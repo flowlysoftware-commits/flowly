@@ -13,15 +13,42 @@ const sectors = [
   },
 ];
 
-const features = [
-  [CalendarDays, "Reservas online", "Agenda moderna para citas, horarios, servicios y empleados."],
-  [UsersRound, "CRM clientes", "Historial, preferencias, visitas, etiquetas y seguimiento comercial."],
-  [MessageCircle, "WhatsApp automático", "Recordatorios, confirmaciones y mensajes post-servicio."],
-  [ChartNoAxesCombined, "Estadísticas", "Ingresos, ocupación, servicios más vendidos y evolución mensual."],
-  [Sparkles, "Automatización", "Flujos inteligentes para reducir trabajo repetitivo."],
-  [WalletCards, "Gestión interna", "Pagos, planes, equipos, servicios y control del negocio."],
+const features: {
+  Icon: React.ComponentType<{ className?: string; size?: number }>;
+  title: string;
+  text: string;
+}[] = [
+  {
+    Icon: CalendarDays,
+    title: "Reservas online",
+    text: "Permite que tus clientes reserven servicios desde cualquier lugar.",
+  },
+  {
+    Icon: Users,
+    title: "CRM clientes",
+    text: "Guarda historial, preferencias, visitas y datos importantes.",
+  },
+  {
+    Icon: MessageCircle,
+    title: "WhatsApp automático",
+    text: "Envía confirmaciones, recordatorios y avisos automáticamente.",
+  },
+  {
+    Icon: BarChart3,
+    title: "Estadísticas",
+    text: "Controla ingresos, citas, servicios más vendidos y rendimiento.",
+  },
+  {
+    Icon: Sparkles,
+    title: "Automatización",
+    text: "Reduce tareas repetitivas y mejora la experiencia del cliente.",
+  },
+  {
+    Icon: Settings2,
+    title: "Gestión interna",
+    text: "Organiza empleados, servicios, horarios y operaciones diarias.",
+  },
 ];
-
 function DashboardPreview() {
   return (
     <div className="relative mx-auto mt-14 w-full max-w-5xl rounded-[2rem] border border-white/70 bg-white/70 p-4 shadow-premium backdrop-blur-xl">
@@ -105,7 +132,7 @@ export default function Home() {
       <section id="features" className="mx-auto max-w-7xl px-6 py-20">
         <div className="mb-10 text-center"><p className="text-sm font-medium text-violet-600">Funciones</p><h2 className="mt-3 text-4xl font-semibold tracking-tight">Todo lo necesario para gestionar y automatizar.</h2></div>
         <div className="grid gap-5 md:grid-cols-3">
-          {features.map(([Icon, title, text]) => (
+          {features.map(({ Icon, title, text }) => (
             <div key={String(title)} className="rounded-[1.5rem] border border-neutral-200 bg-white/75 p-6 shadow-sm backdrop-blur">
               <Icon className="mb-5 text-violet-600" size={28}/><h3 className="text-lg font-semibold">{title}</h3><p className="mt-3 text-sm leading-6 text-neutral-600">{text}</p>
             </div>
