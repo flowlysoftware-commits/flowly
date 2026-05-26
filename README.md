@@ -1,7 +1,7 @@
 # Flowly IA
 
 Landing SaaS premium inicial para Flowly IA.
-.
+
 ## Desarrollo local
 
 ```bash
