@@ -1,4 +1,12 @@
-import { ArrowRight, CalendarDays, Users, ChartNoAxesCombined, MessageCircle, BarChart3, Sparkles, UsersRound, WalletCards } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarDays,
+  Users,
+  MessageCircle,
+  BarChart3,
+  Sparkles,
+  Settings2,
+} from "lucide-react";
 
 const sectors = [
   {
