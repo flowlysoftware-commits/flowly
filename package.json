@@ -13,6 +13,7 @@
     "lucide-react": "^0.468.0",
     "next": "latest",
     "react": "19.0.0",
+    "@react-pdf/renderer": "latest",
     "react-dom": "19.0.0"
   },
   "devDependencies": {
