@@ -106,7 +106,10 @@ function DashboardPreview() {
               "Color completo · 12:00",
               "Barba premium · 13:45",
             ].map((text) => (
-              <div key={text} className="rounded-xl bg-white/10 p-3 text-sm text-white/80">
+              <div
+                key={text}
+                className="rounded-xl bg-white/10 p-3 text-sm text-white/80"
+              >
                 {text}
               </div>
             ))}
@@ -130,10 +133,10 @@ export default function Home() {
         </div>
 
         <Link
-          href="/contacto"
+          href="/demo/login"
           className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm text-white"
         >
-          Solicitar demo
+          Ver demo
         </Link>
       </nav>
 
@@ -155,12 +158,12 @@ export default function Home() {
         </p>
 
         <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
-          <a
-            href="#demos"
+          <Link
+            href="/demo/login"
             className="inline-flex items-center justify-center gap-2 rounded-full bg-neutral-950 px-7 py-4 text-white shadow-lg"
           >
-            Ver demos <ArrowRight size={18} />
-          </a>
+            Entrar en demo <ArrowRight size={18} />
+          </Link>
 
           <Link
             href="/contacto"
@@ -177,7 +180,7 @@ export default function Home() {
         <div className="mb-10 max-w-2xl">
           <p className="text-sm font-medium text-violet-600">Demos por sector</p>
           <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-            Paneles que parecen software real desde el primer día.
+            Prueba paneles reales antes de solicitar una propuesta.
           </h2>
         </div>
 
@@ -200,6 +203,13 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+
+              <Link
+                href="/demo/login"
+                className="mt-6 inline-flex rounded-full bg-neutral-950 px-5 py-3 text-sm text-white"
+              >
+                Entrar en demo
+              </Link>
             </div>
           ))}
         </div>
@@ -234,16 +244,24 @@ export default function Home() {
           </h2>
 
           <p className="mx-auto mt-5 max-w-2xl text-white/60">
-            Solicita una demo personalizada y descubre cómo Flowly IA puede
-            convertirse en el sistema central de tu negocio.
+            Prueba la demo o solicita una propuesta personalizada para tu sector.
           </p>
 
-          <Link
-            href="/contacto"
-            className="mt-8 inline-flex rounded-full bg-white px-7 py-4 font-medium text-neutral-950"
-          >
-            Contacto
-          </Link>
+          <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
+            <Link
+              href="/demo/login"
+              className="inline-flex rounded-full bg-white px-7 py-4 font-medium text-neutral-950"
+            >
+              Ver demo
+            </Link>
+
+            <Link
+              href="/contacto"
+              className="inline-flex rounded-full border border-white/20 px-7 py-4 font-medium text-white"
+            >
+              Contacto
+            </Link>
+          </div>
         </div>
       </section>
     </main>
