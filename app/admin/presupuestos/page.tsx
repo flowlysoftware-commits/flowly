@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { pdf } from "@react-pdf/renderer";
 import { supabase } from "@/lib/supabaseClient";
 import { BudgetPDF } from "./pdf";
 import { Plus, Send, CheckCircle2, XCircle, FileText } from "lucide-react";
+
+type Tab = "Pendientes" | "Aceptados" | "Rechazados";
 
 type Budget = {
   id: string;
@@ -23,6 +25,7 @@ type Budget = {
 
 export default function PresupuestosPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>("Pendientes");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -38,11 +41,13 @@ export default function PresupuestosPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
+  const weeklyBudgetGoal = 10;
+  const monthlyClosedGoal = 5;
+
   const loadBudgets = async () => {
     const { data } = await supabase
       .from("budgets")
       .select("*")
-      .neq("status", "Rechazado")
       .order("created_at", { ascending: false });
 
     setBudgets(data || []);
@@ -51,6 +56,44 @@ export default function PresupuestosPage() {
   useEffect(() => {
     loadBudgets();
   }, []);
+
+  const now = new Date();
+
+  const startOfWeek = useMemo(() => {
+    const date = new Date(now);
+    const day = date.getDay() || 7;
+    date.setDate(date.getDate() - day + 1);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, []);
+
+  const startOfMonth = useMemo(() => {
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }, []);
+
+  const weeklyCreated = budgets.filter(
+    (b) => new Date(b.created_at) >= startOfWeek
+  ).length;
+
+  const monthlyAccepted = budgets.filter(
+    (b) =>
+      b.status === "Aceptado" &&
+      new Date(b.created_at) >= startOfMonth
+  ).length;
+
+  const pendingBudgets = budgets.filter(
+    (b) => b.status !== "Aceptado" && b.status !== "Rechazado"
+  );
+
+  const acceptedBudgets = budgets.filter((b) => b.status === "Aceptado");
+  const rejectedBudgets = budgets.filter((b) => b.status === "Rechazado");
+
+  const visibleBudgets =
+    activeTab === "Pendientes"
+      ? pendingBudgets
+      : activeTab === "Aceptados"
+      ? acceptedBudgets
+      : rejectedBudgets;
 
   const createBudget = async () => {
     if (!client || !email || !service || !monthly) {
@@ -117,6 +160,7 @@ export default function PresupuestosPage() {
       setEmail("");
       setPhone("");
       await loadBudgets();
+      setActiveTab("Pendientes");
     }
 
     setLoading(false);
@@ -125,6 +169,8 @@ export default function PresupuestosPage() {
   const updateStatus = async (id: string, status: string) => {
     await supabase.from("budgets").update({ status }).eq("id", id);
     await loadBudgets();
+
+    if (status === "Aceptado") setActiveTab("Aceptados");
   };
 
   const rejectBudget = async () => {
@@ -144,11 +190,11 @@ export default function PresupuestosPage() {
     setRejectingId(null);
     setRejectionReason("");
     await loadBudgets();
+    setActiveTab("Rechazados");
   };
 
-  const total = budgets.reduce((sum, b) => sum + Number(b.amount), 0);
-  const accepted = budgets.filter((b) => b.status === "Aceptado").length;
-  const sent = budgets.filter((b) => b.status === "Enviado").length;
+  const pendingValue = pendingBudgets.reduce((sum, b) => sum + Number(b.amount), 0);
+  const acceptedValue = acceptedBudgets.reduce((sum, b) => sum + Number(b.amount), 0);
 
   return (
     <main className="min-h-screen bg-[#f8f7fb] px-6 py-8 text-neutral-950">
@@ -160,7 +206,7 @@ export default function PresupuestosPage() {
             </p>
             <h1 className="mt-2 text-4xl font-semibold">Presupuestos</h1>
             <p className="mt-2 text-neutral-600">
-              Genera PDFs, envía propuestas y controla el estado comercial.
+              Gestiona propuestas, objetivos comerciales y seguimiento.
             </p>
           </div>
 
@@ -173,13 +219,56 @@ export default function PresupuestosPage() {
         </header>
 
         <section className="mb-8 grid gap-4 md:grid-cols-4">
-          <Card label="Total presupuestos" value={budgets.length} />
-          <Card label="Enviados" value={sent} />
-          <Card label="Aceptados" value={accepted} />
-          <Card label="Valor mensual" value={`${total.toFixed(2)} €`} />
+          <Card label="Pendientes" value={pendingBudgets.length} />
+          <Card label="Aceptados" value={acceptedBudgets.length} />
+          <Card label="Rechazados" value={rejectedBudgets.length} />
+          <Card label="Valor aceptado mensual" value={`${acceptedValue.toFixed(2)} €`} />
+        </section>
+
+        <section className="mb-8 grid gap-4 md:grid-cols-2">
+          <GoalCard
+            title="Objetivo semanal"
+            subtitle="Presupuestos creados esta semana"
+            current={weeklyCreated}
+            goal={weeklyBudgetGoal}
+          />
+
+          <GoalCard
+            title="Objetivo mensual"
+            subtitle="Presupuestos cerrados este mes"
+            current={monthlyAccepted}
+            goal={monthlyClosedGoal}
+          />
+        </section>
+
+        <section className="mb-4 flex flex-wrap gap-3">
+          <TabButton
+            label={`Pendientes (${pendingBudgets.length})`}
+            active={activeTab === "Pendientes"}
+            onClick={() => setActiveTab("Pendientes")}
+          />
+          <TabButton
+            label={`Aceptados (${acceptedBudgets.length})`}
+            active={activeTab === "Aceptados"}
+            onClick={() => setActiveTab("Aceptados")}
+          />
+          <TabButton
+            label={`Rechazados (${rejectedBudgets.length})`}
+            active={activeTab === "Rechazados"}
+            onClick={() => setActiveTab("Rechazados")}
+          />
         </section>
 
         <section className="rounded-[2rem] bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{activeTab}</h2>
+            {activeTab === "Pendientes" && (
+              <p className="text-sm text-neutral-500">
+                Valor pendiente: {pendingValue.toFixed(2)} €
+              </p>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-neutral-500">
@@ -189,18 +278,21 @@ export default function PresupuestosPage() {
                   <th className="p-4">Mensualidad</th>
                   <th className="p-4">PDF</th>
                   <th className="p-4">Estado</th>
-                  <th className="p-4">Acciones</th>
+                  {activeTab === "Rechazados" && (
+                    <th className="p-4">Motivo</th>
+                  )}
+                  {activeTab !== "Rechazados" && (
+                    <th className="p-4">Acciones</th>
+                  )}
                 </tr>
               </thead>
 
               <tbody>
-                {budgets.map((b) => (
+                {visibleBudgets.map((b) => (
                   <tr key={b.id} className="border-t">
                     <td className="p-4">
                       <p className="font-medium">{b.client_name}</p>
-                      <p className="text-xs text-neutral-500">
-                        {b.client_email}
-                      </p>
+                      <p className="text-xs text-neutral-500">{b.client_email}</p>
                     </td>
 
                     <td className="p-4">{b.service}</td>
@@ -229,39 +321,47 @@ export default function PresupuestosPage() {
                       </span>
                     </td>
 
-                    <td className="p-4">
-                      <div className="flex flex-wrap gap-2">
-                        <a
-                          href={`mailto:${b.client_email}?subject=Presupuesto Flowly IA&body=Hola ${b.client_name}, te enviamos tu presupuesto personalizado:%0A%0A${b.pdf_url || ""}`}
-                          onClick={() => updateStatus(b.id, "Enviado")}
-                          className="rounded-full border px-3 py-2 text-xs"
-                        >
-                          <Send size={14} className="inline" /> Enviar
-                        </a>
+                    {activeTab === "Rechazados" ? (
+                      <td className="max-w-xs p-4 text-sm text-neutral-600">
+                        {b.rejection_reason || "Sin motivo indicado"}
+                      </td>
+                    ) : (
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-2">
+                          {activeTab === "Pendientes" && (
+                            <a
+                              href={`mailto:${b.client_email}?subject=Presupuesto Flowly IA&body=Hola ${b.client_name}, te enviamos tu presupuesto personalizado:%0A%0A${b.pdf_url || ""}`}
+                              onClick={() => updateStatus(b.id, "Enviado")}
+                              className="rounded-full border px-3 py-2 text-xs"
+                            >
+                              <Send size={14} className="inline" /> Enviar
+                            </a>
+                          )}
 
-                        <button
-                          onClick={() => updateStatus(b.id, "Aceptado")}
-                          className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700"
-                        >
-                          <CheckCircle2 size={14} className="inline" /> Aceptado
-                        </button>
+                          <button
+                            onClick={() => updateStatus(b.id, "Aceptado")}
+                            className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700"
+                          >
+                            <CheckCircle2 size={14} className="inline" /> Aceptado
+                          </button>
 
-                        <button
-                          onClick={() => setRejectingId(b.id)}
-                          className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
-                        >
-                          <XCircle size={14} className="inline" /> Rechazado
-                        </button>
-                      </div>
-                    </td>
+                          <button
+                            onClick={() => setRejectingId(b.id)}
+                            className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
+                          >
+                            <XCircle size={14} className="inline" /> Rechazado
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            {budgets.length === 0 && (
+            {visibleBudgets.length === 0 && (
               <div className="p-10 text-center text-neutral-500">
-                Todavía no hay presupuestos activos.
+                No hay presupuestos en esta pestaña.
               </div>
             )}
           </div>
@@ -277,22 +377,10 @@ export default function PresupuestosPage() {
               <Input label="Cliente" value={client} setValue={setClient} />
               <Input label="Email" value={email} setValue={setEmail} />
               <Input label="Teléfono" value={phone} setValue={setPhone} />
-              <Input
-                label="Tipo de negocio"
-                value={businessType}
-                setValue={setBusinessType}
-              />
+              <Input label="Tipo de negocio" value={businessType} setValue={setBusinessType} />
               <Input label="Servicio" value={service} setValue={setService} />
-              <Input
-                label="Instalación"
-                value={installation}
-                setValue={setInstallation}
-              />
-              <Input
-                label="Cuota mensual"
-                value={monthly}
-                setValue={setMonthly}
-              />
+              <Input label="Instalación" value={installation} setValue={setInstallation} />
+              <Input label="Cuota mensual" value={monthly} setValue={setMonthly} />
 
               <textarea
                 value={notes}
@@ -303,10 +391,7 @@ export default function PresupuestosPage() {
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded-full border px-5 py-3"
-              >
+              <button onClick={() => setOpen(false)} className="rounded-full border px-5 py-3">
                 Cancelar
               </button>
 
@@ -327,10 +412,6 @@ export default function PresupuestosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-[2rem] bg-white p-6 shadow-2xl">
             <h2 className="text-2xl font-semibold">Motivo del rechazo</h2>
-
-            <p className="mt-2 text-sm text-neutral-500">
-              Indica por qué el cliente ha rechazado el presupuesto.
-            </p>
 
             <textarea
               value={rejectionReason}
@@ -370,6 +451,64 @@ function Card({ label, value }: { label: string; value: string | number }) {
       <p className="text-sm text-neutral-500">{label}</p>
       <p className="mt-2 text-3xl font-semibold">{value}</p>
     </div>
+  );
+}
+
+function GoalCard({
+  title,
+  subtitle,
+  current,
+  goal,
+}: {
+  title: string;
+  subtitle: string;
+  current: number;
+  goal: number;
+}) {
+  const percentage = Math.min((current / goal) * 100, 100);
+
+  return (
+    <div className="rounded-3xl bg-white p-6 shadow-sm">
+      <p className="text-sm font-medium text-violet-600">{title}</p>
+      <h3 className="mt-2 text-xl font-semibold">{subtitle}</h3>
+      <p className="mt-4 text-3xl font-semibold">
+        {current}/{goal}
+      </p>
+
+      <div className="mt-5 h-3 overflow-hidden rounded-full bg-neutral-100">
+        <div
+          className="h-full rounded-full bg-violet-600"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+
+      <p className="mt-3 text-sm text-neutral-500">
+        {percentage.toFixed(0)}% completado
+      </p>
+    </div>
+  );
+}
+
+function TabButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        active
+          ? "rounded-full bg-neutral-950 px-5 py-3 text-sm text-white"
+          : "rounded-full border border-neutral-200 bg-white px-5 py-3 text-sm text-neutral-600"
+      }
+    >
+      {label}
+    </button>
   );
 }
 
