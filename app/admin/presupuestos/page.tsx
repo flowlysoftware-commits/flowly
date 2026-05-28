@@ -1,193 +1,198 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Plus,
-  Send,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  FileText,
-  Euro,
-  Upload,
-} from "lucide-react";
-
-type BudgetStatus = "Borrador" | "Enviado" | "Aceptado" | "Rechazado";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { Plus, Send, Upload, CheckCircle2, XCircle } from "lucide-react";
 
 type Budget = {
-  id: number;
-  client: string;
-  email: string;
+  id: string;
+  client_name: string;
+  client_email: string;
   service: string;
   amount: number;
-  status: BudgetStatus;
-  date: string;
-  fileName?: string;
+  status: string;
+  file_name: string | null;
+  file_url: string | null;
+  created_at: string;
 };
 
 export default function PresupuestosPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [client, setClient] = useState("");
-  const [email, setEmail] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
   const [service, setService] = useState("");
   const [amount, setAmount] = useState("");
-  const [fileName, setFileName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
 
-  const total = budgets.reduce((sum, item) => sum + item.amount, 0);
-  const accepted = budgets.filter((item) => item.status === "Aceptado").length;
-  const sent = budgets.filter((item) => item.status === "Enviado").length;
+  const loadBudgets = async () => {
+    const { data, error } = await supabase
+      .from("budgets")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  const createBudget = () => {
-    if (!client || !email || !service || !amount) return;
+    if (!error && data) setBudgets(data);
+  };
 
-    const newBudget: Budget = {
-      id: Date.now(),
-      client,
-      email,
+  useEffect(() => {
+    loadBudgets();
+  }, []);
+
+  const createBudget = async () => {
+    if (!clientName || !clientEmail || !service || !amount) return;
+
+    setLoading(true);
+
+    let fileName = null;
+    let filePath = null;
+    let fileUrl = null;
+
+    if (file) {
+      fileName = file.name;
+      filePath = `presupuestos/${Date.now()}-${file.name}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("budgets")
+        .upload(filePath, file);
+
+      if (uploadError) {
+        alert("Error subiendo archivo");
+        setLoading(false);
+        return;
+      }
+
+      const { data } = supabase.storage.from("budgets").getPublicUrl(filePath);
+      fileUrl = data.publicUrl;
+    }
+
+    const { error } = await supabase.from("budgets").insert({
+      client_name: clientName,
+      client_email: clientEmail,
       service,
       amount: Number(amount),
       status: "Borrador",
-      date: new Date().toISOString().slice(0, 10),
-      fileName,
-    };
+      file_name: fileName,
+      file_path: filePath,
+      file_url: fileUrl,
+    });
 
-    setBudgets([newBudget, ...budgets]);
-    setOpen(false);
+    if (error) {
+      alert("Error creando presupuesto");
+    } else {
+      setClientName("");
+      setClientEmail("");
+      setService("");
+      setAmount("");
+      setFile(null);
+      setOpen(false);
+      await loadBudgets();
+    }
 
-    setClient("");
-    setEmail("");
-    setService("");
-    setAmount("");
-    setFileName("");
+    setLoading(false);
   };
 
-  const updateStatus = (id: number, status: BudgetStatus) => {
-    setBudgets((current) =>
-      current.map((item) => (item.id === id ? { ...item, status } : item))
-    );
+  const updateStatus = async (id: string, status: string) => {
+    await supabase.from("budgets").update({ status }).eq("id", id);
+    await loadBudgets();
   };
+
+  const total = budgets.reduce((sum, item) => sum + Number(item.amount), 0);
 
   return (
     <main className="min-h-screen bg-[#f8f7fb] px-6 py-8 text-neutral-950">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <header className="mb-8 flex justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-violet-600">
-              Flowly IA · Administración
-            </p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight">
-              Presupuestos
-            </h1>
-            <p className="mt-2 text-neutral-600">
-              Crea, envía y controla propuestas comerciales.
-            </p>
+            <p className="text-sm font-medium text-violet-600">Flowly IA · Administración</p>
+            <h1 className="mt-2 text-4xl font-semibold">Presupuestos</h1>
+            <p className="mt-2 text-neutral-600">Crea, sube archivos, envía y controla presupuestos.</p>
           </div>
 
           <button
             onClick={() => setOpen(true)}
-            className="flex items-center justify-center gap-2 rounded-full bg-neutral-950 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-neutral-300"
+            className="h-fit rounded-full bg-neutral-950 px-5 py-3 text-white"
           >
-            <Plus size={18} />
-            Nuevo presupuesto
+            <Plus className="inline" size={18} /> Nuevo presupuesto
           </button>
         </header>
 
         <section className="mb-8 grid gap-4 md:grid-cols-3">
-          <Card icon={<FileText />} label="Presupuestos" value={budgets.length} />
-          <Card icon={<CheckCircle2 />} label="Aceptados" value={accepted} />
-          <Card icon={<Euro />} label="Valor total" value={`${total.toFixed(2)} €`} />
+          <Card title="Presupuestos" value={budgets.length} />
+          <Card title="Aceptados" value={budgets.filter(b => b.status === "Aceptado").length} />
+          <Card title="Valor total" value={`${total.toFixed(2)} €`} />
         </section>
 
-        <section className="rounded-[2rem] border border-white bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between px-2">
-            <h2 className="text-lg font-semibold">Listado de presupuestos</h2>
-            <p className="text-sm text-neutral-500">
-              {sent} pendientes de respuesta
-            </p>
-          </div>
+        <section className="rounded-[2rem] bg-white p-5 shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="text-neutral-500">
+              <tr>
+                <th className="p-4">Cliente</th>
+                <th className="p-4">Servicio</th>
+                <th className="p-4">Importe</th>
+                <th className="p-4">Archivo</th>
+                <th className="p-4">Estado</th>
+                <th className="p-4">Acciones</th>
+              </tr>
+            </thead>
 
-          {budgets.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-neutral-200 p-10 text-center text-neutral-500">
-              Todavía no hay presupuestos creados.
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-3xl border border-neutral-100">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-neutral-50 text-neutral-500">
-                  <tr>
-                    <th className="px-5 py-4">Cliente</th>
-                    <th className="px-5 py-4">Servicio</th>
-                    <th className="px-5 py-4">Importe</th>
-                    <th className="px-5 py-4">Archivo</th>
-                    <th className="px-5 py-4">Estado</th>
-                    <th className="px-5 py-4">Acciones</th>
-                  </tr>
-                </thead>
+            <tbody>
+              {budgets.map((budget) => (
+                <tr key={budget.id} className="border-t">
+                  <td className="p-4">
+                    <p className="font-medium">{budget.client_name}</p>
+                    <p className="text-xs text-neutral-500">{budget.client_email}</p>
+                  </td>
 
-                <tbody>
-                  {budgets.map((budget) => (
-                    <tr key={budget.id} className="border-t border-neutral-100">
-                      <td className="px-5 py-4">
-                        <p className="font-medium">{budget.client}</p>
-                        <p className="text-xs text-neutral-500">{budget.email}</p>
-                      </td>
+                  <td className="p-4">{budget.service}</td>
+                  <td className="p-4 font-semibold">{Number(budget.amount).toFixed(2)} €</td>
 
-                      <td className="px-5 py-4">{budget.service}</td>
+                  <td className="p-4">
+                    {budget.file_url ? (
+                      <a href={budget.file_url} target="_blank" className="text-violet-600 underline">
+                        Ver archivo
+                      </a>
+                    ) : (
+                      "Sin archivo"
+                    )}
+                  </td>
 
-                      <td className="px-5 py-4 font-semibold">
-                        {budget.amount.toFixed(2)} €
-                      </td>
+                  <td className="p-4">
+                    <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs">
+                      {budget.status}
+                    </span>
+                  </td>
 
-                      <td className="px-5 py-4 text-xs text-neutral-500">
-                        {budget.fileName || "Sin archivo"}
-                      </td>
+                  <td className="p-4">
+                    <div className="flex flex-wrap gap-2">
+                      <a
+                        onClick={() => updateStatus(budget.id, "Enviado")}
+                        href={`mailto:${budget.client_email}?subject=Presupuesto Flowly IA&body=Hola ${budget.client_name}, te enviamos tu presupuesto de Flowly IA.%0A%0A${budget.file_url || ""}`}
+                        className="rounded-full border px-3 py-2 text-xs"
+                      >
+                        <Send size={14} className="inline" /> Enviar
+                      </a>
 
-                      <td className="px-5 py-4">
-                        <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium">
-                          {budget.status}
-                        </span>
-                      </td>
+                      <button
+                        onClick={() => updateStatus(budget.id, "Aceptado")}
+                        className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700"
+                      >
+                        <CheckCircle2 size={14} className="inline" /> Aceptado
+                      </button>
 
-                      <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={`mailto:${budget.email}?subject=Presupuesto Flowly IA&body=Hola ${budget.client}, te enviamos tu presupuesto personalizado de Flowly IA.`}
-                            onClick={() => updateStatus(budget.id, "Enviado")}
-                            className="rounded-full border px-3 py-2 text-xs"
-                          >
-                            <Send size={14} className="inline" /> Enviar
-                          </a>
-
-                          <button
-                            onClick={() => updateStatus(budget.id, "Aceptado")}
-                            className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700"
-                          >
-                            Aceptado
-                          </button>
-
-                          <button
-                            onClick={() => updateStatus(budget.id, "Rechazado")}
-                            className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
-                          >
-                            Rechazado
-                          </button>
-
-                          <button
-                            onClick={() => updateStatus(budget.id, "Enviado")}
-                            className="rounded-full border border-orange-200 px-3 py-2 text-xs text-orange-700"
-                          >
-                            <Clock size={14} className="inline" /> Seguimiento
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      <button
+                        onClick={() => updateStatus(budget.id, "Rechazado")}
+                        className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
+                      >
+                        <XCircle size={14} className="inline" /> Rechazado
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       </div>
 
@@ -195,66 +200,26 @@ export default function PresupuestosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl">
             <h2 className="text-2xl font-semibold">Nuevo presupuesto</h2>
-            <p className="mt-1 text-sm text-neutral-500">
-              Crea una propuesta comercial para un cliente.
-            </p>
 
             <div className="mt-6 grid gap-4">
-              <input
-                value={client}
-                onChange={(e) => setClient(e.target.value)}
-                placeholder="Nombre del cliente o negocio"
-                className="rounded-2xl border px-4 py-3 outline-none"
-              />
+              <input className="rounded-2xl border px-4 py-3" placeholder="Cliente" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+              <input className="rounded-2xl border px-4 py-3" placeholder="Email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
+              <input className="rounded-2xl border px-4 py-3" placeholder="Servicio" value={service} onChange={(e) => setService(e.target.value)} />
+              <input className="rounded-2xl border px-4 py-3" placeholder="Importe" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
 
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email del cliente"
-                className="rounded-2xl border px-4 py-3 outline-none"
-              />
-
-              <input
-                value={service}
-                onChange={(e) => setService(e.target.value)}
-                placeholder="Servicio presupuestado"
-                className="rounded-2xl border px-4 py-3 outline-none"
-              />
-
-              <input
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="Importe mensual o total"
-                type="number"
-                className="rounded-2xl border px-4 py-3 outline-none"
-              />
-
-              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed px-4 py-4 text-sm text-neutral-600">
-                <Upload size={18} />
-                {fileName || "Subir archivo del presupuesto"}
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(e) =>
-                    setFileName(e.target.files?.[0]?.name || "")
-                  }
-                />
+              <label className="cursor-pointer rounded-2xl border border-dashed px-4 py-4 text-sm text-neutral-600">
+                <Upload size={18} className="inline" /> {file ? file.name : "Subir archivo"}
+                <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
               </label>
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded-full border px-5 py-3 text-sm"
-              >
+              <button onClick={() => setOpen(false)} className="rounded-full border px-5 py-3">
                 Cancelar
               </button>
 
-              <button
-                onClick={createBudget}
-                className="rounded-full bg-neutral-950 px-5 py-3 text-sm text-white"
-              >
-                Crear presupuesto
+              <button onClick={createBudget} disabled={loading} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
+                {loading ? "Guardando..." : "Crear presupuesto"}
               </button>
             </div>
           </div>
@@ -264,21 +229,10 @@ export default function PresupuestosPage() {
   );
 }
 
-function Card({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-}) {
+function Card({ title, value }: { title: string; value: string | number }) {
   return (
-    <div className="rounded-3xl border border-white bg-white p-6 shadow-sm">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-        {icon}
-      </div>
-      <p className="text-sm text-neutral-500">{label}</p>
+    <div className="rounded-3xl bg-white p-6 shadow-sm">
+      <p className="text-sm text-neutral-500">{title}</p>
       <p className="mt-2 text-3xl font-semibold">{value}</p>
     </div>
   );
