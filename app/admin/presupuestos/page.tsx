@@ -65,9 +65,15 @@ export default function PresupuestosPage() {
       />
     ).toBlob();
 
-    const pdfPath = `presupuestos/${Date.now()}-${client
-      .toLowerCase()
-      .replaceAll(" ", "-")}.pdf`;
+    const safeClientName = client
+  .toLowerCase()
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .replace(/[^a-z0-9]/g, "-")
+  .replace(/-+/g, "-")
+  .replace(/^-|-$/g, "");
+
+const pdfPath = `${Date.now()}-${safeClientName}.pdf`;
 
     const { error: uploadError } = await supabase.storage
       .from("budgets")
