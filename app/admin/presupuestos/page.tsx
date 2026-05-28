@@ -58,11 +58,11 @@ export default function PresupuestosPage() {
         .upload(filePath, file);
 
       if (uploadError) {
-        alert("Error subiendo archivo");
-        setLoading(false);
-        return;
-      }
-
+  console.error(uploadError);
+  alert(`Error subiendo archivo: ${uploadError.message}`);
+  setLoading(false);
+  return;
+}
       const { data } = supabase.storage.from("budgets").getPublicUrl(filePath);
       fileUrl = data.publicUrl;
     }
