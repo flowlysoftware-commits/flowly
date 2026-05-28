@@ -75,12 +75,16 @@ export default function PresupuestosPage() {
 
 const pdfPath = `${Date.now()}-${safeClientName}.pdf`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("budgets")
-      .upload(pdfPath, blob, {
-        contentType: "application/pdf",
-        upsert: true,
-      });
+    const pdfFile = new File([blob], pdfPath, {
+  type: "application/pdf",
+});
+
+const { error: uploadError } = await supabase.storage
+  .from("budgets")
+  .upload(pdfPath, pdfFile, {
+    contentType: "application/pdf",
+    upsert: true,
+  });
 
     if (uploadError) {
       alert(`Error subiendo PDF: ${uploadError.message}`);
