@@ -15,6 +15,7 @@ type Budget = {
   service: string;
   amount: number;
   status: string;
+  rejection_reason: string | null;
   notes: string | null;
   pdf_url: string | null;
   created_at: string;
@@ -34,10 +35,14 @@ export default function PresupuestosPage() {
   const [installation, setInstallation] = useState("0");
   const [notes, setNotes] = useState("Promoción especial: primer mes gratis.");
 
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
   const loadBudgets = async () => {
     const { data } = await supabase
       .from("budgets")
       .select("*")
+      .neq("status", "Rechazado")
       .order("created_at", { ascending: false });
 
     setBudgets(data || []);
@@ -48,7 +53,10 @@ export default function PresupuestosPage() {
   }, []);
 
   const createBudget = async () => {
-    if (!client || !email || !service || !monthly) return alert("Faltan datos");
+    if (!client || !email || !service || !monthly) {
+      alert("Faltan datos");
+      return;
+    }
 
     setLoading(true);
 
@@ -65,26 +73,15 @@ export default function PresupuestosPage() {
       />
     ).toBlob();
 
-    const safeClientName = client
-  .toLowerCase()
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .replace(/[^a-z0-9]/g, "-")
-  .replace(/-+/g, "-")
-  .replace(/^-|-$/g, "");
+    const pdfPath = `budget-${crypto.randomUUID()}.pdf`;
+    const pdfBytes = new Uint8Array(await blob.arrayBuffer());
 
-const pdfPath = `${Date.now()}-${safeClientName}.pdf`;
-
-    const pdfFile = new File([blob], pdfPath, {
-  type: "application/pdf",
-});
-
-const { error: uploadError } = await supabase.storage
-  .from("budgets")
-  .upload(pdfPath, pdfFile, {
-    contentType: "application/pdf",
-    upsert: true,
-  });
+    const { error: uploadError } = await supabase.storage
+      .from("budgets")
+      .upload(pdfPath, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
 
     if (uploadError) {
       alert(`Error subiendo PDF: ${uploadError.message}`);
@@ -127,6 +124,25 @@ const { error: uploadError } = await supabase.storage
 
   const updateStatus = async (id: string, status: string) => {
     await supabase.from("budgets").update({ status }).eq("id", id);
+    await loadBudgets();
+  };
+
+  const rejectBudget = async () => {
+    if (!rejectingId || !rejectionReason) {
+      alert("Escribe el motivo del rechazo");
+      return;
+    }
+
+    await supabase
+      .from("budgets")
+      .update({
+        status: "Rechazado",
+        rejection_reason: rejectionReason,
+      })
+      .eq("id", rejectingId);
+
+    setRejectingId(null);
+    setRejectionReason("");
     await loadBudgets();
   };
 
@@ -182,11 +198,16 @@ const { error: uploadError } = await supabase.storage
                   <tr key={b.id} className="border-t">
                     <td className="p-4">
                       <p className="font-medium">{b.client_name}</p>
-                      <p className="text-xs text-neutral-500">{b.client_email}</p>
+                      <p className="text-xs text-neutral-500">
+                        {b.client_email}
+                      </p>
                     </td>
 
                     <td className="p-4">{b.service}</td>
-                    <td className="p-4 font-semibold">{Number(b.amount).toFixed(2)} €</td>
+
+                    <td className="p-4 font-semibold">
+                      {Number(b.amount).toFixed(2)} €
+                    </td>
 
                     <td className="p-4">
                       {b.pdf_url ? (
@@ -226,7 +247,7 @@ const { error: uploadError } = await supabase.storage
                         </button>
 
                         <button
-                          onClick={() => updateStatus(b.id, "Rechazado")}
+                          onClick={() => setRejectingId(b.id)}
                           className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
                         >
                           <XCircle size={14} className="inline" /> Rechazado
@@ -240,7 +261,7 @@ const { error: uploadError } = await supabase.storage
 
             {budgets.length === 0 && (
               <div className="p-10 text-center text-neutral-500">
-                Todavía no hay presupuestos creados.
+                Todavía no hay presupuestos activos.
               </div>
             )}
           </div>
@@ -256,10 +277,22 @@ const { error: uploadError } = await supabase.storage
               <Input label="Cliente" value={client} setValue={setClient} />
               <Input label="Email" value={email} setValue={setEmail} />
               <Input label="Teléfono" value={phone} setValue={setPhone} />
-              <Input label="Tipo de negocio" value={businessType} setValue={setBusinessType} />
+              <Input
+                label="Tipo de negocio"
+                value={businessType}
+                setValue={setBusinessType}
+              />
               <Input label="Servicio" value={service} setValue={setService} />
-              <Input label="Instalación" value={installation} setValue={setInstallation} />
-              <Input label="Cuota mensual" value={monthly} setValue={setMonthly} />
+              <Input
+                label="Instalación"
+                value={installation}
+                setValue={setInstallation}
+              />
+              <Input
+                label="Cuota mensual"
+                value={monthly}
+                setValue={setMonthly}
+              />
 
               <textarea
                 value={notes}
@@ -270,7 +303,10 @@ const { error: uploadError } = await supabase.storage
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setOpen(false)} className="rounded-full border px-5 py-3">
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-full border px-5 py-3"
+              >
                 Cancelar
               </button>
 
@@ -281,6 +317,44 @@ const { error: uploadError } = await supabase.storage
               >
                 <FileText size={16} className="inline" />{" "}
                 {loading ? "Generando..." : "Crear PDF y guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-6 shadow-2xl">
+            <h2 className="text-2xl font-semibold">Motivo del rechazo</h2>
+
+            <p className="mt-2 text-sm text-neutral-500">
+              Indica por qué el cliente ha rechazado el presupuesto.
+            </p>
+
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Ejemplo: precio alto, no interesado, ya tiene otro proveedor..."
+              className="mt-6 min-h-32 w-full rounded-2xl border px-4 py-3 outline-none"
+            />
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setRejectingId(null);
+                  setRejectionReason("");
+                }}
+                className="rounded-full border px-5 py-3"
+              >
+                Cancelar
+              </button>
+
+              <button
+                onClick={rejectBudget}
+                className="rounded-full bg-red-600 px-5 py-3 text-white"
+              >
+                Confirmar rechazo
               </button>
             </div>
           </div>
