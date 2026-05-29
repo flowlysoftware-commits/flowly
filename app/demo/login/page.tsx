@@ -13,7 +13,7 @@ export default function DemoLoginPage() {
   const login = () => {
     if (email === "demo@flowlyia.com" && password === "flowlydemo") {
       localStorage.setItem("flowly_demo_access", "true");
-      router.push("/demo/hair");
+      router.push("/demo");
     } else {
       alert("Credenciales incorrectas");
     }
@@ -31,13 +31,19 @@ export default function DemoLoginPage() {
         </div>
 
         <h1 className="mt-6 text-3xl font-semibold">Acceso demo</h1>
+
         <p className="mt-2 text-neutral-600">
-          Entra al panel demo de Flowly Hair y explora cómo funciona.
+          Entra al selector de demos y prueba los paneles de Flowly Hair,
+          Flowly POS y Flowly Clinic.
         </p>
 
         <div className="mt-6 rounded-2xl bg-neutral-50 p-4 text-sm text-neutral-600">
-          <p><strong>Usuario:</strong> demo@flowlyia.com</p>
-          <p><strong>Contraseña:</strong> flowlydemo</p>
+          <p>
+            <strong>Usuario:</strong> demo@flowlyia.com
+          </p>
+          <p>
+            <strong>Contraseña:</strong> flowlydemo
+          </p>
         </div>
 
         <div className="mt-6 grid gap-4">
@@ -45,6 +51,7 @@ export default function DemoLoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
+            type="email"
             className="rounded-2xl border px-4 py-3 outline-none"
           />
 
@@ -61,7 +68,7 @@ export default function DemoLoginPage() {
           onClick={login}
           className="mt-6 w-full rounded-full bg-neutral-950 px-6 py-4 text-white"
         >
-          Entrar a la demo
+          Entrar a las demos
         </button>
       </div>
     </main>
