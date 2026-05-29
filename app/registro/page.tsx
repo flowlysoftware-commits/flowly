@@ -1,9 +1,23 @@
 "use client";
 
+import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useState } from "react";
 
 export default function RegistroPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#f8f7fb]">
+          Cargando...
+        </main>
+      }
+    >
+      <RegistroContent />
+    </Suspense>
+  );
+}
+
+function RegistroContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get("session_id");
@@ -23,8 +37,15 @@ export default function RegistroPage() {
 
     const res = await fetch("/api/onboarding", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, businessName, businessType, password }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sessionId,
+        businessName,
+        businessType,
+        password,
+      }),
     });
 
     const data = await res.json();
@@ -43,6 +64,7 @@ export default function RegistroPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#f8f7fb] px-6">
       <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-xl">
         <h1 className="text-3xl font-semibold">Configura tu cuenta</h1>
+
         <p className="mt-2 text-neutral-600">
           Tu suscripción está activa. Ahora crea tu acceso al panel.
         </p>
@@ -80,7 +102,7 @@ export default function RegistroPage() {
         <button
           onClick={createAccount}
           disabled={loading}
-          className="mt-6 w-full rounded-full bg-neutral-950 px-6 py-4 text-white"
+          className="mt-6 w-full rounded-full bg-neutral-950 px-6 py-4 text-white disabled:opacity-60"
         >
           {loading ? "Creando..." : "Crear mi panel"}
         </button>
