@@ -10,6 +10,7 @@
   "dependencies": {
     "@supabase/supabase-js": "latest",
     "framer-motion": "^11.11.17",
+    "stripe": "latest",
     "lucide-react": "^0.468.0",
     "next": "latest",
     "react": "19.0.0",
