@@ -20,6 +20,16 @@ const sectors = [
     subtitle: "Estética, uñas y tratamientos",
     stats: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
   },
+  {
+    name: "Flowly POS",
+    subtitle: "TPV inteligente para bares y restaurantes",
+    stats: ["87 tickets", "2.450€ hoy", "14 mesas", "28€ ticket medio"],
+  },
+  {
+    name: "Flowly Clinic",
+    subtitle: "Gestión para clínicas y fisioterapia",
+    stats: ["22 citas hoy", "486 pacientes", "9.200€ mes", "134 tratamientos"],
+  },
 ];
 
 const features: {
@@ -129,14 +139,15 @@ export default function Home() {
         <div className="hidden items-center gap-8 text-sm text-neutral-600 md:flex">
           <a href="#demos">Demos</a>
           <a href="#features">Funciones</a>
+          <Link href="/precios">Precios</Link>
           <Link href="/contacto">Contacto</Link>
         </div>
 
         <Link
-          href="/demo/login"
+          href="/precios"
           className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm text-white"
         >
-          Ver demo
+          Empezar gratis
         </Link>
       </nav>
 
@@ -154,7 +165,8 @@ export default function Home() {
 
         <p className="mx-auto mt-7 max-w-2xl text-lg leading-8 text-neutral-600">
           Reservas, clientes, pagos, automatizaciones y dashboards premium para
-          peluquerías, centros estéticos, spas, coaches y academias.
+          peluquerías, centros estéticos, restaurantes, clínicas, spas, coaches
+          y academias.
         </p>
 
         <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
@@ -166,10 +178,10 @@ export default function Home() {
           </Link>
 
           <Link
-            href="/contacto"
+            href="/precios"
             className="rounded-full border border-neutral-300 bg-white/70 px-7 py-4 text-neutral-800"
           >
-            Contacto
+            Ver precios
           </Link>
         </div>
 
@@ -240,26 +252,27 @@ export default function Home() {
       <section className="mx-auto max-w-7xl px-6 py-24">
         <div className="rounded-[2.5rem] bg-neutral-950 px-8 py-16 text-center text-white shadow-premium">
           <h2 className="text-4xl font-semibold tracking-tight md:text-5xl">
-            ¿Quieres automatizar tu negocio?
+            Empieza con 30 días gratis
           </h2>
 
           <p className="mx-auto mt-5 max-w-2xl text-white/60">
-            Prueba la demo o solicita una propuesta personalizada para tu sector.
+            Elige tu plan, prueba Flowly IA durante el primer mes y automatiza
+            tu negocio desde el primer día.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
             <Link
-              href="/demo/login"
+              href="/precios"
               className="inline-flex rounded-full bg-white px-7 py-4 font-medium text-neutral-950"
             >
-              Ver demo
+              Ver planes
             </Link>
 
             <Link
-              href="/contacto"
+              href="/demo/login"
               className="inline-flex rounded-full border border-white/20 px-7 py-4 font-medium text-white"
             >
-              Contacto
+              Probar demo
             </Link>
           </div>
         </div>
