@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  Settings,
 } from "lucide-react";
 
 type Business = {
@@ -56,7 +57,36 @@ type Appointment = {
   services: { name: string; price: number } | null;
 };
 
-type Tab = "Agenda" | "Servicios" | "Empleados" | "Clientes";
+type BookingSettings = {
+  id?: string;
+  business_id: string;
+  start_time: string;
+  end_time: string;
+  interval_minutes: number;
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+};
+
+type Tab = "Agenda" | "Servicios" | "Empleados" | "Clientes" | "Ajustes";
+
+const defaultSettings = (businessId: string): BookingSettings => ({
+  business_id: businessId,
+  start_time: "09:00",
+  end_time: "19:00",
+  interval_minutes: 30,
+  monday: true,
+  tuesday: true,
+  wednesday: true,
+  thursday: true,
+  friday: true,
+  saturday: false,
+  sunday: false,
+});
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -66,6 +96,7 @@ export default function DashboardPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [settings, setSettings] = useState<BookingSettings | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Agenda");
   const [origin, setOrigin] = useState("");
 
@@ -113,33 +144,24 @@ export default function DashboardPage() {
       { data: employeesData },
       { data: customersData },
       { data: appointmentsData },
+      { data: settingsData },
     ] = await Promise.all([
-      supabase
-        .from("services")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("created_at"),
-      supabase
-        .from("employees")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("created_at"),
-      supabase
-        .from("customers")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("created_at"),
+      supabase.from("services").select("*").eq("business_id", businessId).order("created_at"),
+      supabase.from("employees").select("*").eq("business_id", businessId).order("created_at"),
+      supabase.from("customers").select("*").eq("business_id", businessId).order("created_at"),
       supabase
         .from("appointments")
         .select("*, customers(name), employees(name), services(name, price)")
         .eq("business_id", businessId)
         .order("appointment_date"),
+      supabase.from("booking_settings").select("*").eq("business_id", businessId).maybeSingle(),
     ]);
 
     setServices(servicesData || []);
     setEmployees(employeesData || []);
     setCustomers(customersData || []);
     setAppointments(appointmentsData || []);
+    setSettings(settingsData || defaultSettings(businessId));
   };
 
   useEffect(() => {
@@ -200,13 +222,7 @@ export default function DashboardPage() {
   };
 
   const createAppointment = async () => {
-    if (
-      !business ||
-      !appointmentCustomer ||
-      !appointmentEmployee ||
-      !appointmentService ||
-      !appointmentDate
-    ) {
+    if (!business || !appointmentCustomer || !appointmentEmployee || !appointmentService || !appointmentDate) {
       return alert("Faltan datos");
     }
 
@@ -231,13 +247,29 @@ export default function DashboardPage() {
     await loadData();
   };
 
+  const saveSettings = async () => {
+    if (!business || !settings) return;
+
+    const { error } = await supabase.from("booking_settings").upsert({
+      ...settings,
+      business_id: business.id,
+    });
+
+    if (error) {
+      alert(error.message);
+    } else {
+      alert("Ajustes guardados");
+      await loadData();
+    }
+  };
+
   const revenue = appointments
     .filter((item) => item.status !== "cancelled")
     .reduce((sum, item) => sum + Number(item.services?.price || 0), 0);
 
   const pendingAppointments = appointments.filter((item) => item.status === "pending").length;
 
-  if (!business) {
+  if (!business || !settings) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#f8f7fb]">
         Cargando panel...
@@ -253,15 +285,11 @@ export default function DashboardPage() {
             <p className="text-sm font-medium text-violet-600">Flowly IA</p>
             <h1 className="mt-2 text-4xl font-semibold">{business.name}</h1>
             <p className="mt-2 text-neutral-600">
-              {business.business_type} · Plan {business.plan} · Estado{" "}
-              {business.subscription_status}
+              {business.business_type} · Plan {business.plan} · Estado {business.subscription_status}
             </p>
           </div>
 
-          <button
-            onClick={logout}
-            className="rounded-full border bg-white px-5 py-3"
-          >
+          <button onClick={logout} className="rounded-full border bg-white px-5 py-3">
             <LogOut size={18} className="inline" /> Salir
           </button>
         </header>
@@ -274,22 +302,14 @@ export default function DashboardPage() {
         </section>
 
         <section className="mb-8 rounded-[2rem] bg-neutral-950 p-6 text-white shadow-sm">
-          <p className="text-sm font-medium text-violet-300">
-            Enlace público de reservas
-          </p>
-
-          <h2 className="mt-2 text-2xl font-semibold">
-            Comparte este enlace con tus clientes
-          </h2>
-
+          <p className="text-sm font-medium text-violet-300">Enlace público de reservas</p>
+          <h2 className="mt-2 text-2xl font-semibold">Comparte este enlace con tus clientes</h2>
           <p className="mt-3 text-sm text-white/60">
-            Tus clientes podrán elegir servicio, día y hora desde esta página.
+            Tus clientes podrán elegir servicio, profesional, día y hora desde esta página.
           </p>
 
           <div className="mt-5 flex flex-col gap-3 rounded-2xl bg-white/10 p-4 md:flex-row md:items-center md:justify-between">
-            <code className="break-all text-sm text-white/80">
-              {bookingUrl}
-            </code>
+            <code className="break-all text-sm text-white/80">{bookingUrl}</code>
 
             <button
               onClick={() => {
@@ -305,7 +325,7 @@ export default function DashboardPage() {
         </section>
 
         <section className="mb-6 flex flex-wrap gap-3">
-          {["Agenda", "Servicios", "Empleados", "Clientes"].map((tab) => (
+          {["Agenda", "Servicios", "Empleados", "Clientes", "Ajustes"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as Tab)}
@@ -324,56 +344,30 @@ export default function DashboardPage() {
           <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
             <Panel title="Nueva reserva">
               <div className="grid gap-4">
-                <select
-                  value={appointmentCustomer}
-                  onChange={(e) => setAppointmentCustomer(e.target.value)}
-                  className="rounded-2xl border px-4 py-3"
-                >
+                <select value={appointmentCustomer} onChange={(e) => setAppointmentCustomer(e.target.value)} className="rounded-2xl border px-4 py-3">
                   <option value="">Seleccionar cliente</option>
                   {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
+                    <option key={customer.id} value={customer.id}>{customer.name}</option>
                   ))}
                 </select>
 
-                <select
-                  value={appointmentEmployee}
-                  onChange={(e) => setAppointmentEmployee(e.target.value)}
-                  className="rounded-2xl border px-4 py-3"
-                >
+                <select value={appointmentEmployee} onChange={(e) => setAppointmentEmployee(e.target.value)} className="rounded-2xl border px-4 py-3">
                   <option value="">Seleccionar empleado</option>
                   {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </option>
+                    <option key={employee.id} value={employee.id}>{employee.name}</option>
                   ))}
                 </select>
 
-                <select
-                  value={appointmentService}
-                  onChange={(e) => setAppointmentService(e.target.value)}
-                  className="rounded-2xl border px-4 py-3"
-                >
+                <select value={appointmentService} onChange={(e) => setAppointmentService(e.target.value)} className="rounded-2xl border px-4 py-3">
                   <option value="">Seleccionar servicio</option>
                   {services.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} · {service.price}€
-                    </option>
+                    <option key={service.id} value={service.id}>{service.name} · {service.price}€</option>
                   ))}
                 </select>
 
-                <input
-                  type="datetime-local"
-                  value={appointmentDate}
-                  onChange={(e) => setAppointmentDate(e.target.value)}
-                  className="rounded-2xl border px-4 py-3"
-                />
+                <input type="datetime-local" value={appointmentDate} onChange={(e) => setAppointmentDate(e.target.value)} className="rounded-2xl border px-4 py-3" />
 
-                <button
-                  onClick={createAppointment}
-                  className="rounded-full bg-neutral-950 px-5 py-3 text-white"
-                >
+                <button onClick={createAppointment} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
                   <Plus size={18} className="inline" /> Crear reserva
                 </button>
               </div>
@@ -382,18 +376,13 @@ export default function DashboardPage() {
             <Panel title="Calendario visual">
               <div className="space-y-3">
                 {appointments.map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
-                  >
+                  <div key={appointment.id} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
                     <p className="font-semibold">
                       {new Date(appointment.appointment_date).toLocaleString("es-ES")}
                     </p>
 
                     <p className="mt-1 text-sm text-neutral-600">
-                      {appointment.customers?.name || "Cliente"} ·{" "}
-                      {appointment.services?.name || "Servicio"} ·{" "}
-                      {appointment.employees?.name || "Sin empleado"}
+                      {appointment.customers?.name || "Cliente"} · {appointment.services?.name || "Servicio"} · {appointment.employees?.name || "Sin empleado"}
                     </p>
 
                     <p className="mt-1 text-sm font-medium text-violet-600">
@@ -405,24 +394,15 @@ export default function DashboardPage() {
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        onClick={() => updateAppointmentStatus(appointment.id, "confirmed")}
-                        className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700"
-                      >
+                      <button onClick={() => updateAppointmentStatus(appointment.id, "confirmed")} className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700">
                         <CheckCircle2 size={14} className="inline" /> Confirmar
                       </button>
 
-                      <button
-                        onClick={() => updateAppointmentStatus(appointment.id, "completed")}
-                        className="rounded-full border border-violet-200 px-3 py-2 text-xs text-violet-700"
-                      >
+                      <button onClick={() => updateAppointmentStatus(appointment.id, "completed")} className="rounded-full border border-violet-200 px-3 py-2 text-xs text-violet-700">
                         Completada
                       </button>
 
-                      <button
-                        onClick={() => updateAppointmentStatus(appointment.id, "cancelled")}
-                        className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
-                      >
+                      <button onClick={() => updateAppointmentStatus(appointment.id, "cancelled")} className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700">
                         <XCircle size={14} className="inline" /> Cancelar
                       </button>
                     </div>
@@ -443,33 +423,11 @@ export default function DashboardPage() {
           <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
             <Panel title="Nuevo servicio">
               <div className="grid gap-4">
-                <input
-                  value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
-                  placeholder="Nombre del servicio"
-                  className="rounded-2xl border px-4 py-3"
-                />
+                <input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Nombre del servicio" className="rounded-2xl border px-4 py-3" />
+                <input value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} placeholder="Duración en minutos" type="number" className="rounded-2xl border px-4 py-3" />
+                <input value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="Precio" type="number" className="rounded-2xl border px-4 py-3" />
 
-                <input
-                  value={serviceDuration}
-                  onChange={(e) => setServiceDuration(e.target.value)}
-                  placeholder="Duración en minutos"
-                  type="number"
-                  className="rounded-2xl border px-4 py-3"
-                />
-
-                <input
-                  value={servicePrice}
-                  onChange={(e) => setServicePrice(e.target.value)}
-                  placeholder="Precio"
-                  type="number"
-                  className="rounded-2xl border px-4 py-3"
-                />
-
-                <button
-                  onClick={createService}
-                  className="rounded-full bg-neutral-950 px-5 py-3 text-white"
-                >
+                <button onClick={createService} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
                   Crear servicio
                 </button>
               </div>
@@ -480,12 +438,8 @@ export default function DashboardPage() {
                 {services.map((service) => (
                   <div key={service.id} className="rounded-3xl border p-5">
                     <h3 className="text-lg font-semibold">{service.name}</h3>
-                    <p className="mt-2 text-sm text-neutral-500">
-                      {service.duration} min
-                    </p>
-                    <p className="mt-4 text-2xl font-semibold">
-                      {Number(service.price).toFixed(2)}€
-                    </p>
+                    <p className="mt-2 text-sm text-neutral-500">{service.duration} min</p>
+                    <p className="mt-4 text-2xl font-semibold">{Number(service.price).toFixed(2)}€</p>
                   </div>
                 ))}
               </div>
@@ -497,24 +451,10 @@ export default function DashboardPage() {
           <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
             <Panel title="Nuevo empleado">
               <div className="grid gap-4">
-                <input
-                  value={employeeName}
-                  onChange={(e) => setEmployeeName(e.target.value)}
-                  placeholder="Nombre"
-                  className="rounded-2xl border px-4 py-3"
-                />
+                <input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Nombre" className="rounded-2xl border px-4 py-3" />
+                <input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Teléfono" className="rounded-2xl border px-4 py-3" />
 
-                <input
-                  value={employeePhone}
-                  onChange={(e) => setEmployeePhone(e.target.value)}
-                  placeholder="Teléfono"
-                  className="rounded-2xl border px-4 py-3"
-                />
-
-                <button
-                  onClick={createEmployee}
-                  className="rounded-full bg-neutral-950 px-5 py-3 text-white"
-                >
+                <button onClick={createEmployee} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
                   Crear empleado
                 </button>
               </div>
@@ -525,9 +465,7 @@ export default function DashboardPage() {
                 {employees.map((employee) => (
                   <div key={employee.id} className="rounded-2xl border p-4">
                     <p className="font-semibold">{employee.name}</p>
-                    <p className="text-sm text-neutral-500">
-                      {employee.phone || "Sin teléfono"}
-                    </p>
+                    <p className="text-sm text-neutral-500">{employee.phone || "Sin teléfono"}</p>
                   </div>
                 ))}
               </div>
@@ -539,24 +477,10 @@ export default function DashboardPage() {
           <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
             <Panel title="Nuevo cliente">
               <div className="grid gap-4">
-                <input
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Nombre"
-                  className="rounded-2xl border px-4 py-3"
-                />
+                <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nombre" className="rounded-2xl border px-4 py-3" />
+                <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="rounded-2xl border px-4 py-3" />
 
-                <input
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Teléfono"
-                  className="rounded-2xl border px-4 py-3"
-                />
-
-                <button
-                  onClick={createCustomer}
-                  className="rounded-full bg-neutral-950 px-5 py-3 text-white"
-                >
+                <button onClick={createCustomer} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
                   Crear cliente
                 </button>
               </div>
@@ -567,17 +491,89 @@ export default function DashboardPage() {
                 {customers.map((customer) => (
                   <div key={customer.id} className="rounded-2xl border p-4">
                     <p className="font-semibold">{customer.name}</p>
-                    <p className="text-sm text-neutral-500">
-                      {customer.phone || "Sin teléfono"}
-                    </p>
+                    <p className="text-sm text-neutral-500">{customer.phone || "Sin teléfono"}</p>
                   </div>
                 ))}
               </div>
             </Panel>
           </section>
         )}
+
+        {activeTab === "Ajustes" && (
+          <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+            <Panel title="Horarios de reservas">
+              <div className="grid gap-4">
+                <label className="text-sm font-medium">Hora apertura</label>
+                <input
+                  type="time"
+                  value={settings.start_time}
+                  onChange={(e) => setSettings({ ...settings, start_time: e.target.value })}
+                  className="rounded-2xl border px-4 py-3"
+                />
+
+                <label className="text-sm font-medium">Hora cierre</label>
+                <input
+                  type="time"
+                  value={settings.end_time}
+                  onChange={(e) => setSettings({ ...settings, end_time: e.target.value })}
+                  className="rounded-2xl border px-4 py-3"
+                />
+
+                <label className="text-sm font-medium">Intervalo entre citas</label>
+                <select
+                  value={settings.interval_minutes}
+                  onChange={(e) => setSettings({ ...settings, interval_minutes: Number(e.target.value) })}
+                  className="rounded-2xl border px-4 py-3"
+                >
+                  <option value={15}>15 minutos</option>
+                  <option value={30}>30 minutos</option>
+                  <option value={45}>45 minutos</option>
+                  <option value={60}>60 minutos</option>
+                </select>
+
+                <button onClick={saveSettings} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
+                  <Settings size={18} className="inline" /> Guardar ajustes
+                </button>
+              </div>
+            </Panel>
+
+            <Panel title="Días activos">
+              <div className="grid gap-3">
+                <DayToggle label="Lunes" checked={settings.monday} onChange={(v) => setSettings({ ...settings, monday: v })} />
+                <DayToggle label="Martes" checked={settings.tuesday} onChange={(v) => setSettings({ ...settings, tuesday: v })} />
+                <DayToggle label="Miércoles" checked={settings.wednesday} onChange={(v) => setSettings({ ...settings, wednesday: v })} />
+                <DayToggle label="Jueves" checked={settings.thursday} onChange={(v) => setSettings({ ...settings, thursday: v })} />
+                <DayToggle label="Viernes" checked={settings.friday} onChange={(v) => setSettings({ ...settings, friday: v })} />
+                <DayToggle label="Sábado" checked={settings.saturday} onChange={(v) => setSettings({ ...settings, saturday: v })} />
+                <DayToggle label="Domingo" checked={settings.sunday} onChange={(v) => setSettings({ ...settings, sunday: v })} />
+              </div>
+            </Panel>
+          </section>
+        )}
       </div>
     </main>
+  );
+}
+
+function DayToggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between rounded-2xl border p-4">
+      <span className="font-medium">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-5 w-5"
+      />
+    </label>
   );
 }
 
