@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { CalendarDays, CheckCircle2 } from "lucide-react";
 
@@ -56,12 +57,9 @@ const defaultSettings: BookingSettings = {
   sunday: false,
 };
 
-export default function PublicBookingPage({
-  params,
-}: {
-  params: { businessId: string };
-}) {
-  const businessId = params.businessId;
+export default function PublicBookingPage() {
+  const params = useParams();
+  const businessId = params.businessId as string;
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -82,6 +80,8 @@ export default function PublicBookingPage({
   const [done, setDone] = useState(false);
 
   useEffect(() => {
+    if (!businessId) return;
+    
     const load = async () => {
       const {
   data: businessData,
