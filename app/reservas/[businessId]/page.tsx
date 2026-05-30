@@ -256,12 +256,17 @@ export default function PublicBookingPage({
   };
 
   if (!business) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f8f7fb]">
-        Cargando reservas...
-      </main>
-    );
-  }
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f8f7fb] px-6 text-center">
+      <div>
+        <h1 className="text-2xl font-semibold">No se pudo cargar la página de reservas</h1>
+        <p className="mt-3 text-neutral-600">
+          Revisa que el enlace sea correcto y que las reservas públicas estén activadas.
+        </p>
+      </div>
+    </main>
+  );
+}
 
   if (done) {
     return (
