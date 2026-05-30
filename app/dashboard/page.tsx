@@ -313,29 +313,31 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-[#f8f7fb] px-6 py-8 text-neutral-950">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <p className="text-sm font-medium text-violet-600">Flowly IA</p>
-            <h1 className="mt-2 text-4xl font-semibold">{business.name}</h1>
-            <p className="mt-2 text-neutral-600">
-              {business.business_type} · Plan {business.plan} · Estado {business.subscription_status}
-            </p>
-          </div>
+  <div>
+    <p className="text-sm font-medium text-violet-600">Flowly IA</p>
+    <h1 className="mt-2 text-4xl font-semibold">{business.name}</h1>
+    <p className="mt-2 text-neutral-600">
+      {business.business_type} · Plan {business.plan} · Estado{" "}
+      {business.subscription_status}
+    </p>
+  </div>
 
-          <div className="flex gap-3">
-  <button
-    onClick={openBillingPortal}
-    className="rounded-full border bg-white px-5 py-3"
-  >
-    <CreditCard size={18} className="inline" /> Facturación
-  </button>
+  <div className="flex flex-wrap gap-3">
+    <button
+      onClick={openBillingPortal}
+      className="rounded-full border bg-white px-5 py-3"
+    >
+      <CreditCard size={18} className="inline" /> Facturación
+    </button>
 
-  <button
-    onClick={logout}
-    className="rounded-full border bg-white px-5 py-3"
-  >
-    <LogOut size={18} className="inline" /> Salir
-  </button>
-</div>
+    <button
+      onClick={logout}
+      className="rounded-full border bg-white px-5 py-3"
+    >
+      <LogOut size={18} className="inline" /> Salir
+    </button>
+  </div>
+</header>
 
         <section className="mb-8 grid gap-4 md:grid-cols-4">
           <Card icon={<CalendarDays />} label="Reservas" value={appointments.length} />
