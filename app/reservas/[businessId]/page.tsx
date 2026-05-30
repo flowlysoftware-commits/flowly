@@ -30,24 +30,31 @@ type Appointment = {
   status: string;
 };
 
-const availableHours = [
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "12:30",
-  "13:00",
-  "16:00",
-  "16:30",
-  "17:00",
-  "17:30",
-  "18:00",
-  "18:30",
-  "19:00",
-];
+type BookingSettings = {
+  start_time: string;
+  end_time: string;
+  interval_minutes: number;
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+};
+
+const defaultSettings: BookingSettings = {
+  start_time: "09:00",
+  end_time: "19:00",
+  interval_minutes: 30,
+  monday: true,
+  tuesday: true,
+  wednesday: true,
+  thursday: true,
+  friday: true,
+  saturday: false,
+  sunday: false,
+};
 
 export default function PublicBookingPage({
   params,
@@ -60,6 +67,7 @@ export default function PublicBookingPage({
   const [services, setServices] = useState<Service[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [settings, setSettings] = useState<BookingSettings>(defaultSettings);
 
   const [selectedService, setSelectedService] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState("");
@@ -100,6 +108,16 @@ export default function PublicBookingPage({
         .order("name");
 
       setEmployees(employeesData || []);
+
+      const { data: settingsData } = await supabase
+        .from("booking_settings")
+        .select("*")
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+      if (settingsData) {
+        setSettings(settingsData);
+      }
     };
 
     load();
@@ -130,6 +148,30 @@ export default function PublicBookingPage({
     loadAppointments();
   }, [businessId, date, selectedEmployee]);
 
+  const generatedHours = useMemo(() => {
+    return generateHours(
+      settings.start_time,
+      settings.end_time,
+      settings.interval_minutes
+    );
+  }, [settings.start_time, settings.end_time, settings.interval_minutes]);
+
+  const selectedDateIsOpen = useMemo(() => {
+    if (!date) return true;
+
+    const day = new Date(`${date}T12:00:00`).getDay();
+
+    if (day === 0) return settings.sunday;
+    if (day === 1) return settings.monday;
+    if (day === 2) return settings.tuesday;
+    if (day === 3) return settings.wednesday;
+    if (day === 4) return settings.thursday;
+    if (day === 5) return settings.friday;
+    if (day === 6) return settings.saturday;
+
+    return true;
+  }, [date, settings]);
+
   const busyHours = useMemo(() => {
     return appointments.map((appointment) => {
       const value = new Date(appointment.appointment_date);
@@ -137,7 +179,7 @@ export default function PublicBookingPage({
     });
   }, [appointments]);
 
-  const freeHours = availableHours.filter((hour) => !busyHours.includes(hour));
+  const freeHours = generatedHours.filter((hour) => !busyHours.includes(hour));
 
   const createBooking = async () => {
     if (
@@ -149,6 +191,11 @@ export default function PublicBookingPage({
       !customerPhone
     ) {
       alert("Rellena servicio, empleado, fecha, hora, nombre y teléfono");
+      return;
+    }
+
+    if (!selectedDateIsOpen) {
+      alert("El negocio no acepta reservas este día.");
       return;
     }
 
@@ -293,7 +340,13 @@ export default function PublicBookingPage({
               className="rounded-2xl border px-4 py-3"
             />
 
-            {date && selectedEmployee && (
+            {date && !selectedDateIsOpen && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                Este negocio no acepta reservas este día. Elige otro día.
+              </div>
+            )}
+
+            {date && selectedEmployee && selectedDateIsOpen && (
               <div>
                 <p className="mb-3 text-sm font-medium text-neutral-700">
                   Horas disponibles
@@ -357,4 +410,25 @@ export default function PublicBookingPage({
       </div>
     </main>
   );
+}
+
+function generateHours(startTime: string, endTime: string, interval: number) {
+  const result: string[] = [];
+
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [endHour, endMinute] = endTime.split(":").map(Number);
+
+  const start = startHour * 60 + startMinute;
+  const end = endHour * 60 + endMinute;
+
+  for (let current = start; current < end; current += interval) {
+    const hour = Math.floor(current / 60);
+    const minute = current % 60;
+
+    result.push(
+      `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+    );
+  }
+
+  return result;
 }
