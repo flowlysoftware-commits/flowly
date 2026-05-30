@@ -310,7 +310,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8f7fb] px-6 py-8 text-neutral-950">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#ede9fe_0%,#ffffff_34%,#f8fafc_100%)] px-6 py-8 text-neutral-950">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
   <div>
@@ -325,14 +325,14 @@ export default function DashboardPage() {
   <div className="flex flex-wrap gap-3">
     <button
       onClick={openBillingPortal}
-      className="rounded-full border bg-white px-5 py-3"
+      className="rounded-full border border-neutral-200 bg-white/80 px-5 py-3 shadow-sm backdrop-blur"
     >
       <CreditCard size={18} className="inline" /> Facturación
     </button>
 
     <button
       onClick={logout}
-      className="rounded-full border bg-white px-5 py-3"
+      className="rounded-full border border-neutral-200 bg-white/80 px-5 py-3 shadow-sm backdrop-blur"
     >
       <LogOut size={18} className="inline" /> Salir
     </button>
@@ -346,7 +346,7 @@ export default function DashboardPage() {
           <Card icon={<UserRound />} label="Ingresos previstos" value={`${revenue.toFixed(2)}€`} />
         </section>
 
-        <section className="mb-8 rounded-[2rem] bg-neutral-950 p-6 text-white shadow-sm">
+        <section className="mb-8 overflow-hidden rounded-[2rem] bg-[radial-gradient(circle_at_top_right,#7c3aed_0%,#111827_36%,#020617_100%)] p-6 text-white shadow-premium">
           <p className="text-sm font-medium text-violet-300">Enlace público de reservas</p>
           <h2 className="mt-2 text-2xl font-semibold">Comparte este enlace con tus clientes</h2>
           <p className="mt-3 text-sm text-white/60">
@@ -640,7 +640,7 @@ function Card({
   value: string | number;
 }) {
   return (
-    <div className="rounded-3xl bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-premium backdrop-blur-xl">
       <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
         {icon}
       </div>
@@ -658,7 +658,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[2rem] bg-white p-6 shadow-sm">
+    <div className="rounded-[2rem] border border-white/70 bg-white/80 p-6 shadow-premium backdrop-blur-xl">
       <h2 className="mb-5 text-xl font-semibold">{title}</h2>
       {children}
     </div>

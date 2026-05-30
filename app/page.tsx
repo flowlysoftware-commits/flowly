@@ -142,6 +142,8 @@ export default function Home() {
   <Link href="/precios">Precios</Link>
   <Link href="/contacto">Contacto</Link>
   <Link href="/login">Área cliente</Link>
+  <Link href="/comercial">Comerciales</Link>
+  <Link href="/admin">Admin</Link>
 </div>
 
         <Link
