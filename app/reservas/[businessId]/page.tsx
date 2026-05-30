@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { CalendarDays, CheckCircle2 } from "lucide-react";
 
@@ -17,6 +17,38 @@ type Service = {
   price: number;
 };
 
+type Employee = {
+  id: string;
+  name: string;
+  active: boolean;
+};
+
+type Appointment = {
+  id: string;
+  appointment_date: string;
+  employee_id: string | null;
+  status: string;
+};
+
+const availableHours = [
+  "09:00",
+  "09:30",
+  "10:00",
+  "10:30",
+  "11:00",
+  "11:30",
+  "12:00",
+  "12:30",
+  "13:00",
+  "16:00",
+  "16:30",
+  "17:00",
+  "17:30",
+  "18:00",
+  "18:30",
+  "19:00",
+];
+
 export default function PublicBookingPage({
   params,
 }: {
@@ -26,7 +58,11 @@ export default function PublicBookingPage({
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+
   const [selectedService, setSelectedService] = useState("");
+  const [selectedEmployee, setSelectedEmployee] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
 
@@ -55,14 +91,64 @@ export default function PublicBookingPage({
         .order("name");
 
       setServices(servicesData || []);
+
+      const { data: employeesData } = await supabase
+        .from("employees")
+        .select("id, name, active")
+        .eq("business_id", businessId)
+        .eq("active", true)
+        .order("name");
+
+      setEmployees(employeesData || []);
     };
 
     load();
   }, [businessId]);
 
+  useEffect(() => {
+    const loadAppointments = async () => {
+      if (!date || !selectedEmployee) {
+        setAppointments([]);
+        return;
+      }
+
+      const start = `${date}T00:00:00`;
+      const end = `${date}T23:59:59`;
+
+      const { data } = await supabase
+        .from("appointments")
+        .select("id, appointment_date, employee_id, status")
+        .eq("business_id", businessId)
+        .eq("employee_id", selectedEmployee)
+        .gte("appointment_date", start)
+        .lte("appointment_date", end)
+        .in("status", ["pending", "confirmed"]);
+
+      setAppointments(data || []);
+    };
+
+    loadAppointments();
+  }, [businessId, date, selectedEmployee]);
+
+  const busyHours = useMemo(() => {
+    return appointments.map((appointment) => {
+      const value = new Date(appointment.appointment_date);
+      return value.toTimeString().slice(0, 5);
+    });
+  }, [appointments]);
+
+  const freeHours = availableHours.filter((hour) => !busyHours.includes(hour));
+
   const createBooking = async () => {
-    if (!selectedService || !date || !time || !customerName || !customerPhone) {
-      alert("Rellena servicio, fecha, hora, nombre y teléfono");
+    if (
+      !selectedService ||
+      !selectedEmployee ||
+      !date ||
+      !time ||
+      !customerName ||
+      !customerPhone
+    ) {
+      alert("Rellena servicio, empleado, fecha, hora, nombre y teléfono");
       return;
     }
 
@@ -74,6 +160,7 @@ export default function PublicBookingPage({
       .from("appointments")
       .select("id")
       .eq("business_id", businessId)
+      .eq("employee_id", selectedEmployee)
       .eq("appointment_date", appointmentDate)
       .in("status", ["pending", "confirmed"])
       .maybeSingle();
@@ -106,6 +193,7 @@ export default function PublicBookingPage({
       .insert({
         business_id: businessId,
         customer_id: customer.id,
+        employee_id: selectedEmployee,
         service_id: selectedService,
         appointment_date: appointmentDate,
         status: "pending",
@@ -179,21 +267,61 @@ export default function PublicBookingPage({
               ))}
             </select>
 
-            <div className="grid gap-5 md:grid-cols-2">
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="rounded-2xl border px-4 py-3"
-              />
+            <select
+              value={selectedEmployee}
+              onChange={(e) => {
+                setSelectedEmployee(e.target.value);
+                setTime("");
+              }}
+              className="rounded-2xl border px-4 py-3"
+            >
+              <option value="">Selecciona profesional</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                </option>
+              ))}
+            </select>
 
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="rounded-2xl border px-4 py-3"
-              />
-            </div>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => {
+                setDate(e.target.value);
+                setTime("");
+              }}
+              className="rounded-2xl border px-4 py-3"
+            />
+
+            {date && selectedEmployee && (
+              <div>
+                <p className="mb-3 text-sm font-medium text-neutral-700">
+                  Horas disponibles
+                </p>
+
+                <div className="grid grid-cols-3 gap-3 md:grid-cols-4">
+                  {freeHours.map((hour) => (
+                    <button
+                      key={hour}
+                      onClick={() => setTime(hour)}
+                      className={
+                        time === hour
+                          ? "rounded-2xl bg-neutral-950 px-4 py-3 text-sm text-white"
+                          : "rounded-2xl border border-neutral-200 px-4 py-3 text-sm hover:bg-neutral-50"
+                      }
+                    >
+                      {hour}
+                    </button>
+                  ))}
+                </div>
+
+                {freeHours.length === 0 && (
+                  <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500">
+                    No quedan horas disponibles para este profesional en este día.
+                  </div>
+                )}
+              </div>
+            )}
 
             <input
               value={customerName}
