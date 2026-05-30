@@ -137,11 +137,12 @@ export default function Home() {
         <div className="text-xl font-semibold tracking-tight">Flowly IA</div>
 
         <div className="hidden items-center gap-8 text-sm text-neutral-600 md:flex">
-          <a href="#demos">Demos</a>
-          <a href="#features">Funciones</a>
-          <Link href="/precios">Precios</Link>
-          <Link href="/contacto">Contacto</Link>
-        </div>
+  <a href="#demos">Demos</a>
+  <a href="#features">Funciones</a>
+  <Link href="/precios">Precios</Link>
+  <Link href="/contacto">Contacto</Link>
+  <Link href="/login">Área cliente</Link>
+</div>
 
         <Link
           href="/precios"
