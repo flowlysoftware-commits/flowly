@@ -238,6 +238,38 @@ export default function DashboardPage() {
           <Card icon={<UserRound />} label="Ingresos previstos" value={`${revenue.toFixed(2)}€`} />
         </section>
 
+        <section className="mb-8 rounded-[2rem] bg-neutral-950 p-6 text-white shadow-sm">
+  <p className="text-sm font-medium text-violet-300">
+    Enlace público de reservas
+  </p>
+
+  <h2 className="mt-2 text-2xl font-semibold">
+    Comparte este enlace con tus clientes
+  </h2>
+
+  <p className="mt-3 text-sm text-white/60">
+    Tus clientes podrán elegir servicio, día y hora desde esta página.
+  </p>
+
+  <div className="mt-5 flex flex-col gap-3 rounded-2xl bg-white/10 p-4 md:flex-row md:items-center md:justify-between">
+    <code className="break-all text-sm text-white/80">
+      {`${window.location.origin}/reservas/${business.id}`}
+    </code>
+
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(
+          `${window.location.origin}/reservas/${business.id}`
+        );
+        alert("Enlace copiado");
+      }}
+      className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950"
+    >
+      Copiar enlace
+    </button>
+  </div>
+</section>
+
         <section className="mb-6 flex flex-wrap gap-3">
           {["Agenda", "Servicios", "Empleados", "Clientes"].map((tab) => (
             <button
