@@ -68,6 +68,22 @@ export default function PublicBookingPage({
 
     setLoading(true);
 
+    const appointmentDate = `${date}T${time}:00`;
+
+    const { data: existingAppointment } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("appointment_date", appointmentDate)
+      .in("status", ["pending", "confirmed"])
+      .maybeSingle();
+
+    if (existingAppointment) {
+      alert("Esta hora ya no está disponible. Elige otra.");
+      setLoading(false);
+      return;
+    }
+
     const { data: customer, error: customerError } = await supabase
       .from("customers")
       .insert({
@@ -84,8 +100,6 @@ export default function PublicBookingPage({
       setLoading(false);
       return;
     }
-
-    const appointmentDate = `${date}T${time}:00`;
 
     const { error: appointmentError } = await supabase
       .from("appointments")
