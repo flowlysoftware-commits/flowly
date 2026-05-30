@@ -83,13 +83,25 @@ export default function PublicBookingPage({
 
   useEffect(() => {
     const load = async () => {
-      const { data: businessData } = await supabase
-        .from("businesses")
-        .select("id, name, business_type")
-        .eq("id", businessId)
-        .single();
+      const {
+  data: businessData,
+  error: businessError,
+} = await supabase
+  .from("businesses")
+  .select("id, name, business_type")
+  .eq("id", businessId)
+  .single();
 
-      setBusiness(businessData);
+console.log("BUSINESS ID:", businessId);
+console.log("BUSINESS DATA:", businessData);
+console.log("BUSINESS ERROR:", businessError);
+
+if (businessError) {
+  alert(JSON.stringify(businessError));
+  return;
+}
+
+setBusiness(businessData);
 
       const { data: servicesData } = await supabase
         .from("services")
