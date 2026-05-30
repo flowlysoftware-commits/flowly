@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import {
@@ -10,6 +10,9 @@ import {
   UserRound,
   Plus,
   LogOut,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from "lucide-react";
 
 type Business = {
@@ -64,6 +67,7 @@ export default function DashboardPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("Agenda");
+  const [origin, setOrigin] = useState("");
 
   const [serviceName, setServiceName] = useState("");
   const [serviceDuration, setServiceDuration] = useState("30");
@@ -79,6 +83,10 @@ export default function DashboardPage() {
   const [appointmentEmployee, setAppointmentEmployee] = useState("");
   const [appointmentService, setAppointmentService] = useState("");
   const [appointmentDate, setAppointmentDate] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   const loadData = async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -100,17 +108,33 @@ export default function DashboardPage() {
 
     const businessId = businessData.id;
 
-    const [{ data: servicesData }, { data: employeesData }, { data: customersData }, { data: appointmentsData }] =
-      await Promise.all([
-        supabase.from("services").select("*").eq("business_id", businessId).order("created_at"),
-        supabase.from("employees").select("*").eq("business_id", businessId).order("created_at"),
-        supabase.from("customers").select("*").eq("business_id", businessId).order("created_at"),
-        supabase
-          .from("appointments")
-          .select("*, customers(name), employees(name), services(name, price)")
-          .eq("business_id", businessId)
-          .order("appointment_date"),
-      ]);
+    const [
+      { data: servicesData },
+      { data: employeesData },
+      { data: customersData },
+      { data: appointmentsData },
+    ] = await Promise.all([
+      supabase
+        .from("services")
+        .select("*")
+        .eq("business_id", businessId)
+        .order("created_at"),
+      supabase
+        .from("employees")
+        .select("*")
+        .eq("business_id", businessId)
+        .order("created_at"),
+      supabase
+        .from("customers")
+        .select("*")
+        .eq("business_id", businessId)
+        .order("created_at"),
+      supabase
+        .from("appointments")
+        .select("*, customers(name), employees(name), services(name, price)")
+        .eq("business_id", businessId)
+        .order("appointment_date"),
+    ]);
 
     setServices(servicesData || []);
     setEmployees(employeesData || []);
@@ -121,6 +145,11 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const bookingUrl = useMemo(() => {
+    if (!origin || !business?.id) return "";
+    return `${origin}/reservas/${business.id}`;
+  }, [origin, business?.id]);
 
   const logout = async () => {
     await supabase.auth.signOut();
@@ -197,10 +226,16 @@ export default function DashboardPage() {
     await loadData();
   };
 
-  const revenue = appointments.reduce(
-    (sum, item) => sum + Number(item.services?.price || 0),
-    0
-  );
+  const updateAppointmentStatus = async (id: string, status: string) => {
+    await supabase.from("appointments").update({ status }).eq("id", id);
+    await loadData();
+  };
+
+  const revenue = appointments
+    .filter((item) => item.status !== "cancelled")
+    .reduce((sum, item) => sum + Number(item.services?.price || 0), 0);
+
+  const pendingAppointments = appointments.filter((item) => item.status === "pending").length;
 
   if (!business) {
     return (
@@ -233,42 +268,41 @@ export default function DashboardPage() {
 
         <section className="mb-8 grid gap-4 md:grid-cols-4">
           <Card icon={<CalendarDays />} label="Reservas" value={appointments.length} />
+          <Card icon={<Clock />} label="Pendientes" value={pendingAppointments} />
           <Card icon={<Users />} label="Clientes" value={customers.length} />
-          <Card icon={<Scissors />} label="Servicios" value={services.length} />
           <Card icon={<UserRound />} label="Ingresos previstos" value={`${revenue.toFixed(2)}€`} />
         </section>
 
         <section className="mb-8 rounded-[2rem] bg-neutral-950 p-6 text-white shadow-sm">
-  <p className="text-sm font-medium text-violet-300">
-    Enlace público de reservas
-  </p>
+          <p className="text-sm font-medium text-violet-300">
+            Enlace público de reservas
+          </p>
 
-  <h2 className="mt-2 text-2xl font-semibold">
-    Comparte este enlace con tus clientes
-  </h2>
+          <h2 className="mt-2 text-2xl font-semibold">
+            Comparte este enlace con tus clientes
+          </h2>
 
-  <p className="mt-3 text-sm text-white/60">
-    Tus clientes podrán elegir servicio, día y hora desde esta página.
-  </p>
+          <p className="mt-3 text-sm text-white/60">
+            Tus clientes podrán elegir servicio, día y hora desde esta página.
+          </p>
 
-  <div className="mt-5 flex flex-col gap-3 rounded-2xl bg-white/10 p-4 md:flex-row md:items-center md:justify-between">
-    <code className="break-all text-sm text-white/80">
-      {`${window.location.origin}/reservas/${business.id}`}
-    </code>
+          <div className="mt-5 flex flex-col gap-3 rounded-2xl bg-white/10 p-4 md:flex-row md:items-center md:justify-between">
+            <code className="break-all text-sm text-white/80">
+              {bookingUrl}
+            </code>
 
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(
-          `${window.location.origin}/reservas/${business.id}`
-        );
-        alert("Enlace copiado");
-      }}
-      className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950"
-    >
-      Copiar enlace
-    </button>
-  </div>
-</section>
+            <button
+              onClick={() => {
+                if (!bookingUrl) return;
+                navigator.clipboard.writeText(bookingUrl);
+                alert("Enlace copiado");
+              }}
+              className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950"
+            >
+              Copiar enlace
+            </button>
+          </div>
+        </section>
 
         <section className="mb-6 flex flex-wrap gap-3">
           {["Agenda", "Servicios", "Empleados", "Clientes"].map((tab) => (
@@ -355,13 +389,43 @@ export default function DashboardPage() {
                     <p className="font-semibold">
                       {new Date(appointment.appointment_date).toLocaleString("es-ES")}
                     </p>
+
                     <p className="mt-1 text-sm text-neutral-600">
-                      {appointment.customers?.name} · {appointment.services?.name} ·{" "}
-                      {appointment.employees?.name}
+                      {appointment.customers?.name || "Cliente"} ·{" "}
+                      {appointment.services?.name || "Servicio"} ·{" "}
+                      {appointment.employees?.name || "Sin empleado"}
                     </p>
+
                     <p className="mt-1 text-sm font-medium text-violet-600">
                       {appointment.services?.price || 0}€
                     </p>
+
+                    <p className="mt-2 text-xs text-neutral-500">
+                      Estado: {translateStatus(appointment.status)}
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => updateAppointmentStatus(appointment.id, "confirmed")}
+                        className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700"
+                      >
+                        <CheckCircle2 size={14} className="inline" /> Confirmar
+                      </button>
+
+                      <button
+                        onClick={() => updateAppointmentStatus(appointment.id, "completed")}
+                        className="rounded-full border border-violet-200 px-3 py-2 text-xs text-violet-700"
+                      >
+                        Completada
+                      </button>
+
+                      <button
+                        onClick={() => updateAppointmentStatus(appointment.id, "cancelled")}
+                        className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
+                      >
+                        <XCircle size={14} className="inline" /> Cancelar
+                      </button>
+                    </div>
                   </div>
                 ))}
 
@@ -515,6 +579,14 @@ export default function DashboardPage() {
       </div>
     </main>
   );
+}
+
+function translateStatus(status: string) {
+  if (status === "pending") return "Pendiente";
+  if (status === "confirmed") return "Confirmada";
+  if (status === "completed") return "Completada";
+  if (status === "cancelled") return "Cancelada";
+  return status;
 }
 
 function Card({
