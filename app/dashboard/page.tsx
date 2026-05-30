@@ -14,6 +14,7 @@ import {
   XCircle,
   Clock,
   Settings,
+  CreditCard,
 } from "lucide-react";
 
 type Business = {
@@ -178,6 +179,37 @@ export default function DashboardPage() {
     router.push("/");
   };
 
+  const openBillingPortal = async () => {
+  try {
+    const { data } = await supabase.auth.getSession();
+
+    const token = data.session?.access_token;
+
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const res = await fetch("/api/stripe/portal", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const result = await res.json();
+
+    if (result.url) {
+      window.location.href = result.url;
+    } else {
+      alert(result.error || "No se pudo abrir la facturación");
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Error abriendo la facturación");
+  }
+};
+
   const createService = async () => {
     if (!business || !serviceName || !servicePrice) return alert("Faltan datos");
 
@@ -289,10 +321,21 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <button onClick={logout} className="rounded-full border bg-white px-5 py-3">
-            <LogOut size={18} className="inline" /> Salir
-          </button>
-        </header>
+          <div className="flex gap-3">
+  <button
+    onClick={openBillingPortal}
+    className="rounded-full border bg-white px-5 py-3"
+  >
+    <CreditCard size={18} className="inline" /> Facturación
+  </button>
+
+  <button
+    onClick={logout}
+    className="rounded-full border bg-white px-5 py-3"
+  >
+    <LogOut size={18} className="inline" /> Salir
+  </button>
+</div>
 
         <section className="mb-8 grid gap-4 md:grid-cols-4">
           <Card icon={<CalendarDays />} label="Reservas" value={appointments.length} />
