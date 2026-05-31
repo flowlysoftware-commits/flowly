@@ -31,3 +31,29 @@ body {
 }
 .input-dark::placeholder { color: rgba(255,255,255,.42); }
 .input-dark option { color: #111827; background: #fff; }
+
+/* Flowly IA premium dashboard helpers */
+.input-dark {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.08);
+  padding: .9rem 1rem;
+  color: white;
+  outline: none;
+}
+.input-dark::placeholder { color: rgba(255,255,255,.42); }
+.input-dark:focus { border-color: rgba(167,139,250,.7); box-shadow: 0 0 0 3px rgba(124,58,237,.18); }
+.input-dark option { color: #111827; }
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  border-radius: 999px;
+  background: white;
+  padding: .9rem 1.2rem;
+  font-weight: 600;
+  color: #111827;
+}
+.btn-primary:hover { background: #f5f3ff; }
