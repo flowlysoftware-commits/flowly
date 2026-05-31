@@ -197,7 +197,7 @@ export default function PresupuestosPage() {
   const acceptedValue = acceptedBudgets.reduce((sum, b) => sum + Number(b.amount), 0);
 
   return (
-    <main className="min-h-screen bg-[#f8f7fb] px-6 py-8 text-neutral-950">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#ede9fe_0%,#ffffff_35%,#f8fafc_100%)] px-6 py-8 text-neutral-950">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
@@ -447,7 +447,7 @@ export default function PresupuestosPage() {
 
 function Card({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-3xl bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-xl">
       <p className="text-sm text-neutral-500">{label}</p>
       <p className="mt-2 text-3xl font-semibold">{value}</p>
     </div>
@@ -468,7 +468,7 @@ function GoalCard({
   const percentage = Math.min((current / goal) * 100, 100);
 
   return (
-    <div className="rounded-3xl bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-xl">
       <p className="text-sm font-medium text-violet-600">{title}</p>
       <h3 className="mt-2 text-xl font-semibold">{subtitle}</h3>
       <p className="mt-4 text-3xl font-semibold">

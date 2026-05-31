@@ -54,7 +54,7 @@ export default function ClientesPage() {
       : descartados;
 
   return (
-    <main className="min-h-screen bg-[#f8f7fb] px-6 py-8 text-neutral-950">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#ede9fe_0%,#ffffff_35%,#f8fafc_100%)] px-6 py-8 text-neutral-950">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8">
           <p className="text-sm font-medium text-violet-600">
@@ -183,7 +183,7 @@ export default function ClientesPage() {
 
 function Card({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-3xl bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-xl">
       <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
         <UserRound size={22} />
       </div>

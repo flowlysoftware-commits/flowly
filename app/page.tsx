@@ -184,7 +184,7 @@ export default function Home() {
             href="/precios"
             className="rounded-full border border-neutral-300 bg-white/70 px-7 py-4 text-neutral-800"
           >
-            Ver precios
+            Ver planes y módulos
           </Link>
         </div>
 

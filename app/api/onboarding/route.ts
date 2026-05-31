@@ -22,6 +22,16 @@ export async function POST(request: Request) {
     }
 
     const plan = session.metadata?.plan || "basic";
+    const modules = session.metadata?.modules
+      ? session.metadata.modules.split(",").filter(Boolean)
+      : [];
+    const monthlyAmount = session.metadata?.monthly_amount
+      ? Number(session.metadata.monthly_amount)
+      : plan === "premium"
+        ? 59.99
+        : plan === "basic"
+          ? 29.99
+          : null;
 
     const { data: userData, error: userError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -43,7 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: businessError } = await supabaseAdmin
+    const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
       .insert({
         owner_id: userId,
@@ -53,13 +63,40 @@ export async function POST(request: Request) {
         stripe_customer_id: String(session.customer || ""),
         stripe_subscription_id: String(session.subscription || ""),
         subscription_status: "trialing",
-      });
+      })
+      .select("id")
+      .single();
 
     if (businessError) {
       return NextResponse.json(
         { error: businessError.message },
         { status: 400 }
       );
+    }
+
+    if (business?.id && modules.length > 0) {
+      const rows = modules.map((module) => ({
+        business_id: business.id,
+        module_key: module,
+        status: "active",
+      }));
+
+      const { error: moduleError } = await supabaseAdmin
+        .from("business_modules")
+        .insert(rows);
+
+      if (moduleError) {
+        console.warn("Module insert warning:", moduleError.message);
+      }
+    }
+
+    if (business?.id && monthlyAmount) {
+      await supabaseAdmin.from("sales_deals").insert({
+        business_id: business.id,
+        plan,
+        monthly_amount: monthlyAmount,
+        status: "trialing",
+      });
     }
 
     return NextResponse.json({ success: true, email });
