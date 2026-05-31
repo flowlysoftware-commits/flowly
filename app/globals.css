@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
+  --background: #020617;
+  --foreground: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -13,17 +13,21 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, Arial, Helvetica, sans-serif;
 }
-
 
 .input-dark {
   border-radius: 1rem;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.09);
   padding: .75rem 1rem;
   color: #fff;
   outline: none;
+  backdrop-filter: blur(14px);
 }
-.input-dark::placeholder { color: rgba(255,255,255,.40); }
-.input-dark option { color: #111827; }
+.input-dark:focus {
+  border-color: rgba(167,139,250,.75);
+  box-shadow: 0 0 0 4px rgba(124,58,237,.16);
+}
+.input-dark::placeholder { color: rgba(255,255,255,.42); }
+.input-dark option { color: #111827; background: #fff; }

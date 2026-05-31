@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
       const { error: moduleError } = await supabaseAdmin
         .from("business_modules")
-        .insert(rows);
+        .upsert(rows, { onConflict: "business_id,module_key" });
 
       if (moduleError) {
         console.warn("Module insert warning:", moduleError.message);
