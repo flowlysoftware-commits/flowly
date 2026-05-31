@@ -174,7 +174,7 @@ export default function ModulePage() {
   const router = useRouter();
   const params = useParams();
   const moduleSlug = params.module as ModuleSlug;
-  const config = modules[moduleSlug];
+  const config = modules[moduleSlug] as ModuleConfig | undefined;
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [activeModules, setActiveModules] = useState<BusinessModule[]>([]);
@@ -308,7 +308,7 @@ export default function ModulePage() {
             <p className="mt-2 text-sm text-white/55">Guarda información operativa de este módulo. Todo queda asociado al negocio.</p>
             <div className="mt-6 grid gap-3">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={config.titlePlaceholder} className="input-dark" />
-              {Boolean(config.amountEnabled) && (
+             {(config as ModuleConfig).amountEnabled && (
   <input
     value={amount}
     onChange={(e) => setAmount(e.target.value)}
