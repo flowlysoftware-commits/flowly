@@ -4,27 +4,33 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
+const premiumModules = [
+  "whatsapp",
+  "billing",
+  "crm",
+  "marketing",
+  "ai",
+  "analytics",
+  "booking_premium",
+];
+
 export async function POST(request: Request) {
   try {
-    const { sessionId, password, businessName, businessType } =
-      await request.json();
+    const { sessionId, password, businessName, businessType } = await request.json();
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-
     if (session.status !== "complete") {
       return NextResponse.json({ error: "Pago no completado" }, { status: 400 });
     }
 
     const email = session.customer_details?.email;
-
     if (!email) {
       return NextResponse.json({ error: "Email no encontrado" }, { status: 400 });
     }
 
     const plan = session.metadata?.plan || "basic";
-    const modules = session.metadata?.modules
-      ? session.metadata.modules.split(",").filter(Boolean)
-      : [];
+    const metadataModules = session.metadata?.modules ? session.metadata.modules.split(",").filter(Boolean) : [];
+    const modules = plan === "premium" ? premiumModules : metadataModules;
     const monthlyAmount = session.metadata?.monthly_amount
       ? Number(session.metadata.monthly_amount)
       : plan === "premium"
@@ -33,25 +39,40 @@ export async function POST(request: Request) {
           ? 29.99
           : null;
 
-    const { data: userData, error: userError } =
-      await supabaseAdmin.auth.admin.createUser({
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const existingUser = existingUsers.users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
+
+    let userId = existingUser?.id;
+
+    if (!userId) {
+      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
       });
 
-    if (userError && !userError.message.includes("already registered")) {
-      return NextResponse.json({ error: userError.message }, { status: 400 });
-    }
+      if (userError) {
+        return NextResponse.json({ error: userError.message }, { status: 400 });
+      }
 
-    const userId = userData.user?.id;
+      userId = userData.user?.id;
+    }
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "No se pudo crear el usuario" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No se pudo crear el usuario" }, { status: 400 });
     }
+
+    await supabaseAdmin.from("user_profiles").upsert(
+      {
+        user_id: userId,
+        email,
+        full_name: businessName,
+        account_type: "client",
+        role: "owner",
+        status: "active",
+      },
+      { onConflict: "user_id" }
+    );
 
     const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
@@ -63,31 +84,19 @@ export async function POST(request: Request) {
         stripe_customer_id: String(session.customer || ""),
         stripe_subscription_id: String(session.subscription || ""),
         subscription_status: "trialing",
+        public_booking_enabled: true,
       })
       .select("id")
       .single();
 
     if (businessError) {
-      return NextResponse.json(
-        { error: businessError.message },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: businessError.message }, { status: 400 });
     }
 
     if (business?.id && modules.length > 0) {
-      const rows = modules.map((module) => ({
-        business_id: business.id,
-        module_key: module,
-        status: "active",
-      }));
-
-      const { error: moduleError } = await supabaseAdmin
-        .from("business_modules")
-        .upsert(rows, { onConflict: "business_id,module_key" });
-
-      if (moduleError) {
-        console.warn("Module insert warning:", moduleError.message);
-      }
+      const rows = modules.map((moduleKey) => ({ business_id: business.id, module_key: moduleKey, status: "active" }));
+      const { error: moduleError } = await supabaseAdmin.from("business_modules").upsert(rows, { onConflict: "business_id,module_key" });
+      if (moduleError) console.warn("Module insert warning:", moduleError.message);
     }
 
     if (business?.id && monthlyAmount) {
@@ -96,6 +105,7 @@ export async function POST(request: Request) {
         plan,
         monthly_amount: monthlyAmount,
         status: "trialing",
+        closed_at: new Date().toISOString(),
       });
     }
 

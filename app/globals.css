@@ -57,3 +57,44 @@ body {
   color: #111827;
 }
 .btn-primary:hover { background: #f5f3ff; }
+
+/* Flowly IA · Product UI */
+.menu-item {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  gap: .65rem;
+  border-radius: 1rem;
+  padding: .8rem 1rem;
+  text-align: left;
+  font-size: .9rem;
+  color: rgba(255,255,255,.68);
+  transition: all .18s ease;
+}
+.menu-item:hover { background: rgba(255,255,255,.10); color: white; }
+.menu-active {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  gap: .65rem;
+  border-radius: 1rem;
+  background: white;
+  padding: .8rem 1rem;
+  text-align: left;
+  font-size: .9rem;
+  font-weight: 600;
+  color: #111827;
+}
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+  padding: .9rem 1.2rem;
+  font-weight: 600;
+  color: white;
+}
+.btn-secondary:hover { background: rgba(255,255,255,.14); }

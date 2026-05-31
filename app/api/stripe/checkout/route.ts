@@ -20,15 +20,15 @@ export async function POST(request: Request) {
     const body = await request.json();
     const plan = body.plan as "basic" | "premium" | "modular";
     const selectedModuleIds = Array.isArray(body.modules) ? body.modules.map(String) : [];
+    const referralCode = body.referralCode ? String(body.referralCode) : "";
 
     if (!plan || !["basic", "premium", "modular"].includes(plan)) {
       return NextResponse.json({ error: "Plan no válido" }, { status: 400 });
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
-
     let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-    let metadata: Record<string, string> = { plan };
+    let metadata: Record<string, string> = { plan, referral_code: referralCode };
 
     if (plan === "modular") {
       const selectedModules = modularModules.filter((item) => selectedModuleIds.includes(item.id));
@@ -43,33 +43,16 @@ export async function POST(request: Request) {
             currency: "eur",
             unit_amount: Math.round(total * 100),
             recurring: { interval: "month" },
-            product_data: {
-              name: "Flowly Modular",
-              description: `Base Flowly + ${moduleNames}`,
-            },
+            product_data: { name: "Flowly Modular", description: `Base Flowly + ${moduleNames}` },
           },
           quantity: 1,
         },
       ];
 
-      metadata = {
-        plan,
-        modules: moduleIds,
-        monthly_amount: total.toFixed(2),
-      };
+      metadata = { plan, modules: moduleIds, monthly_amount: total.toFixed(2), referral_code: referralCode };
     } else {
-      const priceId =
-        plan === "basic"
-          ? process.env.STRIPE_BASIC_PRICE_ID
-          : process.env.STRIPE_PREMIUM_PRICE_ID;
-
-      if (!priceId) {
-        return NextResponse.json(
-          { error: "Price ID no configurado" },
-          { status: 400 }
-        );
-      }
-
+      const priceId = plan === "basic" ? process.env.STRIPE_BASIC_PRICE_ID : process.env.STRIPE_PREMIUM_PRICE_ID;
+      if (!priceId) return NextResponse.json({ error: "Price ID no configurado" }, { status: 400 });
       lineItems = [{ price: priceId, quantity: 1 }];
     }
 
@@ -77,10 +60,7 @@ export async function POST(request: Request) {
       mode: "subscription",
       payment_method_collection: "always",
       line_items: lineItems,
-      subscription_data: {
-        trial_period_days: 30,
-        metadata,
-      },
+      subscription_data: { trial_period_days: 30, metadata },
       metadata,
       success_url: `${siteUrl}/registro?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/precios?estado=cancelado`,
@@ -89,9 +69,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: session.url });
   } catch (error) {
     console.error("Stripe checkout error:", error);
-    return NextResponse.json(
-      { error: "Error creando la sesión de pago" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error creando la sesión de pago" }, { status: 500 });
   }
 }
