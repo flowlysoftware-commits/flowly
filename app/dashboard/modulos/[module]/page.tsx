@@ -36,8 +36,8 @@ type Appointment = {
   id: string;
   appointment_date: string;
   status: string;
-  customers: { name: string } | null;
-  services: { name: string; price: number } | null;
+  customers: { name: string }[] | null;
+  services: { name: string; price: number }[] | null;
 };
 
 type ModuleSlug = keyof typeof modules;
@@ -321,7 +321,7 @@ export default function ModulePage() {
                 <div className="mt-5 space-y-3">
                   {upcoming.map((item) => (
                     <div key={item.id} className="rounded-2xl bg-black/25 p-4">
-                      <p className="font-medium">{item.customers?.name || "Cliente"} · {item.services?.name || "Servicio"}</p>
+                      <p className="font-medium">{item.customers?.[0]?.name || "Cliente"} · {item.services?.[0]?.name || "Servicio"}</p>
                       <p className="mt-1 text-sm text-white/45">{new Date(item.appointment_date).toLocaleString("es-ES")}</p>
                     </div>
                   ))}
