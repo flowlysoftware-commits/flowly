@@ -308,7 +308,15 @@ export default function ModulePage() {
             <p className="mt-2 text-sm text-white/55">Guarda información operativa de este módulo. Todo queda asociado al negocio.</p>
             <div className="mt-6 grid gap-3">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={config.titlePlaceholder} className="input-dark" />
-              {config.amountEnabled && <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" />}
+              {Boolean(config.amountEnabled) && (
+  <input
+    value={amount}
+    onChange={(e) => setAmount(e.target.value)}
+    placeholder="Importe"
+    type="number"
+    className="input-dark"
+  />
+)}
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={config.notesPlaceholder} className="input-dark min-h-32" />
               <button onClick={createRecord} className="btn-primary"><Plus size={17} /> {config.cta}</button>
             </div>
