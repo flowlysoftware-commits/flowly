@@ -25,8 +25,11 @@ export async function POST(request: Request) {
 
     const { data: salesUser } = await supabaseAdmin.from("sales_users").select("id").eq("user_id", userData.user.id).maybeSingle();
     const { data: profile } = await supabaseAdmin.from("user_profiles").select("account_type").eq("user_id", userData.user.id).maybeSingle();
-    const isAdmin = profile?.account_type === "admin";
-    if (!isAdmin && salesUser?.id !== budget.sales_user_id) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+    const isAdmin = profile?.account_type === "admin" || profile?.account_type === "super_admin" || adminEmails.includes((userData.user.email || "").toLowerCase());
+    const isOwner = salesUser?.id && salesUser.id === budget.sales_user_id;
+    const isUnassignedAdminBudget = !budget.sales_user_id;
+    if (!isAdmin && !isOwner && !isUnassignedAdminBudget) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
     await supabaseAdmin.from("sales_budgets").update({ status: "enviado", sent_at: new Date().toISOString() }).eq("id", budgetId);
 
