@@ -6,26 +6,32 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
   ArrowRight,
+  Banknote,
   BarChart3,
-  BriefcaseBusiness,
   CheckCircle2,
-  Crown,
+  Clock,
   Euro,
+  FileText,
   LogOut,
+  Mail,
   Plus,
+  Send,
   Target,
   Trophy,
   Users,
 } from "lucide-react";
 
+type SalesRole = "director" | "jefe" | "senior" | "asociado";
+type Tab = "resumen" | "presupuestos" | "leads" | "saldo";
+
 type SalesUser = {
   id: string;
   full_name: string;
   email: string;
-  role: "director" | "jefe" | "senior" | "asociado";
+  role: SalesRole;
   manager_id: string | null;
-  monthly_target: number;
-  status: string;
+  monthly_target: number | null;
+  status: string | null;
 };
 
 type SalesLead = {
@@ -42,15 +48,6 @@ type SalesLead = {
   created_at: string;
 };
 
-type Deal = {
-  id: string;
-  sales_user_id: string | null;
-  monthly_amount: number;
-  plan: string;
-  status: string;
-  closed_at: string;
-};
-
 type Commission = {
   id: string;
   amount: number;
@@ -59,22 +56,75 @@ type Commission = {
   created_at: string;
 };
 
-const leadStatuses = ["nuevo", "contactado", "demo", "propuesta", "cerrado", "perdido"];
+type SalesBudget = {
+  id: string;
+  sales_user_id: string | null;
+  client_name: string;
+  client_email: string | null;
+  client_phone: string | null;
+  company: string | null;
+  sector: string | null;
+  plan_key: string;
+  plan_name: string;
+  modules: BudgetModule[] | null;
+  monthly_amount: number;
+  setup_amount: number;
+  currency: string;
+  country: string | null;
+  status: string;
+  notes: string | null;
+  sent_at: string | null;
+  created_at: string;
+};
 
-const roleLabels: Record<string, string> = {
+type BudgetModule = { key: string; name: string; price: number };
+
+type PlanOption = { key: string; name: string; price: number; description: string };
+type ModuleOption = { key: string; name: string; price: number };
+
+const roleLabels: Record<SalesRole, string> = {
   asociado: "Comercial Asociado",
   senior: "Comercial Senior",
   jefe: "Jefe Comercial",
   director: "Director Comercial",
 };
 
+const leadStatuses = ["nuevo", "contactado", "demo", "propuesta", "cerrado", "perdido"];
+const budgetStatuses = ["borrador", "enviado", "aceptado", "rechazado"];
+
+const plans: PlanOption[] = [
+  { key: "basic", name: "Flowly Basic", price: 29.99, description: "Agenda, clientes, reservas y panel base." },
+  { key: "premium", name: "Flowly Premium", price: 59.99, description: "Pack completo recomendado." },
+  { key: "modular", name: "Flowly Modular", price: 19.99, description: "Base flexible por módulos." },
+  { key: "enterprise", name: "Flowly Enterprise", price: 0, description: "Proyecto personalizado bajo presupuesto." },
+];
+
+const modules: ModuleOption[] = [
+  { key: "whatsapp", name: "WhatsApp automático", price: 9.99 },
+  { key: "billing", name: "Facturación PRO", price: 9.99 },
+  { key: "pos", name: "TPV", price: 14.99 },
+  { key: "crm", name: "CRM avanzado", price: 9.99 },
+  { key: "marketing", name: "Marketing", price: 9.99 },
+  { key: "ai", name: "IA Assistant", price: 14.99 },
+  { key: "analytics", name: "Estadísticas avanzadas", price: 4.99 },
+  { key: "booking_premium", name: "Reservas Premium", price: 4.99 },
+  { key: "voice", name: "Flowly Voice", price: 29.99 },
+];
+
+function money(value: number, currency = "EUR") {
+  if (currency === "COP") return `$${Math.round(value).toLocaleString("es-CO")} COP`;
+  return `${Number(value || 0).toFixed(2)}€`;
+}
+
 export default function ComercialPage() {
   const router = useRouter();
   const [me, setMe] = useState<SalesUser | null>(null);
+  const [team, setTeam] = useState<SalesUser[]>([]);
   const [leads, setLeads] = useState<SalesLead[]>([]);
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [budgets, setBudgets] = useState<SalesBudget[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("resumen");
 
   const [company, setCompany] = useState("");
   const [contactName, setContactName] = useState("");
@@ -83,14 +133,20 @@ export default function ComercialPage() {
   const [sector, setSector] = useState("Peluquería");
   const [notes, setNotes] = useState("");
 
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [budgetCompany, setBudgetCompany] = useState("");
+  const [budgetSector, setBudgetSector] = useState("Peluquería");
+  const [planKey, setPlanKey] = useState("premium");
+  const [setupAmount, setSetupAmount] = useState("0");
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [budgetNotes, setBudgetNotes] = useState("");
+
   const loadData = async () => {
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
-
-    if (!userData.user) {
-      router.push("/login");
-      return;
-    }
+    if (!userData.user) return router.push("/login");
 
     const { data: salesUser } = await supabase
       .from("sales_users")
@@ -104,28 +160,27 @@ export default function ComercialPage() {
       return;
     }
 
-    setMe(salesUser as SalesUser);
+    const current = salesUser as SalesUser;
+    setMe(current);
 
-    const [{ data: leadsData }, { data: dealsData }, { data: commissionsData }] = await Promise.all([
-      supabase
-        .from("sales_leads")
-        .select("*")
-        .eq("assigned_to", salesUser.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("sales_deals")
-        .select("*")
-        .eq("sales_user_id", salesUser.id)
-        .order("closed_at", { ascending: false }),
-      supabase
-        .from("commissions")
-        .select("*")
-        .eq("sales_user_id", salesUser.id)
-        .order("created_at", { ascending: false }),
+    const { data: teamData } = await supabase
+      .from("sales_users")
+      .select("*")
+      .eq("manager_id", current.id)
+      .order("created_at", { ascending: false });
+
+    const members = (teamData || []) as SalesUser[];
+    setTeam(members);
+    const visibleIds = current.role === "jefe" || current.role === "director" ? [current.id, ...members.map((m) => m.id)] : [current.id];
+
+    const [{ data: leadsData }, { data: budgetsData }, { data: commissionsData }] = await Promise.all([
+      supabase.from("sales_leads").select("*").in("assigned_to", visibleIds).order("created_at", { ascending: false }),
+      supabase.from("sales_budgets").select("*").in("sales_user_id", visibleIds).order("created_at", { ascending: false }),
+      supabase.from("commissions").select("*").eq("sales_user_id", current.id).order("created_at", { ascending: false }),
     ]);
 
     setLeads((leadsData || []) as SalesLead[]);
-    setDeals((dealsData || []) as Deal[]);
+    setBudgets((budgetsData || []) as unknown as SalesBudget[]);
     setCommissions((commissionsData || []) as Commission[]);
     setLoading(false);
   };
@@ -134,9 +189,20 @@ export default function ComercialPage() {
     loadData();
   }, []);
 
+  const selectedPlan = plans.find((plan) => plan.key === planKey) || plans[1];
+  const budgetModules = modules.filter((module) => selectedModules.includes(module.key));
+  const monthlyTotal = planKey === "enterprise" ? 0 : selectedPlan.price + budgetModules.reduce((sum, module) => sum + module.price, 0);
+  const pendingBalance = commissions.filter((item) => item.status === "pending").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalBalance = commissions.filter((item) => item.status !== "cancelled").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const sentBudgets = budgets.filter((budget) => budget.status === "enviado").length;
+  const acceptedBudgets = budgets.filter((budget) => budget.status === "aceptado").length;
+  const closedLeads = leads.filter((lead) => lead.status === "cerrado").length;
+  const target = me?.monthly_target || 5;
+  const targetProgress = Math.min(100, Math.round((acceptedBudgets / target) * 100));
+  const teamMrr = budgets.filter((budget) => budget.status === "aceptado").reduce((sum, budget) => sum + Number(budget.monthly_amount || 0), 0);
+
   const createLead = async () => {
     if (!me || !company) return alert("Indica al menos el nombre de la empresa");
-
     const { error } = await supabase.from("sales_leads").insert({
       company,
       contact_name: contactName,
@@ -149,9 +215,7 @@ export default function ComercialPage() {
       assigned_to: me.id,
       notes,
     });
-
     if (error) return alert(error.message);
-
     setCompany("");
     setContactName("");
     setPhone("");
@@ -165,35 +229,85 @@ export default function ComercialPage() {
     await loadData();
   };
 
+  const createBudget = async () => {
+    if (!me || !clientName || !clientEmail) return alert("Indica cliente y email");
+    const { error } = await supabase.from("sales_budgets").insert({
+      sales_user_id: me.id,
+      client_name: clientName,
+      client_email: clientEmail,
+      client_phone: clientPhone,
+      company: budgetCompany,
+      sector: budgetSector,
+      plan_key: selectedPlan.key,
+      plan_name: selectedPlan.name,
+      modules: budgetModules,
+      monthly_amount: monthlyTotal,
+      setup_amount: Number(setupAmount || 0),
+      currency: "EUR",
+      country: "ES",
+      status: "borrador",
+      notes: budgetNotes,
+    });
+    if (error) return alert(error.message);
+    setClientName("");
+    setClientEmail("");
+    setClientPhone("");
+    setBudgetCompany("");
+    setSelectedModules([]);
+    setBudgetNotes("");
+    await loadData();
+    setTab("presupuestos");
+  };
+
+  const sendBudget = async (budget: SalesBudget) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return router.push("/login");
+
+    const res = await fetch("/api/sales/budgets/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ budgetId: budget.id }),
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo enviar el presupuesto");
+    await loadData();
+    if (result.mailto) window.location.href = result.mailto;
+    alert(result.sent ? "Presupuesto enviado por email" : "Presupuesto marcado como enviado. Configura Resend para envío automático real.");
+  };
+
+  const updateBudgetStatus = async (id: string, status: string) => {
+    await supabase.from("sales_budgets").update({ status, accepted_at: status === "aceptado" ? new Date().toISOString() : null }).eq("id", id);
+    await loadData();
+  };
+
+  const requestPayout = async () => {
+    if (pendingBalance <= 0) return alert("No tienes saldo pendiente para solicitar cobro");
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return router.push("/login");
+    const res = await fetch("/api/sales/payouts/request", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo solicitar el cobro");
+    alert("Solicitud de cobro enviada al administrador");
+    await loadData();
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     router.push("/");
   };
 
-  const activeClients = deals.filter((deal) => deal.status === "active" || deal.status === "trialing").length;
-  const mrr = deals
-    .filter((deal) => deal.status === "active" || deal.status === "trialing")
-    .reduce((sum, deal) => sum + Number(deal.monthly_amount || 0), 0);
-  const commissionTotal = commissions
-    .filter((commission) => commission.status !== "cancelled")
-    .reduce((sum, commission) => sum + Number(commission.amount || 0), 0);
-  const closedLeads = leads.filter((lead) => lead.status === "cerrado").length;
-  const targetProgress = me?.monthly_target ? Math.min(100, Math.round((closedLeads / me.monthly_target) * 100)) : 0;
+  const pipeline = useMemo(() => leadStatuses.map((status) => ({ status, count: leads.filter((lead) => lead.status === status).length })), [leads]);
 
-  const pipeline = useMemo(() => {
-    return leadStatuses.map((status) => ({ status, count: leads.filter((lead) => lead.status === status).length }));
-  }, [leads]);
-
-  if (loading) {
-    return <main className="flex min-h-screen items-center justify-center bg-[#070711] text-white">Cargando panel comercial...</main>;
-  }
+  if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#070711] text-white">Cargando panel comercial...</main>;
 
   if (!me) {
     return (
       <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#4c1d95_0%,#09090f_35%,#020617_100%)] px-6 py-10 text-white">
         <div className="mx-auto max-w-3xl rounded-[2rem] border border-white/10 bg-white/10 p-8 backdrop-blur">
           <h1 className="text-3xl font-semibold">Tu usuario todavía no está vinculado a la red comercial</h1>
-          <p className="mt-3 text-white/60">Pide a un administrador que cree tu perfil en sales_users con tu email de acceso.</p>
+          <p className="mt-3 text-white/60">Pide a un administrador que cree tu perfil comercial y lo vincule con tu usuario.</p>
           <Link href="/dashboard" className="mt-6 inline-flex rounded-full bg-white px-5 py-3 text-neutral-950">Volver al dashboard</Link>
         </div>
       </main>
@@ -207,131 +321,92 @@ export default function ComercialPage() {
           <div>
             <p className="text-sm font-medium text-violet-300">Flowly IA · Panel comercial</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-tight">{me.full_name}</h1>
-            <p className="mt-2 text-white/60">{roleLabels[me.role]} · Cartera, objetivos y comisiones</p>
+            <p className="mt-2 text-white/60">{roleLabels[me.role]} · Presupuestos, equipo, cartera y saldo acumulado</p>
           </div>
-
           <div className="flex flex-wrap gap-3">
-            {(me.role === "jefe" || me.role === "director") && (
-              <Link href="/comercial/equipo" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">
-                Ver equipo <ArrowRight size={16} className="inline" />
-              </Link>
-            )}
-            <button onClick={logout} className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white">
-              <LogOut size={16} className="inline" /> Salir
-            </button>
+            {(me.role === "jefe" || me.role === "director") && <Link href="/comercial/equipo" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Ver equipo <ArrowRight size={16} className="inline" /></Link>}
+            <button onClick={logout} className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white"><LogOut size={16} className="inline" /> Salir</button>
           </div>
         </header>
 
-        <section className="mb-8 grid gap-4 md:grid-cols-4">
-          <Metric icon={<Target />} label="Progreso objetivo" value={`${targetProgress}%`} helper={`${closedLeads}/${me.monthly_target} cierres`} />
-          <Metric icon={<Users />} label="Clientes activos" value={activeClients} helper="Cartera propia" />
-          <Metric icon={<BarChart3 />} label="MRR generado" value={`${mrr.toFixed(2)}€`} helper="Mensual recurrente" />
-          <Metric icon={<Euro />} label="Comisiones" value={`${commissionTotal.toFixed(2)}€`} helper="Total registrado" />
+        <section className="mb-8 grid gap-4 md:grid-cols-5">
+          <Metric icon={<Target />} label="Objetivo" value={`${targetProgress}%`} helper={`${acceptedBudgets}/${target} aceptados`} />
+          <Metric icon={<FileText />} label="Presupuestos" value={budgets.length} helper={`${sentBudgets} enviados`} />
+          <Metric icon={<CheckCircle2 />} label="Aceptados" value={acceptedBudgets} helper="Cierres" />
+          <Metric icon={<BarChart3 />} label="MRR aceptado" value={money(teamMrr)} helper="Mensual recurrente" />
+          <Metric icon={<Euro />} label="Saldo disponible" value={money(pendingBalance)} helper="Pendiente de cobro" />
         </section>
 
-        <section className="mb-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <Panel title="Nuevo lead" dark>
-            <div className="grid gap-3">
-              <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Empresa / negocio" className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 outline-none placeholder:text-white/40" />
-              <div className="grid gap-3 md:grid-cols-2">
-                <input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Persona de contacto" className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 outline-none placeholder:text-white/40" />
-                <select value={sector} onChange={(e) => setSector(e.target.value)} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 outline-none">
-                  <option>Peluquería</option>
-                  <option>Barbería</option>
-                  <option>Estética</option>
-                  <option>Clínica</option>
-                  <option>Academia</option>
-                  <option>Restaurante</option>
-                </select>
+        <nav className="mb-6 flex flex-wrap gap-3">
+          <TabButton label="Resumen" active={tab === "resumen"} onClick={() => setTab("resumen")} />
+          <TabButton label="Presupuestos" active={tab === "presupuestos"} onClick={() => setTab("presupuestos")} />
+          <TabButton label="Leads" active={tab === "leads"} onClick={() => setTab("leads")} />
+          <TabButton label="Saldo" active={tab === "saldo"} onClick={() => setTab("saldo")} />
+        </nav>
+
+        {tab === "resumen" && (
+          <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <Panel title="Pipeline comercial">
+              <div className="grid gap-3 md:grid-cols-6">{pipeline.map((item) => <div key={item.status} className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 text-center"><p className="text-2xl font-semibold">{item.count}</p><p className="mt-1 text-xs capitalize text-white/50">{item.status}</p></div>)}</div>
+              <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-300" style={{ width: `${targetProgress}%` }} /></div>
+            </Panel>
+            <Panel title="Últimos presupuestos">
+              <BudgetList budgets={budgets.slice(0, 5)} onSend={sendBudget} onStatus={updateBudgetStatus} />
+            </Panel>
+          </section>
+        )}
+
+        {tab === "presupuestos" && (
+          <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <Panel title="Crear presupuesto">
+              <div className="grid gap-3">
+                <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Nombre del cliente" className="input-dark" />
+                <div className="grid gap-3 md:grid-cols-2"><input value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="Email cliente" className="input-dark" /><input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /></div>
+                <div className="grid gap-3 md:grid-cols-2"><input value={budgetCompany} onChange={(e) => setBudgetCompany(e.target.value)} placeholder="Empresa" className="input-dark" /><select value={budgetSector} onChange={(e) => setBudgetSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option></select></div>
+                <select value={planKey} onChange={(e) => setPlanKey(e.target.value)} className="input-dark">{plans.map((plan) => <option key={plan.key} value={plan.key}>{plan.name} · {plan.key === "enterprise" ? "A medida" : money(plan.price)}</option>)}</select>
+                <div className="grid gap-2 rounded-3xl border border-white/10 bg-white/[0.05] p-4">
+                  <p className="text-sm font-medium text-violet-200">Módulos incluidos</p>
+                  <div className="grid gap-2 md:grid-cols-2">{modules.map((module) => <label key={module.key} className="flex cursor-pointer items-center justify-between rounded-2xl bg-black/20 p-3 text-sm"><span>{module.name}</span><span className="flex items-center gap-2"><span className="text-white/45">{money(module.price)}</span><input type="checkbox" checked={selectedModules.includes(module.key)} onChange={(e) => setSelectedModules(e.target.checked ? [...selectedModules, module.key] : selectedModules.filter((key) => key !== module.key))} /></span></label>)}</div>
+                </div>
+                <input value={setupAmount} onChange={(e) => setSetupAmount(e.target.value)} placeholder="Instalación" type="number" className="input-dark" />
+                <textarea value={budgetNotes} onChange={(e) => setBudgetNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" />
+                <div className="rounded-3xl bg-white p-5 text-neutral-950"><div className="flex justify-between"><span>Total mensual</span><strong>{planKey === "enterprise" ? "A medida" : money(monthlyTotal)}</strong></div><p className="mt-1 text-xs text-neutral-500">{selectedPlan.description}</p></div>
+                <button onClick={createBudget} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white shadow-lg shadow-violet-950/40"><Plus size={18} className="inline" /> Crear presupuesto</button>
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 outline-none placeholder:text-white/40" />
-                <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 outline-none placeholder:text-white/40" />
-              </div>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas comerciales" className="min-h-24 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 outline-none placeholder:text-white/40" />
-              <button onClick={createLead} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white shadow-lg shadow-violet-950/40">
-                <Plus size={18} className="inline" /> Crear lead
-              </button>
-            </div>
-          </Panel>
+            </Panel>
+            <Panel title="Mis presupuestos y equipo">
+              <BudgetList budgets={budgets} onSend={sendBudget} onStatus={updateBudgetStatus} />
+            </Panel>
+          </section>
+        )}
 
-          <Panel title="Pipeline comercial" dark>
-            <div className="grid gap-3 md:grid-cols-6">
-              {pipeline.map((item) => (
-                <div key={item.status} className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 text-center">
-                  <p className="text-2xl font-semibold">{item.count}</p>
-                  <p className="mt-1 text-xs capitalize text-white/50">{item.status}</p>
-                </div>
-              ))}
-            </div>
+        {tab === "leads" && (
+          <section className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+            <Panel title="Nuevo lead">
+              <div className="grid gap-3"><input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Empresa / negocio" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Persona de contacto" className="input-dark" /><select value={sector} onChange={(e) => setSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option></select></div><div className="grid gap-3 md:grid-cols-2"><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="input-dark" /></div><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" /><button onClick={createLead} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><Plus size={18} className="inline" /> Crear lead</button></div>
+            </Panel>
+            <Panel title="Leads asignados">
+              <div className="space-y-3">{leads.map((lead) => <div key={lead.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><h3 className="text-lg font-semibold">{lead.company}</h3><p className="mt-1 text-sm text-white/55">{lead.contact_name || "Sin contacto"} · {lead.phone || "Sin teléfono"} · {lead.sector || "Sector"}</p></div><select value={lead.status} onChange={(e) => updateLead(lead.id, e.target.value)} className="input-dark max-w-44 capitalize">{leadStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></div>{lead.notes && <p className="mt-3 text-sm text-white/50">{lead.notes}</p>}</div>)}{leads.length === 0 && <Empty text="Aún no tienes leads asignados." />}</div>
+            </Panel>
+          </section>
+        )}
 
-            <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-300" style={{ width: `${targetProgress}%` }} />
-            </div>
-          </Panel>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Panel title="Leads asignados" dark>
-            <div className="space-y-3">
-              {leads.map((lead) => (
-                <div key={lead.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
-                  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                    <div>
-                      <h3 className="text-lg font-semibold">{lead.company}</h3>
-                      <p className="mt-1 text-sm text-white/55">{lead.contact_name || "Sin contacto"} · {lead.phone || "Sin teléfono"} · {lead.sector || "Sector"}</p>
-                    </div>
-                    <select value={lead.status} onChange={(e) => updateLead(lead.id, e.target.value)} className="rounded-full border border-white/10 bg-neutral-950 px-4 py-2 text-sm capitalize">
-                      {leadStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </div>
-                  {lead.notes && <p className="mt-3 text-sm text-white/50">{lead.notes}</p>}
-                </div>
-              ))}
-              {leads.length === 0 && <Empty text="Aún no tienes leads asignados." />}
-            </div>
-          </Panel>
-
-          <Panel title="Comisiones recientes" dark>
-            <div className="space-y-3">
-              {commissions.slice(0, 8).map((commission) => (
-                <div key={commission.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-                  <div>
-                    <p className="font-medium capitalize">{commission.type}</p>
-                    <p className="text-xs text-white/45">{commission.status}</p>
-                  </div>
-                  <p className="text-lg font-semibold text-violet-200">{Number(commission.amount).toFixed(2)}€</p>
-                </div>
-              ))}
-              {commissions.length === 0 && <Empty text="No hay comisiones registradas todavía." />}
-            </div>
-          </Panel>
-        </section>
+        {tab === "saldo" && (
+          <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+            <Panel title="Saldo acumulado"><div className="rounded-[2rem] bg-white p-6 text-neutral-950"><p className="text-sm text-neutral-500">Disponible para solicitar</p><p className="mt-2 text-5xl font-semibold">{money(pendingBalance)}</p><p className="mt-2 text-sm text-neutral-500">Total histórico: {money(totalBalance)}</p><button onClick={requestPayout} className="mt-6 rounded-full bg-neutral-950 px-6 py-4 font-medium text-white"><Banknote size={18} className="inline" /> Cobrar saldo</button></div></Panel>
+            <Panel title="Movimientos de comisión"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div><p className="font-medium capitalize">{commission.type}</p><p className="text-xs text-white/45">{commission.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p></div>)}{commissions.length === 0 && <Empty text="No hay comisiones registradas todavía." />}</div></Panel>
+          </section>
+        )}
       </div>
     </main>
   );
 }
 
-function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) {
-  return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-200">{icon}</div>
-      <p className="text-sm text-white/50">{label}</p>
-      <p className="mt-2 text-3xl font-semibold">{value}</p>
-      <p className="mt-1 text-xs text-violet-200/80">{helper}</p>
-    </div>
-  );
+function BudgetList({ budgets, onSend, onStatus }: { budgets: SalesBudget[]; onSend: (budget: SalesBudget) => void; onStatus: (id: string, status: string) => void }) {
+  return <div className="space-y-3">{budgets.map((budget) => <div key={budget.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-start"><div><p className="text-lg font-semibold">{budget.client_name}</p><p className="text-sm text-white/50">{budget.company || "Sin empresa"} · {budget.client_email || "Sin email"}</p><p className="mt-2 text-sm text-violet-200">{budget.plan_name} · {money(Number(budget.monthly_amount || 0), budget.currency)} / mes</p><p className="mt-1 text-xs capitalize text-white/40">Estado: {budget.status}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => onSend(budget)} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950"><Send size={13} className="inline" /> Enviar</button><select value={budget.status} onChange={(e) => onStatus(budget.id, e.target.value)} className="rounded-full border border-white/10 bg-neutral-950 px-3 py-2 text-xs capitalize">{budgetStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></div></div>{budget.modules && budget.modules.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{budget.modules.map((module) => <span key={module.key} className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-100">{module.name}</span>)}</div>}</div>)}{budgets.length === 0 && <Empty text="No hay presupuestos todavía." />}</div>;
 }
 
-function Panel({ title, children, dark = false }: { title: string; children: React.ReactNode; dark?: boolean }) {
-  return (
-    <div className={dark ? "rounded-[2rem] border border-white/10 bg-white/[0.08] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl" : "rounded-[2rem] bg-white p-6 shadow-sm"}>
-      <h2 className="mb-5 text-xl font-semibold">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function Empty({ text }: { text: string }) {
-  return <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-white/45">{text}</div>;
-}
+function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) { return <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-200">{icon}</div><p className="text-sm text-white/50">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-violet-200/80">{helper}</p></div>; }
+function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="rounded-[2rem] border border-white/10 bg-white/[0.08] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"><h2 className="mb-5 text-xl font-semibold">{title}</h2>{children}</div>; }
+function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={active ? "rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950" : "rounded-full border border-white/10 bg-white/[0.07] px-5 py-3 text-sm text-white/60"}>{label}</button>; }
+function Empty({ text }: { text: string }) { return <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-white/45">{text}</div>; }
