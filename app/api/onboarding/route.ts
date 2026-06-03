@@ -16,7 +16,7 @@ const premiumModules = [
 
 export async function POST(request: Request) {
   try {
-    const { sessionId, password, businessName, businessType } = await request.json();
+    const { sessionId, password, businessName, businessType, logoUrl, theme, primaryGoal } = await request.json();
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     if (session.status !== "complete") {
@@ -85,6 +85,9 @@ export async function POST(request: Request) {
         stripe_subscription_id: String(session.subscription || ""),
         subscription_status: "trialing",
         public_booking_enabled: true,
+        logo_url: logoUrl || null,
+        panel_theme: theme || "dark",
+        onboarding_goal: primaryGoal || null,
       })
       .select("id")
       .single();

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   CalendarDays,
@@ -134,7 +135,9 @@ export default function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#f3e8ff_0%,#ffffff_35%,#f8fafc_100%)] text-neutral-950">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-        <div className="text-xl font-semibold tracking-tight">Flowly IA</div>
+        <Link href="/" className="flex items-center gap-3">
+          <Image src="/logo.png" alt="Flowly IA" width={150} height={42} className="h-auto w-36 object-contain" priority />
+        </Link>
 
         <div className="hidden items-center gap-8 text-sm text-neutral-600 md:flex">
   <a href="#demos">Demos</a>
@@ -142,8 +145,6 @@ export default function Home() {
   <Link href="/precios">Precios</Link>
   <Link href="/contacto">Contacto</Link>
   <Link href="/login">Área cliente</Link>
-  <Link href="/comercial">Comerciales</Link>
-  <Link href="/admin">Admin</Link>
 </div>
 
         <Link
