@@ -153,6 +153,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [customization, setCustomization] =
+  useState<BusinessCustomization | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -222,6 +224,14 @@ export default function DashboardPage() {
 
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
+
+    const { data: customizationData } = await supabase
+  .from("business_customizations")
+  .select("*")
+  .eq("business_id", businessId)
+  .maybeSingle();
+
+setCustomization((customizationData as BusinessCustomization) || null);
 
     const [servicesRes, employeesRes, customersRes, patientProfilesRes, appointmentsRes, settingsRes, modulesRes, recordsRes] = await Promise.all([
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
