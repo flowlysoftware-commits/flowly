@@ -43,19 +43,6 @@ type Business = {
   panel_theme?: string | null;
 };
 
-type BusinessCustomization = {
-  business_id: string;
-  panel_title: string | null;
-  logo_url: string | null;
-  primary_color: string | null;
-  client_label: string | null;
-  service_label: string | null;
-  appointment_label: string | null;
-  clinic_mode: boolean | null;
-  medical_notes_enabled: boolean | null;
-  custom_welcome_text: string | null;
-};
-
 type UserProfile = { account_type: "client" | "sales" | "admin"; role: string };
 type Service = { id: string; name: string; duration: number | null; duration_minutes?: number | null; price: number; active: boolean | null };
 type Employee = { id: string; name: string; email: string | null; phone: string | null; active: boolean | null };
@@ -86,7 +73,7 @@ type BookingSettings = {
 type BusinessModule = { id?: string; business_id: string; module_key: string; status: string };
 type ModuleRecord = { id: string; business_id: string; module_key: string; title: string; amount: number | null; status: string; notes: string | null; created_at: string };
 
-type CoreTab = "area" | "agenda" | "servicios" | "empleados" | "clientes" | "ajustes";
+type CoreTab = "area" | "agenda" | "servicios" | "empleados" | "clientes" | "historial" | "ajustes";
 type ActiveTab = CoreTab | `module:${string}`;
 
 type ModuleItem = {
@@ -144,10 +131,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
-  const [customization, setCustomization] = useState<BusinessCustomization | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [patientProfiles, setPatientProfiles] = useState<PatientProfile[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [settings, setSettings] = useState<BookingSettings | null>(null);
   const [modules, setModules] = useState<BusinessModule[]>([]);
@@ -173,6 +160,19 @@ export default function DashboardPage() {
   const [recordAmount, setRecordAmount] = useState("");
   const [recordStatus, setRecordStatus] = useState("active");
   const [crmSearch, setCrmSearch] = useState("");
+
+  const [patientCustomerId, setPatientCustomerId] = useState("");
+  const [patientBirthDate, setPatientBirthDate] = useState("");
+  const [patientDocumentId, setPatientDocumentId] = useState("");
+  const [patientGender, setPatientGender] = useState("");
+  const [guardianName, setGuardianName] = useState("");
+  const [guardianPhone, setGuardianPhone] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
+  const [guardianRelationship, setGuardianRelationship] = useState("");
+  const [initialDiagnosis, setInitialDiagnosis] = useState("");
+  const [therapeuticProcess, setTherapeuticProcess] = useState("");
+  const [patientObservations, setPatientObservations] = useState("");
+  const [nextReviewDate, setNextReviewDate] = useState("");
 
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -201,18 +201,11 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const { data: customizationData } = await supabase
-      .from("business_customizations")
-      .select("*")
-      .eq("business_id", businessId)
-      .maybeSingle();
-
-    setCustomization((customizationData as BusinessCustomization) || null);
-
-    const [servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes] = await Promise.all([
+    const [servicesRes, employeesRes, customersRes, patientProfilesRes, appointmentsRes, settingsRes, modulesRes, recordsRes] = await Promise.all([
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("customers").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      supabase.from("patient_profiles").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("appointments").select("*, customers(name, full_name), employees(name), services(name, price)").eq("business_id", businessId).order("appointment_date", { ascending: true }),
       supabase.from("booking_settings").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("business_modules").select("*").eq("business_id", businessId).eq("status", "active"),
@@ -222,6 +215,7 @@ export default function DashboardPage() {
     setServices((servicesRes.data || []) as unknown as Service[]);
     setEmployees((employeesRes.data || []) as Employee[]);
     setCustomers((customersRes.data || []) as unknown as Customer[]);
+    setPatientProfiles((patientProfilesRes.data || []) as PatientProfile[]);
     setAppointments((appointmentsRes.data || []) as unknown as Appointment[]);
     setSettings((settingsRes.data as BookingSettings) || defaultSettings(businessId));
     setModules((modulesRes.data || []) as BusinessModule[]);
@@ -248,6 +242,20 @@ export default function DashboardPage() {
   const nextAppointments = appointments.slice(0, 6);
 
   const resetRecordForm = () => { setRecordTitle(""); setRecordNotes(""); setRecordAmount(""); setRecordStatus("active"); };
+  const resetPatientForm = () => {
+    setPatientCustomerId("");
+    setPatientBirthDate("");
+    setPatientDocumentId("");
+    setPatientGender("");
+    setGuardianName("");
+    setGuardianPhone("");
+    setGuardianEmail("");
+    setGuardianRelationship("");
+    setInitialDiagnosis("");
+    setTherapeuticProcess("");
+    setPatientObservations("");
+    setNextReviewDate("");
+  };
 
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
   const openBillingPortal = async () => {
@@ -278,6 +286,33 @@ export default function DashboardPage() {
     if (error) return alert(error.message);
     setCustomerFormName(""); setCustomerPhone(""); await loadData();
   };
+  const savePatientProfile = async () => {
+    if (!business || !patientCustomerId) return alert("Selecciona un paciente");
+
+    const selectedCustomer = customers.find((item) => item.id === patientCustomerId);
+    const { error } = await supabase.from("patient_profiles").upsert({
+      business_id: business.id,
+      customer_id: patientCustomerId,
+      child_full_name: selectedCustomer ? customerName(selectedCustomer) : null,
+      birth_date: patientBirthDate || null,
+      document_id: patientDocumentId || null,
+      gender: patientGender || null,
+      guardian_name: guardianName || null,
+      guardian_phone: guardianPhone || null,
+      guardian_email: guardianEmail || null,
+      guardian_relationship: guardianRelationship || null,
+      initial_diagnosis: initialDiagnosis || null,
+      therapeutic_process: therapeuticProcess || null,
+      observations: patientObservations || null,
+      next_review_date: nextReviewDate || null,
+    }, { onConflict: "customer_id" });
+
+    if (error) return alert(error.message);
+    alert("Historial clínico guardado");
+    resetPatientForm();
+    await loadData();
+  };
+
   const createAppointment = async () => {
     if (!business || !appointmentCustomer || !appointmentEmployee || !appointmentService || !appointmentDateValue) return alert("Faltan datos");
     const { error } = await supabase.from("appointments").insert({ business_id: business.id, customer_id: appointmentCustomer, employee_id: appointmentEmployee, service_id: appointmentService, appointment_date: appointmentDateValue, starts_at: appointmentDateValue, status: "confirmed" });
@@ -313,19 +348,12 @@ export default function DashboardPage() {
     return <Shell><div className="mx-auto max-w-2xl rounded-[2rem] border border-white/10 bg-white/[0.07] p-8 text-center shadow-2xl shadow-black/25 backdrop-blur-xl"><h1 className="text-3xl font-semibold">Tu cuenta todavía no tiene un negocio asociado</h1><p className="mt-3 text-white/60">Completa el registro después de contratar un plan o contacta con soporte si ya has pagado.</p><Link href="/precios" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 font-medium text-neutral-950">Ver planes</Link></div></Shell>;
   }
 
-  const panelTitle = customization?.panel_title || business.name;
-  const panelLogo = customization?.logo_url || business.logo_url;
-  const clientLabel = customization?.client_label || "Clientes";
-  const serviceLabel = customization?.service_label || "Servicios";
-  const appointmentLabel = customization?.appointment_label || "Agenda";
-  const welcomeText = customization?.custom_welcome_text || "Centro operativo de reservas, clientes, servicios, módulos y suscripción.";
-
   const navItems: { id: CoreTab; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
     { id: "area", label: "Área personal", Icon: LayoutDashboard },
-    { id: "agenda", label: appointmentLabel, Icon: CalendarDays },
-    { id: "servicios", label: serviceLabel, Icon: Scissors },
+    { id: "agenda", label: "Agenda", Icon: CalendarDays },
+    { id: "servicios", label: "Servicios", Icon: Scissors },
     { id: "empleados", label: "Empleados", Icon: UserRound },
-    { id: "clientes", label: clientLabel, Icon: Users },
+    { id: "clientes", label: "Clientes", Icon: Users },
     { id: "ajustes", label: "Ajustes", Icon: Settings },
   ];
 
@@ -354,11 +382,11 @@ export default function DashboardPage() {
           <header className="mb-6 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.07] p-7 shadow-2xl shadow-black/20 backdrop-blur-xl">
             <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
               <div className="flex items-start gap-4">
-                {panelLogo ? <img src={panelLogo} alt={panelTitle} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-white/15" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/20 text-xl font-semibold text-violet-100">{panelTitle.slice(0, 1)}</div>}
+                {business.logo_url ? <img src={business.logo_url} alt={business.name} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-white/15" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/20 text-xl font-semibold text-violet-100">{business.name.slice(0, 1)}</div>}
                 <div>
                   <p className="text-sm font-medium text-violet-300">{business.business_type || "Negocio"} · Plan {business.plan || "basic"}</p>
-                  <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">{panelTitle}</h1>
-                  <p className="mt-3 max-w-2xl text-white/60">{welcomeText}</p>
+                  <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">{business.name}</h1>
+                  <p className="mt-3 max-w-2xl text-white/60">Centro operativo de reservas, clientes, servicios, módulos y suscripción.</p>
                 </div>
               </div>
               <div className="rounded-[1.5rem] border border-violet-300/20 bg-violet-500/15 px-5 py-4 text-violet-100"><p className="text-sm text-violet-200">Estado suscripción</p><p className="mt-1 text-2xl font-semibold capitalize">{business.subscription_status || "trialing"}</p></div>
@@ -368,15 +396,16 @@ export default function DashboardPage() {
           <section className="mb-6 grid gap-4 md:grid-cols-4">
             <Metric icon={<CalendarDays />} label="Reservas" value={appointments.length} helper="Agenda total" />
             <Metric icon={<Clock />} label="Pendientes" value={pendingAppointments} helper="Por confirmar" />
-            <Metric icon={<Users />} label={clientLabel} value={customers.length} helper="Base activa" />
+            <Metric icon={<Users />} label="Clientes" value={customers.length} helper="Base activa" />
             <Metric icon={<TrendingUp />} label="Ingresos previstos" value={`${revenue.toFixed(2)}€`} helper="No canceladas" />
           </section>
 
           {activeTab === "area" && <AreaSection business={business} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} />}
-          {activeTab === "agenda" && <AgendaSection appointmentLabel={appointmentLabel} clientLabel={clientLabel} serviceLabel={serviceLabel} appointments={nextAppointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
-          {activeTab === "servicios" && <ServicesSection serviceLabel={serviceLabel} services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
+          {activeTab === "agenda" && <AgendaSection appointments={nextAppointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
+          {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
-          {activeTab === "clientes" && <CustomersSection clientLabel={clientLabel} customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
+          {activeTab === "clientes" && <CustomersSection customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
+          {activeTab === "historial" && customization?.clinic_mode && <PatientHistorySection customers={customers} patientProfiles={patientProfiles} patientCustomerId={patientCustomerId} setPatientCustomerId={setPatientCustomerId} patientBirthDate={patientBirthDate} setPatientBirthDate={setPatientBirthDate} patientDocumentId={patientDocumentId} setPatientDocumentId={setPatientDocumentId} patientGender={patientGender} setPatientGender={setPatientGender} guardianName={guardianName} setGuardianName={setGuardianName} guardianPhone={guardianPhone} setGuardianPhone={setGuardianPhone} guardianEmail={guardianEmail} setGuardianEmail={setGuardianEmail} guardianRelationship={guardianRelationship} setGuardianRelationship={setGuardianRelationship} initialDiagnosis={initialDiagnosis} setInitialDiagnosis={setInitialDiagnosis} therapeuticProcess={therapeuticProcess} setTherapeuticProcess={setTherapeuticProcess} patientObservations={patientObservations} setPatientObservations={setPatientObservations} nextReviewDate={nextReviewDate} setNextReviewDate={setNextReviewDate} savePatientProfile={savePatientProfile} />}
           {activeTab === "ajustes" && <SettingsSection settings={settings} setSettings={setSettings} saveSettings={saveSettings} />}
           {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
@@ -432,11 +461,180 @@ function WhatsappModule({ records, title, setTitle, notes, setNotes, status, set
   return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<MessageCircle />} label="Plantillas" value={records.length} helper="Guardadas" /><Metric icon={<CheckCircle2 />} label="Conexión" value="Pendiente" helper="Proveedor" /><Metric icon={<Clock />} label="Bots" value="3" helper="Preparados" /><Metric icon={<Users />} label="Uso" value="Reservas" helper="Automático" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Configurar bot / plantilla"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="confirmation">Confirmación de cita</option><option value="reminder">Recordatorio 24h</option><option value="recovery">Recuperación cliente inactivo</option><option value="custom">Mensaje personalizado</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre de plantilla" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Hola {cliente}, te recordamos tu cita en {negocio} el {fecha} a las {hora}." className="input-dark min-h-32" /><button onClick={() => createRecord("whatsapp", status)} className="btn-primary"><Plus size={17} /> Guardar plantilla</button></div></GlassCard><GlassCard title="Conexión WhatsApp"><div className="rounded-2xl bg-black/25 p-5"><p className="font-semibold">Conecta el número del negocio</p><p className="mt-2 text-sm text-white/55">Preparado para integrar WhatsApp Business API, Twilio, 360dialog o proveedor oficial.</p><button className="btn-secondary mt-4" onClick={() => alert("Conexión pendiente de proveedor WhatsApp")}>Conectar número</button></div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
 }
 
-function AgendaSection({ appointmentLabel = "Agenda", clientLabel = "Clientes", serviceLabel = "Servicios", appointments, customers, employees, services, appointmentCustomer, setAppointmentCustomer, appointmentEmployee, setAppointmentEmployee, appointmentService, setAppointmentService, appointmentDateValue, setAppointmentDateValue, createAppointment, updateAppointmentStatus }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title={`Nueva ${appointmentLabel.toLowerCase()}`}><div className="grid gap-3"><Select value={appointmentCustomer} onChange={setAppointmentCustomer} placeholder={`Seleccionar ${clientLabel.toLowerCase().replace("pacientes", "paciente").replace("clientes", "cliente")}`} options={customers.map((c: Customer) => ({ value: c.id, label: customerName(c) }))} /><Select value={appointmentEmployee} onChange={setAppointmentEmployee} placeholder="Seleccionar empleado" options={employees.map((e: Employee) => ({ value: e.id, label: e.name }))} /><Select value={appointmentService} onChange={setAppointmentService} placeholder={`Seleccionar ${serviceLabel.toLowerCase().replace("tratamientos", "tratamiento").replace("servicios", "servicio")}`} options={services.map((s: Service) => ({ value: s.id, label: `${s.name} · ${s.price}€` }))} /><input type="datetime-local" value={appointmentDateValue} onChange={(e) => setAppointmentDateValue(e.target.value)} className="input-dark" /><button onClick={createAppointment} className="btn-primary"><Plus size={17} /> Crear reserva</button></div></GlassCard><GlassCard title={`${appointmentLabel} operativa`}><div className="space-y-3">{appointments.map((appointment: Appointment) => { const service = firstRelation(appointment.services); const employee = firstRelation(appointment.employees); return <div key={appointment.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><p className="font-semibold">{new Date(appointmentDate(appointment)).toLocaleString("es-ES")}</p><p className="mt-1 text-sm text-white/58">{customerName(appointment.customers)} · {service?.name || "Servicio"} · {employee?.name || "Sin empleado"}</p><p className="mt-2 text-sm font-medium text-violet-200">{service?.price || 0}€ · {translateStatus(appointment.status)}</p></div><div className="flex flex-wrap gap-2"><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "confirmed")} tone="green">Confirmar</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "completed")} tone="violet">Completada</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "cancelled")} tone="red">Cancelar</StatusButton></div></div></div>; })}{!appointments.length && <Empty text="Todavía no hay reservas." />}</div></GlassCard></section>; }
-function ServicesSection({ serviceLabel = "Servicios", services, serviceName, setServiceName, serviceDuration, setServiceDuration, servicePrice, setServicePrice, createService }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title={`Nuevo ${serviceLabel.toLowerCase().replace("tratamientos", "tratamiento").replace("servicios", "servicio")}`}><div className="grid gap-3"><input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder={`Nombre del ${serviceLabel.toLowerCase().replace("tratamientos", "tratamiento").replace("servicios", "servicio")}`} className="input-dark" /><input value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} placeholder="Duración en minutos" type="number" className="input-dark" /><input value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="Precio" type="number" className="input-dark" /><button onClick={createService} className="btn-primary"><Plus size={17} /> Crear servicio</button></div></GlassCard><GlassCard title={`${serviceLabel} creados`}><div className="grid gap-3 md:grid-cols-2">{services.map((service: Service) => <div key={service.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-5"><h3 className="font-semibold">{service.name}</h3><p className="mt-2 text-sm text-white/50">{service.duration || service.duration_minutes || 30} min</p><p className="mt-4 text-2xl font-semibold">{Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea tu primer registro para empezar a recibir reservas." />}</div></GlassCard></section>; }
+function AgendaSection({ appointments, customers, employees, services, appointmentCustomer, setAppointmentCustomer, appointmentEmployee, setAppointmentEmployee, appointmentService, setAppointmentService, appointmentDateValue, setAppointmentDateValue, createAppointment, updateAppointmentStatus }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nueva reserva"><div className="grid gap-3"><Select value={appointmentCustomer} onChange={setAppointmentCustomer} placeholder="Seleccionar cliente" options={customers.map((c: Customer) => ({ value: c.id, label: customerName(c) }))} /><Select value={appointmentEmployee} onChange={setAppointmentEmployee} placeholder="Seleccionar empleado" options={employees.map((e: Employee) => ({ value: e.id, label: e.name }))} /><Select value={appointmentService} onChange={setAppointmentService} placeholder="Seleccionar servicio" options={services.map((s: Service) => ({ value: s.id, label: `${s.name} · ${s.price}€` }))} /><input type="datetime-local" value={appointmentDateValue} onChange={(e) => setAppointmentDateValue(e.target.value)} className="input-dark" /><button onClick={createAppointment} className="btn-primary"><Plus size={17} /> Crear reserva</button></div></GlassCard><GlassCard title="Calendario operativo"><div className="space-y-3">{appointments.map((appointment: Appointment) => { const service = firstRelation(appointment.services); const employee = firstRelation(appointment.employees); return <div key={appointment.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><p className="font-semibold">{new Date(appointmentDate(appointment)).toLocaleString("es-ES")}</p><p className="mt-1 text-sm text-white/58">{customerName(appointment.customers)} · {service?.name || "Servicio"} · {employee?.name || "Sin empleado"}</p><p className="mt-2 text-sm font-medium text-violet-200">{service?.price || 0}€ · {translateStatus(appointment.status)}</p></div><div className="flex flex-wrap gap-2"><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "confirmed")} tone="green">Confirmar</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "completed")} tone="violet">Completada</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "cancelled")} tone="red">Cancelar</StatusButton></div></div></div>; })}{!appointments.length && <Empty text="Todavía no hay reservas." />}</div></GlassCard></section>; }
+function ServicesSection({ services, serviceName, setServiceName, serviceDuration, setServiceDuration, servicePrice, setServicePrice, createService }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo servicio"><div className="grid gap-3"><input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Nombre del servicio" className="input-dark" /><input value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} placeholder="Duración en minutos" type="number" className="input-dark" /><input value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="Precio" type="number" className="input-dark" /><button onClick={createService} className="btn-primary"><Plus size={17} /> Crear servicio</button></div></GlassCard><GlassCard title="Servicios creados"><div className="grid gap-3 md:grid-cols-2">{services.map((service: Service) => <div key={service.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-5"><h3 className="font-semibold">{service.name}</h3><p className="mt-2 text-sm text-white/50">{service.duration || service.duration_minutes || 30} min</p><p className="mt-4 text-2xl font-semibold">{Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea tu primer servicio para empezar a recibir reservas." />}</div></GlassCard></section>; }
 function EmployeesSection({ employees, employeeName, setEmployeeName, employeePhone, setEmployeePhone, createEmployee }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo empleado"><div className="grid gap-3"><input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createEmployee} className="btn-primary"><Plus size={17} /> Crear empleado</button></div></GlassCard><GlassCard title="Equipo"><div className="space-y-3">{employees.map((employee: Employee) => <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{employee.name}</p><p className="text-sm text-white/45">{employee.phone || "Sin teléfono"}</p></div>)}{!employees.length && <Empty text="Añade al primer profesional del negocio." />}</div></GlassCard></section>; }
-function CustomersSection({ clientLabel = "Clientes", customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title={`Nuevo ${clientLabel.toLowerCase().replace("pacientes", "paciente").replace("clientes", "cliente")}`}><div className="grid gap-3"><input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear cliente</button></div></GlassCard><GlassCard title={clientLabel}><div className="space-y-3">{customers.map((customer: Customer) => <div key={customer.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{customerName(customer)}</p><p className="text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p></div>)}{!customers.length && <Empty text="Aún no hay registros." />}</div></GlassCard></section>; }
+function CustomersSection({ customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo cliente"><div className="grid gap-3"><input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear cliente</button></div></GlassCard><GlassCard title="Clientes"><div className="space-y-3">{customers.map((customer: Customer) => <div key={customer.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{customerName(customer)}</p><p className="text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p></div>)}{!customers.length && <Empty text="Aún no hay clientes." />}</div></GlassCard></section>; }
 function SettingsSection({ settings, setSettings, saveSettings }: { settings: BookingSettings; setSettings: (s: BookingSettings) => void; saveSettings: () => void }) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Horarios de reservas"><div className="grid gap-3"><label className="text-sm text-white/70">Hora apertura</label><input type="time" value={settings.start_time} onChange={(e) => setSettings({ ...settings, start_time: e.target.value })} className="input-dark" /><label className="text-sm text-white/70">Hora cierre</label><input type="time" value={settings.end_time} onChange={(e) => setSettings({ ...settings, end_time: e.target.value })} className="input-dark" /><label className="text-sm text-white/70">Intervalo</label><select value={settings.interval_minutes} onChange={(e) => setSettings({ ...settings, interval_minutes: Number(e.target.value) })} className="input-dark"><option value={15}>15 minutos</option><option value={30}>30 minutos</option><option value={45}>45 minutos</option><option value={60}>60 minutos</option></select><button onClick={saveSettings} className="btn-primary"><Settings size={17} /> Guardar ajustes</button></div></GlassCard><GlassCard title="Días activos"><div className="grid gap-3"><DayToggle label="Lunes" checked={settings.monday} onChange={(v) => setSettings({ ...settings, monday: v })} /><DayToggle label="Martes" checked={settings.tuesday} onChange={(v) => setSettings({ ...settings, tuesday: v })} /><DayToggle label="Miércoles" checked={settings.wednesday} onChange={(v) => setSettings({ ...settings, wednesday: v })} /><DayToggle label="Jueves" checked={settings.thursday} onChange={(v) => setSettings({ ...settings, thursday: v })} /><DayToggle label="Viernes" checked={settings.friday} onChange={(v) => setSettings({ ...settings, friday: v })} /><DayToggle label="Sábado" checked={settings.saturday} onChange={(v) => setSettings({ ...settings, saturday: v })} /><DayToggle label="Domingo" checked={settings.sunday} onChange={(v) => setSettings({ ...settings, sunday: v })} /></div></GlassCard></section>; }
+
+
+function PatientHistorySection({
+  customers,
+  patientProfiles,
+  patientCustomerId,
+  setPatientCustomerId,
+  patientBirthDate,
+  setPatientBirthDate,
+  patientDocumentId,
+  setPatientDocumentId,
+  patientGender,
+  setPatientGender,
+  guardianName,
+  setGuardianName,
+  guardianPhone,
+  setGuardianPhone,
+  guardianEmail,
+  setGuardianEmail,
+  guardianRelationship,
+  setGuardianRelationship,
+  initialDiagnosis,
+  setInitialDiagnosis,
+  therapeuticProcess,
+  setTherapeuticProcess,
+  patientObservations,
+  setPatientObservations,
+  nextReviewDate,
+  setNextReviewDate,
+  savePatientProfile,
+}: {
+  customers: Customer[];
+  patientProfiles: PatientProfile[];
+  patientCustomerId: string;
+  setPatientCustomerId: (v: string) => void;
+  patientBirthDate: string;
+  setPatientBirthDate: (v: string) => void;
+  patientDocumentId: string;
+  setPatientDocumentId: (v: string) => void;
+  patientGender: string;
+  setPatientGender: (v: string) => void;
+  guardianName: string;
+  setGuardianName: (v: string) => void;
+  guardianPhone: string;
+  setGuardianPhone: (v: string) => void;
+  guardianEmail: string;
+  setGuardianEmail: (v: string) => void;
+  guardianRelationship: string;
+  setGuardianRelationship: (v: string) => void;
+  initialDiagnosis: string;
+  setInitialDiagnosis: (v: string) => void;
+  therapeuticProcess: string;
+  setTherapeuticProcess: (v: string) => void;
+  patientObservations: string;
+  setPatientObservations: (v: string) => void;
+  nextReviewDate: string;
+  setNextReviewDate: (v: string) => void;
+  savePatientProfile: () => void;
+}) {
+  const selectedProfile = patientProfiles.find((item) => item.customer_id === patientCustomerId);
+
+  useEffect(() => {
+    if (!selectedProfile) return;
+    setPatientBirthDate(selectedProfile.birth_date || "");
+    setPatientDocumentId(selectedProfile.document_id || "");
+    setPatientGender(selectedProfile.gender || "");
+    setGuardianName(selectedProfile.guardian_name || "");
+    setGuardianPhone(selectedProfile.guardian_phone || "");
+    setGuardianEmail(selectedProfile.guardian_email || "");
+    setGuardianRelationship(selectedProfile.guardian_relationship || "");
+    setInitialDiagnosis(selectedProfile.initial_diagnosis || "");
+    setTherapeuticProcess(selectedProfile.therapeutic_process || "");
+    setPatientObservations(selectedProfile.observations || "");
+    setNextReviewDate(selectedProfile.next_review_date || "");
+  }, [selectedProfile]);
+
+  const withProfile = patientProfiles.length;
+  const nextReviews = patientProfiles.filter((item) => item.next_review_date).length;
+
+  return (
+    <section className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric icon={<Users />} label="Pacientes" value={customers.length} helper="Base total" />
+        <Metric icon={<FileText />} label="Historias clínicas" value={withProfile} helper="Creadas" />
+        <Metric icon={<CalendarDays />} label="Revisiones" value={nextReviews} helper="Programadas" />
+        <Metric icon={<UserRound />} label="Acudientes" value={withProfile} helper="Registrados" />
+      </div>
+
+      <section className="grid gap-6 xl:grid-cols-[.9fr_1.1fr]">
+        <GlassCard title="Historia clínica infantil">
+          <div className="grid gap-3">
+            <Select
+              value={patientCustomerId}
+              onChange={setPatientCustomerId}
+              placeholder="Seleccionar paciente"
+              options={customers.map((c) => ({ value: c.id, label: customerName(c) }))}
+            />
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <input type="date" value={patientBirthDate} onChange={(e) => setPatientBirthDate(e.target.value)} className="input-dark" />
+              <input value={patientDocumentId} onChange={(e) => setPatientDocumentId(e.target.value)} placeholder="Documento / ID" className="input-dark" />
+            </div>
+
+            <select value={patientGender} onChange={(e) => setPatientGender(e.target.value)} className="input-dark">
+              <option value="">Género</option>
+              <option value="femenino">Femenino</option>
+              <option value="masculino">Masculino</option>
+              <option value="otro">Otro / No especificado</option>
+            </select>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <input value={guardianName} onChange={(e) => setGuardianName(e.target.value)} placeholder="Nombre del acudiente" className="input-dark" />
+              <input value={guardianRelationship} onChange={(e) => setGuardianRelationship(e.target.value)} placeholder="Parentesco" className="input-dark" />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <input value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} placeholder="Teléfono acudiente" className="input-dark" />
+              <input value={guardianEmail} onChange={(e) => setGuardianEmail(e.target.value)} placeholder="Email acudiente" type="email" className="input-dark" />
+            </div>
+
+            <textarea value={initialDiagnosis} onChange={(e) => setInitialDiagnosis(e.target.value)} placeholder="Diagnóstico inicial" className="input-dark min-h-24" />
+            <textarea value={therapeuticProcess} onChange={(e) => setTherapeuticProcess(e.target.value)} placeholder="Proceso terapéutico / tratamiento" className="input-dark min-h-24" />
+            <textarea value={patientObservations} onChange={(e) => setPatientObservations(e.target.value)} placeholder="Observaciones clínicas" className="input-dark min-h-24" />
+
+            <label className="text-sm text-white/70">Próxima revisión</label>
+            <input type="date" value={nextReviewDate} onChange={(e) => setNextReviewDate(e.target.value)} className="input-dark" />
+
+            <button onClick={savePatientProfile} className="btn-primary">
+              <FileText size={17} /> Guardar historial clínico
+            </button>
+          </div>
+        </GlassCard>
+
+        <GlassCard title="Pacientes con historial">
+          <div className="space-y-3">
+            {patientProfiles.map((profile) => {
+              const customer = customers.find((c) => c.id === profile.customer_id);
+              return (
+                <div key={profile.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+                  <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                    <div>
+                      <p className="font-semibold">{profile.child_full_name || (customer ? customerName(customer) : "Paciente")}</p>
+                      <p className="mt-1 text-sm text-white/50">
+                        Acudiente: {profile.guardian_name || "Sin acudiente"} · {profile.guardian_phone || "Sin teléfono"}
+                      </p>
+                      <p className="mt-2 text-sm text-violet-200">
+                        {profile.initial_diagnosis || "Sin diagnóstico inicial"}
+                      </p>
+                      {profile.next_review_date && (
+                        <p className="mt-2 text-xs text-white/35">Próxima revisión: {new Date(profile.next_review_date).toLocaleDateString("es-ES")}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setPatientCustomerId(profile.customer_id)}
+                      className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {!patientProfiles.length && <Empty text="Aún no hay historiales clínicos creados." />}
+          </div>
+        </GlassCard>
+      </section>
+    </section>
+  );
+}
 
 function RecordsCard({ title, records, deleteRecord }: { title: string; records: ModuleRecord[]; deleteRecord: (id: string) => void }) { return <GlassCard title={title}><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard>; }
 function RecordsList({ records, deleteRecord }: { records: ModuleRecord[]; deleteRecord: (id: string) => void }) { return <div className="space-y-3">{records.map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{record.title}</p>{record.notes && <p className="mt-2 text-sm leading-6 text-white/55">{record.notes}</p>}<p className="mt-2 text-xs text-white/35">{record.status} · {new Date(record.created_at).toLocaleString("es-ES")}</p></div>{record.amount !== null && <p className="rounded-full bg-violet-500/20 px-3 py-1 text-sm text-violet-100">{Number(record.amount).toFixed(2)}€</p>}</div><button onClick={() => deleteRecord(record.id)} className="mt-3 text-xs text-red-200/80">Eliminar</button></div>)}{!records.length && <Empty text="Aún no hay registros." />}</div>; }
