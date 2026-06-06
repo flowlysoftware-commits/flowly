@@ -43,19 +43,6 @@ type Business = {
   panel_theme?: string | null;
 };
 
-type BusinessCustomization = {
-  business_id: string;
-  panel_title: string | null;
-  logo_url: string | null;
-  primary_color: string | null;
-  client_label: string | null;
-  service_label: string | null;
-  appointment_label: string | null;
-  clinic_mode: boolean | null;
-  medical_notes_enabled: boolean | null;
-  custom_welcome_text: string | null;
-};
-
 type UserProfile = { account_type: "client" | "sales" | "admin"; role: string };
 type Service = { id: string; name: string; duration: number | null; duration_minutes?: number | null; price: number; active: boolean | null };
 type Employee = { id: string; name: string; email: string | null; phone: string | null; active: boolean | null };
@@ -85,6 +72,20 @@ type BookingSettings = {
 };
 type BusinessModule = { id?: string; business_id: string; module_key: string; status: string };
 type ModuleRecord = { id: string; business_id: string; module_key: string; title: string; amount: number | null; status: string; notes: string | null; created_at: string };
+
+type VoiceCall = {
+  id: string;
+  business_id: string;
+  caller_name: string | null;
+  caller_phone: string;
+  reason: string | null;
+  transcript: string | null;
+  intent: string | null;
+  status: string | null;
+  priority: string | null;
+  source: string | null;
+  created_at: string;
+};
 
 type CoreTab = "area" | "agenda" | "servicios" | "empleados" | "clientes" | "ajustes";
 type ActiveTab = CoreTab | `module:${string}`;
@@ -144,7 +145,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
-  const [customization, setCustomization] = useState<BusinessCustomization | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -152,6 +152,7 @@ export default function DashboardPage() {
   const [settings, setSettings] = useState<BookingSettings | null>(null);
   const [modules, setModules] = useState<BusinessModule[]>([]);
   const [moduleRecords, setModuleRecords] = useState<ModuleRecord[]>([]);
+  const [voiceCalls, setVoiceCalls] = useState<VoiceCall[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
@@ -173,6 +174,13 @@ export default function DashboardPage() {
   const [recordAmount, setRecordAmount] = useState("");
   const [recordStatus, setRecordStatus] = useState("active");
   const [crmSearch, setCrmSearch] = useState("");
+  const [voiceCallerName, setVoiceCallerName] = useState("");
+  const [voiceCallerPhone, setVoiceCallerPhone] = useState("");
+  const [voiceReason, setVoiceReason] = useState("");
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceIntent, setVoiceIntent] = useState("informacion");
+  const [voiceStatus, setVoiceStatus] = useState("nueva");
+  const [voicePriority, setVoicePriority] = useState("normal");
 
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -201,15 +209,7 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const { data: customizationData } = await supabase
-      .from("business_customizations")
-      .select("*")
-      .eq("business_id", businessId)
-      .maybeSingle();
-
-    setCustomization((customizationData as BusinessCustomization) || null);
-
-    const [servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes] = await Promise.all([
+    const [servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes] = await Promise.all([
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("customers").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -217,6 +217,7 @@ export default function DashboardPage() {
       supabase.from("booking_settings").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("business_modules").select("*").eq("business_id", businessId).eq("status", "active"),
       supabase.from("module_records").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
     ]);
 
     setServices((servicesRes.data || []) as unknown as Service[]);
@@ -226,6 +227,7 @@ export default function DashboardPage() {
     setSettings((settingsRes.data as BookingSettings) || defaultSettings(businessId));
     setModules((modulesRes.data || []) as BusinessModule[]);
     setModuleRecords((recordsRes.data || []) as ModuleRecord[]);
+    setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
     setLoading(false);
   };
 
@@ -248,6 +250,15 @@ export default function DashboardPage() {
   const nextAppointments = appointments.slice(0, 6);
 
   const resetRecordForm = () => { setRecordTitle(""); setRecordNotes(""); setRecordAmount(""); setRecordStatus("active"); };
+  const resetVoiceForm = () => {
+    setVoiceCallerName("");
+    setVoiceCallerPhone("");
+    setVoiceReason("");
+    setVoiceTranscript("");
+    setVoiceIntent("informacion");
+    setVoiceStatus("nueva");
+    setVoicePriority("normal");
+  };
 
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
   const openBillingPortal = async () => {
@@ -308,25 +319,49 @@ export default function DashboardPage() {
     await loadData();
   };
 
+  const createVoiceCall = async () => {
+    if (!business || !voiceCallerPhone) return alert("Añade al menos el teléfono de la llamada");
+
+    const { error } = await supabase.from("voice_calls").insert({
+      business_id: business.id,
+      caller_name: voiceCallerName || null,
+      caller_phone: voiceCallerPhone,
+      reason: voiceReason || null,
+      transcript: voiceTranscript || null,
+      intent: voiceIntent,
+      status: voiceStatus,
+      priority: voicePriority,
+      source: "manual",
+    });
+
+    if (error) return alert(error.message);
+    resetVoiceForm();
+    await loadData();
+  };
+
+  const updateVoiceCallStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from("voice_calls").update({ status }).eq("id", id);
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
+  const deleteVoiceCall = async (id: string) => {
+    const { error } = await supabase.from("voice_calls").delete().eq("id", id);
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#070711] text-white">Cargando panel...</main>;
   if (!business || !settings) {
     return <Shell><div className="mx-auto max-w-2xl rounded-[2rem] border border-white/10 bg-white/[0.07] p-8 text-center shadow-2xl shadow-black/25 backdrop-blur-xl"><h1 className="text-3xl font-semibold">Tu cuenta todavía no tiene un negocio asociado</h1><p className="mt-3 text-white/60">Completa el registro después de contratar un plan o contacta con soporte si ya has pagado.</p><Link href="/precios" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 font-medium text-neutral-950">Ver planes</Link></div></Shell>;
   }
 
-  const panelTitle = customization?.panel_title || business.name;
-  const panelLogo = customization?.logo_url || business.logo_url;
-  const clientLabel = customization?.client_label || "Clientes";
-  const serviceLabel = customization?.service_label || "Servicios";
-  const appointmentLabel = customization?.appointment_label || "Agenda";
-  const welcomeText = customization?.custom_welcome_text || "Centro operativo de reservas, clientes, servicios, módulos y suscripción.";
-
   const navItems: { id: CoreTab; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
     { id: "area", label: "Área personal", Icon: LayoutDashboard },
-    { id: "agenda", label: appointmentLabel, Icon: CalendarDays },
-    { id: "servicios", label: serviceLabel, Icon: Scissors },
-    { id: "empleados", label: customization?.clinic_mode ? "Profesionales" : "Empleados", Icon: UserRound },
-    { id: "clientes", label: clientLabel, Icon: Users },
-    ...(customization?.clinic_mode ? [{ id: "historial" as CoreTab, label: "Historial clínico", Icon: FileText }] : []),
+    { id: "agenda", label: "Agenda", Icon: CalendarDays },
+    { id: "servicios", label: "Servicios", Icon: Scissors },
+    { id: "empleados", label: "Empleados", Icon: UserRound },
+    { id: "clientes", label: "Clientes", Icon: Users },
     { id: "ajustes", label: "Ajustes", Icon: Settings },
   ];
 
@@ -355,11 +390,11 @@ export default function DashboardPage() {
           <header className="mb-6 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.07] p-7 shadow-2xl shadow-black/20 backdrop-blur-xl">
             <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
               <div className="flex items-start gap-4">
-                {panelLogo ? <img src={panelLogo} alt={panelTitle} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-white/15" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/20 text-xl font-semibold text-violet-100">{panelTitle.slice(0, 1)}</div>}
+                {business.logo_url ? <img src={business.logo_url} alt={business.name} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-white/15" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/20 text-xl font-semibold text-violet-100">{business.name.slice(0, 1)}</div>}
                 <div>
                   <p className="text-sm font-medium text-violet-300">{business.business_type || "Negocio"} · Plan {business.plan || "basic"}</p>
-                  <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">{panelTitle}</h1>
-                  <p className="mt-3 max-w-2xl text-white/60">{welcomeText}</p>
+                  <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">{business.name}</h1>
+                  <p className="mt-3 max-w-2xl text-white/60">Centro operativo de reservas, clientes, servicios, módulos y suscripción.</p>
                 </div>
               </div>
               <div className="rounded-[1.5rem] border border-violet-300/20 bg-violet-500/15 px-5 py-4 text-violet-100"><p className="text-sm text-violet-200">Estado suscripción</p><p className="mt-1 text-2xl font-semibold capitalize">{business.subscription_status || "trialing"}</p></div>
@@ -369,17 +404,17 @@ export default function DashboardPage() {
           <section className="mb-6 grid gap-4 md:grid-cols-4">
             <Metric icon={<CalendarDays />} label="Reservas" value={appointments.length} helper="Agenda total" />
             <Metric icon={<Clock />} label="Pendientes" value={pendingAppointments} helper="Por confirmar" />
-            <Metric icon={<Users />} label={clientLabel} value={customers.length} helper="Base activa" />
+            <Metric icon={<Users />} label="Clientes" value={customers.length} helper="Base activa" />
             <Metric icon={<TrendingUp />} label="Ingresos previstos" value={`${revenue.toFixed(2)}€`} helper="No canceladas" />
           </section>
 
           {activeTab === "area" && <AreaSection business={business} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} />}
-          {activeTab === "agenda" && <AgendaSection appointmentLabel={appointmentLabel} clientLabel={clientLabel} serviceLabel={serviceLabel} appointments={nextAppointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
-          {activeTab === "servicios" && <ServicesSection serviceLabel={serviceLabel} services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
+          {activeTab === "agenda" && <AgendaSection appointments={nextAppointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
+          {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
-          {activeTab === "clientes" && <CustomersSection clientLabel={clientLabel} customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
+          {activeTab === "clientes" && <CustomersSection customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
           {activeTab === "ajustes" && <SettingsSection settings={settings} setSettings={setSettings} saveSettings={saveSettings} />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -390,7 +425,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
   const { module, records, customers, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -398,6 +433,7 @@ function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; all
   if (module.key === "marketing") return <MarketingModule {...props} />;
   if (module.key === "ai") return <AiModule {...props} />;
   if (module.key === "whatsapp") return <WhatsappModule {...props} />;
+  if (module.key === "voice") return <VoiceModule {...props} />;
   const Icon = module.Icon;
   return <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard><div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-400/20 text-violet-100"><Icon /></div><h2 className="text-2xl font-semibold">{module.name}</h2><p className="mt-2 text-sm text-white/55">{module.description}</p><div className="mt-6 grid gap-3"><input value={props.title} onChange={(e) => props.setTitle(e.target.value)} placeholder="Título del registro" className="input-dark" />{module.amountEnabled && <input value={props.amount} onChange={(e) => props.setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" />}<textarea value={props.notes} onChange={(e) => props.setNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-32" /><button onClick={() => props.createRecord(module.key)} className="btn-primary"><Plus size={17} /> Guardar</button></div></GlassCard><RecordsCard title="Actividad" records={records} deleteRecord={props.deleteRecord} /></section>;
 }
@@ -433,10 +469,154 @@ function WhatsappModule({ records, title, setTitle, notes, setNotes, status, set
   return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<MessageCircle />} label="Plantillas" value={records.length} helper="Guardadas" /><Metric icon={<CheckCircle2 />} label="Conexión" value="Pendiente" helper="Proveedor" /><Metric icon={<Clock />} label="Bots" value="3" helper="Preparados" /><Metric icon={<Users />} label="Uso" value="Reservas" helper="Automático" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Configurar bot / plantilla"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="confirmation">Confirmación de cita</option><option value="reminder">Recordatorio 24h</option><option value="recovery">Recuperación cliente inactivo</option><option value="custom">Mensaje personalizado</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre de plantilla" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Hola {cliente}, te recordamos tu cita en {negocio} el {fecha} a las {hora}." className="input-dark min-h-32" /><button onClick={() => createRecord("whatsapp", status)} className="btn-primary"><Plus size={17} /> Guardar plantilla</button></div></GlassCard><GlassCard title="Conexión WhatsApp"><div className="rounded-2xl bg-black/25 p-5"><p className="font-semibold">Conecta el número del negocio</p><p className="mt-2 text-sm text-white/55">Preparado para integrar WhatsApp Business API, Twilio, 360dialog o proveedor oficial.</p><button className="btn-secondary mt-4" onClick={() => alert("Conexión pendiente de proveedor WhatsApp")}>Conectar número</button></div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
 }
 
-function AgendaSection({ appointmentLabel = "Agenda", clientLabel = "Clientes", serviceLabel = "Servicios", appointments, customers, employees, services, appointmentCustomer, setAppointmentCustomer, appointmentEmployee, setAppointmentEmployee, appointmentService, setAppointmentService, appointmentDateValue, setAppointmentDateValue, createAppointment, updateAppointmentStatus }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title={`Nueva ${appointmentLabel.toLowerCase()}`}><div className="grid gap-3"><Select value={appointmentCustomer} onChange={setAppointmentCustomer} placeholder={`Seleccionar ${clientLabel.toLowerCase().replace("pacientes", "paciente").replace("clientes", "cliente")}`} options={customers.map((c: Customer) => ({ value: c.id, label: customerName(c) }))} /><Select value={appointmentEmployee} onChange={setAppointmentEmployee} placeholder="Seleccionar empleado" options={employees.map((e: Employee) => ({ value: e.id, label: e.name }))} /><Select value={appointmentService} onChange={setAppointmentService} placeholder={`Seleccionar ${serviceLabel.toLowerCase().replace("tratamientos", "tratamiento").replace("servicios", "servicio")}`} options={services.map((s: Service) => ({ value: s.id, label: `${s.name} · ${s.price}€` }))} /><input type="datetime-local" value={appointmentDateValue} onChange={(e) => setAppointmentDateValue(e.target.value)} className="input-dark" /><button onClick={createAppointment} className="btn-primary"><Plus size={17} /> Crear reserva</button></div></GlassCard><GlassCard title={`${appointmentLabel} operativa`}><div className="space-y-3">{appointments.map((appointment: Appointment) => { const service = firstRelation(appointment.services); const employee = firstRelation(appointment.employees); return <div key={appointment.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><p className="font-semibold">{new Date(appointmentDate(appointment)).toLocaleString("es-ES")}</p><p className="mt-1 text-sm text-white/58">{customerName(appointment.customers)} · {service?.name || "Servicio"} · {employee?.name || "Sin empleado"}</p><p className="mt-2 text-sm font-medium text-violet-200">{service?.price || 0}€ · {translateStatus(appointment.status)}</p></div><div className="flex flex-wrap gap-2"><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "confirmed")} tone="green">Confirmar</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "completed")} tone="violet">Completada</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "cancelled")} tone="red">Cancelar</StatusButton></div></div></div>; })}{!appointments.length && <Empty text="Todavía no hay reservas." />}</div></GlassCard></section>; }
-function ServicesSection({ serviceLabel = "Servicios", services, serviceName, setServiceName, serviceDuration, setServiceDuration, servicePrice, setServicePrice, createService }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title={`Nuevo ${serviceLabel.toLowerCase().replace("tratamientos", "tratamiento").replace("servicios", "servicio")}`}><div className="grid gap-3"><input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder={`Nombre del ${serviceLabel.toLowerCase().replace("tratamientos", "tratamiento").replace("servicios", "servicio")}`} className="input-dark" /><input value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} placeholder="Duración en minutos" type="number" className="input-dark" /><input value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="Precio" type="number" className="input-dark" /><button onClick={createService} className="btn-primary"><Plus size={17} /> Crear servicio</button></div></GlassCard><GlassCard title={`${serviceLabel} creados`}><div className="grid gap-3 md:grid-cols-2">{services.map((service: Service) => <div key={service.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-5"><h3 className="font-semibold">{service.name}</h3><p className="mt-2 text-sm text-white/50">{service.duration || service.duration_minutes || 30} min</p><p className="mt-4 text-2xl font-semibold">{Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea tu primer registro para empezar a recibir reservas." />}</div></GlassCard></section>; }
+
+function VoiceModule({
+  voiceCalls,
+  voiceCallerName,
+  setVoiceCallerName,
+  voiceCallerPhone,
+  setVoiceCallerPhone,
+  voiceReason,
+  setVoiceReason,
+  voiceTranscript,
+  setVoiceTranscript,
+  voiceIntent,
+  setVoiceIntent,
+  voiceStatus,
+  setVoiceStatus,
+  voicePriority,
+  setVoicePriority,
+  createVoiceCall,
+  updateVoiceCallStatus,
+  deleteVoiceCall,
+}: Parameters<typeof ModuleSection>[0]) {
+  const total = voiceCalls.length;
+  const pending = voiceCalls.filter((call) => ["nueva", "pendiente"].includes(call.status || "")).length;
+  const appointmentsCreated = voiceCalls.filter((call) => call.status === "cita_creada").length;
+  const discarded = voiceCalls.filter((call) => call.status === "descartada").length;
+
+  return (
+    <section className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric icon={<PhoneCall />} label="Llamadas" value={total} helper="Total recibidas" />
+        <Metric icon={<Clock />} label="Pendientes" value={pending} helper="Por gestionar" />
+        <Metric icon={<CalendarDays />} label="Citas creadas" value={appointmentsCreated} helper="Convertidas" />
+        <Metric icon={<XCircle />} label="Descartadas" value={discarded} helper="No interesadas" />
+      </div>
+
+      <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+        <GlassCard title="Registrar llamada">
+          <div className="grid gap-3">
+            <input value={voiceCallerName} onChange={(e) => setVoiceCallerName(e.target.value)} placeholder="Nombre de quien llama" className="input-dark" />
+            <input value={voiceCallerPhone} onChange={(e) => setVoiceCallerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" />
+
+            <select value={voiceIntent} onChange={(e) => setVoiceIntent(e.target.value)} className="input-dark">
+              <option value="informacion">Información</option>
+              <option value="nueva_cita">Nueva cita</option>
+              <option value="reprogramar">Reprogramar cita</option>
+              <option value="incidencia">Incidencia</option>
+              <option value="seguimiento">Seguimiento</option>
+            </select>
+
+            <select value={voiceStatus} onChange={(e) => setVoiceStatus(e.target.value)} className="input-dark">
+              <option value="nueva">Nueva</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="contactado">Contactado</option>
+              <option value="cita_creada">Cita creada</option>
+              <option value="descartada">Descartada</option>
+            </select>
+
+            <select value={voicePriority} onChange={(e) => setVoicePriority(e.target.value)} className="input-dark">
+              <option value="baja">Prioridad baja</option>
+              <option value="normal">Prioridad normal</option>
+              <option value="alta">Prioridad alta</option>
+              <option value="urgente">Urgente</option>
+            </select>
+
+            <textarea value={voiceReason} onChange={(e) => setVoiceReason(e.target.value)} placeholder="Motivo de la llamada" className="input-dark min-h-24" />
+            <textarea value={voiceTranscript} onChange={(e) => setVoiceTranscript(e.target.value)} placeholder="Notas o transcripción manual" className="input-dark min-h-32" />
+
+            <button onClick={createVoiceCall} className="btn-primary">
+              <Plus size={17} /> Registrar llamada
+            </button>
+          </div>
+        </GlassCard>
+
+        <GlassCard title="Bandeja Flowly Voice">
+          <div className="space-y-3">
+            {voiceCalls.map((call) => (
+              <div key={call.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+                <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">{call.caller_name || "Llamada sin nombre"}</p>
+                      <span className={priorityBadge(call.priority || "normal")}>{translatePriority(call.priority || "normal")}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-white/55">{call.caller_phone}</p>
+                    <p className="mt-3 text-sm text-white/75">{call.reason || "Sin motivo registrado"}</p>
+                    {call.transcript && <p className="mt-2 text-xs leading-5 text-white/45">{call.transcript}</p>}
+                    <p className="mt-3 text-xs text-violet-200">
+                      Intención: {translateIntent(call.intent || "informacion")} · Estado: {translateVoiceStatus(call.status || "nueva")} · {new Date(call.created_at).toLocaleString("es-ES")}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "pendiente")} tone="violet">Pendiente</StatusButton>
+                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "contactado")} tone="green">Contactado</StatusButton>
+                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "cita_creada")} tone="green">Cita creada</StatusButton>
+                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "descartada")} tone="red">Descartar</StatusButton>
+                    <button onClick={() => deleteVoiceCall(call.id)} className="rounded-full border border-red-300/25 px-3 py-2 text-xs text-red-200">Eliminar</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {!voiceCalls.length && <Empty text="Todavía no hay llamadas registradas." />}
+          </div>
+        </GlassCard>
+      </section>
+    </section>
+  );
+}
+
+function translateVoiceStatus(status: string) {
+  if (status === "nueva") return "Nueva";
+  if (status === "pendiente") return "Pendiente";
+  if (status === "contactado") return "Contactado";
+  if (status === "cita_creada") return "Cita creada";
+  if (status === "descartada") return "Descartada";
+  return status;
+}
+
+function translateIntent(intent: string) {
+  if (intent === "informacion") return "Información";
+  if (intent === "nueva_cita") return "Nueva cita";
+  if (intent === "reprogramar") return "Reprogramar";
+  if (intent === "incidencia") return "Incidencia";
+  if (intent === "seguimiento") return "Seguimiento";
+  return intent;
+}
+
+function translatePriority(priority: string) {
+  if (priority === "baja") return "Baja";
+  if (priority === "normal") return "Normal";
+  if (priority === "alta") return "Alta";
+  if (priority === "urgente") return "Urgente";
+  return priority;
+}
+
+function priorityBadge(priority: string) {
+  if (priority === "urgente") return "rounded-full bg-red-500/20 px-3 py-1 text-xs text-red-100";
+  if (priority === "alta") return "rounded-full bg-orange-500/20 px-3 py-1 text-xs text-orange-100";
+  if (priority === "baja") return "rounded-full bg-white/10 px-3 py-1 text-xs text-white/55";
+  return "rounded-full bg-violet-500/20 px-3 py-1 text-xs text-violet-100";
+}
+
+
+function AgendaSection({ appointments, customers, employees, services, appointmentCustomer, setAppointmentCustomer, appointmentEmployee, setAppointmentEmployee, appointmentService, setAppointmentService, appointmentDateValue, setAppointmentDateValue, createAppointment, updateAppointmentStatus }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nueva reserva"><div className="grid gap-3"><Select value={appointmentCustomer} onChange={setAppointmentCustomer} placeholder="Seleccionar cliente" options={customers.map((c: Customer) => ({ value: c.id, label: customerName(c) }))} /><Select value={appointmentEmployee} onChange={setAppointmentEmployee} placeholder="Seleccionar empleado" options={employees.map((e: Employee) => ({ value: e.id, label: e.name }))} /><Select value={appointmentService} onChange={setAppointmentService} placeholder="Seleccionar servicio" options={services.map((s: Service) => ({ value: s.id, label: `${s.name} · ${s.price}€` }))} /><input type="datetime-local" value={appointmentDateValue} onChange={(e) => setAppointmentDateValue(e.target.value)} className="input-dark" /><button onClick={createAppointment} className="btn-primary"><Plus size={17} /> Crear reserva</button></div></GlassCard><GlassCard title="Calendario operativo"><div className="space-y-3">{appointments.map((appointment: Appointment) => { const service = firstRelation(appointment.services); const employee = firstRelation(appointment.employees); return <div key={appointment.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><p className="font-semibold">{new Date(appointmentDate(appointment)).toLocaleString("es-ES")}</p><p className="mt-1 text-sm text-white/58">{customerName(appointment.customers)} · {service?.name || "Servicio"} · {employee?.name || "Sin empleado"}</p><p className="mt-2 text-sm font-medium text-violet-200">{service?.price || 0}€ · {translateStatus(appointment.status)}</p></div><div className="flex flex-wrap gap-2"><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "confirmed")} tone="green">Confirmar</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "completed")} tone="violet">Completada</StatusButton><StatusButton onClick={() => updateAppointmentStatus(appointment.id, "cancelled")} tone="red">Cancelar</StatusButton></div></div></div>; })}{!appointments.length && <Empty text="Todavía no hay reservas." />}</div></GlassCard></section>; }
+function ServicesSection({ services, serviceName, setServiceName, serviceDuration, setServiceDuration, servicePrice, setServicePrice, createService }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo servicio"><div className="grid gap-3"><input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Nombre del servicio" className="input-dark" /><input value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} placeholder="Duración en minutos" type="number" className="input-dark" /><input value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="Precio" type="number" className="input-dark" /><button onClick={createService} className="btn-primary"><Plus size={17} /> Crear servicio</button></div></GlassCard><GlassCard title="Servicios creados"><div className="grid gap-3 md:grid-cols-2">{services.map((service: Service) => <div key={service.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-5"><h3 className="font-semibold">{service.name}</h3><p className="mt-2 text-sm text-white/50">{service.duration || service.duration_minutes || 30} min</p><p className="mt-4 text-2xl font-semibold">{Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea tu primer servicio para empezar a recibir reservas." />}</div></GlassCard></section>; }
 function EmployeesSection({ employees, employeeName, setEmployeeName, employeePhone, setEmployeePhone, createEmployee }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo empleado"><div className="grid gap-3"><input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createEmployee} className="btn-primary"><Plus size={17} /> Crear empleado</button></div></GlassCard><GlassCard title="Equipo"><div className="space-y-3">{employees.map((employee: Employee) => <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{employee.name}</p><p className="text-sm text-white/45">{employee.phone || "Sin teléfono"}</p></div>)}{!employees.length && <Empty text="Añade al primer profesional del negocio." />}</div></GlassCard></section>; }
-function CustomersSection({ clientLabel = "Clientes", customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title={`Nuevo ${clientLabel.toLowerCase().replace("pacientes", "paciente").replace("clientes", "cliente")}`}><div className="grid gap-3"><input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear cliente</button></div></GlassCard><GlassCard title={clientLabel}><div className="space-y-3">{customers.map((customer: Customer) => <div key={customer.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{customerName(customer)}</p><p className="text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p></div>)}{!customers.length && <Empty text="Aún no hay registros." />}</div></GlassCard></section>; }
+function CustomersSection({ customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo cliente"><div className="grid gap-3"><input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear cliente</button></div></GlassCard><GlassCard title="Clientes"><div className="space-y-3">{customers.map((customer: Customer) => <div key={customer.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{customerName(customer)}</p><p className="text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p></div>)}{!customers.length && <Empty text="Aún no hay clientes." />}</div></GlassCard></section>; }
 function SettingsSection({ settings, setSettings, saveSettings }: { settings: BookingSettings; setSettings: (s: BookingSettings) => void; saveSettings: () => void }) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Horarios de reservas"><div className="grid gap-3"><label className="text-sm text-white/70">Hora apertura</label><input type="time" value={settings.start_time} onChange={(e) => setSettings({ ...settings, start_time: e.target.value })} className="input-dark" /><label className="text-sm text-white/70">Hora cierre</label><input type="time" value={settings.end_time} onChange={(e) => setSettings({ ...settings, end_time: e.target.value })} className="input-dark" /><label className="text-sm text-white/70">Intervalo</label><select value={settings.interval_minutes} onChange={(e) => setSettings({ ...settings, interval_minutes: Number(e.target.value) })} className="input-dark"><option value={15}>15 minutos</option><option value={30}>30 minutos</option><option value={45}>45 minutos</option><option value={60}>60 minutos</option></select><button onClick={saveSettings} className="btn-primary"><Settings size={17} /> Guardar ajustes</button></div></GlassCard><GlassCard title="Días activos"><div className="grid gap-3"><DayToggle label="Lunes" checked={settings.monday} onChange={(v) => setSettings({ ...settings, monday: v })} /><DayToggle label="Martes" checked={settings.tuesday} onChange={(v) => setSettings({ ...settings, tuesday: v })} /><DayToggle label="Miércoles" checked={settings.wednesday} onChange={(v) => setSettings({ ...settings, wednesday: v })} /><DayToggle label="Jueves" checked={settings.thursday} onChange={(v) => setSettings({ ...settings, thursday: v })} /><DayToggle label="Viernes" checked={settings.friday} onChange={(v) => setSettings({ ...settings, friday: v })} /><DayToggle label="Sábado" checked={settings.saturday} onChange={(v) => setSettings({ ...settings, saturday: v })} /><DayToggle label="Domingo" checked={settings.sunday} onChange={(v) => setSettings({ ...settings, sunday: v })} /></div></GlassCard></section>; }
 
 function RecordsCard({ title, records, deleteRecord }: { title: string; records: ModuleRecord[]; deleteRecord: (id: string) => void }) { return <GlassCard title={title}><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard>; }
