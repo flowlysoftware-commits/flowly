@@ -345,6 +345,57 @@ export default function DashboardPage() {
     await loadData();
   };
 
+  const convertVoiceCallToCustomer = async (call: VoiceCall) => {
+    if (!business) return;
+
+    const cleanPhone = call.caller_phone.trim();
+    if (!cleanPhone) return alert("Esta llamada no tiene teléfono");
+
+    const { data: existingCustomer, error: searchError } = await supabase
+      .from("customers")
+      .select("id, name, full_name, phone")
+      .eq("business_id", business.id)
+      .eq("phone", cleanPhone)
+      .maybeSingle();
+
+    if (searchError) return alert(searchError.message);
+
+    if (existingCustomer) {
+      const { error: updateCallError } = await supabase
+        .from("voice_calls")
+        .update({ status: "contactado" })
+        .eq("id", call.id);
+
+      if (updateCallError) return alert(updateCallError.message);
+
+      alert("Este paciente ya existía. La llamada se ha marcado como contactada.");
+      await loadData();
+      return;
+    }
+
+    const customerNameFromCall = call.caller_name?.trim() || "Paciente desde llamada";
+
+    const { error: customerError } = await supabase.from("customers").insert({
+      business_id: business.id,
+      name: customerNameFromCall,
+      full_name: customerNameFromCall,
+      phone: cleanPhone,
+      notes: call.reason || call.transcript || "Creado desde Flowly Voice",
+    });
+
+    if (customerError) return alert(customerError.message);
+
+    const { error: updateCallError } = await supabase
+      .from("voice_calls")
+      .update({ status: "contactado" })
+      .eq("id", call.id);
+
+    if (updateCallError) return alert(updateCallError.message);
+
+    alert("Paciente creado desde la llamada");
+    await loadData();
+  };
+
   const deleteVoiceCall = async (id: string) => {
     const { error } = await supabase.from("voice_calls").delete().eq("id", id);
     if (error) return alert(error.message);
@@ -414,7 +465,7 @@ export default function DashboardPage() {
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
           {activeTab === "clientes" && <CustomersSection customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
           {activeTab === "ajustes" && <SettingsSection settings={settings} setSettings={setSettings} saveSettings={saveSettings} />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -425,7 +476,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
   const { module, records, customers, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -489,6 +540,7 @@ function VoiceModule({
   createVoiceCall,
   updateVoiceCallStatus,
   deleteVoiceCall,
+  convertVoiceCallToCustomer,
 }: Parameters<typeof ModuleSection>[0]) {
   const total = voiceCalls.length;
   const pending = voiceCalls.filter((call) => ["nueva", "pendiente"].includes(call.status || "")).length;
@@ -562,6 +614,7 @@ function VoiceModule({
 
                   <div className="flex flex-wrap gap-2">
                     <StatusButton onClick={() => updateVoiceCallStatus(call.id, "pendiente")} tone="violet">Pendiente</StatusButton>
+                    <button onClick={() => convertVoiceCallToCustomer(call)} className="rounded-full border border-green-300/25 px-3 py-2 text-xs text-green-200">Crear paciente</button>
                     <StatusButton onClick={() => updateVoiceCallStatus(call.id, "contactado")} tone="green">Contactado</StatusButton>
                     <StatusButton onClick={() => updateVoiceCallStatus(call.id, "cita_creada")} tone="green">Cita creada</StatusButton>
                     <StatusButton onClick={() => updateVoiceCallStatus(call.id, "descartada")} tone="red">Descartar</StatusButton>
