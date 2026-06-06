@@ -47,6 +47,28 @@ type UserProfile = { account_type: "client" | "sales" | "admin"; role: string };
 type Service = { id: string; name: string; duration: number | null; duration_minutes?: number | null; price: number; active: boolean | null };
 type Employee = { id: string; name: string; email: string | null; phone: string | null; active: boolean | null };
 type Customer = { id: string; name?: string; full_name?: string; phone: string | null; email: string | null; notes: string | null };
+type PatientProfile = {
+  id: string;
+  business_id: string;
+  customer_id: string;
+
+  child_full_name: string | null;
+  birth_date: string | null;
+  document_id: string | null;
+  gender: string | null;
+
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  guardian_email: string | null;
+  guardian_relationship: string | null;
+
+  initial_diagnosis: string | null;
+  therapeutic_process: string | null;
+  observations: string | null;
+  next_review_date: string | null;
+
+  created_at?: string | null;
+};
 type Appointment = {
   id: string;
   appointment_date?: string;
