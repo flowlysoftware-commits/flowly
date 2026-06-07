@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  try {
+    const raw = await req.text();
 
-  console.log("VOICE EVENT", body);
+    console.log("RAW BODY:", raw);
 
-  return NextResponse.json({
-    success: true,
-    received: body,
-  });
+    return NextResponse.json({
+      success: true,
+      raw,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return NextResponse.json(
+      {
+        success: false,
+      },
+      { status: 500 }
+    );
+  }
 }
