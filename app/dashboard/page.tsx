@@ -46,7 +46,20 @@ type Business = {
 type UserProfile = { account_type: "client" | "sales" | "admin"; role: string };
 type Service = { id: string; name: string; duration: number | null; duration_minutes?: number | null; price: number; active: boolean | null };
 type Employee = { id: string; name: string; email: string | null; phone: string | null; active: boolean | null };
-type Customer = { id: string; name?: string; full_name?: string; phone: string | null; email: string | null; notes: string | null };
+type Customer = {
+  id: string;
+  name?: string;
+  full_name?: string;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  crm_status?: string | null;
+  eps?: string | null;
+  document_type?: string | null;
+  document_number?: string | null;
+  last_contact_at?: string | null;
+  next_follow_up_at?: string | null;
+};
 type Appointment = {
   id: string;
   appointment_date?: string;
@@ -71,7 +84,18 @@ type BookingSettings = {
   sunday: boolean;
 };
 type BusinessModule = { id?: string; business_id: string; module_key: string; status: string };
-type ModuleRecord = { id: string; business_id: string; module_key: string; title: string; amount: number | null; status: string; notes: string | null; created_at: string };
+type ModuleRecord = {
+  id: string;
+  business_id: string;
+  module_key: string;
+  title: string;
+  amount: number | null;
+  status: string;
+  notes: string | null;
+  customer_id?: string | null;
+  due_date?: string | null;
+  created_at: string;
+};
 
 type VoiceCall = {
   id: string;
@@ -164,6 +188,7 @@ export default function DashboardPage() {
   const [moduleRecords, setModuleRecords] = useState<ModuleRecord[]>([]);
   const [voiceCalls, setVoiceCalls] = useState<VoiceCall[]>([]);
   const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
+  const [selectedCrmCustomerId, setSelectedCrmCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
@@ -265,6 +290,8 @@ export default function DashboardPage() {
           const call = payload.new as VoiceCall;
           setVoiceCalls((current) => [call, ...current.filter((item) => item.id !== call.id)]);
           setIncomingVoiceCall(call);
+          if (call.customer_id) setSelectedCrmCustomerId(call.customer_id);
+          setActiveTab("module:crm");
         }
       )
       .subscribe();
@@ -273,6 +300,30 @@ export default function DashboardPage() {
       supabase.removeChannel(channel);
     };
   }, [business?.id]);
+
+  useEffect(() => {
+    if (!incomingVoiceCall) return;
+
+    const matched = customers.find((customer) => {
+      const callPhone = normalizePhone(incomingVoiceCall.caller_phone);
+      const customerPhone = normalizePhone(customer.phone);
+      const documentMatches =
+        incomingVoiceCall.document_number &&
+        customer.document_number &&
+        String(customer.document_number) === String(incomingVoiceCall.document_number);
+
+      return (
+        (incomingVoiceCall.customer_id && customer.id === incomingVoiceCall.customer_id) ||
+        Boolean(documentMatches) ||
+        (!!callPhone && !!customerPhone && customerPhone.endsWith(callPhone.slice(-9)))
+      );
+    });
+
+    if (matched) {
+      setSelectedCrmCustomerId(matched.id);
+      setActiveTab("module:crm");
+    }
+  }, [incomingVoiceCall, customers]);
 
   const activeModuleKeys = useMemo(() => {
     if (business?.plan === "premium") return moduleCatalog.map((item) => item.key);
@@ -407,6 +458,36 @@ export default function DashboardPage() {
     await loadData();
   };
 
+  const updateCustomerCrm = async (
+    customerId: string,
+    updates: Partial<Pick<Customer, "crm_status" | "eps" | "document_type" | "document_number" | "notes" | "next_follow_up_at">>
+  ) => {
+    const { error } = await supabase
+      .from("customers")
+      .update({ ...updates, last_contact_at: new Date().toISOString() })
+      .eq("id", customerId);
+
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
+  const createCrmAction = async (customerId: string, title: string, notes: string, status = "followup", dueDate?: string) => {
+    if (!business || !title.trim()) return alert("Añade un título para la acción CRM");
+
+    const { error } = await supabase.from("module_records").insert({
+      business_id: business.id,
+      module_key: "crm",
+      customer_id: customerId,
+      title,
+      notes: notes || null,
+      status,
+      due_date: dueDate || null,
+    });
+
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
   const convertVoiceCallToCustomer = async (call: VoiceCall) => {
     if (!business) return null;
 
@@ -429,6 +510,8 @@ export default function DashboardPage() {
         return null;
       }
 
+      setSelectedCrmCustomerId(existingCustomer.id);
+      setActiveTab("module:crm");
       await loadData();
       return existingCustomer.id;
     }
@@ -449,6 +532,11 @@ export default function DashboardPage() {
         full_name: customerNameFromCall,
         phone: cleanPhone,
         notes,
+        crm_status: "nuevo",
+        eps: call.eps || call.intent || null,
+        document_type: call.document_type || null,
+        document_number: call.document_number || null,
+        last_contact_at: new Date().toISOString(),
       })
       .select("id")
       .single();
@@ -468,6 +556,8 @@ export default function DashboardPage() {
       return null;
     }
 
+    setSelectedCrmCustomerId(newCustomer.id as string);
+    setActiveTab("module:crm");
     await loadData();
     return newCustomer.id as string;
   };
@@ -605,7 +695,16 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => setActiveTab("module:voice")} className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Abrir Voice</button>
+                  <button
+                    onClick={() => {
+                      if (matchedIncomingCustomer) setSelectedCrmCustomerId(matchedIncomingCustomer.id);
+                      setActiveTab("module:crm");
+                    }}
+                    className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950"
+                  >
+                    Abrir ficha CRM
+                  </button>
+                  <button onClick={() => setActiveTab("module:voice")} className="rounded-full border border-green-300/25 px-5 py-3 text-sm text-green-100">Abrir Voice</button>
                   <button onClick={() => setIncomingVoiceCall(null)} className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/75">Cerrar</button>
                 </div>
               </div>
@@ -618,7 +717,7 @@ export default function DashboardPage() {
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
           {activeTab === "clientes" && <CustomersSection customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
           {activeTab === "ajustes" && <SettingsSection settings={settings} setSettings={setSettings} saveSettings={saveSettings} />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -629,7 +728,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Pick<Customer, "crm_status" | "eps" | "document_type" | "document_number" | "notes" | "next_follow_up_at">>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -655,9 +754,259 @@ function PosModule({ records, services, title, setTitle, notes, setNotes, amount
   return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Store />} label="Caja total" value={`${total.toFixed(2)}€`} helper="Tickets" /><Metric icon={<CreditCard />} label="Tarjeta" value={`${card.toFixed(2)}€`} helper="TPV" /><Metric icon={<Receipt />} label="Efectivo" value={`${cash.toFixed(2)}€`} helper="Caja" /><Metric icon={<Scissors />} label="Servicios" value={services.length} helper="Catálogo" /></div><section className="grid gap-6 xl:grid-cols-[.75fr_1.25fr]"><GlassCard title="Nuevo ticket TPV"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="card">Tarjeta</option><option value="cash">Efectivo</option><option value="bizum">Bizum</option><option value="mixed">Mixto</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ticket: Corte + producto" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Total ticket" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Productos, descuentos, empleado o notas de caja" className="input-dark min-h-32" /><button onClick={() => createRecord("pos", status)} className="btn-primary"><Plus size={17} /> Cobrar y guardar ticket</button></div></GlassCard><GlassCard title="TPV operativo"><div className="grid gap-3 md:grid-cols-3">{services.slice(0, 6).map((s) => <div key={s.id} className="rounded-2xl bg-black/25 p-4"><p className="font-medium">{s.name}</p><p className="text-sm text-white/45">{Number(s.price).toFixed(2)}€</p></div>)}</div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
 }
 
-function CrmModule({ records, customers, appointments, crmSearch, setCrmSearch, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
-  const filtered = customers.filter((c) => `${customerName(c)} ${c.phone || ""} ${c.email || ""}`.toLowerCase().includes(crmSearch.toLowerCase()));
-  return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Users />} label="Clientes" value={customers.length} helper="Base total" /><Metric icon={<CalendarDays />} label="Reservas" value={appointments.length} helper="Historial" /><Metric icon={<CheckCircle2 />} label="Seguimientos" value={records.length} helper="CRM" /><Metric icon={<TrendingUp />} label="Oportunidades" value={records.filter(r => r.status === "opportunity").length} helper="Abiertas" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Ficha CRM / seguimiento"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="followup">Seguimiento</option><option value="opportunity">Oportunidad</option><option value="inactive">Cliente inactivo</option><option value="vip">Cliente VIP</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Laura García · Reactivar color" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas, historial, próxima acción, intereses, preferencias y recordatorios" className="input-dark min-h-32" /><button onClick={() => createRecord("crm", status)} className="btn-primary"><Plus size={17} /> Guardar seguimiento CRM</button></div></GlassCard><GlassCard title="CRM de clientes"><div className="relative mb-4"><Search className="absolute left-4 top-3.5 text-white/35" size={18} /><input value={crmSearch} onChange={(e) => setCrmSearch(e.target.value)} placeholder="Buscar cliente, teléfono o email" className="input-dark pl-11" /></div><div className="grid gap-3 md:grid-cols-2">{filtered.slice(0, 12).map((c) => <div key={c.id} className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="font-semibold">{customerName(c)}</p><p className="mt-1 text-sm text-white/45">{c.phone || c.email || "Sin contacto"}</p><p className="mt-3 text-xs text-violet-200">Historial · Notas · Segmentos · Próxima acción</p></div>)}</div></GlassCard></section><RecordsCard title="Acciones CRM" records={records} deleteRecord={deleteRecord} /></section>;
+function CrmModule({
+  records,
+  customers,
+  appointments,
+  services,
+  crmSearch,
+  setCrmSearch,
+  selectedCrmCustomerId,
+  setSelectedCrmCustomerId,
+  incomingVoiceCall,
+  updateCustomerCrm,
+  createCrmAction,
+}: Parameters<typeof ModuleSection>[0]) {
+  const [crmActionTitle, setCrmActionTitle] = useState("");
+  const [crmActionNotes, setCrmActionNotes] = useState("");
+  const [crmActionDueDate, setCrmActionDueDate] = useState("");
+
+  const filtered = customers.filter((c) =>
+    `${customerName(c)} ${c.phone || ""} ${c.email || ""} ${c.document_number || ""} ${c.eps || ""}`
+      .toLowerCase()
+      .includes(crmSearch.toLowerCase())
+  );
+
+  const selectedCustomer =
+    customers.find((customer) => customer.id === selectedCrmCustomerId) ||
+    filtered[0] ||
+    null;
+
+  const customerAppointments = selectedCustomer
+    ? appointments.filter((appointment) => {
+        const related = firstRelation(appointment.customers);
+        return customerName(related).toLowerCase() === customerName(selectedCustomer).toLowerCase();
+      })
+    : [];
+
+  const customerRecords = selectedCustomer
+    ? records.filter((record) => record.customer_id === selectedCustomer.id || (record.notes || "").includes(selectedCustomer.id))
+    : [];
+
+  const activeCustomers = customers.filter((customer) => (customer.crm_status || "nuevo") !== "cerrado").length;
+  const pendingFollowups = records.filter((record) => ["followup", "pendiente", "opportunity"].includes(record.status || "")).length;
+  const scheduled = appointments.filter((appointment) => appointment.status !== "cancelled").length;
+
+  const saveAction = async () => {
+    if (!selectedCustomer) return alert("Selecciona un paciente");
+    await createCrmAction(
+      selectedCustomer.id,
+      crmActionTitle || `Seguimiento · ${customerName(selectedCustomer)}`,
+      [
+        crmActionNotes,
+        `Paciente: ${customerName(selectedCustomer)}`,
+        `Teléfono: ${selectedCustomer.phone || "Sin teléfono"}`,
+        selectedCustomer.eps ? `EPS: ${selectedCustomer.eps}` : "",
+        selectedCustomer.document_number ? `Documento: ${selectedCustomer.document_number}` : "",
+      ].filter(Boolean).join("\n"),
+      "followup",
+      crmActionDueDate || undefined
+    );
+    setCrmActionTitle("");
+    setCrmActionNotes("");
+    setCrmActionDueDate("");
+  };
+
+  return (
+    <section className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric icon={<Users />} label="Pacientes CRM" value={customers.length} helper="Base total" />
+        <Metric icon={<UserCog />} label="Activos" value={activeCustomers} helper="En gestión" />
+        <Metric icon={<CheckCircle2 />} label="Seguimientos" value={pendingFollowups} helper="Acciones abiertas" />
+        <Metric icon={<CalendarDays />} label="Citas" value={scheduled} helper="Agenda conectada" />
+      </div>
+
+      {incomingVoiceCall && (
+        <div className="rounded-[2rem] border border-green-300/25 bg-green-500/15 p-5">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">Llamada activa detectada</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <InfoBox label="Teléfono" value={incomingVoiceCall.caller_phone} />
+            <InfoBox label="EPS" value={translateIntent(incomingVoiceCall.eps || incomingVoiceCall.intent || "informacion")} />
+            <InfoBox label="Documento" value={translateDocumentType(incomingVoiceCall.document_type || "") || "No indicado"} />
+            <InfoBox label="ID" value={incomingVoiceCall.document_number || "No indicado"} />
+          </div>
+        </div>
+      )}
+
+      <section className="grid gap-6 xl:grid-cols-[.75fr_1.25fr]">
+        <GlassCard title="Pacientes / Leads">
+          <div className="relative mb-4">
+            <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
+            <input
+              value={crmSearch}
+              onChange={(e) => setCrmSearch(e.target.value)}
+              placeholder="Buscar por nombre, teléfono, documento o EPS"
+              className="input-dark pl-11"
+            />
+          </div>
+
+          <div className="space-y-3">
+            {filtered.slice(0, 40).map((customer) => (
+              <button
+                key={customer.id}
+                onClick={() => setSelectedCrmCustomerId(customer.id)}
+                className={`w-full rounded-2xl border p-4 text-left transition ${
+                  selectedCustomer?.id === customer.id
+                    ? "border-violet-300/40 bg-violet-500/20"
+                    : "border-white/10 bg-white/[0.05] hover:bg-white/[0.08]"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{customerName(customer)}</p>
+                    <p className="mt-1 text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p>
+                    <p className="mt-2 text-xs text-violet-200">
+                      {translateCrmStatus(customer.crm_status || "nuevo")} · {translateIntent(customer.eps || "informacion")}
+                    </p>
+                  </div>
+                  {customer.document_number && (
+                    <span className="rounded-full bg-black/25 px-3 py-1 text-xs text-white/60">
+                      ID {customer.document_number}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+            {!filtered.length && <Empty text="No hay pacientes que coincidan con la búsqueda." />}
+          </div>
+        </GlassCard>
+
+        <GlassCard title={selectedCustomer ? `Ficha CRM · ${customerName(selectedCustomer)}` : "Ficha CRM"}>
+          {!selectedCustomer ? (
+            <Empty text="Selecciona un paciente para abrir su ficha CRM." />
+          ) : (
+            <div className="grid gap-5">
+              <div className="grid gap-3 md:grid-cols-4">
+                <InfoBox label="Teléfono" value={selectedCustomer.phone || "Sin teléfono"} />
+                <InfoBox label="Estado CRM" value={translateCrmStatus(selectedCustomer.crm_status || "nuevo")} />
+                <InfoBox label="EPS" value={translateIntent(selectedCustomer.eps || "informacion")} />
+                <InfoBox label="Documento" value={selectedCustomer.document_number || "No indicado"} />
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <select
+                  value={selectedCustomer.crm_status || "nuevo"}
+                  onChange={(e) => updateCustomerCrm(selectedCustomer.id, { crm_status: e.target.value })}
+                  className="input-dark"
+                >
+                  <option value="nuevo">Nuevo lead</option>
+                  <option value="en_llamada">En llamada</option>
+                  <option value="seguimiento">En seguimiento</option>
+                  <option value="cita_pendiente">Cita pendiente</option>
+                  <option value="cita_agendada">Cita agendada</option>
+                  <option value="cerrado">Cerrado</option>
+                </select>
+
+                <select
+                  value={selectedCustomer.eps || ""}
+                  onChange={(e) => updateCustomerCrm(selectedCustomer.id, { eps: e.target.value })}
+                  className="input-dark"
+                >
+                  <option value="">EPS / tipo paciente</option>
+                  <option value="particular">Particular</option>
+                  <option value="nueva_eps">Nueva EPS</option>
+                  <option value="salud_total">Salud Total</option>
+                  <option value="otra_eps">Otra EPS</option>
+                </select>
+
+                <input
+                  type="datetime-local"
+                  value={selectedCustomer.next_follow_up_at ? selectedCustomer.next_follow_up_at.slice(0, 16) : ""}
+                  onChange={(e) => updateCustomerCrm(selectedCustomer.id, { next_follow_up_at: e.target.value || null })}
+                  className="input-dark"
+                />
+              </div>
+
+              <textarea
+                defaultValue={selectedCustomer.notes || ""}
+                onBlur={(e) => updateCustomerCrm(selectedCustomer.id, { notes: e.target.value })}
+                placeholder="Notas del paciente, acuerdos, autorización, observaciones y próximos pasos."
+                className="input-dark min-h-32"
+              />
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  value={crmActionTitle}
+                  onChange={(e) => setCrmActionTitle(e.target.value)}
+                  placeholder="Título acción: llamar, validar EPS..."
+                  className="input-dark"
+                />
+                <input
+                  type="datetime-local"
+                  value={crmActionDueDate}
+                  onChange={(e) => setCrmActionDueDate(e.target.value)}
+                  className="input-dark"
+                />
+                <button onClick={saveAction} className="btn-primary">
+                  <Plus size={17} /> Guardar acción
+                </button>
+              </div>
+
+              <textarea
+                value={crmActionNotes}
+                onChange={(e) => setCrmActionNotes(e.target.value)}
+                placeholder="Detalle del seguimiento o resultado de la llamada"
+                className="input-dark min-h-24"
+              />
+
+              <section className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <h3 className="font-semibold">Historial de agenda</h3>
+                  <div className="mt-3 space-y-3">
+                    {customerAppointments.slice(0, 8).map((appointment) => {
+                      const service = firstRelation(appointment.services);
+                      const employee = firstRelation(appointment.employees);
+                      return (
+                        <div key={appointment.id} className="rounded-xl bg-white/[0.06] p-3">
+                          <p className="text-sm font-medium">{new Date(appointmentDate(appointment)).toLocaleString("es-ES")}</p>
+                          <p className="mt-1 text-xs text-white/45">{service?.name || "Servicio"} · {employee?.name || "Sin profesional"} · {translateStatus(appointment.status)}</p>
+                        </div>
+                      );
+                    })}
+                    {!customerAppointments.length && <Empty text="Sin citas registradas todavía." />}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <h3 className="font-semibold">Acciones CRM</h3>
+                  <div className="mt-3 space-y-3">
+                    {customerRecords.slice(0, 8).map((record) => (
+                      <div key={record.id} className="rounded-xl bg-white/[0.06] p-3">
+                        <p className="text-sm font-medium">{record.title}</p>
+                        {record.notes && <p className="mt-1 text-xs leading-5 text-white/45">{record.notes}</p>}
+                        <p className="mt-2 text-xs text-violet-200">{record.status} · {new Date(record.created_at).toLocaleString("es-ES")}</p>
+                      </div>
+                    ))}
+                    {!customerRecords.length && <Empty text="Sin acciones CRM registradas." />}
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+        </GlassCard>
+      </section>
+    </section>
+  );
+}
+
+function translateCrmStatus(status: string) {
+  if (status === "nuevo") return "Nuevo lead";
+  if (status === "en_llamada") return "En llamada";
+  if (status === "seguimiento") return "En seguimiento";
+  if (status === "cita_pendiente") return "Cita pendiente";
+  if (status === "cita_agendada") return "Cita agendada";
+  if (status === "cerrado") return "Cerrado";
+  return status;
 }
 
 function MarketingModule({ records, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
@@ -866,6 +1215,10 @@ function translateVoiceStatus(status: string) {
 function translateIntent(intent: string) {
   if (intent === "informacion") return "Información";
   if (intent === "nueva_cita") return "Nueva cita";
+  if (intent === "particular") return "Particular";
+  if (intent === "nueva_eps") return "Nueva EPS";
+  if (intent === "salud_total") return "Salud Total";
+  if (intent === "otra_eps") return "Otra EPS";
   if (intent === "reprogramar") return "Reprogramar";
   if (intent === "incidencia") return "Incidencia";
   if (intent === "seguimiento") return "Seguimiento";

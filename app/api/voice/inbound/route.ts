@@ -109,6 +109,17 @@ export async function POST(req: Request) {
     let matchedCustomerId: string | null = null;
 
     if (documentNumber) {
+      const { data: directCustomer } = await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("document_number", documentNumber)
+        .maybeSingle();
+
+      matchedCustomerId = directCustomer?.id || null;
+    }
+
+    if (!matchedCustomerId && documentNumber) {
       const { data: patientProfile } = await supabaseAdmin
         .from("patient_profiles")
         .select("customer_id")
@@ -132,6 +143,51 @@ export async function POST(req: Request) {
       );
 
       matchedCustomerId = match?.id || null;
+    }
+
+    if (matchedCustomerId) {
+      await supabaseAdmin
+        .from("customers")
+        .update({
+          eps: eps || null,
+          document_type: documentType || null,
+          document_number: documentNumber || null,
+          crm_status: "en_llamada",
+          last_contact_at: new Date().toISOString(),
+        })
+        .eq("id", matchedCustomerId);
+    } else {
+      const fallbackName =
+        cleanText(body.caller_name) ||
+        (documentNumber ? `Paciente ${documentNumber}` : `Paciente ${callerPhone}`);
+
+      const { data: createdCustomer, error: customerCreateError } = await supabaseAdmin
+        .from("customers")
+        .insert({
+          business_id: businessId,
+          name: fallbackName,
+          full_name: fallbackName,
+          phone: callerPhone,
+          notes: [
+            "Creado automáticamente desde llamada entrante.",
+            eps ? `EPS: ${eps}` : "",
+            documentType ? `Tipo documento: ${documentType}` : "",
+            documentNumber ? `Documento: ${documentNumber}` : "",
+          ].filter(Boolean).join("\n"),
+          crm_status: "en_llamada",
+          eps: eps || null,
+          document_type: documentType || null,
+          document_number: documentNumber || null,
+          last_contact_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (!customerCreateError) {
+        matchedCustomerId = createdCustomer?.id || null;
+      } else {
+        console.error("FLOWLY VOICE CUSTOMER UPSERT ERROR", customerCreateError);
+      }
     }
 
     const { data, error } = await supabaseAdmin
