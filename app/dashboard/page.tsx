@@ -84,6 +84,12 @@ type VoiceCall = {
   status: string | null;
   priority: string | null;
   source: string | null;
+  call_id?: string | null;
+  eps?: string | null;
+  document_type?: string | null;
+  document_number?: string | null;
+  customer_id?: string | null;
+  appointment_id?: string | null;
   created_at: string;
 };
 
@@ -186,6 +192,10 @@ export default function DashboardPage() {
   const [voiceIntent, setVoiceIntent] = useState("informacion");
   const [voiceStatus, setVoiceStatus] = useState("nueva");
   const [voicePriority, setVoicePriority] = useState("normal");
+  const [voiceScheduleCallId, setVoiceScheduleCallId] = useState("");
+  const [voiceScheduleEmployee, setVoiceScheduleEmployee] = useState("");
+  const [voiceScheduleService, setVoiceScheduleService] = useState("");
+  const [voiceScheduleDate, setVoiceScheduleDate] = useState("");
 
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -291,6 +301,27 @@ export default function DashboardPage() {
     setVoicePriority("normal");
   };
 
+  const resetVoiceScheduleForm = () => {
+    setVoiceScheduleCallId("");
+    setVoiceScheduleEmployee("");
+    setVoiceScheduleService("");
+    setVoiceScheduleDate("");
+  };
+
+  const normalizePhone = (value?: string | null) =>
+    String(value || "").replace(/\D/g, "");
+
+  const findCustomerForVoiceCall = (call: VoiceCall) => {
+    const callPhone = normalizePhone(call.caller_phone);
+    return customers.find((customer) => {
+      const customerPhone = normalizePhone(customer.phone);
+      return (
+        (call.customer_id && customer.id === call.customer_id) ||
+        (!!callPhone && !!customerPhone && customerPhone.endsWith(callPhone.slice(-9)))
+      );
+    }) || null;
+  };
+
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
   const openBillingPortal = async () => {
     const { data } = await supabase.auth.getSession();
@@ -377,53 +408,113 @@ export default function DashboardPage() {
   };
 
   const convertVoiceCallToCustomer = async (call: VoiceCall) => {
-    if (!business) return;
+    if (!business) return null;
 
     const cleanPhone = call.caller_phone.trim();
-    if (!cleanPhone) return alert("Esta llamada no tiene teléfono");
+    if (!cleanPhone) {
+      alert("Esta llamada no tiene teléfono");
+      return null;
+    }
 
-    const { data: existingCustomer, error: searchError } = await supabase
-      .from("customers")
-      .select("id, name, full_name, phone")
-      .eq("business_id", business.id)
-      .eq("phone", cleanPhone)
-      .maybeSingle();
-
-    if (searchError) return alert(searchError.message);
+    const existingCustomer = findCustomerForVoiceCall(call);
 
     if (existingCustomer) {
       const { error: updateCallError } = await supabase
         .from("voice_calls")
-        .update({ status: "contactado" })
+        .update({ status: "contactado", customer_id: existingCustomer.id })
         .eq("id", call.id);
 
-      if (updateCallError) return alert(updateCallError.message);
+      if (updateCallError) {
+        alert(updateCallError.message);
+        return null;
+      }
 
-      alert("Este paciente ya existía. La llamada se ha marcado como contactada.");
       await loadData();
-      return;
+      return existingCustomer.id;
     }
 
     const customerNameFromCall = call.caller_name?.trim() || "Paciente desde llamada";
+    const notes = [
+      call.reason || call.transcript || "Creado desde Flowly Voice",
+      call.eps ? `EPS: ${call.eps}` : "",
+      call.document_type ? `Tipo documento: ${call.document_type}` : "",
+      call.document_number ? `Documento: ${call.document_number}` : "",
+    ].filter(Boolean).join("\n");
 
-    const { error: customerError } = await supabase.from("customers").insert({
-      business_id: business.id,
-      name: customerNameFromCall,
-      full_name: customerNameFromCall,
-      phone: cleanPhone,
-      notes: call.reason || call.transcript || "Creado desde Flowly Voice",
-    });
+    const { data: newCustomer, error: customerError } = await supabase
+      .from("customers")
+      .insert({
+        business_id: business.id,
+        name: customerNameFromCall,
+        full_name: customerNameFromCall,
+        phone: cleanPhone,
+        notes,
+      })
+      .select("id")
+      .single();
 
-    if (customerError) return alert(customerError.message);
+    if (customerError) {
+      alert(customerError.message);
+      return null;
+    }
 
     const { error: updateCallError } = await supabase
       .from("voice_calls")
-      .update({ status: "contactado" })
+      .update({ status: "contactado", customer_id: newCustomer.id })
+      .eq("id", call.id);
+
+    if (updateCallError) {
+      alert(updateCallError.message);
+      return null;
+    }
+
+    await loadData();
+    return newCustomer.id as string;
+  };
+
+  const createAppointmentFromVoiceCall = async (call: VoiceCall) => {
+    if (!business) return;
+    if (!voiceScheduleEmployee || !voiceScheduleService || !voiceScheduleDate) {
+      return alert("Selecciona profesional, servicio y fecha/hora para agendar.");
+    }
+
+    let customerId = findCustomerForVoiceCall(call)?.id || call.customer_id || null;
+
+    if (!customerId) {
+      customerId = await convertVoiceCallToCustomer(call);
+    }
+
+    if (!customerId) return;
+
+    const { data: appointmentData, error: appointmentError } = await supabase
+      .from("appointments")
+      .insert({
+        business_id: business.id,
+        customer_id: customerId,
+        employee_id: voiceScheduleEmployee,
+        service_id: voiceScheduleService,
+        appointment_date: voiceScheduleDate,
+        starts_at: voiceScheduleDate,
+        status: "confirmed",
+      })
+      .select("id")
+      .single();
+
+    if (appointmentError) return alert(appointmentError.message);
+
+    const { error: updateCallError } = await supabase
+      .from("voice_calls")
+      .update({
+        status: "cita_creada",
+        customer_id: customerId,
+        appointment_id: appointmentData.id,
+      })
       .eq("id", call.id);
 
     if (updateCallError) return alert(updateCallError.message);
 
-    alert("Paciente creado desde la llamada");
+    resetVoiceScheduleForm();
+    alert("Cita creada desde la llamada");
     await loadData();
   };
 
@@ -527,7 +618,7 @@ export default function DashboardPage() {
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
           {activeTab === "clientes" && <CustomersSection customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
           {activeTab === "ajustes" && <SettingsSection settings={settings} setSettings={setSettings} saveSettings={saveSettings} />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -538,8 +629,8 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
-  const { module, records, customers, appointments, services, revenue, expenses, manualIncome } = props;
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+  const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
   if (module.key === "crm") return <CrmModule {...props} />;
@@ -585,6 +676,9 @@ function WhatsappModule({ records, title, setTitle, notes, setNotes, status, set
 
 function VoiceModule({
   voiceCalls,
+  customers,
+  employees,
+  services,
   voiceCallerName,
   setVoiceCallerName,
   voiceCallerPhone,
@@ -599,15 +693,37 @@ function VoiceModule({
   setVoiceStatus,
   voicePriority,
   setVoicePriority,
+  voiceScheduleCallId,
+  setVoiceScheduleCallId,
+  voiceScheduleEmployee,
+  setVoiceScheduleEmployee,
+  voiceScheduleService,
+  setVoiceScheduleService,
+  voiceScheduleDate,
+  setVoiceScheduleDate,
   createVoiceCall,
   updateVoiceCallStatus,
   deleteVoiceCall,
   convertVoiceCallToCustomer,
+  createAppointmentFromVoiceCall,
 }: Parameters<typeof ModuleSection>[0]) {
   const total = voiceCalls.length;
   const pending = voiceCalls.filter((call) => ["nueva", "pendiente"].includes(call.status || "")).length;
   const appointmentsCreated = voiceCalls.filter((call) => call.status === "cita_creada").length;
   const discarded = voiceCalls.filter((call) => call.status === "descartada").length;
+
+  const cleanPhone = (value?: string | null) => String(value || "").replace(/\D/g, "");
+  const findCustomerForCall = (call: VoiceCall) => {
+    const phone = cleanPhone(call.caller_phone);
+    return customers.find((customer) => {
+      const customerPhone = cleanPhone(customer.phone);
+      return (
+        (call.customer_id && customer.id === call.customer_id) ||
+        (!!phone && !!customerPhone && customerPhone.endsWith(phone.slice(-9)))
+      );
+    }) || null;
+  };
+
 
   return (
     <section className="grid gap-6">
@@ -619,19 +735,22 @@ function VoiceModule({
       </div>
 
       <div className="rounded-[2rem] border border-green-300/20 bg-green-500/10 p-5 text-sm text-green-100">
-        <p className="font-semibold">Recepción en tiempo real activa</p>
-        <p className="mt-1 text-green-100/70">Cuando Asterisk reciba una llamada, Flowly la guardará automáticamente y aparecerá aquí. Si Supabase Realtime está activo para la tabla, también saltará el aviso en pantalla sin refrescar.</p>
+        <p className="font-semibold">Flowly Voice conectado al CRM</p>
+        <p className="mt-1 text-green-100/70">Las llamadas entrantes guardan EPS, tipo de documento e identificación. Desde esta bandeja puedes crear el paciente, marcar seguimiento o agendar directamente en la agenda.</p>
       </div>
 
       <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
-        <GlassCard title="Registrar llamada">
+        <GlassCard title="Registrar llamada manual">
           <div className="grid gap-3">
             <input value={voiceCallerName} onChange={(e) => setVoiceCallerName(e.target.value)} placeholder="Nombre de quien llama" className="input-dark" />
             <input value={voiceCallerPhone} onChange={(e) => setVoiceCallerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" />
 
             <select value={voiceIntent} onChange={(e) => setVoiceIntent(e.target.value)} className="input-dark">
               <option value="informacion">Información</option>
-              <option value="nueva_cita">Nueva cita</option>
+              <option value="particular">Paciente particular</option>
+              <option value="nueva_eps">Nueva EPS</option>
+              <option value="salud_total">Salud Total</option>
+              <option value="otra_eps">Otra EPS</option>
               <option value="reprogramar">Reprogramar cita</option>
               <option value="incidencia">Incidencia</option>
               <option value="seguimiento">Seguimiento</option>
@@ -661,35 +780,71 @@ function VoiceModule({
           </div>
         </GlassCard>
 
-        <GlassCard title="Bandeja Flowly Voice">
+        <GlassCard title="Bandeja CRM de llamadas">
           <div className="space-y-3">
-            {voiceCalls.map((call) => (
-              <div key={call.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-                <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold">{call.caller_name || "Llamada sin nombre"}</p>
-                      <span className={priorityBadge(call.priority || "normal")}>{translatePriority(call.priority || "normal")}</span>
+            {voiceCalls.map((call) => {
+              const linkedCustomer = findCustomerForCall(call);
+              const isScheduling = voiceScheduleCallId === call.id;
+
+              return (
+                <div key={call.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+                  <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold">{linkedCustomer ? customerName(linkedCustomer) : call.caller_name || "Llamada sin nombre"}</p>
+                        <span className={priorityBadge(call.priority || "normal")}>{translatePriority(call.priority || "normal")}</span>
+                        {linkedCustomer && <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-100">Paciente encontrado</span>}
+                      </div>
+                      <p className="mt-1 text-sm text-white/55">{call.caller_phone}</p>
+
+                      <div className="mt-3 grid gap-2 text-xs text-white/60 md:grid-cols-3">
+                        <div className="rounded-xl bg-black/20 p-3">
+                          <p className="text-white/35">EPS</p>
+                          <p className="mt-1 font-medium text-white">{translateIntent(call.eps || call.intent || "informacion")}</p>
+                        </div>
+                        <div className="rounded-xl bg-black/20 p-3">
+                          <p className="text-white/35">Documento</p>
+                          <p className="mt-1 font-medium text-white">{translateDocumentType(call.document_type || "") || "No indicado"}</p>
+                        </div>
+                        <div className="rounded-xl bg-black/20 p-3">
+                          <p className="text-white/35">Número ID</p>
+                          <p className="mt-1 font-medium text-white">{call.document_number || "No indicado"}</p>
+                        </div>
+                      </div>
+
+                      <p className="mt-3 text-sm text-white/75">{call.reason || "Sin motivo registrado"}</p>
+                      {call.transcript && <p className="mt-2 text-xs leading-5 text-white/45">{call.transcript}</p>}
+                      <p className="mt-3 text-xs text-violet-200">
+                        Estado: {translateVoiceStatus(call.status || "nueva")} · Fuente: {call.source || "manual"} · {new Date(call.created_at).toLocaleString("es-ES")}
+                      </p>
                     </div>
-                    <p className="mt-1 text-sm text-white/55">{call.caller_phone}</p>
-                    <p className="mt-3 text-sm text-white/75">{call.reason || "Sin motivo registrado"}</p>
-                    {call.transcript && <p className="mt-2 text-xs leading-5 text-white/45">{call.transcript}</p>}
-                    <p className="mt-3 text-xs text-violet-200">
-                      Intención: {translateIntent(call.intent || "informacion")} · Estado: {translateVoiceStatus(call.status || "nueva")} · {new Date(call.created_at).toLocaleString("es-ES")}
-                    </p>
+
+                    <div className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end">
+                      <StatusButton onClick={() => updateVoiceCallStatus(call.id, "pendiente")} tone="violet">Pendiente</StatusButton>
+                      <button onClick={() => convertVoiceCallToCustomer(call)} className="rounded-full border border-green-300/25 px-3 py-2 text-xs text-green-200">{linkedCustomer ? "Vincular CRM" : "Crear paciente"}</button>
+                      <button onClick={() => setVoiceScheduleCallId(isScheduling ? "" : call.id)} className="rounded-full border border-violet-300/25 px-3 py-2 text-xs text-violet-200">Agendar cita</button>
+                      <StatusButton onClick={() => updateVoiceCallStatus(call.id, "contactado")} tone="green">Contactado</StatusButton>
+                      <StatusButton onClick={() => updateVoiceCallStatus(call.id, "descartada")} tone="red">Descartar</StatusButton>
+                      <button onClick={() => deleteVoiceCall(call.id)} className="rounded-full border border-red-300/25 px-3 py-2 text-xs text-red-200">Eliminar</button>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "pendiente")} tone="violet">Pendiente</StatusButton>
-                    <button onClick={() => convertVoiceCallToCustomer(call)} className="rounded-full border border-green-300/25 px-3 py-2 text-xs text-green-200">Crear paciente</button>
-                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "contactado")} tone="green">Contactado</StatusButton>
-                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "cita_creada")} tone="green">Cita creada</StatusButton>
-                    <StatusButton onClick={() => updateVoiceCallStatus(call.id, "descartada")} tone="red">Descartar</StatusButton>
-                    <button onClick={() => deleteVoiceCall(call.id)} className="rounded-full border border-red-300/25 px-3 py-2 text-xs text-red-200">Eliminar</button>
-                  </div>
+                  {isScheduling && (
+                    <div className="mt-4 rounded-2xl border border-violet-300/20 bg-violet-500/10 p-4">
+                      <p className="mb-3 text-sm font-semibold text-violet-100">Agendar desde esta llamada</p>
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <Select value={voiceScheduleEmployee} onChange={setVoiceScheduleEmployee} placeholder="Profesional" options={employees.map((employee) => ({ value: employee.id, label: employee.name }))} />
+                        <Select value={voiceScheduleService} onChange={setVoiceScheduleService} placeholder="Servicio / terapia" options={services.map((service) => ({ value: service.id, label: `${service.name} · ${Number(service.price).toFixed(2)}€` }))} />
+                        <input type="datetime-local" value={voiceScheduleDate} onChange={(e) => setVoiceScheduleDate(e.target.value)} className="input-dark" />
+                        <button onClick={() => createAppointmentFromVoiceCall(call)} className="btn-primary">
+                          <CalendarDays size={17} /> Crear cita
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {!voiceCalls.length && <Empty text="Todavía no hay llamadas registradas." />}
           </div>
@@ -715,6 +870,12 @@ function translateIntent(intent: string) {
   if (intent === "incidencia") return "Incidencia";
   if (intent === "seguimiento") return "Seguimiento";
   return intent;
+}
+
+function translateDocumentType(type: string) {
+  if (type === "tarjeta_identidad") return "Tarjeta de identidad";
+  if (type === "cedula_ciudadania") return "Cédula de ciudadanía";
+  return type;
 }
 
 function translatePriority(priority: string) {
