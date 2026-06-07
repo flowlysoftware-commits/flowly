@@ -77,6 +77,10 @@ type Customer = {
 };
 type Appointment = {
   id: string;
+  business_id?: string;
+  customer_id?: string | null;
+  employee_id?: string | null;
+  service_id?: string | null;
   appointment_date?: string;
   starts_at?: string;
   status: string;
@@ -129,6 +133,20 @@ type VoiceCall = {
   document_number?: string | null;
   customer_id?: string | null;
   appointment_id?: string | null;
+  created_at: string;
+};
+
+
+type ClinicalDocument = {
+  id: string;
+  business_id: string;
+  customer_id: string;
+  title: string;
+  file_name: string | null;
+  file_path: string;
+  file_url: string | null;
+  document_type: string | null;
+  notes: string | null;
   created_at: string;
 };
 
@@ -203,6 +221,7 @@ export default function DashboardPage() {
   const [modules, setModules] = useState<BusinessModule[]>([]);
   const [moduleRecords, setModuleRecords] = useState<ModuleRecord[]>([]);
   const [voiceCalls, setVoiceCalls] = useState<VoiceCall[]>([]);
+  const [clinicalDocuments, setClinicalDocuments] = useState<ClinicalDocument[]>([]);
   const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
   const [selectedCrmCustomerId, setSelectedCrmCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
@@ -274,7 +293,7 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes] = await Promise.all([
+    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes] = await Promise.all([
       supabase.from("company_profiles").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -284,6 +303,7 @@ export default function DashboardPage() {
       supabase.from("business_modules").select("*").eq("business_id", businessId).eq("status", "active"),
       supabase.from("module_records").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
     ]);
 
     const loadedCompanyProfile = (companyRes.data as CompanyProfile | null) || null;
@@ -304,6 +324,7 @@ export default function DashboardPage() {
     setModules((modulesRes.data || []) as BusinessModule[]);
     setModuleRecords((recordsRes.data || []) as ModuleRecord[]);
     setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
+    setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
     setLoading(false);
   };
 
@@ -625,7 +646,7 @@ export default function DashboardPage() {
 
   const updateCustomerCrm = async (
     customerId: string,
-    updates: Partial<Pick<Customer, "crm_status" | "eps" | "document_type" | "document_number" | "notes" | "next_follow_up_at">>
+    updates: Partial<Customer>
   ) => {
     const { error } = await supabase
       .from("customers")
@@ -650,6 +671,40 @@ export default function DashboardPage() {
     });
 
     if (error) return alert(error.message);
+    await loadData();
+  };
+
+
+  const uploadClinicalDocument = async (customerId: string, file: File, title?: string, documentType = "clinico", notes = "") => {
+    if (!business || !customerId || !file) return alert("Selecciona un paciente y un archivo");
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${business.id}/${customerId}/${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("clinical-documents")
+      .upload(path, file, { upsert: false });
+
+    if (uploadError) return alert(uploadError.message);
+
+    const { data: publicData } = supabase.storage
+      .from("clinical-documents")
+      .getPublicUrl(path);
+
+    const { error: insertError } = await supabase.from("clinical_documents").insert({
+      business_id: business.id,
+      customer_id: customerId,
+      title: title || file.name,
+      file_name: file.name,
+      file_path: path,
+      file_url: publicData.publicUrl,
+      document_type: documentType || "clinico",
+      notes: notes || null,
+    });
+
+    if (insertError) return alert(insertError.message);
+
+    await createCrmAction(customerId, `Documento subido: ${title || file.name}`, notes || "Documento clínico cargado en la ficha", "documento");
     await loadData();
   };
 
@@ -905,7 +960,7 @@ export default function DashboardPage() {
             uploadCompanyLogo={uploadCompanyLogo}
             saveCompanyProfile={saveCompanyProfile}
           />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -916,7 +971,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Pick<Customer, "crm_status" | "eps" | "document_type" | "document_number" | "notes" | "next_follow_up_at">>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -956,6 +1011,8 @@ function CrmModule({
   updateCustomerCrm,
   createCrmAction,
   createAppointmentForCustomer,
+  clinicalDocuments,
+  uploadClinicalDocument,
 }: Parameters<typeof ModuleSection>[0]) {
   const [crmActionTitle, setCrmActionTitle] = useState("");
   const [crmActionNotes, setCrmActionNotes] = useState("");
@@ -964,10 +1021,21 @@ function CrmModule({
   const [crmAppointmentService, setCrmAppointmentService] = useState("");
   const [crmAppointmentDate, setCrmAppointmentDate] = useState("");
   const [crmStatusFilter, setCrmStatusFilter] = useState("all");
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentType, setDocumentType] = useState("clinico");
+  const [documentNotes, setDocumentNotes] = useState("");
+  const [detailName, setDetailName] = useState("");
+  const [detailPhone, setDetailPhone] = useState("");
+  const [detailEmail, setDetailEmail] = useState("");
+  const [detailDocumentType, setDetailDocumentType] = useState("");
+  const [detailDocumentNumber, setDetailDocumentNumber] = useState("");
+  const [detailEps, setDetailEps] = useState("");
+  const [detailNotes, setDetailNotes] = useState("");
 
   const filtered = customers.filter((c) => {
-    const searchable = `${customerName(c)} ${c.phone || ""} ${c.email || ""} ${c.document_number || ""} ${c.eps || ""} ${c.crm_status || ""}`.toLowerCase();
-    const matchesSearch = searchable.includes(crmSearch.toLowerCase());
+    const searchable = `${customerName(c)} ${c.phone || ""} ${c.email || ""} ${c.document_number || ""} ${c.document_type || ""} ${c.eps || ""} ${c.crm_status || ""} ${c.notes || ""}`.toLowerCase();
+    const search = crmSearch.toLowerCase().trim();
+    const matchesSearch = !search || searchable.includes(search);
     const matchesStatus = crmStatusFilter === "all" || (c.crm_status || "nuevo") === crmStatusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -977,15 +1045,33 @@ function CrmModule({
     filtered[0] ||
     null;
 
+  useEffect(() => {
+    if (!selectedCustomer) return;
+    setDetailName(customerName(selectedCustomer));
+    setDetailPhone(selectedCustomer.phone || "");
+    setDetailEmail(selectedCustomer.email || "");
+    setDetailDocumentType(selectedCustomer.document_type || "");
+    setDetailDocumentNumber(selectedCustomer.document_number || "");
+    setDetailEps(selectedCustomer.eps || "");
+    setDetailNotes(selectedCustomer.notes || "");
+  }, [selectedCustomer?.id]);
+
   const customerAppointments = selectedCustomer
     ? appointments.filter((appointment) => {
         const related = firstRelation(appointment.customers);
-        return customerName(related).toLowerCase() === customerName(selectedCustomer).toLowerCase();
+        return (
+          appointment.customer_id === selectedCustomer.id ||
+          customerName(related).toLowerCase() === customerName(selectedCustomer).toLowerCase()
+        );
       })
     : [];
 
   const customerRecords = selectedCustomer
     ? records.filter((record) => record.customer_id === selectedCustomer.id || (record.notes || "").includes(selectedCustomer.id))
+    : [];
+
+  const customerDocs = selectedCustomer
+    ? clinicalDocuments.filter((document) => document.customer_id === selectedCustomer.id)
     : [];
 
   const activeCustomers = customers.filter((customer) => (customer.crm_status || "nuevo") !== "cerrado").length;
@@ -1010,6 +1096,20 @@ function CrmModule({
     setCrmActionTitle("");
     setCrmActionNotes("");
     setCrmActionDueDate("");
+  };
+
+  const saveCustomerDetails = async () => {
+    if (!selectedCustomer) return;
+    await updateCustomerCrm(selectedCustomer.id, {
+      name: detailName,
+      full_name: detailName,
+      phone: detailPhone,
+      email: detailEmail,
+      eps: detailEps,
+      document_type: detailDocumentType,
+      document_number: detailDocumentNumber,
+      notes: detailNotes,
+    } as any);
   };
 
   const scheduleFromCrm = async () => {
@@ -1046,15 +1146,15 @@ function CrmModule({
         </div>
       )}
 
-      <section className="grid gap-6 xl:grid-cols-[.75fr_1.25fr]">
+      <section className="grid gap-6 xl:grid-cols-[.65fr_1.35fr]">
         <GlassCard title="Pacientes / Leads">
-          <div className="grid gap-3 md:grid-cols-[1fr_.7fr]">
+          <div className="grid gap-3">
             <div className="relative">
               <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
               <input
                 value={crmSearch}
                 onChange={(e) => setCrmSearch(e.target.value)}
-                placeholder="Buscar por nombre, teléfono, documento, EPS o estado"
+                placeholder="Buscar por nombre, teléfono, identificación, EPS, notas o estado"
                 className="input-dark pl-11"
               />
             </div>
@@ -1065,12 +1165,14 @@ function CrmModule({
               <option value="seguimiento">En seguimiento</option>
               <option value="cita_pendiente">Cita pendiente</option>
               <option value="cita_agendada">Cita agendada</option>
+              <option value="pendiente_documentacion">Pendiente documentación</option>
+              <option value="en_tratamiento">En tratamiento</option>
               <option value="cerrado">Cerrado</option>
             </select>
           </div>
 
-          <div className="mt-4 space-y-3">
-            {filtered.slice(0, 40).map((customer) => (
+          <div className="mt-4 max-h-[760px] space-y-3 overflow-y-auto pr-1">
+            {filtered.slice(0, 80).map((customer) => (
               <button
                 key={customer.id}
                 onClick={() => setSelectedCrmCustomerId(customer.id)}
@@ -1112,6 +1214,32 @@ function CrmModule({
                 <InfoBox label="Documento" value={selectedCustomer.document_number || "No indicado"} />
               </div>
 
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <h3 className="mb-3 font-semibold">Datos del paciente</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={detailName} onChange={(e) => setDetailName(e.target.value)} placeholder="Nombre completo" className="input-dark" />
+                  <input value={detailPhone} onChange={(e) => setDetailPhone(e.target.value)} placeholder="Teléfono" className="input-dark" />
+                  <input value={detailEmail} onChange={(e) => setDetailEmail(e.target.value)} placeholder="Email" className="input-dark" />
+                  <select value={detailEps} onChange={(e) => setDetailEps(e.target.value)} className="input-dark">
+                    <option value="">EPS / tipo paciente</option>
+                    <option value="particular">Particular</option>
+                    <option value="nueva_eps">Nueva EPS</option>
+                    <option value="salud_total">Salud Total</option>
+                    <option value="otra_eps">Otra EPS</option>
+                  </select>
+                  <select value={detailDocumentType} onChange={(e) => setDetailDocumentType(e.target.value)} className="input-dark">
+                    <option value="">Tipo documento</option>
+                    <option value="tarjeta_identidad">Tarjeta de identidad</option>
+                    <option value="cedula_ciudadania">Cédula de ciudadanía</option>
+                    <option value="registro_civil">Registro civil</option>
+                    <option value="pasaporte">Pasaporte</option>
+                  </select>
+                  <input value={detailDocumentNumber} onChange={(e) => setDetailDocumentNumber(e.target.value)} placeholder="Número de identificación" className="input-dark" />
+                </div>
+                <textarea value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)} placeholder="Notas clínicas, familiares, autorizaciones, observaciones y próximos pasos" className="input-dark mt-3 min-h-28" />
+                <button onClick={saveCustomerDetails} className="btn-primary mt-3"><CheckCircle2 size={17} /> Guardar ficha</button>
+              </div>
+
               <div className="grid gap-3 md:grid-cols-3">
                 <select
                   value={selectedCustomer.crm_status || "nuevo"}
@@ -1123,19 +1251,9 @@ function CrmModule({
                   <option value="seguimiento">En seguimiento</option>
                   <option value="cita_pendiente">Cita pendiente</option>
                   <option value="cita_agendada">Cita agendada</option>
+                  <option value="pendiente_documentacion">Pendiente documentación</option>
+                  <option value="en_tratamiento">En tratamiento</option>
                   <option value="cerrado">Cerrado</option>
-                </select>
-
-                <select
-                  value={selectedCustomer.eps || ""}
-                  onChange={(e) => updateCustomerCrm(selectedCustomer.id, { eps: e.target.value })}
-                  className="input-dark"
-                >
-                  <option value="">EPS / tipo paciente</option>
-                  <option value="particular">Particular</option>
-                  <option value="nueva_eps">Nueva EPS</option>
-                  <option value="salud_total">Salud Total</option>
-                  <option value="otra_eps">Otra EPS</option>
                 </select>
 
                 <input
@@ -1144,56 +1262,83 @@ function CrmModule({
                   onChange={(e) => updateCustomerCrm(selectedCustomer.id, { next_follow_up_at: e.target.value || null })}
                   className="input-dark"
                 />
-              </div>
 
-              <textarea
-                defaultValue={selectedCustomer.notes || ""}
-                onBlur={(e) => updateCustomerCrm(selectedCustomer.id, { notes: e.target.value })}
-                placeholder="Notas del paciente, acuerdos, autorización, observaciones y próximos pasos."
-                className="input-dark min-h-32"
-              />
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <input
-                  value={crmActionTitle}
-                  onChange={(e) => setCrmActionTitle(e.target.value)}
-                  placeholder="Título acción: llamar, validar EPS..."
-                  className="input-dark"
-                />
-                <input
-                  type="datetime-local"
-                  value={crmActionDueDate}
-                  onChange={(e) => setCrmActionDueDate(e.target.value)}
-                  className="input-dark"
-                />
-                <button onClick={saveAction} className="btn-primary">
-                  <Plus size={17} /> Guardar acción
+                <button onClick={() => updateCustomerCrm(selectedCustomer.id, { crm_status: "cita_pendiente" })} className="btn-secondary">
+                  Dejar pendiente
                 </button>
               </div>
 
-              <textarea
-                value={crmActionNotes}
-                onChange={(e) => setCrmActionNotes(e.target.value)}
-                placeholder="Detalle del seguimiento o resultado de la llamada"
-                className="input-dark min-h-24"
-              />
+              <section className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-2xl border border-violet-300/20 bg-violet-500/10 p-4">
+                  <h3 className="font-semibold">Agendar desde CRM</h3>
+                  <p className="mt-1 text-sm text-white/45">Crea una cita sin salir de la ficha del paciente.</p>
+                  <div className="mt-4 grid gap-3">
+                    <Select value={crmAppointmentEmployee} onChange={setCrmAppointmentEmployee} placeholder="Profesional" options={employees.map((e: Employee) => ({ value: e.id, label: e.name }))} />
+                    <Select value={crmAppointmentService} onChange={setCrmAppointmentService} placeholder="Servicio / terapia" options={services.map((s: Service) => ({ value: s.id, label: `${s.name} · ${s.price}€` }))} />
+                    <input type="datetime-local" value={crmAppointmentDate} onChange={(e) => setCrmAppointmentDate(e.target.value)} className="input-dark" />
+                    <button onClick={scheduleFromCrm} className="btn-primary"><CalendarDays size={17} /> Agendar cita</button>
+                  </div>
+                </div>
 
-              <div className="rounded-2xl border border-violet-300/20 bg-violet-500/10 p-4">
-                <h3 className="font-semibold">Agendar desde CRM</h3>
-                <p className="mt-1 text-sm text-white/45">Crea una cita sin salir de la ficha del paciente.</p>
-                <div className="mt-4 grid gap-3 md:grid-cols-4">
-                  <Select value={crmAppointmentEmployee} onChange={setCrmAppointmentEmployee} placeholder="Profesional" options={employees.map((e: Employee) => ({ value: e.id, label: e.name }))} />
-                  <Select value={crmAppointmentService} onChange={setCrmAppointmentService} placeholder="Servicio / terapia" options={services.map((s: Service) => ({ value: s.id, label: `${s.name} · ${s.price}€` }))} />
-                  <input type="datetime-local" value={crmAppointmentDate} onChange={(e) => setCrmAppointmentDate(e.target.value)} className="input-dark" />
-                  <button onClick={scheduleFromCrm} className="btn-primary"><CalendarDays size={17} /> Agendar</button>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <h3 className="font-semibold">Proceso pendiente / tarea</h3>
+                  <div className="mt-4 grid gap-3">
+                    <input value={crmActionTitle} onChange={(e) => setCrmActionTitle(e.target.value)} placeholder="Título: validar autorización, llamar acudiente..." className="input-dark" />
+                    <input type="datetime-local" value={crmActionDueDate} onChange={(e) => setCrmActionDueDate(e.target.value)} className="input-dark" />
+                    <textarea value={crmActionNotes} onChange={(e) => setCrmActionNotes(e.target.value)} placeholder="Detalle del seguimiento o resultado de la llamada" className="input-dark min-h-24" />
+                    <button onClick={saveAction} className="btn-primary"><Plus size={17} /> Guardar proceso</button>
+                  </div>
+                </div>
+              </section>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <h3 className="font-semibold">Documentos clínicos</h3>
+                <p className="mt-1 text-sm text-white/45">Sube consentimientos, remisiones, autorizaciones, informes, PDFs o imágenes.</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" />
+                  <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark">
+                    <option value="clinico">Documento clínico</option>
+                    <option value="consentimiento">Consentimiento</option>
+                    <option value="autorizacion">Autorización EPS</option>
+                    <option value="remision">Remisión</option>
+                    <option value="informe">Informe</option>
+                    <option value="imagen">Imagen</option>
+                  </select>
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">
+                    Subir archivo
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file && selectedCustomer) {
+                          uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes);
+                          setDocumentTitle("");
+                          setDocumentNotes("");
+                        }
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas del documento" className="input-dark mt-3 min-h-20" />
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {customerDocs.map((document) => (
+                    <a key={document.id} href={document.file_url || "#"} target="_blank" rel="noreferrer" className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 hover:bg-white/[0.09]">
+                      <p className="font-semibold">{document.title}</p>
+                      <p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"} · {new Date(document.created_at).toLocaleString("es-ES")}</p>
+                      {document.notes && <p className="mt-2 text-xs leading-5 text-white/50">{document.notes}</p>}
+                    </a>
+                  ))}
+                  {!customerDocs.length && <Empty text="Sin documentos clínicos cargados." />}
                 </div>
               </div>
 
-              <section className="grid gap-4 xl:grid-cols-2">
+              <section className="grid gap-4 xl:grid-cols-3">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <h3 className="font-semibold">Historial de agenda</h3>
                   <div className="mt-3 space-y-3">
-                    {customerAppointments.slice(0, 8).map((appointment) => {
+                    {customerAppointments.slice(0, 10).map((appointment) => {
                       const service = firstRelation(appointment.services);
                       const employee = firstRelation(appointment.employees);
                       return (
@@ -1208,9 +1353,9 @@ function CrmModule({
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <h3 className="font-semibold">Acciones CRM</h3>
+                  <h3 className="font-semibold">Procesos y seguimientos</h3>
                   <div className="mt-3 space-y-3">
-                    {customerRecords.slice(0, 8).map((record) => (
+                    {customerRecords.slice(0, 10).map((record) => (
                       <div key={record.id} className="rounded-xl bg-white/[0.06] p-3">
                         <p className="text-sm font-medium">{record.title}</p>
                         {record.notes && <p className="mt-1 text-xs leading-5 text-white/45">{record.notes}</p>}
@@ -1218,6 +1363,15 @@ function CrmModule({
                       </div>
                     ))}
                     {!customerRecords.length && <Empty text="Sin acciones CRM registradas." />}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <h3 className="font-semibold">Resumen operativo</h3>
+                  <div className="mt-3 grid gap-3">
+                    <InfoBox label="Citas" value={customerAppointments.length} />
+                    <InfoBox label="Documentos" value={customerDocs.length} />
+                    <InfoBox label="Procesos" value={customerRecords.length} />
                   </div>
                 </div>
               </section>
@@ -1235,6 +1389,8 @@ function translateCrmStatus(status: string) {
   if (status === "seguimiento") return "En seguimiento";
   if (status === "cita_pendiente") return "Cita pendiente";
   if (status === "cita_agendada") return "Cita agendada";
+  if (status === "pendiente_documentacion") return "Pendiente documentación";
+  if (status === "en_tratamiento") return "En tratamiento";
   if (status === "cerrado") return "Cerrado";
   return status;
 }
@@ -1604,7 +1760,50 @@ function AgendaSection({
 
 function ServicesSection({ services, serviceName, setServiceName, serviceDuration, setServiceDuration, servicePrice, setServicePrice, createService }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo servicio"><div className="grid gap-3"><input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Nombre del servicio" className="input-dark" /><input value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} placeholder="Duración en minutos" type="number" className="input-dark" /><input value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="Precio" type="number" className="input-dark" /><button onClick={createService} className="btn-primary"><Plus size={17} /> Crear servicio</button></div></GlassCard><GlassCard title="Servicios creados"><div className="grid gap-3 md:grid-cols-2">{services.map((service: Service) => <div key={service.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-5"><h3 className="font-semibold">{service.name}</h3><p className="mt-2 text-sm text-white/50">{service.duration || service.duration_minutes || 30} min</p><p className="mt-4 text-2xl font-semibold">{Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea tu primer servicio para empezar a recibir reservas." />}</div></GlassCard></section>; }
 function EmployeesSection({ employees, employeeName, setEmployeeName, employeePhone, setEmployeePhone, createEmployee }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo empleado"><div className="grid gap-3"><input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createEmployee} className="btn-primary"><Plus size={17} /> Crear empleado</button></div></GlassCard><GlassCard title="Equipo"><div className="space-y-3">{employees.map((employee: Employee) => <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{employee.name}</p><p className="text-sm text-white/45">{employee.phone || "Sin teléfono"}</p></div>)}{!employees.length && <Empty text="Añade al primer profesional del negocio." />}</div></GlassCard></section>; }
-function CustomersSection({ customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo cliente"><div className="grid gap-3"><input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear cliente</button></div></GlassCard><GlassCard title="Clientes"><div className="space-y-3">{customers.map((customer: Customer) => <div key={customer.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{customerName(customer)}</p><p className="text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p></div>)}{!customers.length && <Empty text="Aún no hay clientes." />}</div></GlassCard></section>; }
+function CustomersSection({ customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) {
+  const [search, setSearch] = useState("");
+  const filteredCustomers = customers.filter((customer: Customer) => {
+    const text = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""} ${customer.crm_status || ""}`.toLowerCase();
+    return text.includes(search.toLowerCase());
+  });
+
+  return (
+    <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
+      <GlassCard title="Nuevo paciente / cliente">
+        <div className="grid gap-3">
+          <input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre" className="input-dark" />
+          <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" />
+          <button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear paciente</button>
+        </div>
+      </GlassCard>
+
+      <GlassCard title="Clientes / pacientes">
+        <div className="relative mb-4">
+          <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, identificación, EPS o estado" className="input-dark pl-11" />
+        </div>
+        <div className="space-y-3">
+          {filteredCustomers.map((customer: Customer) => (
+            <div key={customer.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+              <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                <div>
+                  <p className="font-semibold">{customerName(customer)}</p>
+                  <p className="text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p>
+                  <p className="mt-2 text-xs text-violet-200">
+                    {translateCrmStatus(customer.crm_status || "nuevo")} · {translateIntent(customer.eps || "informacion")}
+                    {customer.document_number ? ` · ID ${customer.document_number}` : ""}
+                  </p>
+                </div>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">Gestionar en CRM</span>
+              </div>
+            </div>
+          ))}
+          {!filteredCustomers.length && <Empty text="No hay pacientes que coincidan con la búsqueda." />}
+        </div>
+      </GlassCard>
+    </section>
+  );
+}
 function SettingsSection({
   business,
   settings,
