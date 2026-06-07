@@ -141,6 +141,10 @@ function appointmentDate(item: Appointment) {
   return item.appointment_date || item.starts_at || new Date().toISOString();
 }
 
+function normalizePhone(value: string | null | undefined) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -153,6 +157,7 @@ export default function DashboardPage() {
   const [modules, setModules] = useState<BusinessModule[]>([]);
   const [moduleRecords, setModuleRecords] = useState<ModuleRecord[]>([]);
   const [voiceCalls, setVoiceCalls] = useState<VoiceCall[]>([]);
+  const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
@@ -232,6 +237,32 @@ export default function DashboardPage() {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (!business?.id) return;
+
+    const channel = supabase
+      .channel(`flowly-voice-${business.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "voice_calls",
+          filter: `business_id=eq.${business.id}`,
+        },
+        (payload) => {
+          const call = payload.new as VoiceCall;
+          setVoiceCalls((current) => [call, ...current.filter((item) => item.id !== call.id)]);
+          setIncomingVoiceCall(call);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [business?.id]);
 
   const activeModuleKeys = useMemo(() => {
     if (business?.plan === "premium") return moduleCatalog.map((item) => item.key);
@@ -407,6 +438,13 @@ export default function DashboardPage() {
     return <Shell><div className="mx-auto max-w-2xl rounded-[2rem] border border-white/10 bg-white/[0.07] p-8 text-center shadow-2xl shadow-black/25 backdrop-blur-xl"><h1 className="text-3xl font-semibold">Tu cuenta todavía no tiene un negocio asociado</h1><p className="mt-3 text-white/60">Completa el registro después de contratar un plan o contacta con soporte si ya has pagado.</p><Link href="/precios" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 font-medium text-neutral-950">Ver planes</Link></div></Shell>;
   }
 
+  const matchedIncomingCustomer = incomingVoiceCall
+    ? customers.find((customer) => {
+        const callPhone = normalizePhone(incomingVoiceCall.caller_phone);
+        return Boolean(callPhone) && normalizePhone(customer.phone).endsWith(callPhone.slice(-9));
+      })
+    : null;
+
   const navItems: { id: CoreTab; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
     { id: "area", label: "Área personal", Icon: LayoutDashboard },
     { id: "agenda", label: "Agenda", Icon: CalendarDays },
@@ -458,6 +496,30 @@ export default function DashboardPage() {
             <Metric icon={<Users />} label="Clientes" value={customers.length} helper="Base activa" />
             <Metric icon={<TrendingUp />} label="Ingresos previstos" value={`${revenue.toFixed(2)}€`} helper="No canceladas" />
           </section>
+
+          {incomingVoiceCall && (
+            <div className="mb-6 rounded-[2rem] border border-green-300/25 bg-green-500/15 p-5 shadow-2xl shadow-green-950/20 backdrop-blur-xl">
+              <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-400/20 text-green-100">
+                    <PhoneCall size={22} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">Llamada entrante</p>
+                    <h2 className="mt-1 text-2xl font-semibold">{incomingVoiceCall.caller_phone}</h2>
+                    <p className="mt-1 text-sm text-white/60">
+                      {matchedIncomingCustomer ? `Paciente encontrado: ${customerName(matchedIncomingCustomer)}` : "Número nuevo. Puedes crearlo como paciente desde Flowly Voice."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setActiveTab("module:voice")} className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Abrir Voice</button>
+                  <button onClick={() => setIncomingVoiceCall(null)} className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/75">Cerrar</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {activeTab === "area" && <AreaSection business={business} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} />}
           {activeTab === "agenda" && <AgendaSection appointments={nextAppointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
@@ -554,6 +616,11 @@ function VoiceModule({
         <Metric icon={<Clock />} label="Pendientes" value={pending} helper="Por gestionar" />
         <Metric icon={<CalendarDays />} label="Citas creadas" value={appointmentsCreated} helper="Convertidas" />
         <Metric icon={<XCircle />} label="Descartadas" value={discarded} helper="No interesadas" />
+      </div>
+
+      <div className="rounded-[2rem] border border-green-300/20 bg-green-500/10 p-5 text-sm text-green-100">
+        <p className="font-semibold">Recepción en tiempo real activa</p>
+        <p className="mt-1 text-green-100/70">Cuando Asterisk reciba una llamada, Flowly la guardará automáticamente y aparecerá aquí. Si Supabase Realtime está activo para la tabla, también saltará el aviso en pantalla sin refrescar.</p>
       </div>
 
       <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
