@@ -1240,6 +1240,32 @@ function CrmModule({
                 <button onClick={saveCustomerDetails} className="btn-primary mt-3"><CheckCircle2 size={17} /> Guardar ficha</button>
               </div>
 
+              <div className="rounded-2xl border border-green-300/20 bg-green-500/10 p-4">
+                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                  <div>
+                    <h3 className="font-semibold">WhatsApp del paciente</h3>
+                    <p className="mt-1 text-sm text-white/50">Abre WhatsApp con mensajes rápidos usando los datos de esta ficha.</p>
+                  </div>
+                  <button
+                    onClick={() => openWhatsappForCustomer(selectedCustomer, whatsappTemplates[0].message)}
+                    className="btn-primary"
+                  >
+                    <MessageCircle size={17} /> WhatsApp
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-2 md:grid-cols-3">
+                  {whatsappTemplates.slice(0, 5).map((template) => (
+                    <button
+                      key={template.key}
+                      onClick={() => openWhatsappForCustomer(selectedCustomer, template.message)}
+                      className="rounded-full border border-white/15 px-4 py-2 text-left text-xs text-white/75 hover:bg-white/10"
+                    >
+                      {template.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid gap-3 md:grid-cols-3">
                 <select
                   value={selectedCustomer.crm_status || "nuevo"}
@@ -1404,10 +1430,249 @@ function AiModule({ records, customers, appointments, revenue, title, setTitle, 
   return <section className="grid gap-6"><div className="rounded-[2rem] border border-violet-300/20 bg-violet-500/15 p-7"><p className="text-sm font-medium text-violet-200">IA Assistant activo</p><h2 className="mt-2 text-3xl font-semibold">Tu panel ahora funciona como centro de inteligencia</h2><p className="mt-2 text-white/60">Este módulo prepara prompts, análisis e insights. Cuando conectemos el proveedor IA, estas instrucciones se convertirán en respuestas automáticas reales.</p></div><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Bot />} label="Prompts" value={records.length} helper="Guardados" /><Metric icon={<Users />} label="Clientes" value={customers.length} helper="Analizables" /><Metric icon={<CalendarDays />} label="Reservas" value={appointments.length} helper="Dataset" /><Metric icon={<TrendingUp />} label="Ingresos" value={`${revenue.toFixed(2)}€`} helper="Contexto" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva instrucción IA"><div className="grid gap-3"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Resumen semanal del negocio" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Pide a Flowly IA que analice clientes inactivos, servicios más rentables, huecos libres o campañas recomendadas" className="input-dark min-h-32" /><button onClick={() => createRecord("ai", "prompt")} className="btn-primary"><Bot size={17} /> Guardar instrucción IA</button></div></GlassCard><GlassCard title="Insights sugeridos"><div className="grid gap-3">{["Clientes sin reservar en 60 días", "Servicios con más margen", "Horas con menor ocupación", "Campaña recomendada esta semana"].map((x) => <div key={x} className="rounded-2xl bg-black/25 p-4"><p className="font-semibold">{x}</p><p className="mt-1 text-sm text-white/45">Listo para automatizar con IA</p></div>)}</div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
 }
 
-function WhatsappModule({ records, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
-  return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<MessageCircle />} label="Plantillas" value={records.length} helper="Guardadas" /><Metric icon={<CheckCircle2 />} label="Conexión" value="Pendiente" helper="Proveedor" /><Metric icon={<Clock />} label="Bots" value="3" helper="Preparados" /><Metric icon={<Users />} label="Uso" value="Reservas" helper="Automático" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Configurar bot / plantilla"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="confirmation">Confirmación de cita</option><option value="reminder">Recordatorio 24h</option><option value="recovery">Recuperación cliente inactivo</option><option value="custom">Mensaje personalizado</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre de plantilla" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Hola {cliente}, te recordamos tu cita en {negocio} el {fecha} a las {hora}." className="input-dark min-h-32" /><button onClick={() => createRecord("whatsapp", status)} className="btn-primary"><Plus size={17} /> Guardar plantilla</button></div></GlassCard><GlassCard title="Conexión WhatsApp"><div className="rounded-2xl bg-black/25 p-5"><p className="font-semibold">Conecta el número del negocio</p><p className="mt-2 text-sm text-white/55">Preparado para integrar WhatsApp Business API, Twilio, 360dialog o proveedor oficial.</p><button className="btn-secondary mt-4" onClick={() => alert("Conexión pendiente de proveedor WhatsApp")}>Conectar número</button></div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
+
+const whatsappTemplates = [
+  {
+    key: "llamada_perdida",
+    label: "Llamada perdida",
+    message: "Hola {nombre}, somos Neuronas IPS. Intentamos comunicarnos contigo al teléfono {telefono}. Por favor respóndenos este mensaje para continuar con tu proceso de atención.",
+  },
+  {
+    key: "confirmar_cita",
+    label: "Confirmar cita",
+    message: "Hola {nombre}, somos Neuronas IPS. Te escribimos para confirmar tu cita. Por favor respóndenos confirmando tu disponibilidad.",
+  },
+  {
+    key: "documentacion",
+    label: "Solicitar documentación",
+    message: "Hola {nombre}, somos Neuronas IPS. Para continuar con tu proceso necesitamos que nos envíes la documentación pendiente. Muchas gracias.",
+  },
+  {
+    key: "seguimiento_eps",
+    label: "Seguimiento EPS",
+    message: "Hola {nombre}, somos Neuronas IPS. Te contactamos para hacer seguimiento a tu proceso con {eps}. Quedamos atentos a tu respuesta.",
+  },
+  {
+    key: "recordatorio",
+    label: "Recordatorio",
+    message: "Hola {nombre}, te recordamos que tienes un proceso pendiente con Neuronas IPS. Por favor comunícate con nosotros para continuar.",
+  },
+];
+
+function normalizeWhatsappPhone(phone?: string | null) {
+  const raw = (phone || "").replace(/\D/g, "");
+  if (!raw) return "";
+  if (raw.startsWith("57")) return raw;
+  if (raw.length === 10) return `57${raw}`;
+  return raw;
 }
 
+function whatsappMessageForCustomer(template: string, customer: Customer) {
+  return template
+    .replaceAll("{nombre}", customerName(customer))
+    .replaceAll("{telefono}", customer.phone || "")
+    .replaceAll("{eps}", translateIntent(customer.eps || ""))
+    .replaceAll("{documento}", customer.document_number || "");
+}
+
+function whatsappUrl(phone?: string | null, message = "") {
+  const normalized = normalizeWhatsappPhone(phone);
+  if (!normalized) return "";
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+}
+
+function openWhatsappForCustomer(customer: Customer, template: string) {
+  const url = whatsappUrl(customer.phone, whatsappMessageForCustomer(template, customer));
+  if (!url) return alert("Este paciente no tiene teléfono para WhatsApp");
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function WhatsappModule({
+  records,
+  customers,
+  title,
+  setTitle,
+  notes,
+  setNotes,
+  status,
+  setStatus,
+  createRecord,
+  deleteRecord,
+}: Parameters<typeof ModuleSection>[0]) {
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState("llamada_perdida");
+  const [manualPhone, setManualPhone] = useState("");
+  const [manualMessage, setManualMessage] = useState("Hola, somos Neuronas IPS. Te contactamos sobre tu proceso de atención. Quedamos atentos a tu respuesta.");
+  const [customerSearch, setCustomerSearch] = useState("");
+
+  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
+  const selectedTemplate = whatsappTemplates.find((template) => template.key === selectedTemplateKey) || whatsappTemplates[0];
+
+  const filteredCustomers = customers.filter((customer) => {
+    const searchable = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""}`.toLowerCase();
+    return searchable.includes(customerSearch.toLowerCase().trim());
+  });
+
+  const sendSelectedTemplate = () => {
+    if (!selectedCustomer) return alert("Selecciona un paciente");
+    openWhatsappForCustomer(selectedCustomer, selectedTemplate.message);
+  };
+
+  const sendManualMessage = () => {
+    const url = whatsappUrl(manualPhone, manualMessage);
+    if (!url) return alert("Añade un teléfono válido");
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const saveTemplate = async () => {
+    if (!title || !notes) return alert("Añade nombre y mensaje de la plantilla");
+    await createRecord("whatsapp", status || "template");
+    setTitle("");
+    setNotes("");
+  };
+
+  const quickTemplates = [
+    ...whatsappTemplates,
+    ...records.map((record) => ({
+      key: record.id,
+      label: record.title,
+      message: record.notes || "",
+    })).filter((template) => template.message),
+  ];
+
+  return (
+    <section className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric icon={<MessageCircle />} label="Modo" value="Manual" helper="Sin coste API" />
+        <Metric icon={<Users />} label="Pacientes" value={customers.length} helper="CRM conectado" />
+        <Metric icon={<FileText />} label="Plantillas" value={quickTemplates.length} helper="Rápidas" />
+        <Metric icon={<CheckCircle2 />} label="Coste" value="0€" helper="Abre WhatsApp" />
+      </div>
+
+      <div className="rounded-[2rem] border border-green-300/25 bg-green-500/15 p-5">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">WhatsApp Manual activo</p>
+        <p className="mt-2 text-sm leading-6 text-white/65">
+          Este módulo no usa API de pago. Genera conversaciones con mensajes preparados usando WhatsApp Web o WhatsApp Desktop.
+          Ideal para empezar sin costes fijos por número.
+        </p>
+      </div>
+
+      <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+        <GlassCard title="Enviar WhatsApp desde CRM">
+          <div className="grid gap-3">
+            <div className="relative">
+              <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
+              <input
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                placeholder="Buscar paciente por nombre, teléfono, EPS o documento"
+                className="input-dark pl-11"
+              />
+            </div>
+
+            <Select
+              value={selectedCustomerId}
+              onChange={setSelectedCustomerId}
+              placeholder="Seleccionar paciente"
+              options={filteredCustomers.slice(0, 80).map((customer) => ({
+                value: customer.id,
+                label: `${customerName(customer)} · ${customer.phone || "Sin teléfono"}${customer.document_number ? ` · ID ${customer.document_number}` : ""}`,
+              }))}
+            />
+
+            <select value={selectedTemplateKey} onChange={(e) => setSelectedTemplateKey(e.target.value)} className="input-dark">
+              {quickTemplates.map((template) => (
+                <option key={template.key} value={template.key}>{template.label}</option>
+              ))}
+            </select>
+
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/35">Vista previa</p>
+              <p className="mt-2 text-sm leading-6 text-white/70">
+                {selectedCustomer
+                  ? whatsappMessageForCustomer(selectedTemplate.message, selectedCustomer)
+                  : selectedTemplate.message}
+              </p>
+            </div>
+
+            {selectedCustomer && (
+              <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4 md:grid-cols-2">
+                <InfoBox label="Paciente" value={customerName(selectedCustomer)} />
+                <InfoBox label="Teléfono" value={selectedCustomer.phone || "Sin teléfono"} />
+                <InfoBox label="EPS" value={translateIntent(selectedCustomer.eps || "informacion")} />
+                <InfoBox label="Documento" value={selectedCustomer.document_number || "No indicado"} />
+              </div>
+            )}
+
+            <button onClick={sendSelectedTemplate} className="btn-primary">
+              <MessageCircle size={17} /> Abrir WhatsApp con plantilla
+            </button>
+          </div>
+        </GlassCard>
+
+        <GlassCard title="Mensaje libre">
+          <div className="grid gap-3">
+            <input
+              value={manualPhone}
+              onChange={(e) => setManualPhone(e.target.value)}
+              placeholder="Teléfono. Ej: 3001234567"
+              className="input-dark"
+            />
+            <textarea
+              value={manualMessage}
+              onChange={(e) => setManualMessage(e.target.value)}
+              placeholder="Mensaje"
+              className="input-dark min-h-32"
+            />
+            <button onClick={sendManualMessage} className="btn-primary">
+              <MessageCircle size={17} /> Abrir WhatsApp
+            </button>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4">
+            <h3 className="font-semibold">Crear plantilla personalizada</h3>
+            <p className="mt-1 text-sm text-white/45">
+              Puedes usar variables: {"{nombre}"}, {"{telefono}"}, {"{eps}"}, {"{documento}"}.
+            </p>
+            <div className="mt-4 grid gap-3">
+              <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark">
+                <option value="template">Plantilla general</option>
+                <option value="followup">Seguimiento</option>
+                <option value="appointment">Citas</option>
+                <option value="documents">Documentación</option>
+              </select>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre de plantilla" className="input-dark" />
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Hola {nombre}, somos Neuronas IPS..."
+                className="input-dark min-h-28"
+              />
+              <button onClick={saveTemplate} className="btn-secondary">
+                <Plus size={17} /> Guardar plantilla
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <RecordsList records={records} deleteRecord={deleteRecord} />
+          </div>
+        </GlassCard>
+      </section>
+
+      <GlassCard title="Plantillas rápidas">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {whatsappTemplates.map((template) => (
+            <div key={template.key} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
+              <p className="font-semibold">{template.label}</p>
+              <p className="mt-2 text-sm leading-6 text-white/50">{template.message}</p>
+            </div>
+          ))}
+        </div>
+      </GlassCard>
+    </section>
+  );
+}
 
 function VoiceModule({
   voiceCalls,
