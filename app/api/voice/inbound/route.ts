@@ -203,7 +203,7 @@ export async function POST(req: Request) {
           }${documentNumber ? ` · ID: ${documentNumber}` : ""}`,
         transcript: cleanText(body.transcript) || null,
         intent: eps || "informacion",
-        status: cleanText(body.status) || "nueva",
+        status: cleanText(body.status) || "en_llamada",
         priority: cleanText(body.priority) || "normal",
         source: cleanText(body.source) || "asterisk",
         call_id: cleanText(body.call_id) || null,
@@ -221,6 +221,14 @@ export async function POST(req: Request) {
         { success: false, error: error.message },
         { status: 500 }
       );
+    }
+
+    if (matchedCustomerId) {
+      await supabaseAdmin.from("voice_links").upsert({
+        business_id: businessId,
+        voice_call_id: data.id,
+        customer_id: matchedCustomerId,
+      }, { onConflict: "voice_call_id,customer_id" });
     }
 
     console.log("FLOWLY VOICE CALL SAVED", {

@@ -54,6 +54,9 @@ type CompanyProfile = {
   tax_id: string | null;
   website: string | null;
   public_description: string | null;
+  schedule_text?: string | null;
+  primary_color?: string | null;
+  secondary_color?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -67,6 +70,8 @@ type Customer = {
   full_name?: string;
   phone: string | null;
   email: string | null;
+  address?: string | null;
+  responsible_name?: string | null;
   notes: string | null;
   crm_status?: string | null;
   eps?: string | null;
@@ -74,6 +79,17 @@ type Customer = {
   document_number?: string | null;
   last_contact_at?: string | null;
   next_follow_up_at?: string | null;
+};
+
+type WhatsappMessage = {
+  id: string;
+  business_id: string;
+  customer_id: string | null;
+  phone: string;
+  template_key: string | null;
+  message: string;
+  status: string | null;
+  created_at: string;
 };
 type Appointment = {
   id: string;
@@ -222,6 +238,7 @@ export default function DashboardPage() {
   const [moduleRecords, setModuleRecords] = useState<ModuleRecord[]>([]);
   const [voiceCalls, setVoiceCalls] = useState<VoiceCall[]>([]);
   const [clinicalDocuments, setClinicalDocuments] = useState<ClinicalDocument[]>([]);
+  const [whatsappMessages, setWhatsappMessages] = useState<WhatsappMessage[]>([]);
   const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
   const [selectedCrmCustomerId, setSelectedCrmCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
@@ -264,6 +281,9 @@ export default function DashboardPage() {
   const [companyTaxId, setCompanyTaxId] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [companyDescription, setCompanyDescription] = useState("");
+  const [companySchedule, setCompanySchedule] = useState("");
+  const [companyPrimaryColor, setCompanyPrimaryColor] = useState("#7c3aed");
+  const [companySecondaryColor, setCompanySecondaryColor] = useState("#ec4899");
   const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => setOrigin(window.location.origin), []);
@@ -293,7 +313,7 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes] = await Promise.all([
+    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes] = await Promise.all([
       supabase.from("company_profiles").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -304,6 +324,7 @@ export default function DashboardPage() {
       supabase.from("module_records").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
     ]);
 
     const loadedCompanyProfile = (companyRes.data as CompanyProfile | null) || null;
@@ -315,6 +336,9 @@ export default function DashboardPage() {
     setCompanyTaxId(loadedCompanyProfile?.tax_id || "");
     setCompanyWebsite(loadedCompanyProfile?.website || "");
     setCompanyDescription(loadedCompanyProfile?.public_description || "");
+    setCompanySchedule(loadedCompanyProfile?.schedule_text || "");
+    setCompanyPrimaryColor(loadedCompanyProfile?.primary_color || "#7c3aed");
+    setCompanySecondaryColor(loadedCompanyProfile?.secondary_color || "#ec4899");
 
     setServices((servicesRes.data || []) as unknown as Service[]);
     setEmployees((employeesRes.data || []) as Employee[]);
@@ -325,6 +349,7 @@ export default function DashboardPage() {
     setModuleRecords((recordsRes.data || []) as ModuleRecord[]);
     setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
+    setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
     setLoading(false);
   };
 
@@ -455,13 +480,13 @@ export default function DashboardPage() {
   };
   const createCustomer = async () => {
     if (!business || !customerFormName) return alert("Faltan datos");
-    const { error } = await supabase.from("customers").insert({ business_id: business.id, name: customerFormName, full_name: customerFormName, phone: customerPhone });
+    const { error } = await supabase.from("customers").insert({ business_id: business.id, name: customerFormName, full_name: customerFormName, phone: customerPhone, crm_status: "nuevo" });
     if (error) return alert(error.message);
     setCustomerFormName(""); setCustomerPhone(""); await loadData();
   };
   const createAppointment = async () => {
     if (!business || !appointmentCustomer || !appointmentEmployee || !appointmentService || !appointmentDateValue) return alert("Faltan datos");
-    const { error } = await supabase.from("appointments").insert({ business_id: business.id, customer_id: appointmentCustomer, employee_id: appointmentEmployee, service_id: appointmentService, appointment_date: appointmentDateValue, starts_at: appointmentDateValue, status: "confirmed" });
+    const { error } = await supabase.from("appointments").insert({ business_id: business.id, customer_id: appointmentCustomer, employee_id: appointmentEmployee, service_id: appointmentService, appointment_date: appointmentDateValue, starts_at: appointmentDateValue, status: "pending" });
     if (error) return alert(error.message);
     setAppointmentCustomer(""); setAppointmentEmployee(""); setAppointmentService(""); setAppointmentDateValue(""); await loadData();
   };
@@ -490,6 +515,9 @@ export default function DashboardPage() {
       tax_id: companyTaxId || null,
       website: companyWebsite || null,
       public_description: companyDescription || null,
+      schedule_text: companySchedule || null,
+      primary_color: companyPrimaryColor || null,
+      secondary_color: companySecondaryColor || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -548,6 +576,9 @@ export default function DashboardPage() {
           tax_id: companyTaxId || null,
           website: companyWebsite || null,
           public_description: companyDescription || null,
+          schedule_text: companySchedule || null,
+          primary_color: companyPrimaryColor || null,
+          secondary_color: companySecondaryColor || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: "business_id" });
 
@@ -576,6 +607,9 @@ export default function DashboardPage() {
         tax_id: companyTaxId || null,
         website: companyWebsite || null,
         public_description: companyDescription || null,
+        schedule_text: companySchedule || null,
+        primary_color: companyPrimaryColor || null,
+        secondary_color: companySecondaryColor || null,
       } as CompanyProfile));
       setBusiness({ ...business, logo_url: logoUrl });
       alert("Logo subido correctamente");
@@ -593,7 +627,7 @@ export default function DashboardPage() {
       service_id: serviceId,
       appointment_date: dateValue,
       starts_at: dateValue,
-      status: "confirmed",
+      status: "pending",
     });
     if (error) return alert(error.message);
 
@@ -682,13 +716,13 @@ export default function DashboardPage() {
     const path = `${business.id}/${customerId}/${Date.now()}-${safeName}`;
 
     const { error: uploadError } = await supabase.storage
-      .from("clinical-documents")
+      .from("clinical_documents")
       .upload(path, file, { upsert: false });
 
     if (uploadError) return alert(uploadError.message);
 
     const { data: publicData } = supabase.storage
-      .from("clinical-documents")
+      .from("clinical_documents")
       .getPublicUrl(path);
 
     const { error: insertError } = await supabase.from("clinical_documents").insert({
@@ -828,6 +862,21 @@ export default function DashboardPage() {
     await loadData();
   };
 
+
+  const saveWhatsappMessage = async (customerId: string | null, phone: string, templateKey: string | null, message: string) => {
+    if (!business || !phone || !message) return;
+    const { error } = await supabase.from("whatsapp_messages").insert({
+      business_id: business.id,
+      customer_id: customerId,
+      phone,
+      template_key: templateKey,
+      message,
+      status: "opened",
+    });
+    if (error) console.error("WHATSAPP HISTORY ERROR", error.message);
+    await loadData();
+  };
+
   const deleteVoiceCall = async (id: string) => {
     const { error } = await supabase.from("voice_calls").delete().eq("id", id);
     if (error) return alert(error.message);
@@ -932,7 +981,7 @@ export default function DashboardPage() {
           )}
 
           {activeTab === "area" && <AreaSection business={business} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} />}
-          {activeTab === "agenda" && <AgendaSection appointments={nextAppointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
+          {activeTab === "agenda" && <AgendaSection appointments={appointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
           {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
           {activeTab === "clientes" && <CustomersSection customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
@@ -956,11 +1005,17 @@ export default function DashboardPage() {
             setCompanyWebsite={setCompanyWebsite}
             companyDescription={companyDescription}
             setCompanyDescription={setCompanyDescription}
+            companySchedule={companySchedule}
+            setCompanySchedule={setCompanySchedule}
+            companyPrimaryColor={companyPrimaryColor}
+            setCompanyPrimaryColor={setCompanyPrimaryColor}
+            companySecondaryColor={companySecondaryColor}
+            setCompanySecondaryColor={setCompanySecondaryColor}
             logoUploading={logoUploading}
             uploadCompanyLogo={uploadCompanyLogo}
             saveCompanyProfile={saveCompanyProfile}
           />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -971,7 +1026,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -1013,6 +1068,8 @@ function CrmModule({
   createAppointmentForCustomer,
   clinicalDocuments,
   uploadClinicalDocument,
+  whatsappMessages,
+  saveWhatsappMessage,
 }: Parameters<typeof ModuleSection>[0]) {
   const [crmActionTitle, setCrmActionTitle] = useState("");
   const [crmActionNotes, setCrmActionNotes] = useState("");
@@ -1031,6 +1088,10 @@ function CrmModule({
   const [detailDocumentNumber, setDetailDocumentNumber] = useState("");
   const [detailEps, setDetailEps] = useState("");
   const [detailNotes, setDetailNotes] = useState("");
+  const [detailAddress, setDetailAddress] = useState("");
+  const [detailResponsible, setDetailResponsible] = useState("");
+  const [detailCrmStatus, setDetailCrmStatus] = useState("nuevo");
+  const [detailNextFollowUp, setDetailNextFollowUp] = useState("");
 
   const filtered = customers.filter((c) => {
     const searchable = `${customerName(c)} ${c.phone || ""} ${c.email || ""} ${c.document_number || ""} ${c.document_type || ""} ${c.eps || ""} ${c.crm_status || ""} ${c.notes || ""}`.toLowerCase();
@@ -1054,6 +1115,10 @@ function CrmModule({
     setDetailDocumentNumber(selectedCustomer.document_number || "");
     setDetailEps(selectedCustomer.eps || "");
     setDetailNotes(selectedCustomer.notes || "");
+    setDetailAddress(selectedCustomer.address || "");
+    setDetailResponsible(selectedCustomer.responsible_name || "");
+    setDetailCrmStatus(selectedCustomer.crm_status || "nuevo");
+    setDetailNextFollowUp(selectedCustomer.next_follow_up_at ? selectedCustomer.next_follow_up_at.slice(0,16) : "");
   }, [selectedCustomer?.id]);
 
   const customerAppointments = selectedCustomer
@@ -1109,6 +1174,10 @@ function CrmModule({
       document_type: detailDocumentType,
       document_number: detailDocumentNumber,
       notes: detailNotes,
+      address: detailAddress,
+      responsible_name: detailResponsible,
+      crm_status: detailCrmStatus,
+      next_follow_up_at: detailNextFollowUp || null,
     } as any);
   };
 
@@ -1160,14 +1229,7 @@ function CrmModule({
             </div>
             <select value={crmStatusFilter} onChange={(e) => setCrmStatusFilter(e.target.value)} className="input-dark">
               <option value="all">Todos los estados</option>
-              <option value="nuevo">Nuevo lead</option>
-              <option value="en_llamada">En llamada</option>
-              <option value="seguimiento">En seguimiento</option>
-              <option value="cita_pendiente">Cita pendiente</option>
-              <option value="cita_agendada">Cita agendada</option>
-              <option value="pendiente_documentacion">Pendiente documentación</option>
-              <option value="en_tratamiento">En tratamiento</option>
-              <option value="cerrado">Cerrado</option>
+              {crmStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </div>
 
@@ -1235,6 +1297,12 @@ function CrmModule({
                     <option value="pasaporte">Pasaporte</option>
                   </select>
                   <input value={detailDocumentNumber} onChange={(e) => setDetailDocumentNumber(e.target.value)} placeholder="Número de identificación" className="input-dark" />
+                  <input value={detailAddress} onChange={(e) => setDetailAddress(e.target.value)} placeholder="Dirección" className="input-dark" />
+                  <input value={detailResponsible} onChange={(e) => setDetailResponsible(e.target.value)} placeholder="Responsable / acudiente" className="input-dark" />
+                  <select value={detailCrmStatus} onChange={(e) => setDetailCrmStatus(e.target.value)} className="input-dark">
+                    {crmStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <input type="datetime-local" value={detailNextFollowUp} onChange={(e) => setDetailNextFollowUp(e.target.value)} className="input-dark" title="Próxima llamada" />
                 </div>
                 <textarea value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)} placeholder="Notas clínicas, familiares, autorizaciones, observaciones y próximos pasos" className="input-dark mt-3 min-h-28" />
                 <button onClick={saveCustomerDetails} className="btn-primary mt-3"><CheckCircle2 size={17} /> Guardar ficha</button>
@@ -1247,7 +1315,7 @@ function CrmModule({
                     <p className="mt-1 text-sm text-white/50">Abre WhatsApp con mensajes rápidos usando los datos de esta ficha.</p>
                   </div>
                   <button
-                    onClick={() => openWhatsappForCustomer(selectedCustomer, whatsappTemplates[0].message)}
+                    onClick={() => { const msg = whatsappMessageForCustomer(whatsappTemplates[0].message, selectedCustomer); saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", whatsappTemplates[0].key, msg); openWhatsappForCustomer(selectedCustomer, whatsappTemplates[0].message); }}
                     className="btn-primary"
                   >
                     <MessageCircle size={17} /> WhatsApp
@@ -1409,16 +1477,19 @@ function CrmModule({
   );
 }
 
+
+const crmStatusOptions = [
+  { value: "nuevo", label: "Nuevo" },
+  { value: "contactado", label: "Contactado" },
+  { value: "pendiente_documentacion", label: "Pendiente documentación" },
+  { value: "pendiente_cita", label: "Pendiente cita" },
+  { value: "en_tratamiento", label: "En tratamiento" },
+  { value: "alta", label: "Alta" },
+  { value: "perdido", label: "Perdido" },
+  { value: "en_llamada", label: "En llamada" },
+];
 function translateCrmStatus(status: string) {
-  if (status === "nuevo") return "Nuevo lead";
-  if (status === "en_llamada") return "En llamada";
-  if (status === "seguimiento") return "En seguimiento";
-  if (status === "cita_pendiente") return "Cita pendiente";
-  if (status === "cita_agendada") return "Cita agendada";
-  if (status === "pendiente_documentacion") return "Pendiente documentación";
-  if (status === "en_tratamiento") return "En tratamiento";
-  if (status === "cerrado") return "Cerrado";
-  return status;
+  return crmStatusOptions.find((option) => option.value === status)?.label || status;
 }
 
 function MarketingModule({ records, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
@@ -1498,6 +1569,8 @@ function WhatsappModule({
   setStatus,
   createRecord,
   deleteRecord,
+  whatsappMessages,
+  saveWhatsappMessage,
 }: Parameters<typeof ModuleSection>[0]) {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [selectedTemplateKey, setSelectedTemplateKey] = useState("llamada_perdida");
@@ -1515,12 +1588,15 @@ function WhatsappModule({
 
   const sendSelectedTemplate = () => {
     if (!selectedCustomer) return alert("Selecciona un paciente");
+    const message = whatsappMessageForCustomer(selectedTemplate.message, selectedCustomer);
+    saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", selectedTemplate.key, message);
     openWhatsappForCustomer(selectedCustomer, selectedTemplate.message);
   };
 
   const sendManualMessage = () => {
     const url = whatsappUrl(manualPhone, manualMessage);
     if (!url) return alert("Añade un teléfono válido");
+    saveWhatsappMessage(null, manualPhone, "manual", manualMessage);
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
@@ -1542,11 +1618,12 @@ function WhatsappModule({
 
   return (
     <section className="grid gap-6">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Metric icon={<MessageCircle />} label="Modo" value="Manual" helper="Sin coste API" />
         <Metric icon={<Users />} label="Pacientes" value={customers.length} helper="CRM conectado" />
         <Metric icon={<FileText />} label="Plantillas" value={quickTemplates.length} helper="Rápidas" />
         <Metric icon={<CheckCircle2 />} label="Coste" value="0€" helper="Abre WhatsApp" />
+        <Metric icon={<Clock />} label="Historial" value={whatsappMessages.length} helper="Mensajes abiertos" />
       </div>
 
       <div className="rounded-[2rem] border border-green-300/25 bg-green-500/15 p-5">
@@ -1659,6 +1736,19 @@ function WhatsappModule({
           </div>
         </GlassCard>
       </section>
+
+      <GlassCard title="Historial WhatsApp">
+        <div className="space-y-3">
+          {whatsappMessages.slice(0, 20).map((message) => (
+            <div key={message.id} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
+              <p className="text-sm font-semibold">{message.phone} · {message.template_key || "manual"}</p>
+              <p className="mt-2 text-sm leading-6 text-white/55">{message.message}</p>
+              <p className="mt-2 text-xs text-white/35">{new Date(message.created_at).toLocaleString("es-ES")}</p>
+            </div>
+          ))}
+          {!whatsappMessages.length && <Empty text="Todavía no hay mensajes WhatsApp registrados." />}
+        </div>
+      </GlassCard>
 
       <GlassCard title="Plantillas rápidas">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -2089,6 +2179,12 @@ function SettingsSection({
   setCompanyWebsite,
   companyDescription,
   setCompanyDescription,
+  companySchedule,
+  setCompanySchedule,
+  companyPrimaryColor,
+  setCompanyPrimaryColor,
+  companySecondaryColor,
+  setCompanySecondaryColor,
   logoUploading,
   uploadCompanyLogo,
   saveCompanyProfile,
@@ -2112,6 +2208,12 @@ function SettingsSection({
   setCompanyWebsite: (v: string) => void;
   companyDescription: string;
   setCompanyDescription: (v: string) => void;
+  companySchedule: string;
+  setCompanySchedule: (v: string) => void;
+  companyPrimaryColor: string;
+  setCompanyPrimaryColor: (v: string) => void;
+  companySecondaryColor: string;
+  setCompanySecondaryColor: (v: string) => void;
   logoUploading: boolean;
   uploadCompanyLogo: (file: File) => void;
   saveCompanyProfile: () => void;
@@ -2156,6 +2258,9 @@ function SettingsSection({
               <input value={companyEmail} onChange={(e) => setCompanyEmail(e.target.value)} placeholder="Email público" type="email" className="input-dark" />
               <input value={companyWebsite} onChange={(e) => setCompanyWebsite(e.target.value)} placeholder="Web pública" className="input-dark md:col-span-2" />
               <input value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} placeholder="Dirección" className="input-dark md:col-span-2" />
+              <input value={companySchedule} onChange={(e) => setCompanySchedule(e.target.value)} placeholder="Horario público. Ej: Lun-Vie 8:00-18:00" className="input-dark md:col-span-2" />
+              <label className="grid gap-2 text-sm text-white/60">Color principal<input type="color" value={companyPrimaryColor} onChange={(e) => setCompanyPrimaryColor(e.target.value)} className="h-12 w-full rounded-xl border border-white/10 bg-black/30 p-1" /></label>
+              <label className="grid gap-2 text-sm text-white/60">Color secundario<input type="color" value={companySecondaryColor} onChange={(e) => setCompanySecondaryColor(e.target.value)} className="h-12 w-full rounded-xl border border-white/10 bg-black/30 p-1" /></label>
             </div>
 
             <textarea
