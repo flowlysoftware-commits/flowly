@@ -16,13 +16,38 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-type Country = "ES" | "CO";
+type Country = "VE" | "ES" | "CO" | "EC" | "PR";
+type Currency = "EUR" | "COP" | "USD";
+
+type MarketConfig = {
+  code: Country;
+  label: string;
+  flag: string;
+  currency: Currency;
+  locale: string;
+  rate: number;
+  badge: string;
+};
 type ModuleId = "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice";
 type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }> };
 
 type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[] };
 
-const RATE_COP = 4300;
+const markets: MarketConfig[] = [
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", locale: "es-VE", rate: 1.08, badge: "Planes para Venezuela · USD" },
+  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", locale: "es-ES", rate: 1, badge: "30 días gratis · Sin permanencia" },
+  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", locale: "es-CO", rate: 4300, badge: "Planes para Colombia · COP" },
+  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", locale: "es-EC", rate: 1.08, badge: "Planes para Ecuador · USD" },
+  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", locale: "es-PR", rate: 1.08, badge: "Planes para Puerto Rico · USD" },
+];
+
+function isCountry(value: string | null): value is Country {
+  return markets.some((market) => market.code === value);
+}
+
+function getMarket(country: Country) {
+  return markets.find((market) => market.code === country) ?? markets[1];
+}
 const fixedPlans: Plan[] = [
   { id: "basic", name: "Basic", price: 29.99, description: "Para negocios pequeños o que están empezando.", highlighted: false, features: ["Agenda y reservas online", "CRM de clientes", "Gestión de servicios", "Historial de citas", "Dashboard básico", "Recordatorios automáticos", "Acceso desde móvil y ordenador", "Soporte por email"] },
   { id: "premium", name: "Premium", price: 59.99, description: "Para negocios que quieren crecer y automatizar.", highlighted: true, features: ["Todo lo incluido en Basic", "Módulo de contabilidad", "Control de ingresos y gastos", "Informes avanzados", "WhatsApp automático", "Automatizaciones inteligentes", "Clientes inactivos", "Gestión de bonos y membresías", "Soporte prioritario"] },
@@ -41,8 +66,18 @@ const modules: Module[] = [
 ];
 
 function formatMoney(value: number, country: Country) {
-  if (country === "CO") return `$${Math.round(value * RATE_COP).toLocaleString("es-CO")} COP`;
-  return `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+  const market = getMarket(country);
+  const converted = value * market.rate;
+
+  if (market.currency === "EUR") {
+    return `${converted.toLocaleString(market.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+  }
+
+  if (market.currency === "COP") {
+    return `$${Math.round(converted).toLocaleString(market.locale)} COP`;
+  }
+
+  return `$${converted.toLocaleString(market.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
 }
 
 export default function PreciosPage() {
@@ -54,15 +89,17 @@ export default function PreciosPage() {
     const params = new URLSearchParams(window.location.search);
     const queryCountry = params.get("country");
     const saved = window.localStorage.getItem("flowly_country");
-    if (queryCountry === "CO" || saved === "CO") setCountry("CO");
+    if (isCountry(queryCountry)) setCountry(queryCountry);
+    else if (isCountry(saved)) setCountry(saved);
   }, []);
 
   const changeCountry = (value: Country) => {
     setCountry(value);
     window.localStorage.setItem("flowly_country", value);
-    const url = value === "CO" ? "/precios?country=CO" : "/precios";
-    window.history.replaceState({}, "", url);
+    window.history.replaceState({}, "", `/precios?country=${value}`);
   };
+
+  const market = getMarket(country);
 
   const modularTotal = useMemo(() => {
     const base = 19.99;
@@ -79,7 +116,7 @@ export default function PreciosPage() {
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, modules: moduleIds, country, currency: country === "CO" ? "COP" : "EUR" }),
+        body: JSON.stringify({ plan, modules: moduleIds, country, currency: getMarket(country).currency }),
       });
       const data = await response.json();
       if (data.url) window.location.href = data.url;
@@ -99,13 +136,27 @@ export default function PreciosPage() {
             <Link href="/demo/login">Demos</Link>
             <Link href="/login">Área cliente</Link>
             <Link href="/contacto">Contacto</Link>
-            <button onClick={() => changeCountry(country === "CO" ? "ES" : "CO")} className="rounded-full border border-violet-200 bg-white px-3 py-2 shadow-sm"><span className="mr-2">🇨🇴</span>{country === "CO" ? "COP" : "Colombia"}</button>
+            <label className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-3 py-2 shadow-sm">
+              <span className="text-lg">{market.flag}</span>
+              <select
+                value={country}
+                onChange={(event) => changeCountry(event.target.value as Country)}
+                className="bg-transparent text-sm font-medium text-neutral-700 outline-none"
+                aria-label="Seleccionar país"
+              >
+                {markets.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.label} · {item.currency}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <Link href="/contacto" className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm text-white">Hablar con ventas</Link>
         </nav>
 
         <section className="text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/80 px-4 py-2 text-sm text-violet-700 shadow-sm backdrop-blur">{country === "CO" ? "Planes para Colombia · COP" : "30 días gratis · Sin permanencia"}</div>
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/80 px-4 py-2 text-sm text-violet-700 shadow-sm backdrop-blur">{market.badge}</div>
           <h1 className="mx-auto mt-6 max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">Planes para lanzar y escalar tu negocio</h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-neutral-600">Elige un pack cerrado o crea tu propio Flowly con módulos. Los precios cambian automáticamente según el mercado seleccionado.</p>
         </section>

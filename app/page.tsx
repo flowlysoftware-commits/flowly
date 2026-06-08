@@ -13,32 +13,78 @@ import {
   Settings2,
 } from "lucide-react";
 
-type Country = "ES" | "CO";
+type Country = "VE" | "ES" | "CO" | "EC" | "PR";
+
+type MarketConfig = {
+  code: Country;
+  label: string;
+  flag: string;
+  currency: string;
+  headline: string;
+  pricesLabel: string;
+  dashboardMoney: string;
+};
+
+const markets: MarketConfig[] = [
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", headline: "Flowly IA Venezuela · precios en USD", pricesLabel: "en dólares", dashboardMoney: "$13.5k" },
+  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", headline: "SaaS premium para negocios modernos", pricesLabel: "y módulos", dashboardMoney: "12.4k€" },
+  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", headline: "Flowly IA Colombia · precios en COP", pricesLabel: "en pesos colombianos", dashboardMoney: "$54.0M" },
+  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", headline: "Flowly IA Ecuador · precios en USD", pricesLabel: "en dólares", dashboardMoney: "$13.5k" },
+  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", headline: "Flowly IA Puerto Rico · precios en USD", pricesLabel: "en dólares", dashboardMoney: "$13.5k" },
+];
+
+function isCountry(value: string | null): value is Country {
+  return markets.some((market) => market.code === value);
+}
+
+function getMarket(country: Country) {
+  return markets.find((market) => market.code === country) ?? markets[1];
+}
 
 const sectorsBase = [
   {
     name: "Flowly Hair",
     subtitle: "Software premium para peluquerías",
-    statsES: ["38 citas hoy", "12.450€ este mes", "842 clientes", "94% ocupación"],
-    statsCO: ["38 citas hoy", "$54.000.000 COP mes", "842 clientes", "94% ocupación"],
+    stats: {
+      ES: ["38 citas hoy", "12.450€ este mes", "842 clientes", "94% ocupación"],
+      CO: ["38 citas hoy", "$54.000.000 COP mes", "842 clientes", "94% ocupación"],
+      VE: ["38 citas hoy", "$13.500 USD mes", "842 clientes", "94% ocupación"],
+      EC: ["38 citas hoy", "$13.500 USD mes", "842 clientes", "94% ocupación"],
+      PR: ["38 citas hoy", "$13.500 USD mes", "842 clientes", "94% ocupación"],
+    },
   },
   {
     name: "Flowly Beauty",
     subtitle: "Estética, uñas y tratamientos",
-    statsES: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
-    statsCO: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
+    stats: {
+      ES: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
+      CO: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
+      VE: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
+      EC: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
+      PR: ["124 bonos activos", "67 reservas", "312 recurrentes", "+28% ventas"],
+    },
   },
   {
     name: "Flowly POS",
     subtitle: "TPV inteligente para bares y restaurantes",
-    statsES: ["87 tickets", "2.450€ hoy", "14 mesas", "28€ ticket medio"],
-    statsCO: ["87 tickets", "$10.600.000 COP hoy", "14 mesas", "$121.000 ticket medio"],
+    stats: {
+      ES: ["87 tickets", "2.450€ hoy", "14 mesas", "28€ ticket medio"],
+      CO: ["87 tickets", "$10.600.000 COP hoy", "14 mesas", "$121.000 ticket medio"],
+      VE: ["87 tickets", "$2.660 USD hoy", "14 mesas", "$30 ticket medio"],
+      EC: ["87 tickets", "$2.660 USD hoy", "14 mesas", "$30 ticket medio"],
+      PR: ["87 tickets", "$2.660 USD hoy", "14 mesas", "$30 ticket medio"],
+    },
   },
   {
     name: "Flowly Clinic",
     subtitle: "Gestión para clínicas y fisioterapia",
-    statsES: ["22 citas hoy", "486 pacientes", "9.200€ mes", "134 tratamientos"],
-    statsCO: ["22 citas hoy", "486 pacientes", "$39.800.000 COP mes", "134 tratamientos"],
+    stats: {
+      ES: ["22 citas hoy", "486 pacientes", "9.200€ mes", "134 tratamientos"],
+      CO: ["22 citas hoy", "486 pacientes", "$39.800.000 COP mes", "134 tratamientos"],
+      VE: ["22 citas hoy", "486 pacientes", "$10.000 USD mes", "134 tratamientos"],
+      EC: ["22 citas hoy", "486 pacientes", "$10.000 USD mes", "134 tratamientos"],
+      PR: ["22 citas hoy", "486 pacientes", "$10.000 USD mes", "134 tratamientos"],
+    },
   },
 ];
 
@@ -56,7 +102,7 @@ const features: {
 ];
 
 function DashboardPreview({ country }: { country: Country }) {
-  const money = country === "CO" ? "$54.0M" : "12.4k€";
+  const money = getMarket(country).dashboardMoney;
   return (
     <div className="relative mx-auto mt-14 w-full max-w-5xl rounded-[2rem] border border-white/70 bg-white/70 p-4 shadow-premium backdrop-blur-xl">
       <div className="rounded-[1.5rem] border border-neutral-200 bg-neutral-950 p-5 text-white">
@@ -103,8 +149,11 @@ export default function Home() {
   const [country, setCountry] = useState<Country>("ES");
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("flowly_country") as Country | null;
-    if (saved === "CO" || saved === "ES") setCountry(saved);
+    const params = new URLSearchParams(window.location.search);
+    const queryCountry = params.get("country");
+    const saved = window.localStorage.getItem("flowly_country");
+    if (isCountry(queryCountry)) setCountry(queryCountry);
+    else if (isCountry(saved)) setCountry(saved);
   }, []);
 
   const setMarket = (value: Country) => {
@@ -112,8 +161,9 @@ export default function Home() {
     window.localStorage.setItem("flowly_country", value);
   };
 
-  const pricesHref = useMemo(() => `/precios${country === "CO" ? "?country=CO" : ""}`, [country]);
-  const sectors = sectorsBase.map((sector) => ({ ...sector, stats: country === "CO" ? sector.statsCO : sector.statsES }));
+  const market = getMarket(country);
+  const pricesHref = useMemo(() => `/precios?country=${country}`, [country]);
+  const sectors = sectorsBase.map((sector) => ({ ...sector, stats: sector.stats[country] }));
 
   return (
     <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#f3e8ff_0%,#ffffff_35%,#f8fafc_100%)] text-neutral-950">
@@ -128,14 +178,21 @@ export default function Home() {
           <Link href={pricesHref}>Precios</Link>
           <Link href="/contacto">Contacto</Link>
           <Link href="/login">Área cliente</Link>
-          <button
-            onClick={() => setMarket(country === "CO" ? "ES" : "CO")}
-            className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/75 px-3 py-2 text-sm shadow-sm transition hover:bg-violet-50"
-            title={country === "CO" ? "Cambiar a España" : "Ver precios Colombia"}
-          >
-            <span className="text-lg">🇨🇴</span>
-            <span>{country === "CO" ? "COP" : "Colombia"}</span>
-          </button>
+          <label className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/75 px-3 py-2 text-sm shadow-sm transition hover:bg-violet-50">
+            <span className="text-lg">{market.flag}</span>
+            <select
+              value={country}
+              onChange={(event) => setMarket(event.target.value as Country)}
+              className="bg-transparent text-sm font-medium text-neutral-700 outline-none"
+              aria-label="Seleccionar país"
+            >
+              {markets.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.label} · {item.currency}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <Link href={pricesHref} className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm text-white">
@@ -145,7 +202,7 @@ export default function Home() {
 
       <section className="mx-auto max-w-7xl px-6 pb-24 pt-16 text-center">
         <div className="mx-auto mb-6 inline-flex rounded-full border border-violet-200 bg-white/70 px-4 py-2 text-sm text-neutral-600 shadow-sm backdrop-blur">
-          {country === "CO" ? "Flowly IA Colombia · precios en COP" : "SaaS premium para negocios modernos"}
+          {market.headline}
         </div>
         <h1 className="mx-auto max-w-5xl text-5xl font-semibold tracking-tight md:text-7xl">
           Automatiza tu negocio con <span className="bg-gradient-to-r from-violet-600 to-pink-500 bg-clip-text text-transparent">Flowly IA</span>
@@ -158,7 +215,7 @@ export default function Home() {
             Entrar en demo <ArrowRight size={18} />
           </Link>
           <Link href={pricesHref} className="rounded-full border border-neutral-300 bg-white/70 px-7 py-4 text-neutral-800">
-            Ver planes {country === "CO" ? "en pesos colombianos" : "y módulos"}
+            Ver planes {market.pricesLabel}
           </Link>
         </div>
         <DashboardPreview country={country} />
