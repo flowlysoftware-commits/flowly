@@ -44,6 +44,8 @@ export async function POST(request: Request) {
 
       const email = session.customer_details?.email || "";
       const plan = session.metadata?.plan || "basic";
+      const salesUserId = session.metadata?.sales_user_id || null;
+      const referralCode = session.metadata?.referral_code || null;
 
       await supabaseAdmin.from("stripe_checkout_sessions").upsert({
         stripe_session_id: session.id,
@@ -51,6 +53,8 @@ export async function POST(request: Request) {
         stripe_customer_id: customerId,
         stripe_subscription_id: subscriptionId,
         plan,
+        sales_user_id: salesUserId,
+        referral_code: referralCode,
         status: "completed",
       });
     }

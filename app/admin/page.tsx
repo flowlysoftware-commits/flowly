@@ -32,6 +32,8 @@ type SalesUser = {
   manager_id: string | null;
   monthly_target: number | null;
   status: string | null;
+  referral_code?: string | null;
+  payment_link?: string | null;
   created_at?: string;
 };
 
@@ -52,7 +54,8 @@ type SalesLead = {
 
 type Commission = { id: string; sales_user_id: string | null; amount: number; type: string; status: string; created_at?: string };
 type Payout = { id: string; sales_user_id: string | null; amount: number; status: string; created_at?: string };
-type Business = { id: string; name: string; plan: string | null; subscription_status: string | null; created_at?: string; sales_user_id?: string | null };
+type Business = { id: string; name: string; plan: string | null; subscription_status: string | null; created_at?: string; sales_user_id?: string | null; stripe_customer_id?: string | null; stripe_subscription_id?: string | null };
+type ManualSaleForm = { businessId: string; salesUserId: string; plan: string; monthlyAmount: string; setupAmount: string; notes: string };
 type BudgetModule = { key: string; name: string; price: number };
 type SalesBudget = {
   id: string;
@@ -107,6 +110,16 @@ function money(value: number, currency = "EUR") {
   return `${Number(value || 0).toFixed(2)}€`;
 }
 
+function createReferralCode(name: string) {
+  const base = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 10) || "FLOWLY";
+  return `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function buildPaymentLink(code: string) {
+  const base = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || "");
+  return `${base}/precios?ref=${encodeURIComponent(code)}`;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [tab, setTab] = useState<AdminTab>("resumen");
@@ -148,6 +161,8 @@ export default function AdminPage() {
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [budgetNotes, setBudgetNotes] = useState("");
 
+  const [manualSale, setManualSale] = useState<ManualSaleForm>({ businessId: "", salesUserId: "", plan: "premium", monthlyAmount: "84.99", setupAmount: "0", notes: "" });
+
   const load = async () => {
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
@@ -159,7 +174,7 @@ export default function AdminPage() {
       supabase.from("sales_budgets").select("*").order("created_at", { ascending: false }),
       supabase.from("commissions").select("*").order("created_at", { ascending: false }),
       supabase.from("commission_payouts").select("*").order("created_at", { ascending: false }),
-      supabase.from("businesses").select("id, name, plan, subscription_status, created_at, sales_user_id").order("created_at", { ascending: false }).limit(200),
+      supabase.from("businesses").select("id, name, plan, subscription_status, created_at, sales_user_id, stripe_customer_id, stripe_subscription_id").order("created_at", { ascending: false }).limit(200),
     ]);
 
     setSalesUsers((salesUsersRes.data || []) as SalesUser[]);
@@ -200,7 +215,8 @@ export default function AdminPage() {
 
   const createSalesUser = async () => {
     if (!fullName || !email) return alert("Nombre y email son obligatorios");
-    const { error } = await supabase.from("sales_users").insert({ full_name: fullName, email, phone, role, manager_id: managerId || null, monthly_target: Number(monthlyTarget), status: "active" });
+    const referralCode = createReferralCode(fullName);
+    const { error } = await supabase.from("sales_users").insert({ full_name: fullName, email, phone, role, manager_id: managerId || null, monthly_target: Number(monthlyTarget), status: "active", referral_code: referralCode, payment_link: buildPaymentLink(referralCode) });
     if (error) return alert(error.message);
     setFullName(""); setEmail(""); setPhone(""); setRole("asociado"); setManagerId(""); setMonthlyTarget("5");
     await load();
@@ -268,6 +284,31 @@ export default function AdminPage() {
   const updatePayout = async (id: string, status: string) => {
     await supabase.from("commission_payouts").update({ status, processed_at: status === "paid" ? new Date().toISOString() : null }).eq("id", id);
     await load();
+  };
+
+  const assignBusinessToSalesUser = async (businessId: string, salesUserId: string) => {
+    const { error } = await supabase.from("businesses").update({ sales_user_id: salesUserId || null }).eq("id", businessId);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const registerManualSale = async () => {
+    if (!manualSale.businessId || !manualSale.salesUserId) return alert("Selecciona cliente y comercial");
+    const monthly = Number(manualSale.monthlyAmount || 0);
+    const setup = Number(manualSale.setupAmount || 0);
+    const commissionAmount = Math.round((monthly * 0.2 + setup * 0.1) * 100) / 100;
+    const selectedBusiness = businesses.find((business) => business.id === manualSale.businessId);
+    const { error: businessError } = await supabase.from("businesses").update({ sales_user_id: manualSale.salesUserId, plan: manualSale.plan, subscription_status: "manual_active" }).eq("id", manualSale.businessId);
+    if (businessError) return alert(businessError.message);
+    const { error: saleError } = await supabase.from("sales_deals").insert({ business_id: manualSale.businessId, sales_user_id: manualSale.salesUserId, client_name: selectedBusiness?.name || "Cliente manual", plan: manualSale.plan, monthly_amount: monthly, setup_amount: setup, currency: "EUR", status: "closed_won", source: "manual_admin", notes: manualSale.notes });
+    if (saleError) return alert(saleError.message);
+    if (commissionAmount > 0) {
+      const { error: commissionError } = await supabase.from("commissions").insert({ sales_user_id: manualSale.salesUserId, amount: commissionAmount, type: "manual_sale", status: "pending", source: "manual_admin", description: `Venta manual ${selectedBusiness?.name || "cliente"}` });
+      if (commissionError) return alert(commissionError.message);
+    }
+    setManualSale({ businessId: "", salesUserId: "", plan: "premium", monthlyAmount: "84.99", setupAmount: "0", notes: "" });
+    await load();
+    alert("Venta manual registrada y cliente vinculado al comercial");
   };
 
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
@@ -352,7 +393,7 @@ export default function AdminPage() {
         {tab === "comerciales" && (
           <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
             <Panel title="Crear comercial"><div className="grid gap-3"><input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nombre completo" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="input-dark" /><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /></div><div className="grid gap-3 md:grid-cols-3"><select value={role} onChange={(e) => setRole(e.target.value as SalesRole)} className="input-dark">{roles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select><select value={managerId} onChange={(e) => setManagerId(e.target.value)} className="input-dark"><option value="">Sin responsable</option>{salesUsers.filter((user) => user.role === "jefe" || user.role === "director").map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><input value={monthlyTarget} onChange={(e) => setMonthlyTarget(e.target.value)} type="number" placeholder="Objetivo mensual" className="input-dark" /></div><button onClick={createSalesUser} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white shadow-lg shadow-violet-950/40"><Plus size={18} className="inline" /> Crear perfil comercial</button><p className="text-xs text-white/45">Para que pueda iniciar sesión, debe existir también como usuario de Supabase Auth y vincular user_id.</p></div></Panel>
-            <Panel title="Gestión de equipo comercial"><div className="space-y-3">{salesUsers.map((user) => <div key={user.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-4"><div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr] md:items-center"><div><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{user.email}</p></div><select value={user.role} onChange={(e) => updateSalesUser(user.id, "role", e.target.value)} className="input-dark">{roles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select><select value={user.manager_id || ""} onChange={(e) => updateSalesUser(user.id, "manager_id", e.target.value || null)} className="input-dark"><option value="">Sin manager</option>{salesUsers.filter((manager) => manager.id !== user.id && (manager.role === "jefe" || manager.role === "director")).map((manager) => <option key={manager.id} value={manager.id}>{manager.full_name}</option>)}</select><select value={user.status || "active"} onChange={(e) => updateSalesUser(user.id, "status", e.target.value)} className="input-dark"><option value="active">Activo</option><option value="paused">Pausado</option><option value="inactive">Inactivo</option></select></div></div>)}</div></Panel>
+            <Panel title="Gestión de equipo comercial"><div className="space-y-3">{salesUsers.map((user) => { const code = user.referral_code || createReferralCode(user.full_name); const link = user.payment_link || buildPaymentLink(code); return <div key={user.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-4"><div className="grid gap-3 md:grid-cols-[1.1fr_0.75fr_0.75fr_0.7fr] md:items-center"><div><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{user.email}</p><p className="mt-1 text-xs text-violet-200">Código: {code}</p></div><select value={user.role} onChange={(e) => updateSalesUser(user.id, "role", e.target.value)} className="input-dark">{roles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select><select value={user.manager_id || ""} onChange={(e) => updateSalesUser(user.id, "manager_id", e.target.value || null)} className="input-dark"><option value="">Sin manager</option>{salesUsers.filter((manager) => manager.id !== user.id && (manager.role === "jefe" || manager.role === "director")).map((manager) => <option key={manager.id} value={manager.id}>{manager.full_name}</option>)}</select><select value={user.status || "active"} onChange={(e) => updateSalesUser(user.id, "status", e.target.value)} className="input-dark"><option value="active">Activo</option><option value="paused">Pausado</option><option value="inactive">Inactivo</option></select></div><div className="mt-3 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-3"><p className="text-xs text-white/45">Enlace de pago del comercial</p><div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center"><input readOnly value={link} className="input-dark flex-1 text-xs" /><button onClick={() => navigator.clipboard?.writeText(link)} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Copiar enlace</button><Link href={link.replace(typeof window !== "undefined" ? window.location.origin : "", "")} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/75">Abrir</Link></div></div></div>; })}</div></Panel>
           </section>
         )}
 
@@ -360,7 +401,7 @@ export default function AdminPage() {
 
         {tab === "comisiones" && <section className="grid gap-6 lg:grid-cols-2"><Panel title="Comisiones"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div><p className="font-medium capitalize">{commission.type}</p><p className="text-xs text-white/45">{sellerName(commission.sales_user_id, salesUsers)} · {commission.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p></div>)}{!commissions.length && <Empty text="No hay comisiones registradas." />}</div></Panel><Panel title="Solicitudes de cobro"><div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-medium">{sellerName(payout.sales_user_id, salesUsers)}</p><p className="text-xs text-white/45">Estado: {payout.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(payout.amount || 0))}</p></div><div className="mt-3 flex gap-2"><button onClick={() => updatePayout(payout.id, "paid")} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Marcar pagado</button><button onClick={() => updatePayout(payout.id, "rejected")} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">Rechazar</button></div></div>)}{!payouts.length && <Empty text="No hay solicitudes de cobro." />}</div></Panel></section>}
 
-        {tab === "clientes" && <Panel title="Clientes SaaS"><div className="space-y-3">{businesses.map((business) => <div key={business.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-lg font-semibold">{business.name}</p><p className="text-sm text-white/45">Plan {business.plan || "sin plan"} · Estado {business.subscription_status || "sin estado"}</p></div><p className="text-sm text-violet-200">Comercial: {sellerName(business.sales_user_id || null, salesUsers)}</p></div></div>)}{!businesses.length && <Empty text="Aún no hay clientes SaaS." />}</div></Panel>}
+        {tab === "clientes" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Registrar venta manual"><div className="grid gap-3"><p className="text-sm text-white/55">Úsalo para paneles ya entregados: vincula el cliente al comercial y genera la comisión interna sin pasar por Stripe.</p><select value={manualSale.businessId} onChange={(e) => setManualSale({ ...manualSale, businessId: e.target.value })} className="input-dark"><option value="">Seleccionar cliente SaaS</option>{businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}</select><select value={manualSale.salesUserId} onChange={(e) => setManualSale({ ...manualSale, salesUserId: e.target.value })} className="input-dark"><option value="">Seleccionar comercial</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><div className="grid gap-3 md:grid-cols-3"><select value={manualSale.plan} onChange={(e) => setManualSale({ ...manualSale, plan: e.target.value })} className="input-dark"><option value="basic">Basic</option><option value="premium">Premium</option><option value="clinic">Clinic</option><option value="enterprise">Enterprise</option></select><input value={manualSale.monthlyAmount} onChange={(e) => setManualSale({ ...manualSale, monthlyAmount: e.target.value })} type="number" step="0.01" placeholder="Mensualidad" className="input-dark" /><input value={manualSale.setupAmount} onChange={(e) => setManualSale({ ...manualSale, setupAmount: e.target.value })} type="number" step="0.01" placeholder="Instalación" className="input-dark" /></div><textarea value={manualSale.notes} onChange={(e) => setManualSale({ ...manualSale, notes: e.target.value })} placeholder="Notas internas de la venta" className="input-dark min-h-24" /><div className="rounded-2xl bg-white/10 p-4 text-sm text-white/70">Comisión estimada: <strong className="text-violet-200">{money(Math.round((Number(manualSale.monthlyAmount || 0) * 0.2 + Number(manualSale.setupAmount || 0) * 0.1) * 100) / 100)}</strong></div><button onClick={registerManualSale} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white">Registrar venta y vincular</button></div></Panel><Panel title="Clientes SaaS"><div className="space-y-3">{businesses.map((business) => <div key={business.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-lg font-semibold">{business.name}</p><p className="text-sm text-white/45">Plan {business.plan || "sin plan"} · Estado {business.subscription_status || "sin estado"}</p><p className="mt-1 text-xs text-violet-200">Comercial actual: {sellerName(business.sales_user_id || null, salesUsers)}</p></div><select value={business.sales_user_id || ""} onChange={(e) => assignBusinessToSalesUser(business.id, e.target.value)} className="input-dark max-w-64"><option value="">Sin comercial</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select></div></div>)}{!businesses.length && <Empty text="Aún no hay clientes SaaS." />}</div></Panel></section>}
       </div>
     </main>
   );

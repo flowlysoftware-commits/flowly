@@ -84,11 +84,14 @@ export default function PreciosPage() {
   const [country, setCountry] = useState<Country>("ES");
   const [selectedModules, setSelectedModules] = useState<ModuleId[]>(["whatsapp", "analytics"]);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const queryCountry = params.get("country");
     const saved = window.localStorage.getItem("flowly_country");
+    const ref = params.get("ref") || params.get("comercial") || "";
+    if (ref) setReferralCode(ref);
     if (isCountry(queryCountry)) setCountry(queryCountry);
     else if (isCountry(saved)) setCountry(saved);
   }, []);
@@ -96,7 +99,8 @@ export default function PreciosPage() {
   const changeCountry = (value: Country) => {
     setCountry(value);
     window.localStorage.setItem("flowly_country", value);
-    window.history.replaceState({}, "", `/precios?country=${value}`);
+    const refParam = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : "";
+    window.history.replaceState({}, "", `/precios?country=${value}${refParam}`);
   };
 
   const market = getMarket(country);
@@ -116,7 +120,7 @@ export default function PreciosPage() {
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, modules: moduleIds, country, currency: getMarket(country).currency }),
+        body: JSON.stringify({ plan, modules: moduleIds, country, currency: getMarket(country).currency, referralCode }),
       });
       const data = await response.json();
       if (data.url) window.location.href = data.url;
@@ -156,7 +160,7 @@ export default function PreciosPage() {
         </nav>
 
         <section className="text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/80 px-4 py-2 text-sm text-violet-700 shadow-sm backdrop-blur">{market.badge}</div>
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/80 px-4 py-2 text-sm text-violet-700 shadow-sm backdrop-blur">{referralCode ? `Enlace comercial ${referralCode}` : market.badge}</div>
           <h1 className="mx-auto mt-6 max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">Planes para lanzar y escalar tu negocio</h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-neutral-600">Elige un pack cerrado o crea tu propio Flowly con módulos. Los precios cambian automáticamente según el mercado seleccionado.</p>
         </section>

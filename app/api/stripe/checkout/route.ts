@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -20,7 +21,17 @@ export async function POST(request: Request) {
     const body = await request.json();
     const plan = body.plan as "basic" | "premium" | "modular";
     const selectedModuleIds = Array.isArray(body.modules) ? body.modules.map(String) : [];
-    const referralCode = body.referralCode ? String(body.referralCode) : "";
+    const referralCode = body.referralCode ? String(body.referralCode).trim() : "";
+    let salesUserId = "";
+    if (referralCode) {
+      const { data: salesUser } = await supabaseAdmin
+        .from("sales_users")
+        .select("id")
+        .eq("referral_code", referralCode)
+        .eq("status", "active")
+        .maybeSingle();
+      salesUserId = salesUser?.id || "";
+    }
 
     if (!plan || !["basic", "premium", "modular"].includes(plan)) {
       return NextResponse.json({ error: "Plan no válido" }, { status: 400 });
@@ -28,7 +39,7 @@ export async function POST(request: Request) {
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
     let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-    let metadata: Record<string, string> = { plan, referral_code: referralCode };
+    let metadata: Record<string, string> = { plan, referral_code: referralCode, sales_user_id: salesUserId };
 
     if (plan === "modular") {
       const selectedModules = modularModules.filter((item) => selectedModuleIds.includes(item.id));
@@ -49,7 +60,7 @@ export async function POST(request: Request) {
         },
       ];
 
-      metadata = { plan, modules: moduleIds, monthly_amount: total.toFixed(2), referral_code: referralCode };
+      metadata = { plan, modules: moduleIds, monthly_amount: total.toFixed(2), referral_code: referralCode, sales_user_id: salesUserId };
     } else {
       const priceId = plan === "basic" ? process.env.STRIPE_BASIC_PRICE_ID : process.env.STRIPE_PREMIUM_PRICE_ID;
       if (!priceId) return NextResponse.json({ error: "Price ID no configurado" }, { status: 400 });

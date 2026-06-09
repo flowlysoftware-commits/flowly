@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     }
 
     const plan = session.metadata?.plan || "basic";
+    const salesUserId = session.metadata?.sales_user_id || null;
     const metadataModules = session.metadata?.modules ? session.metadata.modules.split(",").filter(Boolean) : [];
     const modules = plan === "premium" ? premiumModules : metadataModules;
     const monthlyAmount = session.metadata?.monthly_amount
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
         logo_url: logoUrl || null,
         panel_theme: theme || "dark",
         onboarding_goal: primaryGoal || null,
+        sales_user_id: salesUserId,
       })
       .select("id")
       .single();
@@ -105,11 +107,27 @@ export async function POST(request: Request) {
     if (business?.id && monthlyAmount) {
       await supabaseAdmin.from("sales_deals").insert({
         business_id: business.id,
+        sales_user_id: salesUserId,
+        client_name: businessName,
         plan,
         monthly_amount: monthlyAmount,
         status: "trialing",
         closed_at: new Date().toISOString(),
       });
+
+      if (salesUserId) {
+        const commissionAmount = Math.round(Number(monthlyAmount) * 0.2 * 100) / 100;
+        if (commissionAmount > 0) {
+          await supabaseAdmin.from("commissions").insert({
+            sales_user_id: salesUserId,
+            amount: commissionAmount,
+            type: "stripe_subscription",
+            status: "pending",
+            source: "stripe",
+            description: `Alta Stripe ${businessName}`,
+          });
+        }
+      }
     }
 
     return NextResponse.json({ success: true, email });
