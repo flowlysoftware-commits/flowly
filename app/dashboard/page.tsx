@@ -1854,10 +1854,16 @@ function WhatsappModule({
   const [editingTemplateKey, setEditingTemplateKey] = useState<string | null>(null);
   const [editingTemplateLabel, setEditingTemplateLabel] = useState("");
   const [editingTemplateMessage, setEditingTemplateMessage] = useState("");
+  const [localTemplates, setLocalTemplates] = useState<WhatsappTemplate[]>([]);
 
+  useEffect(() => {
+    setLocalTemplates(whatsappTemplatesEffective);
+  }, [whatsappTemplatesEffective]);
+
+  const quickTemplates = localTemplates.length ? localTemplates : whatsappTemplatesEffective;
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
-  const selectedTemplate = whatsappTemplatesEffective.find((template) => template.key === selectedTemplateKey) || whatsappTemplatesEffective[0] || whatsappTemplates[0];
-  const selectedManualTemplate = whatsappTemplatesEffective.find((template) => template.key === manualTemplateKey) || null;
+  const selectedTemplate = quickTemplates.find((template) => template.key === selectedTemplateKey) || quickTemplates[0] || whatsappTemplates[0];
+  const selectedManualTemplate = quickTemplates.find((template) => template.key === manualTemplateKey) || null;
 
   const filteredCustomers = customers.filter((customer) => {
     const searchable = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""}`.toLowerCase();
@@ -1876,18 +1882,25 @@ function WhatsappModule({
     saveWhatsappMessage(null, manualPhone, "manual", manualMessage);
   };
 
+  const applyTemplateToManual = (template: WhatsappTemplate) => {
+    setManualTemplateKey(template.key);
+    setManualMessage(template.message);
+  };
+
+  const applyTemplateToCrm = (template: WhatsappTemplate) => {
+    setSelectedTemplateKey(template.key);
+  };
+
   const saveTemplate = async () => {
-    if (!title || !notes) return alert("Añade nombre y mensaje de la plantilla");
-    const newTemplate = { key: `custom_${Date.now()}`, label: title, message: notes, category: status || "template" };
-    await saveWhatsappTemplate(newTemplate);
+    if (!title.trim() || !notes.trim()) return alert("Añade nombre y mensaje de la plantilla");
+    const newTemplate = { key: `custom_${Date.now()}`, label: title.trim(), message: notes.trim(), category: status || "template", is_active: true };
+    setLocalTemplates((current) => mergeWhatsappTemplates(current, [newTemplate]));
     setSelectedTemplateKey(newTemplate.key);
-    setManualTemplateKey(newTemplate.key);
-    setManualMessage(newTemplate.message);
+    applyTemplateToManual(newTemplate);
+    await saveWhatsappTemplate(newTemplate);
     setTitle("");
     setNotes("");
   };
-
-  const quickTemplates = whatsappTemplatesEffective;
 
   const startEditTemplate = (template: WhatsappTemplate) => {
     setEditingTemplateKey(template.key);
@@ -1897,7 +1910,10 @@ function WhatsappModule({
 
   const saveEditingTemplate = async () => {
     if (!editingTemplateKey) return;
-    await saveWhatsappTemplate({ key: editingTemplateKey, label: editingTemplateLabel, message: editingTemplateMessage, category: "quick" });
+    const updatedTemplate = { key: editingTemplateKey, label: editingTemplateLabel.trim(), message: editingTemplateMessage.trim(), category: "quick", is_active: true };
+    setLocalTemplates((current) => mergeWhatsappTemplates(current, [updatedTemplate]));
+    if (manualTemplateKey === editingTemplateKey) setManualMessage(updatedTemplate.message);
+    await saveWhatsappTemplate(updatedTemplate);
     setEditingTemplateKey(null);
     setEditingTemplateLabel("");
     setEditingTemplateMessage("");
@@ -1987,13 +2003,13 @@ function WhatsappModule({
               onChange={(e) => {
                 const key = e.target.value;
                 setManualTemplateKey(key);
-                const template = whatsappTemplatesEffective.find((item) => item.key === key);
+                const template = quickTemplates.find((item) => item.key === key);
                 if (template) setManualMessage(template.message);
               }}
               className="input-dark"
             >
               <option value="">Usar plantilla guardada</option>
-              {whatsappTemplatesEffective.map((template) => (
+              {quickTemplates.map((template) => (
                 <option key={template.key} value={template.key}>{template.label}</option>
               ))}
             </select>
@@ -2059,7 +2075,7 @@ function WhatsappModule({
 
       <GlassCard title="Plantillas rápidas">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {whatsappTemplatesEffective.map((template) => (
+          {quickTemplates.map((template) => (
             <div key={template.key} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
               {editingTemplateKey === template.key ? (
                 <div className="grid gap-3">
@@ -2077,7 +2093,11 @@ function WhatsappModule({
                     <button onClick={() => startEditTemplate(template)} className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/75 hover:bg-white/10">Editar</button>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-white/50">{template.message}</p>
-                  {template.key.startsWith("custom_") && <button onClick={() => deleteWhatsappTemplate(template)} className="mt-3 text-xs text-red-200/80">Eliminar</button>}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button onClick={() => applyTemplateToCrm(template)} className="rounded-full border border-green-300/25 bg-green-500/10 px-3 py-1 text-xs text-green-100 hover:bg-green-500/20">Usar en CRM</button>
+                    <button onClick={() => applyTemplateToManual(template)} className="rounded-full border border-sky-300/25 bg-sky-500/10 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/20">Usar en mensaje libre</button>
+                    {template.key.startsWith("custom_") && <button onClick={async () => { setLocalTemplates((current) => current.filter((item) => item.key !== template.key)); await deleteWhatsappTemplate(template); }} className="rounded-full border border-red-300/20 px-3 py-1 text-xs text-red-200/80 hover:bg-red-500/10">Eliminar</button>}
+                  </div>
                 </>
               )}
             </div>
