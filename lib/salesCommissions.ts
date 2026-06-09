@@ -30,12 +30,16 @@ export type CommissionLine = {
 
 export const COMMISSION_RULES: Record<SalesRole, CommissionRule> = {
   asociado: { role: "asociado", directSalePct: 10, directMonthlyPct: 5, branchSalePct: 0, branchMonthlyPct: 0 },
-  senior: { role: "senior", directSalePct: 15, directMonthlyPct: 7, branchSalePct: 2, branchMonthlyPct: 2 },
+  senior: { role: "senior", directSalePct: 15, directMonthlyPct: 8, branchSalePct: 2, branchMonthlyPct: 2 },
   jefe: { role: "jefe", directSalePct: 20, directMonthlyPct: 8, branchSalePct: 4, branchMonthlyPct: 4 },
   director: { role: "director", directSalePct: 25, directMonthlyPct: 10, branchSalePct: 6, branchMonthlyPct: 6 },
 };
 
 export const FIRST_BRANCH_RULE = { salePct: 8, monthlyPct: 5, maxLevels: 5 };
+
+export function canManageTeam(role?: string | null) {
+  return role === "senior" || role === "jefe" || role === "director";
+}
 
 export function moneyAmount(value: number) {
   return Math.round(Number(value || 0) * 100) / 100;
@@ -104,6 +108,7 @@ export function buildCommissionLines(input: {
   });
 
   getUplineChain(input.seller.id, input.users).forEach((manager) => {
+    if (!canManageTeam(manager.role)) return;
     const roleRule = getCommissionRule(manager.role);
     const salePct = manager.hierarchy_level === 1 ? FIRST_BRANCH_RULE.salePct : roleRule.branchSalePct;
     const monthlyPct = manager.hierarchy_level === 1 ? FIRST_BRANCH_RULE.monthlyPct : roleRule.branchMonthlyPct;

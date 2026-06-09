@@ -210,9 +210,37 @@ export default function EquipoComercialPage() {
 
 function CommissionPlan({ role }: { role: SalesUser["role"] }) {
   const rule = getCommissionRule(role);
-  return <div className="rounded-2xl border border-violet-300/20 bg-violet-500/10 p-4"><p className="text-sm text-violet-200">{roleLabels[role]}</p><p className="mt-2 text-2xl font-semibold">{rule.directSalePct}% venta + {rule.directMonthlyPct}% mensual</p><p className="mt-2 text-sm text-white/55">Rama propia: {rule.branchSalePct}% venta + {rule.branchMonthlyPct}% mensual. Primera rama: {FIRST_BRANCH_RULE.salePct}% venta + {FIRST_BRANCH_RULE.monthlyPct}% mensual. Máximo {FIRST_BRANCH_RULE.maxLevels} niveles.</p></div>;
+  const rows = [
+    { label: "Tus ventas", sale: rule.directSalePct, monthly: rule.directMonthlyPct, helper: "Comisión directa por cada cliente que cierres tú." },
+    { label: "Primera rama directa", sale: FIRST_BRANCH_RULE.salePct, monthly: FIRST_BRANCH_RULE.monthlyPct, helper: "Personas que cuelgan directamente de ti." },
+    { label: "Ramas siguientes", sale: rule.branchSalePct, monthly: rule.branchMonthlyPct, helper: `Niveles 2 a ${FIRST_BRANCH_RULE.maxLevels} de tu red.` },
+  ];
+  return (
+    <div className="grid gap-3">
+      <div className="rounded-2xl border border-violet-300/20 bg-violet-500/10 p-4">
+        <p className="text-sm text-violet-200">{roleLabels[role]}</p>
+        <p className="mt-2 text-2xl font-semibold">{rule.directSalePct}% venta + {rule.directMonthlyPct}% mensual</p>
+        <p className="mt-2 text-sm text-white/55">La rama se paga hasta {FIRST_BRANCH_RULE.maxLevels} niveles. El Comercial Asociado no puede tener equipo.</p>
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-white/10">
+        {rows.map((row) => (
+          <div key={row.label} className="grid gap-3 border-b border-white/10 bg-white/[0.05] p-4 last:border-b-0 md:grid-cols-[1fr_.45fr_.45fr] md:items-center">
+            <div><p className="font-medium">{row.label}</p><p className="text-xs text-white/45">{row.helper}</p></div>
+            <p className="rounded-full bg-white/10 px-3 py-2 text-center text-sm">{row.sale}% venta</p>
+            <p className="rounded-full bg-white/10 px-3 py-2 text-center text-sm">{row.monthly}% mensual</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
+function branchRateFor(rootRole: SalesUser["role"], level: number) {
+  const rule = getCommissionRule(rootRole);
+  return level === 1
+    ? { sale: FIRST_BRANCH_RULE.salePct, monthly: FIRST_BRANCH_RULE.monthlyPct }
+    : { sale: rule.branchSalePct, monthly: rule.branchMonthlyPct };
+}
 function getDescendants(rootId: string, users: SalesUser[], maxLevels: number) {
   const result: SalesUser[] = [];
   let frontier = users.filter((user) => user.manager_id === rootId);
@@ -237,12 +265,13 @@ function OrgBack({ me, allUsers }: { me: SalesUser; allUsers: SalesUser[] }) {
 
 function OrgForward({ root, allUsers }: { root: SalesUser; allUsers: SalesUser[] }) {
   const children = allUsers.filter((user) => user.manager_id === root.id);
-  return <div className="mt-5 space-y-3"><p className="text-sm font-medium text-violet-200">Hacia delante</p>{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={1} />)}{children.length === 0 && <div className="rounded-2xl border border-dashed border-white/15 p-6 text-center text-white/45">Aún no tienes rama por debajo.</div>}</div>;
+  return <div className="mt-5 space-y-3"><p className="text-sm font-medium text-violet-200">Hacia delante</p>{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={1} rootRole={root.role} />)}{children.length === 0 && <div className="rounded-2xl border border-dashed border-white/15 p-6 text-center text-white/45">Aún no tienes rama por debajo.</div>}</div>;
 }
 
-function OrgNode({ user, allUsers, level }: { user: SalesUser; allUsers: SalesUser[]; level: number }) {
+function OrgNode({ user, allUsers, level, rootRole }: { user: SalesUser; allUsers: SalesUser[]; level: number; rootRole: SalesUser["role"] }) {
   const children = level >= FIRST_BRANCH_RULE.maxLevels ? [] : allUsers.filter((candidate) => candidate.manager_id === user.id);
-  return <div className="ml-3 border-l border-white/10 pl-4"><div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel {level}</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div><div className="mt-3 space-y-3">{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={level + 1} />)}</div></div>;
+  const rate = branchRateFor(rootRole, level);
+  return <div className="ml-3 border-l border-white/10 pl-4"><div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel {level} · {rate.sale}% venta + {rate.monthly}% mensual para ti</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div><div className="mt-3 space-y-3">{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={level + 1} rootRole={rootRole} />)}</div></div>;
 }
 
 function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) {
