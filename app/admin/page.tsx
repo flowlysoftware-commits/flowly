@@ -142,6 +142,11 @@ export default function AdminPage() {
   const [role, setRole] = useState<SalesRole>("asociado");
   const [managerId, setManagerId] = useState("");
   const [monthlyTarget, setMonthlyTarget] = useState("5");
+  const resetSalesPassword = async (user: SalesUser) => {
+    const password = window.prompt(`Nueva contraseña para ${user.full_name}`);
+    if (!password) return;
+    alert("Implementa endpoint admin para actualizar auth.users. Contraseña solicitada: "+password);
+  };
 
   const [leadCompany, setLeadCompany] = useState("");
   const [leadContact, setLeadContact] = useState("");
