@@ -798,6 +798,12 @@ export default function DashboardPage() {
     };
     const { error } = await supabase.from("whatsapp_templates").upsert(payload, { onConflict: "business_id,key" });
     if (error) return alert(error.message);
+
+    const savedTemplate = payload as WhatsappTemplate;
+    setWhatsappTemplatesData((current) => {
+      const withoutCurrent = current.filter((item) => item.key !== templateKey);
+      return [...withoutCurrent, savedTemplate].sort((a, b) => a.label.localeCompare(b.label));
+    });
     await loadData();
   };
 
@@ -1843,6 +1849,7 @@ function WhatsappModule({
   const [selectedTemplateKey, setSelectedTemplateKey] = useState("llamada_perdida");
   const [manualPhone, setManualPhone] = useState("");
   const [manualMessage, setManualMessage] = useState("Hola, somos Neuronas IPS. Te contactamos sobre tu proceso de atención. Quedamos atentos a tu respuesta.");
+  const [manualTemplateKey, setManualTemplateKey] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [editingTemplateKey, setEditingTemplateKey] = useState<string | null>(null);
   const [editingTemplateLabel, setEditingTemplateLabel] = useState("");
@@ -1850,6 +1857,7 @@ function WhatsappModule({
 
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
   const selectedTemplate = whatsappTemplatesEffective.find((template) => template.key === selectedTemplateKey) || whatsappTemplatesEffective[0] || whatsappTemplates[0];
+  const selectedManualTemplate = whatsappTemplatesEffective.find((template) => template.key === manualTemplateKey) || null;
 
   const filteredCustomers = customers.filter((customer) => {
     const searchable = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""}`.toLowerCase();
@@ -1870,7 +1878,11 @@ function WhatsappModule({
 
   const saveTemplate = async () => {
     if (!title || !notes) return alert("Añade nombre y mensaje de la plantilla");
-    await saveWhatsappTemplate({ key: `custom_${Date.now()}`, label: title, message: notes, category: status || "template" });
+    const newTemplate = { key: `custom_${Date.now()}`, label: title, message: notes, category: status || "template" };
+    await saveWhatsappTemplate(newTemplate);
+    setSelectedTemplateKey(newTemplate.key);
+    setManualTemplateKey(newTemplate.key);
+    setManualMessage(newTemplate.message);
     setTitle("");
     setNotes("");
   };
@@ -1970,6 +1982,26 @@ function WhatsappModule({
               placeholder="Teléfono. Ej: 3001234567"
               className="input-dark"
             />
+            <select
+              value={manualTemplateKey}
+              onChange={(e) => {
+                const key = e.target.value;
+                setManualTemplateKey(key);
+                const template = whatsappTemplatesEffective.find((item) => item.key === key);
+                if (template) setManualMessage(template.message);
+              }}
+              className="input-dark"
+            >
+              <option value="">Usar plantilla guardada</option>
+              {whatsappTemplatesEffective.map((template) => (
+                <option key={template.key} value={template.key}>{template.label}</option>
+              ))}
+            </select>
+            {selectedManualTemplate && (
+              <p className="text-xs leading-5 text-white/45">
+                Plantilla seleccionada: <span className="text-white/70">{selectedManualTemplate.label}</span>. Puedes modificar el texto antes de abrir WhatsApp.
+              </p>
+            )}
             <textarea
               value={manualMessage}
               onChange={(e) => setManualMessage(e.target.value)}
