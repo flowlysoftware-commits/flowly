@@ -109,11 +109,16 @@ type WhatsappTemplate = {
 type CrmReminder = {
   id: string;
   business_id: string;
-  customer_id: string;
+  customer_id?: string | null;
+  patient_id?: string | null;
+  customer_name?: string | null;
   title: string;
-  notes: string | null;
-  remind_at: string;
+  notes?: string | null;
+  description?: string | null;
+  remind_at?: string | null;
+  reminder_at?: string | null;
   status: string | null;
+  notified_at?: string | null;
   created_at: string;
   customers?: Relation<{ name?: string; full_name?: string; phone?: string | null }>;
 };
@@ -268,6 +273,7 @@ export default function DashboardPage() {
   const [whatsappTemplatesData, setWhatsappTemplatesData] = useState<WhatsappTemplate[]>([]);
   const [crmReminders, setCrmReminders] = useState<CrmReminder[]>([]);
   const [dueReminder, setDueReminder] = useState<CrmReminder | null>(null);
+  const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
   const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
   const [selectedCrmCustomerId, setSelectedCrmCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
@@ -355,7 +361,7 @@ export default function DashboardPage() {
       supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_templates").select("*").eq("business_id", businessId).eq("is_active", true).order("label", { ascending: true }),
-      supabase.from("crm_reminders").select("*, customers(name, full_name, phone)").eq("business_id", businessId).order("remind_at", { ascending: true }),
+      supabase.from("crm_reminders").select("*").eq("business_id", businessId).order("reminder_at", { ascending: true }),
     ]);
 
     const loadedCompanyProfile = (companyRes.data as CompanyProfile | null) || null;
@@ -382,7 +388,7 @@ export default function DashboardPage() {
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
     setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
     setWhatsappTemplatesData(((whatsappTemplatesRes.data || []) as WhatsappTemplate[]).map(normalizeWhatsappTemplate));
-    setCrmReminders((crmRemindersRes.data || []) as unknown as CrmReminder[]);
+    setCrmReminders(((crmRemindersRes.data || []) as unknown as CrmReminder[]).map(normalizeCrmReminder));
     setLoading(false);
   };
 
@@ -445,7 +451,8 @@ export default function DashboardPage() {
       const now = Date.now();
       const nextDue = crmReminders.find((reminder) => {
         if ((reminder.status || "pending") !== "pending") return false;
-        return new Date(reminder.remind_at).getTime() <= now;
+        if (dismissedReminderIds.includes(reminder.id)) return false;
+        return reminderTime(reminder) <= now;
       });
       if (nextDue) setDueReminder(nextDue);
     };
@@ -453,7 +460,7 @@ export default function DashboardPage() {
     checkDueReminders();
     const timer = window.setInterval(checkDueReminders, 30000);
     return () => window.clearInterval(timer);
-  }, [crmReminders]);
+  }, [crmReminders, dismissedReminderIds]);
 
   const activeModuleKeys = useMemo(() => {
     if (business?.plan === "premium") return moduleCatalog.map((item) => item.key);
@@ -762,10 +769,10 @@ export default function DashboardPage() {
     if (!business || !customerId || !title.trim() || !remindAt) return alert("Selecciona paciente, título, fecha y hora del recordatorio");
     const { error } = await supabase.from("crm_reminders").insert({
       business_id: business.id,
-      customer_id: customerId,
+      patient_id: customerId,
       title: title.trim(),
-      notes: notes || null,
-      remind_at: remindAt,
+      description: notes || null,
+      reminder_at: remindAt,
       status: "pending",
     });
     if (error) return alert(error.message);
@@ -776,6 +783,7 @@ export default function DashboardPage() {
     const { error } = await supabase.from("crm_reminders").update({ status: "completed" }).eq("id", id);
     if (error) return alert(error.message);
     setDueReminder((current) => (current?.id === id ? null : current));
+    setDismissedReminderIds((ids) => ids.filter((item) => item !== id));
     await loadData();
   };
 
@@ -783,6 +791,7 @@ export default function DashboardPage() {
     const { error } = await supabase.from("crm_reminders").delete().eq("id", id);
     if (error) return alert(error.message);
     setDueReminder((current) => (current?.id === id ? null : current));
+    setDismissedReminderIds((ids) => ids.filter((item) => item !== id));
     await loadData();
   };
 
@@ -1076,7 +1085,7 @@ export default function DashboardPage() {
           </section>
 
           {dueReminder && (
-            <ReminderAlarm reminder={dueReminder} completeReminder={completeCrmReminder} dismiss={() => setDueReminder(null)} />
+            <ReminderAlarm reminder={dueReminder} customers={customers} completeReminder={completeCrmReminder} dismiss={() => { setDismissedReminderIds((ids) => dueReminder ? [...new Set([...ids, dueReminder.id])] : ids); setDueReminder(null); }} viewCustomer={(customerId) => { setSelectedCrmCustomerId(customerId); setActiveTab("module:crm"); setDueReminder(null); }} />
           )}
 
           {incomingVoiceCall && (
@@ -1281,7 +1290,7 @@ function CrmModule({
     : [];
 
   const customerReminders = selectedCustomer
-    ? crmReminders.filter((reminder) => reminder.customer_id === selectedCustomer.id).sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())
+    ? crmReminders.filter((reminder) => reminderCustomerId(reminder) === selectedCustomer.id).sort((a, b) => reminderTime(a) - reminderTime(b))
     : [];
 
   const activeCustomers = customers.filter((customer) => (customer.crm_status || "nuevo") !== "cerrado").length;
@@ -1668,13 +1677,13 @@ function translateCrmStatus(status: string) {
 }
 
 function RemindersSection({ reminders, customers, completeReminder, deleteReminder }: { reminders: CrmReminder[]; customers: Customer[]; completeReminder: (id: string) => void; deleteReminder: (id: string) => void }) {
-  const dueNow = reminders.filter((reminder) => new Date(reminder.remind_at).getTime() <= Date.now()).length;
+  const dueNow = reminders.filter((reminder) => reminderTime(reminder) <= Date.now()).length;
   return (
     <section className="grid gap-6">
       <div className="grid gap-4 md:grid-cols-3">
         <Metric icon={<Clock />} label="Próximos 7 días" value={reminders.length} helper="Recordatorios activos" />
         <Metric icon={<XCircle />} label="Vencidos" value={dueNow} helper="Requieren atención" />
-        <Metric icon={<Users />} label="Pacientes" value={new Set(reminders.map((item) => item.customer_id)).size} helper="Con alarma" />
+        <Metric icon={<Users />} label="Pacientes" value={new Set(reminders.map((item) => reminderCustomerId(item)).filter(Boolean)).size} helper="Con alarma" />
       </div>
       <GlassCard title="Recordatorios de los próximos 7 días">
         <div className="space-y-3">
@@ -1689,13 +1698,13 @@ function RemindersSection({ reminders, customers, completeReminder, deleteRemind
 }
 
 function ReminderCard({ reminder, customers, completeReminder, deleteReminder, compact = false }: { reminder: CrmReminder; customers?: Customer[]; completeReminder: (id: string) => void; deleteReminder: (id: string) => void; compact?: boolean }) {
-  const isDue = new Date(reminder.remind_at).getTime() <= Date.now();
+  const isDue = reminderTime(reminder) <= Date.now();
   return (
     <div className={`rounded-2xl border ${isDue ? "border-amber-300/35 bg-amber-500/15" : "border-white/10 bg-white/[0.06]"} p-4`}>
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
         <div className="min-w-0">
           <p className="break-words font-semibold">{reminder.title}</p>
-          <p className="mt-1 text-sm text-white/55">{reminderCustomerName(reminder, customers)} · {new Date(reminder.remind_at).toLocaleString("es-ES")}</p>
+          <p className="mt-1 text-sm text-white/55">{reminderCustomerName(reminder, customers)} · {formatReminderDate(reminder)}</p>
           {reminder.notes && <p className="mt-2 break-words text-sm leading-6 text-white/50">{reminder.notes}</p>}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -1707,7 +1716,8 @@ function ReminderCard({ reminder, customers, completeReminder, deleteReminder, c
   );
 }
 
-function ReminderAlarm({ reminder, completeReminder, dismiss }: { reminder: CrmReminder; completeReminder: (id: string) => void; dismiss: () => void }) {
+function ReminderAlarm({ reminder, customers, completeReminder, dismiss, viewCustomer }: { reminder: CrmReminder; customers: Customer[]; completeReminder: (id: string) => void; dismiss: () => void; viewCustomer: (customerId: string) => void }) {
+  const customerId = reminderCustomerId(reminder);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-[2rem] border border-amber-300/30 bg-[#11111c] p-7 text-center shadow-2xl shadow-amber-950/40">
@@ -1716,10 +1726,11 @@ function ReminderAlarm({ reminder, completeReminder, dismiss }: { reminder: CrmR
         </div>
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-200">Recordatorio CRM</p>
         <h2 className="mt-3 break-words text-3xl font-semibold">{reminder.title}</h2>
-        <p className="mt-2 text-white/60">{reminderCustomerName(reminder)} · {new Date(reminder.remind_at).toLocaleString("es-ES")}</p>
+        <p className="mt-2 text-white/60">{reminderCustomerName(reminder, customers)} · {formatReminderDate(reminder)}</p>
         {reminder.notes && <p className="mt-4 break-words rounded-2xl bg-white/[0.06] p-4 text-sm leading-6 text-white/65">{reminder.notes}</p>}
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <button onClick={() => completeReminder(reminder.id)} className="btn-primary">Marcar como hecho</button>
+          {customerId && <button onClick={() => viewCustomer(customerId)} className="btn-secondary">Ver ficha</button>}
           <button onClick={dismiss} className="btn-secondary">Cerrar</button>
         </div>
       </div>
@@ -1785,16 +1796,47 @@ function getUpcomingReminders(reminders: CrmReminder[], days = 7) {
   const limit = now + days * 24 * 60 * 60 * 1000;
   return reminders
     .filter((reminder) => {
-      const time = new Date(reminder.remind_at).getTime();
+      const time = reminderTime(reminder);
       return (reminder.status || "pending") === "pending" && time >= now - 60 * 60 * 1000 && time <= limit;
     })
-    .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime());
+    .sort((a, b) => reminderTime(a) - reminderTime(b));
+}
+
+function normalizeCrmReminder(reminder: CrmReminder): CrmReminder {
+  const time = reminder.reminder_at || reminder.remind_at || null;
+  const customerId = reminder.customer_id || reminder.patient_id || null;
+  return {
+    ...reminder,
+    customer_id: customerId,
+    patient_id: reminder.patient_id || customerId,
+    notes: reminder.notes || reminder.description || null,
+    description: reminder.description || reminder.notes || null,
+    remind_at: time,
+    reminder_at: time,
+    status: reminder.status || "pending",
+  };
+}
+
+function reminderCustomerId(reminder: CrmReminder) {
+  return reminder.customer_id || reminder.patient_id || "";
+}
+
+function reminderTime(reminder: CrmReminder) {
+  const raw = reminder.reminder_at || reminder.remind_at;
+  const time = raw ? new Date(raw).getTime() : Number.POSITIVE_INFINITY;
+  return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY;
+}
+
+function formatReminderDate(reminder: CrmReminder) {
+  const raw = reminder.reminder_at || reminder.remind_at;
+  if (!raw) return "Sin fecha";
+  return new Date(raw).toLocaleString("es-ES");
 }
 
 function reminderCustomerName(reminder: CrmReminder, customers?: Customer[]) {
   const related = firstRelation(reminder.customers);
-  const fallback = customers?.find((customer) => customer.id === reminder.customer_id);
-  return customerName(related || fallback || null);
+  const fallback = customers?.find((customer) => customer.id === reminderCustomerId(reminder));
+  return reminder.customer_name || customerName(related || fallback || null);
 }
 
 function normalizeWhatsappPhone(phone?: string | null) {
