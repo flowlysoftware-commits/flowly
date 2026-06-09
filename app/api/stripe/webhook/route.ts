@@ -47,6 +47,10 @@ export async function POST(request: Request) {
       const plan = session.metadata?.plan || "basic";
       const salesUserId = session.metadata?.sales_user_id || null;
       const referralCode = session.metadata?.referral_code || null;
+      const businessId = session.metadata?.business_id || null;
+      const salesDealId = session.metadata?.sales_deal_id || null;
+      const setupAmount = Number(session.metadata?.setup_amount || 0);
+      const monthlyAmount = Number(session.metadata?.monthly_amount || 0);
 
       await supabaseAdmin.from("stripe_checkout_sessions").upsert({
         stripe_session_id: session.id,
@@ -58,6 +62,56 @@ export async function POST(request: Request) {
         referral_code: referralCode,
         status: "completed",
       });
+
+      if (businessId) {
+        await supabaseAdmin
+          .from("businesses")
+          .update({
+            sales_user_id: salesUserId,
+            plan,
+            subscription_status: "paid",
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscriptionId,
+          })
+          .eq("id", businessId);
+      }
+
+      if (salesDealId) {
+        const { data: deal } = await supabaseAdmin
+          .from("sales_deals")
+          .select("id, status")
+          .eq("id", salesDealId)
+          .maybeSingle();
+
+        if (deal && deal.status !== "paid") {
+          await supabaseAdmin
+            .from("sales_deals")
+            .update({ status: "paid", paid_at: new Date().toISOString(), stripe_session_id: session.id })
+            .eq("id", salesDealId);
+
+          if (salesUserId) {
+            const [{ data: users }, { data: seller }, { data: business }] = await Promise.all([
+              supabaseAdmin.from("sales_users").select("id, full_name, role, manager_id"),
+              supabaseAdmin.from("sales_users").select("id, full_name, role, manager_id").eq("id", salesUserId).maybeSingle(),
+              businessId ? supabaseAdmin.from("businesses").select("name").eq("id", businessId).maybeSingle() : Promise.resolve({ data: null } as any),
+            ]);
+
+            if (seller) {
+              const saleBaseAmount = setupAmount > 0 ? setupAmount : monthlyAmount;
+              const lines = buildCommissionLines({
+                seller,
+                users: users || [],
+                clientName: business?.name || email || "cliente",
+                saleBaseAmount,
+                monthlyAmount,
+                source: "stripe_checkout",
+                includeMonthly: false,
+              });
+              if (lines.length > 0) await supabaseAdmin.from("commissions").insert(lines);
+            }
+          }
+        }
+      }
     }
 
 

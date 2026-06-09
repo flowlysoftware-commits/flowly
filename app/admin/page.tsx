@@ -180,6 +180,7 @@ export default function AdminPage() {
   const [budgetNotes, setBudgetNotes] = useState("");
 
   const [manualSale, setManualSale] = useState<ManualSaleForm>({ businessId: "", salesUserId: "", plan: "premium", monthlyAmount: "84.99", setupAmount: "0", notes: "" });
+  const [paymentLinks, setPaymentLinks] = useState<Record<string, string>>({});
 
   const load = async () => {
     setLoading(true);
@@ -319,31 +320,87 @@ export default function AdminPage() {
     await load();
   };
 
+  const getAdminToken = async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) router.push("/login");
+    return token || "";
+  };
+
   const assignBusinessToSalesUser = async (businessId: string, salesUserId: string) => {
-    const { error } = await supabase.from("businesses").update({ sales_user_id: salesUserId || null }).eq("id", businessId);
-    if (error) return alert(error.message);
+    const token = await getAdminToken();
+    if (!token) return;
+    const res = await fetch("/api/admin/business-sales", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ businessId, salesUserId: salesUserId || null }),
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo asociar el cliente");
+    setBusinesses((items) => items.map((item) => item.id === businessId ? { ...item, sales_user_id: salesUserId || null } : item));
+    await load();
+  };
+
+  const createCustomerPaymentLink = async () => {
+    if (!manualSale.businessId || !manualSale.salesUserId) return alert("Selecciona cliente y comercial antes de generar el enlace");
+    const token = await getAdminToken();
+    if (!token) return;
+    const res = await fetch("/api/admin/customer-payment-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(manualSale),
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo generar el enlace de pago");
+    setPaymentLinks((prev) => ({ ...prev, [manualSale.businessId]: result.url }));
+    await load();
+    window.prompt("Enlace de pago del cliente. Copia y envíalo:", result.url);
+  };
+
+  const updateCommissionAmount = async (commission: Commission) => {
+    const value = window.prompt(`Nuevo importe para la comisión de ${sellerName(commission.sales_user_id, salesUsers)}`, String(Number(commission.amount || 0)));
+    if (value === null) return;
+    const amount = Number(value.replace(",", "."));
+    if (!Number.isFinite(amount) || amount < 0) return alert("Importe no válido");
+    const token = await getAdminToken();
+    if (!token) return;
+    const res = await fetch("/api/admin/commissions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ commissionId: commission.id, amount }),
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo modificar la comisión");
+    await load();
+  };
+
+  const deleteCommission = async (commission: Commission) => {
+    if (!window.confirm(`¿Eliminar esta comisión de ${money(Number(commission.amount || 0))}?`)) return;
+    const token = await getAdminToken();
+    if (!token) return;
+    const res = await fetch(`/api/admin/commissions?id=${encodeURIComponent(commission.id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo eliminar la comisión");
     await load();
   };
 
   const registerManualSale = async () => {
     if (!manualSale.businessId || !manualSale.salesUserId) return alert("Selecciona cliente y comercial");
-    const monthly = Number(manualSale.monthlyAmount || 0);
-    const setup = Number(manualSale.setupAmount || 0);
-    const selectedBusiness = businesses.find((business) => business.id === manualSale.businessId);
-    const saleBaseAmount = setup > 0 ? setup : monthly;
-    const seller = salesUsers.find((user) => user.id === manualSale.salesUserId);
-    const commissionLines = seller ? buildCommissionLines({ seller, users: salesUsers, clientName: selectedBusiness?.name || "Cliente manual", saleBaseAmount, monthlyAmount: monthly, source: "manual_admin", includeMonthly: false }) : [];
-    const { error: businessError } = await supabase.from("businesses").update({ sales_user_id: manualSale.salesUserId, plan: manualSale.plan, subscription_status: "manual_active" }).eq("id", manualSale.businessId);
-    if (businessError) return alert(businessError.message);
-    const { error: saleError } = await supabase.from("sales_deals").insert({ business_id: manualSale.businessId, sales_user_id: manualSale.salesUserId, client_name: selectedBusiness?.name || "Cliente manual", plan: manualSale.plan, monthly_amount: monthly, setup_amount: setup, currency: "EUR", status: "paid", source: "manual_admin", notes: manualSale.notes });
-    if (saleError) return alert(saleError.message);
-    if (commissionLines.length > 0) {
-      const { error: commissionError } = await supabase.from("commissions").insert(commissionLines);
-      if (commissionError) return alert(commissionError.message);
-    }
+    const token = await getAdminToken();
+    if (!token) return;
+    const res = await fetch("/api/admin/business-sales", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(manualSale),
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo registrar la venta");
     setManualSale({ businessId: "", salesUserId: "", plan: "premium", monthlyAmount: "84.99", setupAmount: "0", notes: "" });
     await load();
-    alert("Venta manual registrada. Se ha generado solo la comisión de venta; la mensual se generará cuando entre el siguiente pago del cliente.");
+    alert("Venta manual registrada y cliente vinculado. Solo se ha generado comisión de venta; la mensual se generará cuando entre el pago mensual real.");
   };
 
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
@@ -435,9 +492,9 @@ export default function AdminPage() {
 
         {tab === "leads" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Nuevo lead admin"><div className="grid gap-3"><input value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} placeholder="Empresa / negocio" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={leadContact} onChange={(e) => setLeadContact(e.target.value)} placeholder="Persona de contacto" className="input-dark" /><select value={leadSector} onChange={(e) => setLeadSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option></select></div><div className="grid gap-3 md:grid-cols-2"><input value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} placeholder="Email" className="input-dark" /></div><select value={leadAssigned} onChange={(e) => setLeadAssigned(e.target.value)} className="input-dark"><option value="">Sin asignar</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><textarea value={leadNotes} onChange={(e) => setLeadNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" /><button onClick={createLead} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><Plus size={18} className="inline" /> Crear lead</button></div></Panel><Panel title="Todos los leads"><LeadList leads={leads} salesUsers={salesUsers} onStatus={updateLead} /></Panel></section>}
 
-        {tab === "comisiones" && <section className="grid gap-6 lg:grid-cols-2"><Panel title="Comisiones"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div><p className="font-medium capitalize">{commission.type}</p><p className="text-xs text-white/45">{sellerName(commission.sales_user_id, salesUsers)} · {commission.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p></div>)}{!commissions.length && <Empty text="No hay comisiones registradas." />}</div></Panel><Panel title="Solicitudes de cobro"><div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-medium">{sellerName(payout.sales_user_id, salesUsers)}</p><p className="text-xs text-white/45">Estado: {payout.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(payout.amount || 0))}</p></div><div className="mt-3 flex gap-2"><button onClick={() => updatePayout(payout.id, "paid")} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Marcar pagado</button><button onClick={() => updatePayout(payout.id, "rejected")} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">Rechazar</button></div></div>)}{!payouts.length && <Empty text="No hay solicitudes de cobro." />}</div></Panel></section>}
+        {tab === "comisiones" && <section className="grid gap-6 lg:grid-cols-2"><Panel title="Comisiones"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div className="min-w-0"><p className="font-medium capitalize break-words">{commission.type}</p><p className="text-xs text-white/45 break-words">{sellerName(commission.sales_user_id, salesUsers)} · {commission.status}</p>{commission.description && <p className="mt-1 text-xs text-white/35 break-words">{commission.description}</p>}<p className="mt-1 text-[11px] text-violet-200">{commission.percentage ? `${commission.percentage}%` : ""}{commission.hierarchy_level != null ? ` · Nivel ${commission.hierarchy_level}` : ""}</p></div><div className="shrink-0 text-left md:text-right"><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p><div className="mt-3 flex flex-wrap gap-2 md:justify-end"><button onClick={() => updateCommissionAmount(commission)} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Cambiar importe</button><button onClick={() => deleteCommission(commission)} className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">Borrar</button></div></div></div></div>)}{!commissions.length && <Empty text="No hay comisiones registradas." />}</div></Panel><Panel title="Solicitudes de cobro"><div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-medium">{sellerName(payout.sales_user_id, salesUsers)}</p><p className="text-xs text-white/45">Estado: {payout.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(payout.amount || 0))}</p></div><div className="mt-3 flex gap-2"><button onClick={() => updatePayout(payout.id, "paid")} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Marcar pagado</button><button onClick={() => updatePayout(payout.id, "rejected")} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">Rechazar</button></div></div>)}{!payouts.length && <Empty text="No hay solicitudes de cobro." />}</div></Panel></section>}
 
-        {tab === "clientes" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Registrar venta manual"><div className="grid gap-3"><p className="text-sm text-white/55">Úsalo para paneles ya entregados: vincula el cliente al comercial y genera la comisión interna sin pasar por Stripe.</p><select value={manualSale.businessId} onChange={(e) => setManualSale({ ...manualSale, businessId: e.target.value })} className="input-dark"><option value="">Seleccionar cliente SaaS</option>{businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}</select><select value={manualSale.salesUserId} onChange={(e) => setManualSale({ ...manualSale, salesUserId: e.target.value })} className="input-dark"><option value="">Seleccionar comercial</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><div className="grid gap-3 md:grid-cols-3"><select value={manualSale.plan} onChange={(e) => setManualSale({ ...manualSale, plan: e.target.value })} className="input-dark"><option value="basic">Basic</option><option value="premium">Premium</option><option value="clinic">Clinic</option><option value="enterprise">Enterprise</option></select><input value={manualSale.monthlyAmount} onChange={(e) => setManualSale({ ...manualSale, monthlyAmount: e.target.value })} type="number" step="0.01" placeholder="Mensualidad" className="input-dark" /><input value={manualSale.setupAmount} onChange={(e) => setManualSale({ ...manualSale, setupAmount: e.target.value })} type="number" step="0.01" placeholder="Instalación" className="input-dark" /></div><textarea value={manualSale.notes} onChange={(e) => setManualSale({ ...manualSale, notes: e.target.value })} placeholder="Notas internas de la venta" className="input-dark min-h-24" /><div className="rounded-2xl bg-white/10 p-4 text-sm text-white/70">Comisión estimada red: <strong className="text-violet-200">{money(estimateManualCommissions(manualSale, salesUsers))}</strong></div><button onClick={registerManualSale} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white">Registrar venta y vincular</button></div></Panel><Panel title="Clientes SaaS"><div className="space-y-3">{businesses.map((business) => <div key={business.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-lg font-semibold">{business.name}</p><p className="text-sm text-white/45">Plan {business.plan || "sin plan"} · Estado {business.subscription_status || "sin estado"}</p><p className="mt-1 text-xs text-violet-200">Comercial actual: {sellerName(business.sales_user_id || null, salesUsers)}</p></div><select value={business.sales_user_id || ""} onChange={(e) => assignBusinessToSalesUser(business.id, e.target.value)} className="input-dark max-w-64"><option value="">Sin comercial</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select></div></div>)}{!businesses.length && <Empty text="Aún no hay clientes SaaS." />}</div></Panel></section>}
+        {tab === "clientes" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Registrar venta / pago cliente"><div className="grid gap-3"><p className="text-sm text-white/55">Para paneles ya entregados: primero vincula cliente y comercial. Puedes registrar una venta manual ya pagada o generar un enlace de pago Stripe para que el cliente pague y quede marcado como pagado automáticamente.</p><select value={manualSale.businessId} onChange={(e) => setManualSale({ ...manualSale, businessId: e.target.value })} className="input-dark"><option value="">Seleccionar cliente SaaS</option>{businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}</select><select value={manualSale.salesUserId} onChange={(e) => setManualSale({ ...manualSale, salesUserId: e.target.value })} className="input-dark"><option value="">Seleccionar comercial</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><div className="grid gap-3 md:grid-cols-3"><select value={manualSale.plan} onChange={(e) => setManualSale({ ...manualSale, plan: e.target.value })} className="input-dark"><option value="basic">Basic</option><option value="premium">Premium</option><option value="modular">Modular</option><option value="clinic">Clinic</option><option value="enterprise">Enterprise</option></select><input value={manualSale.monthlyAmount} onChange={(e) => setManualSale({ ...manualSale, monthlyAmount: e.target.value })} type="number" step="0.01" placeholder="Mensualidad" className="input-dark" /><input value={manualSale.setupAmount} onChange={(e) => setManualSale({ ...manualSale, setupAmount: e.target.value })} type="number" step="0.01" placeholder="Instalación" className="input-dark" /></div><textarea value={manualSale.notes} onChange={(e) => setManualSale({ ...manualSale, notes: e.target.value })} placeholder="Notas internas de la venta" className="input-dark min-h-24" /><div className="rounded-2xl bg-white/10 p-4 text-sm text-white/70">Comisión estimada red: <strong className="text-violet-200">{money(estimateManualCommissions(manualSale, salesUsers))}</strong></div><div className="grid gap-2 md:grid-cols-2"><button onClick={registerManualSale} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white">Registrar venta ya pagada</button><button onClick={createCustomerPaymentLink} className="rounded-full bg-white px-5 py-3 font-medium text-neutral-950">Generar enlace de pago</button></div>{manualSale.businessId && paymentLinks[manualSale.businessId] && <a href={paymentLinks[manualSale.businessId]} target="_blank" rel="noreferrer" className="break-all rounded-2xl border border-violet-300/30 bg-violet-500/10 p-3 text-xs text-violet-100">{paymentLinks[manualSale.businessId]}</a>}</div></Panel><Panel title="Clientes SaaS"><div className="space-y-3">{businesses.map((business) => <div key={business.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div className="min-w-0"><p className="text-lg font-semibold break-words">{business.name}</p><p className="text-sm text-white/45 break-words">Plan {business.plan || "sin plan"} · Estado <span className={business.subscription_status === "paid" || business.subscription_status === "active" ? "text-emerald-300" : "text-amber-200"}>{business.subscription_status || "sin estado"}</span></p><p className="mt-1 text-xs text-violet-200 break-words">Comercial actual: {sellerName(business.sales_user_id || null, salesUsers)}</p><p className="mt-1 text-[11px] text-white/35 break-words">Stripe: {business.stripe_customer_id ? "Cliente creado" : "Sin pago Stripe"}</p></div><select value={business.sales_user_id || ""} onChange={(e) => assignBusinessToSalesUser(business.id, e.target.value)} className="input-dark max-w-64"><option value="">Sin comercial</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select></div></div>)}{!businesses.length && <Empty text="Aún no hay clientes SaaS." />}</div></Panel></section>}
       </div>
     </main>
   );

@@ -29,7 +29,7 @@ export type CommissionLine = {
 };
 
 export const COMMISSION_RULES: Record<SalesRole, CommissionRule> = {
-  asociado: { role: "asociado", directSalePct: 10, directMonthlyPct: 5, branchSalePct: 0, branchMonthlyPct: 0 },
+  asociado: { role: "asociado", directSalePct: 10, directMonthlyPct: 0, branchSalePct: 0, branchMonthlyPct: 0 },
   senior: { role: "senior", directSalePct: 15, directMonthlyPct: 8, branchSalePct: 2, branchMonthlyPct: 2 },
   jefe: { role: "jefe", directSalePct: 20, directMonthlyPct: 8, branchSalePct: 4, branchMonthlyPct: 4 },
   director: { role: "director", directSalePct: 25, directMonthlyPct: 10, branchSalePct: 6, branchMonthlyPct: 6 },
