@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { buildCommissionLines } from "@/lib/salesCommissions";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -116,16 +117,18 @@ export async function POST(request: Request) {
       });
 
       if (salesUserId) {
-        const commissionAmount = Math.round(Number(monthlyAmount) * 0.2 * 100) / 100;
-        if (commissionAmount > 0) {
-          await supabaseAdmin.from("commissions").insert({
-            sales_user_id: salesUserId,
-            amount: commissionAmount,
-            type: "stripe_subscription",
-            status: "pending",
+        const { data: users } = await supabaseAdmin.from("sales_users").select("id, full_name, role, manager_id");
+        const seller = (users || []).find((user: any) => user.id === salesUserId);
+        if (seller) {
+          const lines = buildCommissionLines({
+            seller,
+            users: users || [],
+            clientName: businessName,
+            saleBaseAmount: Number(monthlyAmount),
+            monthlyAmount: Number(monthlyAmount),
             source: "stripe",
-            description: `Alta Stripe ${businessName}`,
           });
+          if (lines.length > 0) await supabaseAdmin.from("commissions").insert(lines);
         }
       }
     }

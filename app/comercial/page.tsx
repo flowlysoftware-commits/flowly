@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { FIRST_BRANCH_RULE, getCommissionRule, getUplineChain } from "@/lib/salesCommissions";
 import {
   ArrowRight,
   Banknote,
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 
 type SalesRole = "director" | "jefe" | "senior" | "asociado";
-type Tab = "resumen" | "presupuestos" | "leads" | "saldo";
+type Tab = "resumen" | "presupuestos" | "leads" | "saldo" | "equipo";
 
 type SalesUser = {
   id: string;
@@ -120,6 +121,7 @@ export default function ComercialPage() {
   const router = useRouter();
   const [me, setMe] = useState<SalesUser | null>(null);
   const [team, setTeam] = useState<SalesUser[]>([]);
+  const [allSalesUsers, setAllSalesUsers] = useState<SalesUser[]>([]);
   const [leads, setLeads] = useState<SalesLead[]>([]);
   const [budgets, setBudgets] = useState<SalesBudget[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
@@ -163,15 +165,16 @@ export default function ComercialPage() {
     const current = salesUser as SalesUser;
     setMe(current);
 
-    const { data: teamData } = await supabase
+    const { data: allUsersData } = await supabase
       .from("sales_users")
       .select("*")
-      .eq("manager_id", current.id)
       .order("created_at", { ascending: false });
 
-    const members = (teamData || []) as SalesUser[];
+    const allUsers = (allUsersData || []) as SalesUser[];
+    setAllSalesUsers(allUsers);
+    const members = getDescendants(current.id, allUsers, FIRST_BRANCH_RULE.maxLevels);
     setTeam(members);
-    const visibleIds = current.role === "jefe" || current.role === "director" ? [current.id, ...members.map((m) => m.id)] : [current.id];
+    const visibleIds = current.role === "asociado" ? [current.id] : [current.id, ...members.map((m) => m.id)];
 
     const [{ data: leadsData }, { data: budgetsData }, { data: commissionsData }] = await Promise.all([
       supabase.from("sales_leads").select("*").in("assigned_to", visibleIds).order("created_at", { ascending: false }),
@@ -324,7 +327,7 @@ export default function ComercialPage() {
             <p className="mt-2 text-white/60">{roleLabels[me.role]} · Presupuestos, equipo, cartera y saldo acumulado</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            {(me.role === "jefe" || me.role === "director") && <Link href="/comercial/equipo" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Ver equipo <ArrowRight size={16} className="inline" /></Link>}
+            {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <Link href="/comercial/equipo" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Ver equipo <ArrowRight size={16} className="inline" /></Link>}
             <button onClick={logout} className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white"><LogOut size={16} className="inline" /> Salir</button>
           </div>
         </header>
@@ -342,6 +345,7 @@ export default function ComercialPage() {
           <TabButton label="Presupuestos" active={tab === "presupuestos"} onClick={() => setTab("presupuestos")} />
           <TabButton label="Leads" active={tab === "leads"} onClick={() => setTab("leads")} />
           <TabButton label="Saldo" active={tab === "saldo"} onClick={() => setTab("saldo")} />
+          {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <TabButton label="Equipo y rama" active={tab === "equipo"} onClick={() => setTab("equipo")} />}
         </nav>
 
         {tab === "resumen" && (
@@ -349,6 +353,9 @@ export default function ComercialPage() {
             <Panel title="Pipeline comercial">
               <div className="grid gap-3 md:grid-cols-6">{pipeline.map((item) => <div key={item.status} className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 text-center"><p className="text-2xl font-semibold">{item.count}</p><p className="mt-1 text-xs capitalize text-white/50">{item.status}</p></div>)}</div>
               <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-300" style={{ width: `${targetProgress}%` }} /></div>
+            </Panel>
+            <Panel title="Mi plan de comisión">
+              <CommissionPlan role={me.role} />
             </Panel>
             <Panel title="Últimos presupuestos">
               <BudgetList budgets={budgets.slice(0, 5)} onSend={sendBudget} onStatus={updateBudgetStatus} />
@@ -397,9 +404,63 @@ export default function ComercialPage() {
             <Panel title="Movimientos de comisión"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div><p className="font-medium capitalize">{commission.type}</p><p className="text-xs text-white/45">{commission.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p></div>)}{commissions.length === 0 && <Empty text="No hay comisiones registradas todavía." />}</div></Panel>
           </section>
         )}
+
+        {tab === "equipo" && (
+          <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <Panel title="Organigrama hacia atrás">
+              <OrgBack me={me} allUsers={allSalesUsers} />
+            </Panel>
+            <Panel title="Mi equipo y rama hasta 5 niveles">
+              <OrgForward root={me} allUsers={allSalesUsers} />
+            </Panel>
+            <Panel title="Porcentajes aplicables">
+              <CommissionPlan role={me.role} />
+            </Panel>
+            <Panel title="Resumen de rama">
+              <div className="grid gap-3 md:grid-cols-3"><Mini label="Personas en rama" value={team.length} /><Mini label="Niveles pagados" value={FIRST_BRANCH_RULE.maxLevels} /><Mini label="Primera rama" value={`${FIRST_BRANCH_RULE.salePct}% + ${FIRST_BRANCH_RULE.monthlyPct}%`} /></div>
+            </Panel>
+          </section>
+        )}
       </div>
     </main>
   );
+}
+
+function CommissionPlan({ role }: { role: SalesRole }) {
+  const rule = getCommissionRule(role);
+  return <div className="grid gap-3"><div className="rounded-2xl border border-violet-300/20 bg-violet-500/10 p-4"><p className="text-sm text-violet-200">{roleLabels[role]}</p><p className="mt-2 text-2xl font-semibold">{rule.directSalePct}% venta + {rule.directMonthlyPct}% mensual</p><p className="mt-2 text-sm text-white/55">Rama propia: {rule.branchSalePct}% venta + {rule.branchMonthlyPct}% mensual. Primera rama de cualquier líder: {FIRST_BRANCH_RULE.salePct}% venta + {FIRST_BRANCH_RULE.monthlyPct}% mensual.</p></div></div>;
+}
+
+function getDescendants(rootId: string, users: SalesUser[], maxLevels: number) {
+  const result: SalesUser[] = [];
+  let frontier = users.filter((user) => user.manager_id === rootId);
+  const seen = new Set<string>([rootId]);
+  for (let level = 1; level <= maxLevels && frontier.length; level += 1) {
+    const next: SalesUser[] = [];
+    frontier.forEach((user) => {
+      if (seen.has(user.id)) return;
+      seen.add(user.id);
+      result.push(user);
+      next.push(...users.filter((candidate) => candidate.manager_id === user.id));
+    });
+    frontier = next;
+  }
+  return result;
+}
+
+function OrgBack({ me, allUsers }: { me: SalesUser; allUsers: SalesUser[] }) {
+  const chain = getUplineChain(me.id, allUsers, FIRST_BRANCH_RULE.maxLevels);
+  return <div className="space-y-3"><div className="rounded-2xl bg-white p-4 text-neutral-950"><p className="text-xs text-neutral-500">Tú</p><p className="font-semibold">{me.full_name}</p><p className="text-xs">{roleLabels[me.role]}</p></div>{chain.map((user) => <div key={user.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel superior {user.hierarchy_level}</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div>)}{chain.length === 0 && <Empty text="No tienes responsables por encima." />}</div>;
+}
+
+function OrgForward({ root, allUsers }: { root: SalesUser; allUsers: SalesUser[] }) {
+  const children = allUsers.filter((user) => user.manager_id === root.id);
+  return <div className="space-y-3"><div className="rounded-2xl bg-violet-500/20 p-4"><p className="font-semibold">{root.full_name}</p><p className="text-xs text-white/45">{roleLabels[root.role]}</p></div>{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={1} />)}{children.length === 0 && <Empty text="Aún no tienes rama por debajo." />}</div>;
+}
+
+function OrgNode({ user, allUsers, level }: { user: SalesUser; allUsers: SalesUser[]; level: number }) {
+  const children = level >= FIRST_BRANCH_RULE.maxLevels ? [] : allUsers.filter((candidate) => candidate.manager_id === user.id);
+  return <div className="ml-3 border-l border-white/10 pl-4"><div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel {level}</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div><div className="mt-3 space-y-3">{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={level + 1} />)}</div></div>;
 }
 
 function BudgetList({ budgets, onSend, onStatus }: { budgets: SalesBudget[]; onSend: (budget: SalesBudget) => void; onStatus: (id: string, status: string) => void }) {
@@ -409,4 +470,5 @@ function BudgetList({ budgets, onSend, onStatus }: { budgets: SalesBudget[]; onS
 function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) { return <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-200">{icon}</div><p className="text-sm text-white/50">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-violet-200/80">{helper}</p></div>; }
 function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="rounded-[2rem] border border-white/10 bg-white/[0.08] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"><h2 className="mb-5 text-xl font-semibold">{title}</h2>{children}</div>; }
 function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={active ? "rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950" : "rounded-full border border-white/10 bg-white/[0.07] px-5 py-3 text-sm text-white/60"}>{label}</button>; }
+function Mini({ label, value }: { label: string; value: string | number }) { return <div className="rounded-2xl bg-white/10 px-4 py-3"><p className="font-semibold">{value}</p><p className="text-xs text-white/45">{label}</p></div>; }
 function Empty({ text }: { text: string }) { return <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-white/45">{text}</div>; }

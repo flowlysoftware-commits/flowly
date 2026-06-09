@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { FIRST_BRANCH_RULE, getCommissionRule, getUplineChain } from "@/lib/salesCommissions";
 import { ArrowLeft, BarChart3, Crown, Euro, LogOut, Target, Trophy, Users } from "lucide-react";
 
 type SalesUser = {
@@ -49,6 +50,7 @@ export default function EquipoComercialPage() {
   const router = useRouter();
   const [me, setMe] = useState<SalesUser | null>(null);
   const [team, setTeam] = useState<SalesUser[]>([]);
+  const [allSalesUsers, setAllSalesUsers] = useState<SalesUser[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
@@ -73,13 +75,14 @@ export default function EquipoComercialPage() {
 
     setMe(salesUser as SalesUser);
 
-    const { data: teamData } = await supabase
+    const { data: allUsersData } = await supabase
       .from("sales_users")
       .select("*")
-      .eq("manager_id", salesUser.id)
       .order("created_at", { ascending: false });
 
-    const members = (teamData || []) as SalesUser[];
+    const allUsers = (allUsersData || []) as SalesUser[];
+    setAllSalesUsers(allUsers);
+    const members = getDescendants(salesUser.id, allUsers, FIRST_BRANCH_RULE.maxLevels);
     setTeam(members);
 
     const ids = members.map((member) => member.id);
@@ -146,7 +149,7 @@ export default function EquipoComercialPage() {
             <Link href="/comercial" className="mb-4 inline-flex items-center gap-2 text-sm text-violet-200"><ArrowLeft size={16} /> Volver a mi panel</Link>
             <p className="text-sm font-medium text-violet-300">Flowly IA · Equipo comercial</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-tight">Equipo de {me.full_name}</h1>
-            <p className="mt-2 text-white/60">Liderazgo, ranking, MRR y comisiones de red.</p>
+            <p className="mt-2 text-white/60">Liderazgo, ranking, MRR, comisiones de red y organigrama completo.</p>
           </div>
 
           <button onClick={logout} className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm"><LogOut size={16} className="inline" /> Salir</button>
@@ -186,6 +189,8 @@ export default function EquipoComercialPage() {
             </div>
           </Panel>
 
+          <Panel title="Plan de comisiones"><CommissionPlan role={me.role} /></Panel>
+
           <Panel title="Estructura de liderazgo">
             <div className="rounded-3xl bg-violet-500/20 p-5 text-center">
               <p className="text-sm text-violet-200">Tú</p>
@@ -193,18 +198,51 @@ export default function EquipoComercialPage() {
               <p className="mt-1 text-sm text-white/50">{roleLabels[me.role]}</p>
             </div>
             <div className="mt-5 grid gap-3">
-              {team.slice(0, 6).map((member) => (
-                <div key={member.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-                  <p className="font-medium">{member.full_name}</p>
-                  <p className="text-xs text-white/45">{roleLabels[member.role]}</p>
-                </div>
-              ))}
+              <OrgBack me={me} allUsers={allSalesUsers} />
+              <OrgForward root={me} allUsers={allSalesUsers} />
             </div>
           </Panel>
         </section>
       </div>
     </main>
   );
+}
+
+function CommissionPlan({ role }: { role: SalesUser["role"] }) {
+  const rule = getCommissionRule(role);
+  return <div className="rounded-2xl border border-violet-300/20 bg-violet-500/10 p-4"><p className="text-sm text-violet-200">{roleLabels[role]}</p><p className="mt-2 text-2xl font-semibold">{rule.directSalePct}% venta + {rule.directMonthlyPct}% mensual</p><p className="mt-2 text-sm text-white/55">Rama propia: {rule.branchSalePct}% venta + {rule.branchMonthlyPct}% mensual. Primera rama: {FIRST_BRANCH_RULE.salePct}% venta + {FIRST_BRANCH_RULE.monthlyPct}% mensual. Máximo {FIRST_BRANCH_RULE.maxLevels} niveles.</p></div>;
+}
+
+function getDescendants(rootId: string, users: SalesUser[], maxLevels: number) {
+  const result: SalesUser[] = [];
+  let frontier = users.filter((user) => user.manager_id === rootId);
+  const seen = new Set<string>([rootId]);
+  for (let level = 1; level <= maxLevels && frontier.length; level += 1) {
+    const next: SalesUser[] = [];
+    frontier.forEach((user) => {
+      if (seen.has(user.id)) return;
+      seen.add(user.id);
+      result.push(user);
+      next.push(...users.filter((candidate) => candidate.manager_id === user.id));
+    });
+    frontier = next;
+  }
+  return result;
+}
+
+function OrgBack({ me, allUsers }: { me: SalesUser; allUsers: SalesUser[] }) {
+  const chain = getUplineChain(me.id, allUsers, FIRST_BRANCH_RULE.maxLevels);
+  return <div className="space-y-3"><p className="text-sm font-medium text-violet-200">Hacia atrás</p><div className="rounded-2xl bg-white p-4 text-neutral-950"><p className="font-semibold">{me.full_name}</p><p className="text-xs">{roleLabels[me.role]}</p></div>{chain.map((user) => <div key={user.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel superior {user.hierarchy_level}</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div>)}</div>;
+}
+
+function OrgForward({ root, allUsers }: { root: SalesUser; allUsers: SalesUser[] }) {
+  const children = allUsers.filter((user) => user.manager_id === root.id);
+  return <div className="mt-5 space-y-3"><p className="text-sm font-medium text-violet-200">Hacia delante</p>{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={1} />)}{children.length === 0 && <div className="rounded-2xl border border-dashed border-white/15 p-6 text-center text-white/45">Aún no tienes rama por debajo.</div>}</div>;
+}
+
+function OrgNode({ user, allUsers, level }: { user: SalesUser; allUsers: SalesUser[]; level: number }) {
+  const children = level >= FIRST_BRANCH_RULE.maxLevels ? [] : allUsers.filter((candidate) => candidate.manager_id === user.id);
+  return <div className="ml-3 border-l border-white/10 pl-4"><div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel {level}</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div><div className="mt-3 space-y-3">{children.map((child) => <OrgNode key={child.id} user={child} allUsers={allUsers} level={level + 1} />)}</div></div>;
 }
 
 function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) {

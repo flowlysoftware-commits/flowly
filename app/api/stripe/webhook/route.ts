@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { buildCommissionLines } from "@/lib/salesCommissions";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -57,6 +58,39 @@ export async function POST(request: Request) {
         referral_code: referralCode,
         status: "completed",
       });
+    }
+
+
+
+    if (event.type === "invoice.paid") {
+      const invoice = event.data.object as any;
+      const customerId = typeof invoice.customer === "string" ? invoice.customer : "";
+      const amountPaid = Number(invoice.amount_paid || 0) / 100;
+
+      if (customerId && amountPaid > 0) {
+        const { data: business } = await supabaseAdmin
+          .from("businesses")
+          .select("id, name, sales_user_id")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+
+        if (business?.sales_user_id) {
+          const { data: users } = await supabaseAdmin.from("sales_users").select("id, full_name, role, manager_id");
+          const seller = (users || []).find((user: any) => user.id === business.sales_user_id);
+          if (seller) {
+            const monthlyLines = buildCommissionLines({
+              seller,
+              users: users || [],
+              clientName: business.name || "cliente",
+              saleBaseAmount: 0,
+              monthlyAmount: amountPaid,
+              source: "stripe_invoice",
+            }).filter((line) => line.type === "direct_monthly" || line.type === "branch_monthly");
+
+            if (monthlyLines.length > 0) await supabaseAdmin.from("commissions").insert(monthlyLines);
+          }
+        }
+      }
     }
 
     if (
