@@ -91,6 +91,30 @@ type WhatsappMessage = {
   status: string | null;
   created_at: string;
 };
+
+type WhatsappTemplate = {
+  id?: string;
+  business_id?: string;
+  key: string;
+  label: string;
+  message: string;
+  category?: string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type CrmReminder = {
+  id: string;
+  business_id: string;
+  customer_id: string;
+  title: string;
+  notes: string | null;
+  remind_at: string;
+  status: string | null;
+  created_at: string;
+  customers?: Relation<{ name?: string; full_name?: string; phone?: string | null }>;
+};
 type Appointment = {
   id: string;
   business_id?: string;
@@ -166,7 +190,7 @@ type ClinicalDocument = {
   created_at: string;
 };
 
-type CoreTab = "area" | "agenda" | "servicios" | "empleados" | "clientes" | "ajustes";
+type CoreTab = "area" | "agenda" | "servicios" | "empleados" | "clientes" | "recordatorios" | "ajustes";
 type ActiveTab = CoreTab | `module:${string}`;
 
 type ModuleItem = {
@@ -239,6 +263,9 @@ export default function DashboardPage() {
   const [voiceCalls, setVoiceCalls] = useState<VoiceCall[]>([]);
   const [clinicalDocuments, setClinicalDocuments] = useState<ClinicalDocument[]>([]);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsappMessage[]>([]);
+  const [whatsappTemplatesData, setWhatsappTemplatesData] = useState<WhatsappTemplate[]>([]);
+  const [crmReminders, setCrmReminders] = useState<CrmReminder[]>([]);
+  const [dueReminder, setDueReminder] = useState<CrmReminder | null>(null);
   const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
   const [selectedCrmCustomerId, setSelectedCrmCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
@@ -313,7 +340,7 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes] = await Promise.all([
+    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, crmRemindersRes] = await Promise.all([
       supabase.from("company_profiles").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -325,6 +352,8 @@ export default function DashboardPage() {
       supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      supabase.from("whatsapp_templates").select("*").eq("business_id", businessId).eq("is_active", true).order("label", { ascending: true }),
+      supabase.from("crm_reminders").select("*, customers(name, full_name, phone)").eq("business_id", businessId).order("remind_at", { ascending: true }),
     ]);
 
     const loadedCompanyProfile = (companyRes.data as CompanyProfile | null) || null;
@@ -350,6 +379,8 @@ export default function DashboardPage() {
     setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
     setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
+    setWhatsappTemplatesData((whatsappTemplatesRes.data || []) as WhatsappTemplate[]);
+    setCrmReminders((crmRemindersRes.data || []) as unknown as CrmReminder[]);
     setLoading(false);
   };
 
@@ -407,6 +438,21 @@ export default function DashboardPage() {
     }
   }, [incomingVoiceCall, customers]);
 
+  useEffect(() => {
+    const checkDueReminders = () => {
+      const now = Date.now();
+      const nextDue = crmReminders.find((reminder) => {
+        if ((reminder.status || "pending") !== "pending") return false;
+        return new Date(reminder.remind_at).getTime() <= now;
+      });
+      if (nextDue) setDueReminder(nextDue);
+    };
+
+    checkDueReminders();
+    const timer = window.setInterval(checkDueReminders, 30000);
+    return () => window.clearInterval(timer);
+  }, [crmReminders]);
+
   const activeModuleKeys = useMemo(() => {
     if (business?.plan === "premium") return moduleCatalog.map((item) => item.key);
     return modules.map((item) => item.module_key);
@@ -422,6 +468,8 @@ export default function DashboardPage() {
   const manualIncome = moduleRecords.filter((r) => r.module_key === "billing" && r.status === "income").reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const pendingAppointments = appointments.filter((item) => item.status === "pending").length;
   const nextAppointments = appointments.slice(0, 6);
+  const whatsappTemplatesEffective = useMemo(() => mergeWhatsappTemplates(whatsappTemplates, whatsappTemplatesData), [whatsappTemplatesData]);
+  const upcomingReminders = useMemo(() => getUpcomingReminders(crmReminders, 7), [crmReminders]);
 
   const resetRecordForm = () => { setRecordTitle(""); setRecordNotes(""); setRecordAmount(""); setRecordStatus("active"); };
   const resetVoiceForm = () => {
@@ -708,6 +756,60 @@ export default function DashboardPage() {
     await loadData();
   };
 
+  const saveCrmReminder = async (customerId: string, title: string, remindAt: string, notes = "") => {
+    if (!business || !customerId || !title.trim() || !remindAt) return alert("Selecciona paciente, título, fecha y hora del recordatorio");
+    const { error } = await supabase.from("crm_reminders").insert({
+      business_id: business.id,
+      customer_id: customerId,
+      title: title.trim(),
+      notes: notes || null,
+      remind_at: remindAt,
+      status: "pending",
+    });
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
+  const completeCrmReminder = async (id: string) => {
+    const { error } = await supabase.from("crm_reminders").update({ status: "completed" }).eq("id", id);
+    if (error) return alert(error.message);
+    setDueReminder((current) => (current?.id === id ? null : current));
+    await loadData();
+  };
+
+  const deleteCrmReminder = async (id: string) => {
+    const { error } = await supabase.from("crm_reminders").delete().eq("id", id);
+    if (error) return alert(error.message);
+    setDueReminder((current) => (current?.id === id ? null : current));
+    await loadData();
+  };
+
+  const saveWhatsappTemplate = async (template: WhatsappTemplate) => {
+    if (!business || !template.label.trim() || !template.message.trim()) return alert("Añade nombre y mensaje de plantilla");
+    const templateKey = template.key || `custom_${Date.now()}`;
+    const payload = {
+      business_id: business.id,
+      key: templateKey,
+      label: template.label.trim(),
+      message: template.message.trim(),
+      category: template.category || "custom",
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("whatsapp_templates").upsert(payload, { onConflict: "business_id,key" });
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
+  const deleteWhatsappTemplate = async (template: WhatsappTemplate) => {
+    if (!business) return;
+    const { error } = await supabase
+      .from("whatsapp_templates")
+      .upsert({ business_id: business.id, key: template.key, label: template.label, message: template.message, category: template.category || "custom", is_active: false, updated_at: new Date().toISOString() }, { onConflict: "business_id,key" });
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
 
   const uploadClinicalDocument = async (customerId: string, file: File, title?: string, documentType = "clinico", notes = "") => {
     if (!business || !customerId || !file) return alert("Selecciona un paciente y un archivo");
@@ -901,6 +1003,7 @@ export default function DashboardPage() {
     { id: "servicios", label: "Servicios", Icon: Scissors },
     { id: "empleados", label: "Empleados", Icon: UserRound },
     { id: "clientes", label: "Clientes", Icon: Users },
+    { id: "recordatorios", label: "Recordatorios", Icon: Clock },
     { id: "ajustes", label: "Ajustes", Icon: Settings },
   ];
 
@@ -947,6 +1050,10 @@ export default function DashboardPage() {
             <Metric icon={<TrendingUp />} label="Ingresos previstos" value={`${revenue.toFixed(2)}€`} helper="No canceladas" />
           </section>
 
+          {dueReminder && (
+            <ReminderAlarm reminder={dueReminder} completeReminder={completeCrmReminder} dismiss={() => setDueReminder(null)} />
+          )}
+
           {incomingVoiceCall && (
             <div className="mb-6 rounded-[2rem] border border-green-300/25 bg-green-500/15 p-5 shadow-2xl shadow-green-950/20 backdrop-blur-xl">
               <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
@@ -985,6 +1092,7 @@ export default function DashboardPage() {
           {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
           {activeTab === "clientes" && <CustomersSection customers={customers} customerFormName={customerFormName} setCustomerFormName={setCustomerFormName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} createCustomer={createCustomer} />}
+          {activeTab === "recordatorios" && <RemindersSection reminders={upcomingReminders} customers={customers} completeReminder={completeCrmReminder} deleteReminder={deleteCrmReminder} />}
           {activeTab === "ajustes" && <SettingsSection
             business={business}
             settings={settings}
@@ -1015,7 +1123,7 @@ export default function DashboardPage() {
             uploadCompanyLogo={uploadCompanyLogo}
             saveCompanyProfile={saveCompanyProfile}
           />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -1026,7 +1134,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -1069,11 +1177,19 @@ function CrmModule({
   clinicalDocuments,
   uploadClinicalDocument,
   whatsappMessages,
+  whatsappTemplatesEffective,
   saveWhatsappMessage,
+  crmReminders,
+  saveCrmReminder,
+  completeCrmReminder,
+  deleteCrmReminder,
 }: Parameters<typeof ModuleSection>[0]) {
   const [crmActionTitle, setCrmActionTitle] = useState("");
   const [crmActionNotes, setCrmActionNotes] = useState("");
   const [crmActionDueDate, setCrmActionDueDate] = useState("");
+  const [reminderTitle, setReminderTitle] = useState("");
+  const [reminderNotes, setReminderNotes] = useState("");
+  const [reminderAt, setReminderAt] = useState("");
   const [crmAppointmentEmployee, setCrmAppointmentEmployee] = useState("");
   const [crmAppointmentService, setCrmAppointmentService] = useState("");
   const [crmAppointmentDate, setCrmAppointmentDate] = useState("");
@@ -1139,6 +1255,10 @@ function CrmModule({
     ? clinicalDocuments.filter((document) => document.customer_id === selectedCustomer.id)
     : [];
 
+  const customerReminders = selectedCustomer
+    ? crmReminders.filter((reminder) => reminder.customer_id === selectedCustomer.id).sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())
+    : [];
+
   const activeCustomers = customers.filter((customer) => (customer.crm_status || "nuevo") !== "cerrado").length;
   const pendingFollowups = records.filter((record) => ["followup", "pendiente", "opportunity"].includes(record.status || "")).length;
   const scheduled = appointments.filter((appointment) => appointment.status !== "cancelled").length;
@@ -1192,6 +1312,19 @@ function CrmModule({
     setCrmAppointmentEmployee("");
     setCrmAppointmentService("");
     setCrmAppointmentDate("");
+  };
+
+  const saveReminder = async () => {
+    if (!selectedCustomer) return alert("Selecciona un paciente");
+    await saveCrmReminder(
+      selectedCustomer.id,
+      reminderTitle || `Recordatorio · ${customerName(selectedCustomer)}`,
+      reminderAt,
+      reminderNotes
+    );
+    setReminderTitle("");
+    setReminderNotes("");
+    setReminderAt("");
   };
 
   return (
@@ -1315,14 +1448,14 @@ function CrmModule({
                     <p className="mt-1 text-sm text-white/50">Abre WhatsApp con mensajes rápidos usando los datos de esta ficha.</p>
                   </div>
                   <button
-                    onClick={() => { const msg = whatsappMessageForCustomer(whatsappTemplates[0].message, selectedCustomer); saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", whatsappTemplates[0].key, msg); openWhatsappForCustomer(selectedCustomer, whatsappTemplates[0].message); }}
+                    onClick={() => { const msg = whatsappMessageForCustomer(whatsappTemplatesEffective[0]?.message || "Hola {nombre}", selectedCustomer); saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", whatsappTemplatesEffective[0]?.key || "manual", msg); openWhatsappForCustomer(selectedCustomer, whatsappTemplatesEffective[0]?.message || "Hola {nombre}"); }}
                     className="btn-primary"
                   >
                     <MessageCircle size={17} /> WhatsApp
                   </button>
                 </div>
                 <div className="mt-4 grid gap-2 md:grid-cols-3">
-                  {whatsappTemplates.slice(0, 5).map((template) => (
+                  {whatsappTemplatesEffective.slice(0, 5).map((template) => (
                     <button
                       key={template.key}
                       onClick={() => openWhatsappForCustomer(selectedCustomer, template.message)}
@@ -1384,6 +1517,23 @@ function CrmModule({
                   </div>
                 </div>
               </section>
+
+              <div className="rounded-2xl border border-amber-300/20 bg-amber-500/10 p-4">
+                <h3 className="font-semibold">Recordatorio con alarma</h3>
+                <p className="mt-1 text-sm text-white/45">Configura una alerta para este paciente. Cuando llegue la fecha y hora aparecerá una notificación en el centro del panel.</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]">
+                  <input value={reminderTitle} onChange={(e) => setReminderTitle(e.target.value)} placeholder="Título del recordatorio" className="input-dark" />
+                  <input type="datetime-local" value={reminderAt} onChange={(e) => setReminderAt(e.target.value)} className="input-dark" />
+                </div>
+                <textarea value={reminderNotes} onChange={(e) => setReminderNotes(e.target.value)} placeholder="Notas internas del recordatorio" className="input-dark mt-3 min-h-20" />
+                <button onClick={saveReminder} className="btn-primary mt-3"><Clock size={17} /> Guardar recordatorio</button>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {customerReminders.slice(0, 6).map((reminder) => (
+                    <ReminderCard key={reminder.id} reminder={reminder} completeReminder={completeCrmReminder} deleteReminder={deleteCrmReminder} compact />
+                  ))}
+                  {!customerReminders.length && <Empty text="Sin recordatorios para este paciente." />}
+                </div>
+              </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <h3 className="font-semibold">Documentos clínicos</h3>
@@ -1492,6 +1642,66 @@ function translateCrmStatus(status: string) {
   return crmStatusOptions.find((option) => option.value === status)?.label || status;
 }
 
+function RemindersSection({ reminders, customers, completeReminder, deleteReminder }: { reminders: CrmReminder[]; customers: Customer[]; completeReminder: (id: string) => void; deleteReminder: (id: string) => void }) {
+  const dueNow = reminders.filter((reminder) => new Date(reminder.remind_at).getTime() <= Date.now()).length;
+  return (
+    <section className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Metric icon={<Clock />} label="Próximos 7 días" value={reminders.length} helper="Recordatorios activos" />
+        <Metric icon={<XCircle />} label="Vencidos" value={dueNow} helper="Requieren atención" />
+        <Metric icon={<Users />} label="Pacientes" value={new Set(reminders.map((item) => item.customer_id)).size} helper="Con alarma" />
+      </div>
+      <GlassCard title="Recordatorios de los próximos 7 días">
+        <div className="space-y-3">
+          {reminders.map((reminder) => (
+            <ReminderCard key={reminder.id} reminder={reminder} customers={customers} completeReminder={completeReminder} deleteReminder={deleteReminder} />
+          ))}
+          {!reminders.length && <Empty text="No hay recordatorios activos para los próximos 7 días." />}
+        </div>
+      </GlassCard>
+    </section>
+  );
+}
+
+function ReminderCard({ reminder, customers, completeReminder, deleteReminder, compact = false }: { reminder: CrmReminder; customers?: Customer[]; completeReminder: (id: string) => void; deleteReminder: (id: string) => void; compact?: boolean }) {
+  const isDue = new Date(reminder.remind_at).getTime() <= Date.now();
+  return (
+    <div className={`rounded-2xl border ${isDue ? "border-amber-300/35 bg-amber-500/15" : "border-white/10 bg-white/[0.06]"} p-4`}>
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+        <div className="min-w-0">
+          <p className="break-words font-semibold">{reminder.title}</p>
+          <p className="mt-1 text-sm text-white/55">{reminderCustomerName(reminder, customers)} · {new Date(reminder.remind_at).toLocaleString("es-ES")}</p>
+          {reminder.notes && <p className="mt-2 break-words text-sm leading-6 text-white/50">{reminder.notes}</p>}
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button onClick={() => completeReminder(reminder.id)} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Completar</button>
+          {!compact && <button onClick={() => deleteReminder(reminder.id)} className="rounded-full border border-red-300/25 px-3 py-2 text-xs text-red-100">Eliminar</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReminderAlarm({ reminder, completeReminder, dismiss }: { reminder: CrmReminder; completeReminder: (id: string) => void; dismiss: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-[2rem] border border-amber-300/30 bg-[#11111c] p-7 text-center shadow-2xl shadow-amber-950/40">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-400/20 text-amber-100">
+          <Clock size={30} />
+        </div>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-200">Recordatorio CRM</p>
+        <h2 className="mt-3 break-words text-3xl font-semibold">{reminder.title}</h2>
+        <p className="mt-2 text-white/60">{reminderCustomerName(reminder)} · {new Date(reminder.remind_at).toLocaleString("es-ES")}</p>
+        {reminder.notes && <p className="mt-4 break-words rounded-2xl bg-white/[0.06] p-4 text-sm leading-6 text-white/65">{reminder.notes}</p>}
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button onClick={() => completeReminder(reminder.id)} className="btn-primary">Marcar como hecho</button>
+          <button onClick={dismiss} className="btn-secondary">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MarketingModule({ records, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
   const budget = records.reduce((s, r) => s + Number(r.amount || 0), 0);
   return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Megaphone />} label="Campañas" value={records.length} helper="Planificadas" /><Metric icon={<CreditCard />} label="Presupuesto" value={`${budget.toFixed(2)}€`} helper="Total" /><Metric icon={<TrendingUp />} label="Canales" value="Meta · Google" helper="Preparados" /><Metric icon={<CheckCircle2 />} label="Estado" value="Ready" helper="Integraciones" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva campaña"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="meta">Facebook / Instagram Ads</option><option value="google">Google Ads</option><option value="tiktok">TikTok Ads</option><option value="email">Email Marketing</option><option value="whatsapp">WhatsApp Campaign</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaña: Promo verano / Reactivación" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Presupuesto estimado" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Público, oferta, canal, objetivo, fechas y creatividad" className="input-dark min-h-32" /><button onClick={() => createRecord("marketing", status)} className="btn-primary"><Plus size={17} /> Guardar campaña</button></div></GlassCard><GlassCard title="Conectores publicitarios"><div className="grid gap-3 md:grid-cols-2">{["Meta Ads", "Google Ads", "TikTok Ads", "Email", "WhatsApp", "Landing"].map((x) => <div key={x} className="rounded-2xl bg-black/25 p-4"><p className="font-semibold">{x}</p><p className="mt-1 text-sm text-white/45">Preparado para conexión API</p></div>)}</div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
@@ -1529,6 +1739,31 @@ const whatsappTemplates = [
     message: "Hola {nombre}, te recordamos que tienes un proceso pendiente con Neuronas IPS. Por favor comunícate con nosotros para continuar.",
   },
 ];
+
+function mergeWhatsappTemplates(defaults: WhatsappTemplate[], custom: WhatsappTemplate[]) {
+  const activeCustom = custom.filter((template) => template.is_active !== false);
+  const map = new Map<string, WhatsappTemplate>();
+  defaults.forEach((template) => map.set(template.key, template));
+  activeCustom.forEach((template) => map.set(template.key, { ...map.get(template.key), ...template }));
+  return Array.from(map.values());
+}
+
+function getUpcomingReminders(reminders: CrmReminder[], days = 7) {
+  const now = Date.now();
+  const limit = now + days * 24 * 60 * 60 * 1000;
+  return reminders
+    .filter((reminder) => {
+      const time = new Date(reminder.remind_at).getTime();
+      return (reminder.status || "pending") === "pending" && time >= now - 60 * 60 * 1000 && time <= limit;
+    })
+    .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime());
+}
+
+function reminderCustomerName(reminder: CrmReminder, customers?: Customer[]) {
+  const related = firstRelation(reminder.customers);
+  const fallback = customers?.find((customer) => customer.id === reminder.customer_id);
+  return customerName(related || fallback || null);
+}
 
 function normalizeWhatsappPhone(phone?: string | null) {
   const digits = (phone || "").replace(/\D/g, "");
@@ -1599,6 +1834,9 @@ function WhatsappModule({
   createRecord,
   deleteRecord,
   whatsappMessages,
+  whatsappTemplatesEffective,
+  saveWhatsappTemplate,
+  deleteWhatsappTemplate,
   saveWhatsappMessage,
 }: Parameters<typeof ModuleSection>[0]) {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
@@ -1606,9 +1844,12 @@ function WhatsappModule({
   const [manualPhone, setManualPhone] = useState("");
   const [manualMessage, setManualMessage] = useState("Hola, somos Neuronas IPS. Te contactamos sobre tu proceso de atención. Quedamos atentos a tu respuesta.");
   const [customerSearch, setCustomerSearch] = useState("");
+  const [editingTemplateKey, setEditingTemplateKey] = useState<string | null>(null);
+  const [editingTemplateLabel, setEditingTemplateLabel] = useState("");
+  const [editingTemplateMessage, setEditingTemplateMessage] = useState("");
 
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
-  const selectedTemplate = whatsappTemplates.find((template) => template.key === selectedTemplateKey) || whatsappTemplates[0];
+  const selectedTemplate = whatsappTemplatesEffective.find((template) => template.key === selectedTemplateKey) || whatsappTemplatesEffective[0] || whatsappTemplates[0];
 
   const filteredCustomers = customers.filter((customer) => {
     const searchable = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""}`.toLowerCase();
@@ -1629,19 +1870,26 @@ function WhatsappModule({
 
   const saveTemplate = async () => {
     if (!title || !notes) return alert("Añade nombre y mensaje de la plantilla");
-    await createRecord("whatsapp", status || "template");
+    await saveWhatsappTemplate({ key: `custom_${Date.now()}`, label: title, message: notes, category: status || "template" });
     setTitle("");
     setNotes("");
   };
 
-  const quickTemplates = [
-    ...whatsappTemplates,
-    ...records.map((record) => ({
-      key: record.id,
-      label: record.title,
-      message: record.notes || "",
-    })).filter((template) => template.message),
-  ];
+  const quickTemplates = whatsappTemplatesEffective;
+
+  const startEditTemplate = (template: WhatsappTemplate) => {
+    setEditingTemplateKey(template.key);
+    setEditingTemplateLabel(template.label);
+    setEditingTemplateMessage(template.message);
+  };
+
+  const saveEditingTemplate = async () => {
+    if (!editingTemplateKey) return;
+    await saveWhatsappTemplate({ key: editingTemplateKey, label: editingTemplateLabel, message: editingTemplateMessage, category: "quick" });
+    setEditingTemplateKey(null);
+    setEditingTemplateLabel("");
+    setEditingTemplateMessage("");
+  };
 
   return (
     <section className="grid gap-6">
@@ -1779,10 +2027,27 @@ function WhatsappModule({
 
       <GlassCard title="Plantillas rápidas">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {whatsappTemplates.map((template) => (
+          {whatsappTemplatesEffective.map((template) => (
             <div key={template.key} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
-              <p className="font-semibold">{template.label}</p>
-              <p className="mt-2 text-sm leading-6 text-white/50">{template.message}</p>
+              {editingTemplateKey === template.key ? (
+                <div className="grid gap-3">
+                  <input value={editingTemplateLabel} onChange={(e) => setEditingTemplateLabel(e.target.value)} className="input-dark" />
+                  <textarea value={editingTemplateMessage} onChange={(e) => setEditingTemplateMessage(e.target.value)} className="input-dark min-h-28" />
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={saveEditingTemplate} className="btn-primary">Guardar cambios</button>
+                    <button onClick={() => setEditingTemplateKey(null)} className="btn-secondary">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-semibold">{template.label}</p>
+                    <button onClick={() => startEditTemplate(template)} className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/75 hover:bg-white/10">Editar</button>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/50">{template.message}</p>
+                  {template.key.startsWith("custom_") && <button onClick={() => deleteWhatsappTemplate(template)} className="mt-3 text-xs text-red-200/80">Eliminar</button>}
+                </>
+              )}
             </div>
           ))}
         </div>

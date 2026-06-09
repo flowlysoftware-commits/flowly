@@ -98,3 +98,17 @@ body {
   color: white;
 }
 .btn-secondary:hover { background: rgba(255,255,255,.14); }
+
+/* Evita desbordes de textos largos en tarjetas, tablas y botones del panel */
+.card-safe, .rounded-2xl, .rounded-\[2rem\], .rounded-\[1\.7rem\], .rounded-\[1\.5rem\], .menu-item, .menu-active, .btn-primary, .btn-secondary, .input-dark {
+  min-width: 0;
+}
+
+p, h1, h2, h3, h4, span, button, a, code, td, th, input, textarea, select {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+select.input-dark, .input-dark option {
+  text-overflow: ellipsis;
+}
