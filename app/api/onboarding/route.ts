@@ -127,6 +127,7 @@ export async function POST(request: Request) {
             saleBaseAmount: Number(monthlyAmount),
             monthlyAmount: Number(monthlyAmount),
             source: "stripe",
+            includeMonthly: false,
           });
           if (lines.length > 0) await supabaseAdmin.from("commissions").insert(lines);
         }

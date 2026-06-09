@@ -66,6 +66,11 @@ export async function POST(request: Request) {
       const invoice = event.data.object as any;
       const customerId = typeof invoice.customer === "string" ? invoice.customer : "";
       const amountPaid = Number(invoice.amount_paid || 0) / 100;
+      const billingReason = typeof invoice.billing_reason === "string" ? invoice.billing_reason : "";
+
+      if (billingReason === "subscription_create") {
+        return NextResponse.json({ received: true });
+      }
 
       if (customerId && amountPaid > 0) {
         const { data: business } = await supabaseAdmin

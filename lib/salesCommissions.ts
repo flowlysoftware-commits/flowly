@@ -75,11 +75,13 @@ export function buildCommissionLines(input: {
   saleBaseAmount: number;
   monthlyAmount: number;
   source: string;
+  includeMonthly?: boolean;
 }) {
   const sellerRule = getCommissionRule(input.seller.role);
   const saleBase = Number(input.saleBaseAmount || 0);
   const monthly = Number(input.monthlyAmount || 0);
   const descriptionClient = input.clientName || "cliente";
+  const includeMonthly = input.includeMonthly !== false;
   const lines: CommissionLine[] = [];
 
   const addLine = (line: Omit<CommissionLine, "status" | "source_sales_user_id" | "source">) => {
@@ -97,15 +99,17 @@ export function buildCommissionLines(input: {
     hierarchy_level: 0,
   });
 
-  addLine({
-    sales_user_id: input.seller.id,
-    amount: moneyAmount(monthly * (sellerRule.directMonthlyPct / 100)),
-    type: "direct_monthly",
-    description: `${sellerRule.directMonthlyPct}% mensual directa · ${descriptionClient}`,
-    base_amount: monthly,
-    percentage: sellerRule.directMonthlyPct,
-    hierarchy_level: 0,
-  });
+  if (includeMonthly) {
+    addLine({
+      sales_user_id: input.seller.id,
+      amount: moneyAmount(monthly * (sellerRule.directMonthlyPct / 100)),
+      type: "direct_monthly",
+      description: `${sellerRule.directMonthlyPct}% mensual directa · ${descriptionClient}`,
+      base_amount: monthly,
+      percentage: sellerRule.directMonthlyPct,
+      hierarchy_level: 0,
+    });
+  }
 
   getUplineChain(input.seller.id, input.users).forEach((manager) => {
     if (!canManageTeam(manager.role)) return;
@@ -123,15 +127,17 @@ export function buildCommissionLines(input: {
       hierarchy_level: manager.hierarchy_level,
     });
 
-    addLine({
-      sales_user_id: manager.id,
-      amount: moneyAmount(monthly * (monthlyPct / 100)),
-      type: "branch_monthly",
-      description: `${monthlyPct}% mensual rama nivel ${manager.hierarchy_level} · ${descriptionClient}`,
-      base_amount: monthly,
-      percentage: monthlyPct,
-      hierarchy_level: manager.hierarchy_level,
-    });
+    if (includeMonthly) {
+      addLine({
+        sales_user_id: manager.id,
+        amount: moneyAmount(monthly * (monthlyPct / 100)),
+        type: "branch_monthly",
+        description: `${monthlyPct}% mensual rama nivel ${manager.hierarchy_level} · ${descriptionClient}`,
+        base_amount: monthly,
+        percentage: monthlyPct,
+        hierarchy_level: manager.hierarchy_level,
+      });
+    }
   });
 
   return lines;

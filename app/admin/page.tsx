@@ -186,12 +186,17 @@ export default function AdminPage() {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return router.push("/login");
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
     const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes] = await Promise.all([
       supabase.from("sales_users").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_leads").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").order("created_at", { ascending: false }),
       supabase.from("commissions").select("*").order("created_at", { ascending: false }),
-      supabase.from("commission_payouts").select("*").order("created_at", { ascending: false }),
+      token
+        ? fetch("/api/admin/commission-payouts", { headers: { Authorization: `Bearer ${token}` } }).then((res) => res.json())
+        : Promise.resolve({ payouts: [] }),
       supabase.from("businesses").select("id, name, plan, subscription_status, created_at, sales_user_id, stripe_customer_id, stripe_subscription_id").order("created_at", { ascending: false }).limit(200),
     ]);
 
@@ -199,7 +204,7 @@ export default function AdminPage() {
     setLeads((leadsRes.data || []) as SalesLead[]);
     setBudgets((budgetsRes.data || []) as unknown as SalesBudget[]);
     setCommissions((commissionsRes.data || []) as Commission[]);
-    setPayouts((payoutsRes.data || []) as Payout[]);
+    setPayouts(((payoutsRes as any).payouts || []) as Payout[]);
     setBusinesses((businessesRes.data || []) as Business[]);
     setLoading(false);
   };
@@ -300,7 +305,17 @@ export default function AdminPage() {
   };
 
   const updatePayout = async (id: string, status: string) => {
-    await supabase.from("commission_payouts").update({ status, processed_at: status === "paid" ? new Date().toISOString() : null }).eq("id", id);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return router.push("/login");
+
+    const res = await fetch("/api/admin/commission-payouts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ payoutId: id, status }),
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudo actualizar la solicitud de cobro");
     await load();
   };
 
@@ -317,7 +332,7 @@ export default function AdminPage() {
     const selectedBusiness = businesses.find((business) => business.id === manualSale.businessId);
     const saleBaseAmount = setup > 0 ? setup : monthly;
     const seller = salesUsers.find((user) => user.id === manualSale.salesUserId);
-    const commissionLines = seller ? buildCommissionLines({ seller, users: salesUsers, clientName: selectedBusiness?.name || "Cliente manual", saleBaseAmount, monthlyAmount: monthly, source: "manual_admin" }) : [];
+    const commissionLines = seller ? buildCommissionLines({ seller, users: salesUsers, clientName: selectedBusiness?.name || "Cliente manual", saleBaseAmount, monthlyAmount: monthly, source: "manual_admin", includeMonthly: false }) : [];
     const { error: businessError } = await supabase.from("businesses").update({ sales_user_id: manualSale.salesUserId, plan: manualSale.plan, subscription_status: "manual_active" }).eq("id", manualSale.businessId);
     if (businessError) return alert(businessError.message);
     const { error: saleError } = await supabase.from("sales_deals").insert({ business_id: manualSale.businessId, sales_user_id: manualSale.salesUserId, client_name: selectedBusiness?.name || "Cliente manual", plan: manualSale.plan, monthly_amount: monthly, setup_amount: setup, currency: "EUR", status: "paid", source: "manual_admin", notes: manualSale.notes });
@@ -328,7 +343,7 @@ export default function AdminPage() {
     }
     setManualSale({ businessId: "", salesUserId: "", plan: "premium", monthlyAmount: "84.99", setupAmount: "0", notes: "" });
     await load();
-    alert("Venta manual registrada y cliente vinculado al comercial");
+    alert("Venta manual registrada. Se ha generado solo la comisión de venta; la mensual se generará cuando entre el siguiente pago del cliente.");
   };
 
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
@@ -435,7 +450,7 @@ function estimateManualCommissions(form: ManualSaleForm, users: SalesUser[]) {
   const monthly = Number(form.monthlyAmount || 0);
   const setup = Number(form.setupAmount || 0);
   const saleBaseAmount = setup > 0 ? setup : monthly;
-  return buildCommissionLines({ seller, users, clientName: "cliente", saleBaseAmount, monthlyAmount: monthly, source: "preview" }).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  return buildCommissionLines({ seller, users, clientName: "cliente", saleBaseAmount, monthlyAmount: monthly, source: "preview", includeMonthly: false }).reduce((sum, item) => sum + Number(item.amount || 0), 0);
 }
 function CommissionPlan({ role }: { role: SalesRole }) {
   const rule = getCommissionRule(role);
