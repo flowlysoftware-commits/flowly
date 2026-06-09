@@ -15,7 +15,9 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
     const businessId = typeof body.businessId === "string" ? body.businessId : "";
+    const hasSalesUserField = Object.prototype.hasOwnProperty.call(body, "salesUserId");
     const salesUserId = typeof body.salesUserId === "string" && body.salesUserId ? body.salesUserId : null;
+    const subscriptionStatus = typeof body.subscriptionStatus === "string" && body.subscriptionStatus ? body.subscriptionStatus : null;
     if (!businessId) return NextResponse.json({ error: "Falta el cliente" }, { status: 400 });
 
     if (salesUserId) {
@@ -28,11 +30,16 @@ export async function PATCH(request: NextRequest) {
       if (!salesUser) return NextResponse.json({ error: "Comercial no encontrado" }, { status: 404 });
     }
 
+    const updates: Record<string, string | null> = {};
+    if (hasSalesUserField) updates.sales_user_id = salesUserId;
+    if (subscriptionStatus) updates.subscription_status = subscriptionStatus;
+    if (!Object.keys(updates).length) return NextResponse.json({ error: "No hay cambios para guardar" }, { status: 400 });
+
     const { data, error } = await supabaseAdmin
       .from("businesses")
-      .update({ sales_user_id: salesUserId })
+      .update(updates)
       .eq("id", businessId)
-      .select("id, name, sales_user_id")
+      .select("id, name, sales_user_id, subscription_status")
       .maybeSingle();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -73,7 +80,7 @@ export async function POST(request: NextRequest) {
     const saleBaseAmount = setup > 0 ? setup : monthly;
     const { error: updateError } = await supabaseAdmin
       .from("businesses")
-      .update({ sales_user_id: salesUserId, plan, subscription_status: "manual_paid" })
+      .update({ sales_user_id: salesUserId, plan, subscription_status: "paid" })
       .eq("id", businessId);
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 

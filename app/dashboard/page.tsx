@@ -98,6 +98,8 @@ type WhatsappTemplate = {
   key: string;
   label: string;
   message: string;
+  name?: string | null;
+  content?: string | null;
   category?: string | null;
   is_active?: boolean | null;
   created_at?: string | null;
@@ -379,7 +381,7 @@ export default function DashboardPage() {
     setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
     setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
-    setWhatsappTemplatesData((whatsappTemplatesRes.data || []) as WhatsappTemplate[]);
+    setWhatsappTemplatesData(((whatsappTemplatesRes.data || []) as WhatsappTemplate[]).map(normalizeWhatsappTemplate));
     setCrmReminders((crmRemindersRes.data || []) as unknown as CrmReminder[]);
     setLoading(false);
   };
@@ -787,21 +789,31 @@ export default function DashboardPage() {
   const saveWhatsappTemplate = async (template: WhatsappTemplate) => {
     if (!business || !template.label.trim() || !template.message.trim()) return alert("Añade nombre y mensaje de plantilla");
     const templateKey = template.key || `custom_${Date.now()}`;
+    const label = template.label.trim();
+    const message = template.message.trim();
     const payload = {
       business_id: business.id,
       key: templateKey,
-      label: template.label.trim(),
-      message: template.message.trim(),
+      label,
+      message,
+      name: label,
+      content: message,
       category: template.category || "custom",
       is_active: true,
       updated_at: new Date().toISOString(),
     };
-    const { error } = await supabase.from("whatsapp_templates").upsert(payload, { onConflict: "business_id,key" });
+
+    const existingId = template.id || whatsappTemplatesData.find((item) => item.key === templateKey)?.id;
+    const query = existingId
+      ? supabase.from("whatsapp_templates").update(payload).eq("id", existingId)
+      : supabase.from("whatsapp_templates").insert(payload);
+
+    const { data, error } = await query.select("*").maybeSingle();
     if (error) return alert(error.message);
 
-    const savedTemplate = payload as WhatsappTemplate;
+    const savedTemplate = normalizeWhatsappTemplate((data || { ...payload, id: existingId }) as WhatsappTemplate);
     setWhatsappTemplatesData((current) => {
-      const withoutCurrent = current.filter((item) => item.key !== templateKey);
+      const withoutCurrent = current.filter((item) => item.key !== templateKey && item.id !== savedTemplate.id);
       return [...withoutCurrent, savedTemplate].sort((a, b) => a.label.localeCompare(b.label));
     });
     await loadData();
@@ -809,10 +821,17 @@ export default function DashboardPage() {
 
   const deleteWhatsappTemplate = async (template: WhatsappTemplate) => {
     if (!business) return;
+    const existingId = template.id || whatsappTemplatesData.find((item) => item.key === template.key)?.id;
+    if (!existingId) {
+      setWhatsappTemplatesData((current) => current.filter((item) => item.key !== template.key));
+      return;
+    }
     const { error } = await supabase
       .from("whatsapp_templates")
-      .upsert({ business_id: business.id, key: template.key, label: template.label, message: template.message, category: template.category || "custom", is_active: false, updated_at: new Date().toISOString() }, { onConflict: "business_id,key" });
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq("id", existingId);
     if (error) return alert(error.message);
+    setWhatsappTemplatesData((current) => current.filter((item) => item.id !== existingId));
     await loadData();
   };
 
@@ -1746,12 +1765,19 @@ const whatsappTemplates = [
   },
 ];
 
+function normalizeWhatsappTemplate(template: WhatsappTemplate): WhatsappTemplate {
+  const label = String(template.label || template.name || template.key || "Plantilla").trim() || "Plantilla";
+  const message = String(template.message || template.content || "").trim();
+  const key = String(template.key || label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || `custom_${Date.now()}`);
+  return { ...template, key, label, message, name: template.name || label, content: template.content || message };
+}
+
 function mergeWhatsappTemplates(defaults: WhatsappTemplate[], custom: WhatsappTemplate[]) {
-  const activeCustom = custom.filter((template) => template.is_active !== false);
+  const activeCustom = custom.map(normalizeWhatsappTemplate).filter((template) => template.is_active !== false);
   const map = new Map<string, WhatsappTemplate>();
-  defaults.forEach((template) => map.set(template.key, template));
+  defaults.map(normalizeWhatsappTemplate).forEach((template) => map.set(template.key, template));
   activeCustom.forEach((template) => map.set(template.key, { ...map.get(template.key), ...template }));
-  return Array.from(map.values());
+  return Array.from(map.values()).filter((template) => template.message);
 }
 
 function getUpcomingReminders(reminders: CrmReminder[], days = 7) {
@@ -1893,7 +1919,7 @@ function WhatsappModule({
 
   const saveTemplate = async () => {
     if (!title.trim() || !notes.trim()) return alert("Añade nombre y mensaje de la plantilla");
-    const newTemplate = { key: `custom_${Date.now()}`, label: title.trim(), message: notes.trim(), category: status || "template", is_active: true };
+    const newTemplate = { key: `custom_${Date.now()}`, label: title.trim(), message: notes.trim(), name: title.trim(), content: notes.trim(), category: status || "template", is_active: true };
     setLocalTemplates((current) => mergeWhatsappTemplates(current, [newTemplate]));
     setSelectedTemplateKey(newTemplate.key);
     applyTemplateToManual(newTemplate);
@@ -1910,7 +1936,7 @@ function WhatsappModule({
 
   const saveEditingTemplate = async () => {
     if (!editingTemplateKey) return;
-    const updatedTemplate = { key: editingTemplateKey, label: editingTemplateLabel.trim(), message: editingTemplateMessage.trim(), category: "quick", is_active: true };
+    const updatedTemplate = { id: quickTemplates.find((item) => item.key === editingTemplateKey)?.id, key: editingTemplateKey, label: editingTemplateLabel.trim(), message: editingTemplateMessage.trim(), name: editingTemplateLabel.trim(), content: editingTemplateMessage.trim(), category: "quick", is_active: true };
     setLocalTemplates((current) => mergeWhatsappTemplates(current, [updatedTemplate]));
     if (manualTemplateKey === editingTemplateKey) setManualMessage(updatedTemplate.message);
     await saveWhatsappTemplate(updatedTemplate);
