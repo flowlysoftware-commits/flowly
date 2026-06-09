@@ -1531,11 +1531,29 @@ const whatsappTemplates = [
 ];
 
 function normalizeWhatsappPhone(phone?: string | null) {
-  const raw = (phone || "").replace(/\D/g, "");
-  if (!raw) return "";
-  if (raw.startsWith("57")) return raw;
-  if (raw.length === 10) return `57${raw}`;
-  return raw;
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+
+  if (digits.startsWith("00")) return digits.slice(2);
+
+  // Ya viene con prefijo internacional. WhatsApp necesita el número sin + ni espacios.
+  if (digits.startsWith("34") && digits.length === 11) return digits; // España
+  if (digits.startsWith("57") && digits.length === 12) return digits; // Colombia
+  if (digits.startsWith("58") && digits.length >= 12) return digits; // Venezuela
+  if (digits.startsWith("593") && digits.length >= 12) return digits; // Ecuador
+  if ((digits.startsWith("1787") || digits.startsWith("1939")) && digits.length === 11) return digits; // Puerto Rico
+
+  // Inferencia segura para números locales frecuentes en los países soportados.
+  if (digits.length === 9 && /^[6789]/.test(digits)) return `34${digits}`;
+  if (digits.length === 10 && digits.startsWith("3")) return `57${digits}`;
+  if (digits.length === 11 && digits.startsWith("0")) {
+    const withoutZero = digits.slice(1);
+    if (withoutZero.startsWith("4")) return `58${withoutZero}`;
+    if (withoutZero.startsWith("9")) return `593${withoutZero}`;
+  }
+  if (digits.length === 10 && (digits.startsWith("787") || digits.startsWith("939"))) return `1${digits}`;
+
+  return digits;
 }
 
 function whatsappMessageForCustomer(template: string, customer: Customer) {
@@ -1546,16 +1564,27 @@ function whatsappMessageForCustomer(template: string, customer: Customer) {
     .replaceAll("{documento}", customer.document_number || "");
 }
 
-function whatsappUrl(phone?: string | null, message = "") {
+function whatsappUrl(phone?: string | null, message = "", mode: "web" | "app" = "web") {
   const normalized = normalizeWhatsappPhone(phone);
   if (!normalized) return "";
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+  const text = encodeURIComponent(message);
+
+  // Abrimos directamente el destino final para evitar la pantalla intermedia de wa.me,
+  // que en algunos navegadores bloquea el contacto o pierde el texto prellenado.
+  if (mode === "app") return `whatsapp://send?phone=${normalized}&text=${text}`;
+  return `https://web.whatsapp.com/send?phone=${normalized}&text=${text}`;
+}
+
+function openWhatsapp(phone?: string | null, message = "") {
+  const url = whatsappUrl(phone, message, "web");
+  if (!url) return false;
+  window.open(url, "_blank", "noopener,noreferrer");
+  return true;
 }
 
 function openWhatsappForCustomer(customer: Customer, template: string) {
-  const url = whatsappUrl(customer.phone, whatsappMessageForCustomer(template, customer));
-  if (!url) return alert("Este paciente no tiene teléfono para WhatsApp");
-  window.open(url, "_blank", "noopener,noreferrer");
+  const message = whatsappMessageForCustomer(template, customer);
+  if (!openWhatsapp(customer.phone, message)) return alert("Este paciente no tiene teléfono para WhatsApp");
 }
 
 function WhatsappModule({
@@ -1594,10 +1623,8 @@ function WhatsappModule({
   };
 
   const sendManualMessage = () => {
-    const url = whatsappUrl(manualPhone, manualMessage);
-    if (!url) return alert("Añade un teléfono válido");
+    if (!openWhatsapp(manualPhone, manualMessage)) return alert("Añade un teléfono válido");
     saveWhatsappMessage(null, manualPhone, "manual", manualMessage);
-    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const saveTemplate = async () => {
