@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 
 export default function RegistroPage() {
   return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-[#070711] text-white">Cargando...</main>}>
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center flowly-public text-white">Cargando...</main>}>
       <RegistroContent />
     </Suspense>
   );
@@ -51,8 +51,8 @@ function RegistroContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#070711] px-6 py-10 text-white">
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,.55),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(236,72,153,.18),transparent_30%)]" />
+    <main className="min-h-screen flowly-public px-6 py-10 text-white">
+      <div className="fixed inset-0 " />
       <div className="relative mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
         <section>
           <Image src="/logo.png" alt="Flowly IA" width={170} height={48} className="h-auto w-40 object-contain" priority />
@@ -67,31 +67,31 @@ function RegistroContent() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.08] p-8 shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <section className="rounded-[2rem] flowly-glass p-8 shadow-2xl shadow-black/30 backdrop-blur-xl">
           <h2 className="text-3xl font-semibold">Configura tu cuenta</h2>
           <p className="mt-2 text-white/55">Estos datos se usarán para crear tu espacio de trabajo Flowly.</p>
 
           <div className="mt-6 grid gap-4">
-            <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Nombre del negocio" className="input-dark" />
-            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="input-dark">
+            <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Nombre del negocio" className="flowly-input-light rounded-2xl px-4 py-3" />
+            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="flowly-input-light rounded-2xl px-4 py-3">
               <option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Restaurante</option><option>Clínica</option><option>Fisioterapia</option><option>Academia</option><option>Otro</option>
             </select>
-            <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="URL del logo opcional" className="input-dark" />
-            <select value={theme} onChange={(e) => setTheme(e.target.value)} className="input-dark">
+            <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="URL del logo opcional" className="flowly-input-light rounded-2xl px-4 py-3" />
+            <select value={theme} onChange={(e) => setTheme(e.target.value)} className="flowly-input-light rounded-2xl px-4 py-3">
               <option value="dark">Tema oscuro premium</option>
               <option value="light">Tema claro elegante</option>
               <option value="violet">Tema morado Flowly</option>
             </select>
-            <select value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} className="input-dark">
+            <select value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} className="flowly-input-light rounded-2xl px-4 py-3">
               <option value="reservas">Quiero gestionar reservas</option>
               <option value="clientes">Quiero organizar clientes</option>
               <option value="ventas">Quiero controlar ventas y caja</option>
               <option value="automatizar">Quiero automatizar tareas</option>
             </select>
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Crear contraseña" className="input-dark" />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Crear contraseña" className="flowly-input-light rounded-2xl px-4 py-3" />
           </div>
 
-          <button onClick={createAccount} disabled={loading} className="mt-6 w-full rounded-full bg-white px-6 py-4 font-semibold text-neutral-950 disabled:opacity-60">
+          <button onClick={createAccount} disabled={loading} className="mt-6 w-full flowly-primary rounded-full px-6 py-4 font-semibold disabled:opacity-60">
             {loading ? "Creando panel..." : "Crear mi panel personalizado"}
           </button>
         </section>
@@ -101,5 +101,5 @@ function RegistroContent() {
 }
 
 function MiniStat({ title, text }: { title: string; text: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4"><p className="text-sm text-violet-200">{title}</p><p className="mt-1 font-semibold">{text}</p></div>;
+  return <div className="rounded-2xl flowly-glass p-4"><p className="text-sm text-violet-200">{title}</p><p className="mt-1 font-semibold">{text}</p></div>;
 }

@@ -196,7 +196,7 @@ export default function RestaurantDemoPage() {
   const filteredProducts = products.filter((item) => item.category === category);
 
   return (
-    <main className="min-h-screen bg-[#f8f7fb] text-neutral-950">
+    <main className="flowly-demo-shell min-h-screen">
       {toast && (
         <div className="fixed right-6 top-6 z-[60] rounded-full bg-neutral-950 px-5 py-3 text-sm text-white shadow-xl">
           {toast}
@@ -204,9 +204,9 @@ export default function RestaurantDemoPage() {
       )}
 
       <div className="flex min-h-screen">
-        <aside className="hidden w-72 border-r border-neutral-200 bg-white p-6 md:block">
-          <h1 className="text-xl font-semibold">Flowly POS</h1>
-          <p className="mt-1 text-sm text-neutral-500">Restaurantes y bares</p>
+        <aside className="flowly-demo-sidebar hidden w-72 p-6 md:block">
+          <h1 className="text-xl font-semibold text-white">Flowly POS</h1>
+          <p className="mt-1 text-sm text-white/45">Restaurantes y bares</p>
 
           <nav className="mt-10 space-y-2 text-sm">
             {[
@@ -221,8 +221,8 @@ export default function RestaurantDemoPage() {
                 onClick={() => setActiveTab(label as Tab)}
                 className={
                   activeTab === label
-                    ? "flex w-full items-center gap-3 rounded-2xl bg-neutral-950 px-4 py-3 text-white"
-                    : "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-neutral-600 hover:bg-neutral-50"
+                    ? "flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-cyan-400 to-violet-500 px-4 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-950/30"
+                    : "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-white/62 hover:bg-white/10 hover:text-white"
                 }
               >
                 <Icon size={18} />
@@ -232,17 +232,17 @@ export default function RestaurantDemoPage() {
           </nav>
         </aside>
 
-        <section className="flex-1 px-6 py-8">
+        <section className="flex-1 px-6 py-8 text-white">
           <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
-              <p className="text-sm font-medium text-violet-600">Demo · TPV</p>
-              <h2 className="mt-2 text-4xl font-semibold">Flowly POS Restaurante</h2>
-              <p className="mt-2 text-neutral-600">
+              <p className="text-sm font-medium text-cyan-200">Demo · TPV</p>
+              <h2 className="mt-2 text-4xl font-semibold tracking-tight">Flowly POS Restaurante</h2>
+              <p className="mt-2 text-white/58">
                 Gestiona mesas, comandas, productos, cobros y tickets.
               </p>
             </div>
 
-            <button onClick={logout} className="rounded-full border bg-white px-5 py-3">
+            <button onClick={logout} className="flowly-secondary rounded-full px-5 py-3 text-white">
               <LogOut size={18} className="inline" /> Salir
             </button>
           </header>
@@ -342,7 +342,7 @@ export default function RestaurantDemoPage() {
                         {product.category === "Cafés" && <Coffee />}
                       </div>
                       <p className="font-semibold">{product.name}</p>
-                      <p className="mt-1 text-sm text-neutral-500">{product.price.toFixed(2)} €</p>
+                      <p className="mt-1 text-sm text-white/45">{product.price.toFixed(2)} €</p>
                     </button>
                   ))}
                 </div>
@@ -366,14 +366,14 @@ export default function RestaurantDemoPage() {
 
                 <div className="mt-6 rounded-3xl bg-neutral-950 p-5 text-white">
                   <p className="text-sm text-white/50">Total</p>
-                  <p className="mt-2 text-4xl font-semibold">{cartTotal.toFixed(2)} €</p>
+                  <p className="mt-2 text-4xl font-semibold tracking-tight">{cartTotal.toFixed(2)} €</p>
                 </div>
 
                 <div className="mt-5 grid gap-3">
                   <button onClick={sendToKitchen} className="rounded-full bg-violet-600 px-5 py-3 text-white">
                     <Send size={16} className="inline" /> Enviar a cocina
                   </button>
-                  <button onClick={chargeTable} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
+                  <button onClick={chargeTable} className="flowly-primary rounded-full px-5 py-3 font-semibold">
                     <CreditCard size={16} className="inline" /> Cobrar mesa
                   </button>
                   <button onClick={() => notify("Cuenta dividida en 2 pagos")} className="rounded-full border px-5 py-3">
@@ -392,7 +392,7 @@ export default function RestaurantDemoPage() {
                     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                       <div>
                         <p className="text-lg font-semibold">{order.table}</p>
-                        <p className="mt-1 text-sm text-neutral-500">
+                        <p className="mt-1 text-sm text-white/45">
                           {order.items.map((item) => `${item.quantity}x ${item.name}`).join(" · ")}
                         </p>
                       </div>
@@ -447,7 +447,7 @@ export default function RestaurantDemoPage() {
                   {["Cerveza", "Hamburguesa", "Café con leche", "Patatas bravas"].map((item, index) => (
                     <div key={item} className="rounded-2xl bg-neutral-50 p-4">
                       <p className="font-medium">#{index + 1} {item}</p>
-                      <p className="mt-1 text-sm text-neutral-500">{42 - index * 7} unidades vendidas</p>
+                      <p className="mt-1 text-sm text-white/45">{42 - index * 7} unidades vendidas</p>
                     </div>
                   ))}
                 </div>

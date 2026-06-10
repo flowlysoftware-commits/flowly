@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 export default function DemoLoginPage() {
@@ -20,56 +20,25 @@ export default function DemoLoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#f3e8ff_0%,#ffffff_35%,#f8fafc_100%)] px-6">
-      <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-xl shadow-violet-100">
-        <Link href="/" className="text-sm text-neutral-500">
-          ← Volver a Flowly IA
-        </Link>
-
-        <div className="mt-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-          <LockKeyhole />
-        </div>
-
-        <h1 className="mt-6 text-3xl font-semibold">Acceso demo</h1>
-
-        <p className="mt-2 text-neutral-600">
-          Entra al selector de demos y prueba los paneles de Flowly Hair,
-          Flowly POS y Flowly Clinic.
-        </p>
-
-        <div className="mt-6 rounded-2xl bg-neutral-50 p-4 text-sm text-neutral-600">
-          <p>
-            <strong>Usuario:</strong> demo@flowlyia.com
-          </p>
-          <p>
-            <strong>Contraseña:</strong> flowlydemo
-          </p>
-        </div>
-
-        <div className="mt-6 grid gap-4">
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            type="email"
-            className="rounded-2xl border px-4 py-3 outline-none"
-          />
-
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contraseña"
-            type="password"
-            className="rounded-2xl border px-4 py-3 outline-none"
-          />
-        </div>
-
-        <button
-          onClick={login}
-          className="mt-6 w-full rounded-full bg-neutral-950 px-6 py-4 text-white"
-        >
-          Entrar a las demos
-        </button>
+    <main className="flowly-public flex min-h-screen items-center justify-center px-6 py-10">
+      <div className="relative z-10 grid w-full max-w-5xl gap-6 md:grid-cols-[.9fr_1.1fr] md:items-center">
+        <section className="hidden md:block">
+          <div className="flowly-chip mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> Acceso demo</div>
+          <h1 className="text-6xl font-semibold tracking-tight">Prueba Flowly como si ya fuera tu panel.</h1>
+          <p className="mt-5 text-lg leading-8 text-white/62">Entra al selector y explora demos tecnológicas para clínicas, peluquerías y restaurantes.</p>
+        </section>
+        <section className="flowly-glass rounded-[2rem] p-8">
+          <Link href="/" className="text-sm text-white/60 hover:text-white">← Volver a Flowly IA</Link>
+          <div className="mt-8 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><LockKeyhole /></div>
+          <h2 className="mt-6 text-3xl font-semibold">Entrar a demos</h2>
+          <p className="mt-2 text-white/60">Usa las credenciales ya cargadas para acceder.</p>
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.07] p-4 text-sm text-white/70"><p><strong>Usuario:</strong> demo@flowlyia.com</p><p><strong>Contraseña:</strong> flowlydemo</p></div>
+          <div className="mt-6 grid gap-4">
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" className="flowly-input-light rounded-2xl px-4 py-3" />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" type="password" className="flowly-input-light rounded-2xl px-4 py-3" />
+          </div>
+          <button onClick={login} className="flowly-primary mt-6 w-full rounded-full px-6 py-4 font-semibold">Entrar a las demos</button>
+        </section>
       </div>
     </main>
   );

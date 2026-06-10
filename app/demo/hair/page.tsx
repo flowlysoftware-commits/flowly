@@ -210,7 +210,7 @@ export default function FlowlyHairDemoPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f8f7fb] text-neutral-950">
+    <main className="flowly-demo-shell min-h-screen">
       {toast && (
         <div className="fixed right-6 top-6 z-[60] rounded-full bg-neutral-950 px-5 py-3 text-sm text-white shadow-xl">
           {toast}
@@ -218,10 +218,10 @@ export default function FlowlyHairDemoPage() {
       )}
 
       <div className="flex min-h-screen">
-        <aside className="hidden w-72 border-r border-neutral-200 bg-white p-6 md:block">
+        <aside className="flowly-demo-sidebar hidden w-72 p-6 md:block">
           <div>
-            <h1 className="text-xl font-semibold">Flowly Hair</h1>
-            <p className="mt-1 text-sm text-neutral-500">Demo interactiva</p>
+            <h1 className="text-xl font-semibold text-white">Flowly Hair</h1>
+            <p className="mt-1 text-sm text-white/45">Demo interactiva</p>
           </div>
 
           <nav className="mt-10 space-y-2 text-sm">
@@ -238,8 +238,8 @@ export default function FlowlyHairDemoPage() {
                 onClick={() => setActiveTab(label as Tab)}
                 className={
                   activeTab === label
-                    ? "flex w-full items-center gap-3 rounded-2xl bg-neutral-950 px-4 py-3 text-white"
-                    : "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-neutral-600 hover:bg-neutral-50"
+                    ? "flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-cyan-400 to-violet-500 px-4 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-950/30"
+                    : "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-white/62 hover:bg-white/10 hover:text-white"
                 }
               >
                 <Icon size={18} />
@@ -248,20 +248,20 @@ export default function FlowlyHairDemoPage() {
             ))}
           </nav>
 
-          <div className="mt-10 rounded-3xl bg-violet-50 p-5 text-sm text-violet-800">
+          <div className="mt-10 flowly-card rounded-3xl p-5 text-sm text-white/80">
             <p className="font-semibold">Modo demo</p>
-            <p className="mt-2 text-violet-700">
+            <p className="mt-2 text-white/58">
               Puedes tocar botones, crear citas y probar el panel sin afectar datos reales.
             </p>
           </div>
         </aside>
 
-        <section className="flex-1 px-6 py-8">
+        <section className="flex-1 px-6 py-8 text-white">
           <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
-              <p className="text-sm font-medium text-violet-600">Demo · Peluquería</p>
-              <h2 className="mt-2 text-4xl font-semibold">Panel Flowly Hair Studio</h2>
-              <p className="mt-2 text-neutral-600">
+              <p className="text-sm font-medium text-cyan-200">Demo · Peluquería</p>
+              <h2 className="mt-2 text-4xl font-semibold tracking-tight">Panel Flowly Hair Studio</h2>
+              <p className="mt-2 text-white/58">
                 Gestiona citas, clientes, servicios, automatizaciones y métricas.
               </p>
             </div>
@@ -269,14 +269,14 @@ export default function FlowlyHairDemoPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setOpenAppointment(true)}
-                className="rounded-full bg-neutral-950 px-5 py-3 text-white"
+                className="flowly-primary rounded-full px-5 py-3 font-semibold"
               >
                 <Plus size={18} className="inline" /> Nueva cita
               </button>
 
               <button
                 onClick={logout}
-                className="rounded-full border bg-white px-5 py-3 text-neutral-700"
+                className="flowly-secondary rounded-full px-5 py-3 text-white"
               >
                 <LogOut size={18} className="inline" /> Salir
               </button>
@@ -340,7 +340,7 @@ export default function FlowlyHairDemoPage() {
                 <p className="text-sm text-neutral-500">Crea, confirma o cancela citas de prueba.</p>
                 <button
                   onClick={() => setOpenAppointment(true)}
-                  className="rounded-full bg-neutral-950 px-4 py-2 text-sm text-white"
+                  className="flowly-primary rounded-full px-4 py-2 text-sm font-semibold"
                 >
                   + Nueva cita
                 </button>
@@ -358,7 +358,7 @@ export default function FlowlyHairDemoPage() {
                 <p className="text-sm text-neutral-500">Historial y valor de clientes.</p>
                 <button
                   onClick={() => setOpenClient(true)}
-                  className="rounded-full bg-neutral-950 px-4 py-2 text-sm text-white"
+                  className="flowly-primary rounded-full px-4 py-2 text-sm font-semibold"
                 >
                   <UserPlus size={16} className="inline" /> Nuevo cliente
                 </button>
@@ -409,7 +409,7 @@ export default function FlowlyHairDemoPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-lg font-semibold">{s.name}</h3>
-                        <p className="mt-1 text-sm text-neutral-500">
+                        <p className="mt-1 text-sm text-white/45">
                           {s.category} · {s.duration}
                         </p>
                       </div>
@@ -499,7 +499,7 @@ export default function FlowlyHairDemoPage() {
                       <p className="text-sm font-medium">
                         #{index + 1} {s.name}
                       </p>
-                      <p className="mt-1 text-sm text-neutral-500">
+                      <p className="mt-1 text-sm text-white/45">
                         Ticket medio: {s.price} €
                       </p>
                     </div>
@@ -533,7 +533,7 @@ export default function FlowlyHairDemoPage() {
             <button onClick={() => setOpenAppointment(false)} className="rounded-full border px-5 py-3">
               Cancelar
             </button>
-            <button onClick={createAppointment} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
+            <button onClick={createAppointment} className="flowly-primary rounded-full px-5 py-3 font-semibold">
               Crear cita
             </button>
           </div>
@@ -551,7 +551,7 @@ export default function FlowlyHairDemoPage() {
             <button onClick={() => setOpenClient(false)} className="rounded-full border px-5 py-3">
               Cancelar
             </button>
-            <button onClick={createClient} className="rounded-full bg-neutral-950 px-5 py-3 text-white">
+            <button onClick={createClient} className="flowly-primary rounded-full px-5 py-3 font-semibold">
               Crear cliente
             </button>
           </div>

@@ -131,21 +131,21 @@ export default function PreciosPage() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,#ede9fe_0%,#ffffff_30%,#f8fafc_100%)] px-6 py-8 text-neutral-950">
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(to_right,rgba(124,58,237,.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(124,58,237,.08)_1px,transparent_1px)] bg-[size:56px_56px]" />
+    <main className="flowly-public min-h-screen overflow-hidden px-6 py-8 text-white">
+      <div className="pointer-events-none fixed inset-0 -z-10" />
       <div className="mx-auto max-w-7xl">
-        <nav className="mb-16 flex items-center justify-between rounded-full border border-white/70 bg-white/70 px-5 py-3 shadow-sm backdrop-blur-xl">
+        <nav className="mb-16 flex items-center justify-between flowly-glass rounded-full px-5 py-3">
           <Link href="/" className="flex items-center gap-3"><Image src="/logo.png" alt="Flowly IA" width={140} height={40} className="h-auto w-32 object-contain" /></Link>
-          <div className="hidden items-center gap-6 text-sm text-neutral-600 md:flex">
+          <div className="hidden items-center gap-6 text-sm text-white/65 md:flex">
             <Link href="/demo/login">Demos</Link>
             <Link href="/login">Área cliente</Link>
             <Link href="/contacto">Contacto</Link>
-            <label className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-3 py-2 shadow-sm">
+            <label className="inline-flex items-center gap-2 flowly-chip rounded-full px-3 py-2">
               <span className="text-lg">{market.flag}</span>
               <select
                 value={country}
                 onChange={(event) => changeCountry(event.target.value as Country)}
-                className="bg-transparent text-sm font-medium text-neutral-700 outline-none"
+                className="bg-transparent text-sm font-medium text-white outline-none"
                 aria-label="Seleccionar país"
               >
                 {markets.map((item) => (
@@ -156,43 +156,43 @@ export default function PreciosPage() {
               </select>
             </label>
           </div>
-          <Link href="/contacto" className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm text-white">Hablar con ventas</Link>
+          <Link href="/contacto" className="flowly-primary rounded-full px-5 py-2.5 text-sm font-semibold">Hablar con ventas</Link>
         </nav>
 
         <section className="text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/80 px-4 py-2 text-sm text-violet-700 shadow-sm backdrop-blur">{referralCode ? `Enlace comercial ${referralCode}` : market.badge}</div>
-          <h1 className="mx-auto mt-6 max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">Planes para lanzar y escalar tu negocio</h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-neutral-600">Elige un pack cerrado o crea tu propio Flowly con módulos. Los precios cambian automáticamente según el mercado seleccionado.</p>
+          <div className="mx-auto inline-flex items-center gap-2 flowly-chip px-4 py-2 text-sm">{referralCode ? `Enlace comercial ${referralCode}` : market.badge}</div>
+          <h1 className="mx-auto mt-6 max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl flowly-gradient-text">Planes para lanzar y escalar tu negocio</h1>
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/68">Elige un pack cerrado o crea tu propio Flowly con módulos. Los precios cambian automáticamente según el mercado seleccionado.</p>
         </section>
 
         <section className="mt-16 grid gap-6 lg:grid-cols-3">
           {fixedPlans.map((plan) => (
-            <div key={plan.id} className={plan.highlighted ? "rounded-[2rem] border border-violet-300 bg-neutral-950 p-7 text-white shadow-2xl shadow-violet-200" : "rounded-[2rem] border border-neutral-200 bg-white/85 p-7 shadow-sm backdrop-blur"}>
-              <p className={plan.highlighted ? "text-sm font-medium text-violet-200" : "text-sm font-medium text-violet-600"}>{plan.highlighted ? "Más recomendado" : "Plan"}</p>
+            <div key={plan.id} className={plan.highlighted ? "flowly-glass rounded-[2rem] p-7 text-white" : "flowly-card rounded-[2rem] p-7"}>
+              <p className={plan.highlighted ? "text-sm font-medium text-violet-200" : "text-sm font-medium text-cyan-200"}>{plan.highlighted ? "Más recomendado" : "Plan"}</p>
               <h2 className="mt-3 text-3xl font-semibold">{plan.name}</h2>
-              <p className={plan.highlighted ? "mt-3 text-white/60" : "mt-3 text-neutral-600"}>{plan.description}</p>
-              <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(plan.price, country)}</span><span className={plan.highlighted ? "text-white/45" : "text-neutral-500"}> / mes</span></div>
-              <button onClick={() => startCheckout(plan.id)} disabled={loadingPlan === plan.id} className={plan.highlighted ? "mt-7 w-full rounded-full bg-white px-5 py-4 font-medium text-neutral-950" : "mt-7 w-full rounded-full bg-neutral-950 px-5 py-4 font-medium text-white"}>{loadingPlan === plan.id ? "Abriendo..." : "Empezar 30 días gratis"}</button>
-              <div className="mt-7 space-y-3">{plan.features.map((feature) => <div key={feature} className="flex gap-3 text-sm"><Check size={18} className={plan.highlighted ? "text-violet-200" : "text-violet-600"} /><span>{feature}</span></div>)}</div>
+              <p className={plan.highlighted ? "mt-3 text-white/60" : "mt-3 text-white/60"}>{plan.description}</p>
+              <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(plan.price, country)}</span><span className={plan.highlighted ? "text-white/45" : "text-white/50"}> / mes</span></div>
+              <button onClick={() => startCheckout(plan.id)} disabled={loadingPlan === plan.id} className={plan.highlighted ? "mt-7 w-full rounded-full bg-white px-5 py-4 font-medium text-neutral-950" : "mt-7 w-full flowly-primary rounded-full px-5 py-4 font-medium"}>{loadingPlan === plan.id ? "Abriendo..." : "Empezar 30 días gratis"}</button>
+              <div className="mt-7 space-y-3">{plan.features.map((feature) => <div key={feature} className="flex gap-3 text-sm"><Check size={18} className={plan.highlighted ? "text-violet-200" : "text-cyan-200"} /><span>{feature}</span></div>)}</div>
             </div>
           ))}
 
-          <div id="modular" className="rounded-[2rem] border border-violet-200 bg-white/90 p-7 shadow-xl shadow-violet-100 backdrop-blur">
-            <p className="text-sm font-medium text-violet-600">Configurable</p>
+          <div id="modular" className="flowly-card rounded-[2rem] p-7">
+            <p className="text-sm font-medium text-cyan-200">Configurable</p>
             <h2 className="mt-3 text-3xl font-semibold">Flowly Modular</h2>
-            <p className="mt-3 text-neutral-600">Empieza desde una base ligera y añade solo los módulos que necesitas.</p>
-            <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(modularTotal, country)}</span><span className="text-neutral-500"> / mes</span></div>
-            <div className="mt-6 rounded-3xl bg-violet-50 p-4 text-sm text-violet-900">Base incluida: dashboard, clientes, reservas, calendario y servicios.</div>
+            <p className="mt-3 text-white/60">Empieza desde una base ligera y añade solo los módulos que necesitas.</p>
+            <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(modularTotal, country)}</span><span className="text-white/50"> / mes</span></div>
+            <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm text-cyan-100">Base incluida: dashboard, clientes, reservas, calendario y servicios.</div>
             <div className="mt-6 grid gap-3">
               {modules.map((module) => {
                 const Icon = module.Icon;
                 const active = selectedModules.includes(module.id);
-                return <button key={module.id} onClick={() => toggleModule(module.id)} className={active ? "rounded-2xl border border-violet-300 bg-violet-50 p-4 text-left" : "rounded-2xl border border-neutral-200 bg-white p-4 text-left hover:bg-neutral-50"}>
-                  <div className="flex items-start gap-3"><Icon className="mt-0.5 text-violet-600" size={21} /><div className="flex-1"><div className="flex justify-between gap-3"><p className="font-medium">{module.name}</p><p className="text-sm text-neutral-500">+{formatMoney(module.price, country)}</p></div><p className="mt-1 text-sm text-neutral-500">{module.description}</p></div></div>
+                return <button key={module.id} onClick={() => toggleModule(module.id)} className={active ? "rounded-2xl border border-cyan-300/35 bg-cyan-300/10 p-4 text-left text-white" : "rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-left text-white hover:bg-white/[0.1]"}>
+                  <div className="flex items-start gap-3"><Icon className="mt-0.5 text-cyan-200" size={21} /><div className="flex-1"><div className="flex justify-between gap-3"><p className="font-medium">{module.name}</p><p className="text-sm text-white/50">+{formatMoney(module.price, country)}</p></div><p className="mt-1 text-sm text-white/50">{module.description}</p></div></div>
                 </button>;
               })}
             </div>
-            <button onClick={() => startCheckout("modular", selectedModules)} disabled={loadingPlan === "modular"} className="mt-7 w-full rounded-full bg-violet-600 px-5 py-4 font-medium text-white shadow-lg shadow-violet-200">{loadingPlan === "modular" ? "Abriendo..." : "Contratar Modular"}</button>
+            <button onClick={() => startCheckout("modular", selectedModules)} disabled={loadingPlan === "modular"} className="mt-7 w-full flowly-primary rounded-full px-5 py-4 font-medium">{loadingPlan === "modular" ? "Abriendo..." : "Contratar Modular"}</button>
           </div>
         </section>
       </div>

@@ -112,3 +112,101 @@ p, h1, h2, h3, h4, span, button, a, code, td, th, input, textarea, select {
 select.input-dark, .input-dark option {
   text-overflow: ellipsis;
 }
+
+
+/* Flowly public redesign · techno youthful system */
+.flowly-public {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(34, 211, 238, .24), transparent 32%),
+    radial-gradient(circle at 86% 8%, rgba(168, 85, 247, .32), transparent 34%),
+    radial-gradient(circle at 50% 88%, rgba(16, 185, 129, .18), transparent 34%),
+    linear-gradient(135deg, #020617 0%, #111827 45%, #170f2f 100%);
+  color: white;
+}
+.flowly-public::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size: 58px 58px;
+  mask-image: radial-gradient(circle at top, black 0%, transparent 76%);
+}
+.flowly-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(18px);
+  opacity: .75;
+  pointer-events: none;
+  animation: flowlyFloat 9s ease-in-out infinite alternate;
+}
+@keyframes flowlyFloat { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(20px,-18px,0) scale(1.08); } }
+.flowly-glass {
+  border: 1px solid rgba(255,255,255,.13);
+  background: linear-gradient(145deg, rgba(255,255,255,.13), rgba(255,255,255,.055));
+  box-shadow: 0 24px 80px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.16);
+  backdrop-filter: blur(22px);
+}
+.flowly-card {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.075);
+  box-shadow: 0 16px 48px rgba(2,6,23,.24);
+  backdrop-filter: blur(18px);
+}
+.flowly-gradient-text {
+  background: linear-gradient(90deg, #22d3ee, #a78bfa 48%, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.flowly-chip {
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.09);
+  color: rgba(255,255,255,.82);
+  backdrop-filter: blur(16px);
+}
+.flowly-primary {
+  background: linear-gradient(135deg, #22d3ee, #8b5cf6 50%, #ec4899);
+  color: white;
+  box-shadow: 0 18px 55px rgba(139,92,246,.36);
+}
+.flowly-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.flowly-secondary {
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.08);
+  color: white;
+  backdrop-filter: blur(18px);
+}
+.flowly-input-light {
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.09);
+  color: white;
+  outline: none;
+}
+.flowly-input-light::placeholder { color: rgba(255,255,255,.46); }
+.flowly-input-light:focus { border-color: rgba(34,211,238,.68); box-shadow: 0 0 0 4px rgba(34,211,238,.12); }
+.flowly-input-light option { background: #0f172a; color: white; }
+.flowly-demo-shell {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(34,211,238,.18), transparent 28%),
+    radial-gradient(circle at 90% 10%, rgba(168,85,247,.24), transparent 28%),
+    linear-gradient(135deg, #020617, #0f172a 56%, #1e1238);
+  color: white;
+}
+.flowly-demo-sidebar {
+  border-right: 1px solid rgba(255,255,255,.10) !important;
+  background: rgba(2,6,23,.72) !important;
+  color: white;
+  backdrop-filter: blur(20px);
+}
+.flowly-demo-panel {
+  border: 1px solid rgba(255,255,255,.12) !important;
+  background: rgba(255,255,255,.075) !important;
+  color: white;
+  box-shadow: 0 18px 55px rgba(0,0,0,.24);
+  backdrop-filter: blur(18px);
+}
