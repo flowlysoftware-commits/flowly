@@ -31,6 +31,94 @@ function cleanDocumentNumber(value: unknown) {
   return String(value || "").replace(/\D/g, "").trim();
 }
 
+
+const EPS_VALUES: Record<string, string> = {
+  "1": "nueva_eps",
+  nueva_eps: "nueva_eps",
+  "nueva eps": "nueva_eps",
+  nueva: "nueva_eps",
+  "2": "salud_total",
+  salud_total: "salud_total",
+  "salud total": "salud_total",
+  "3": "fomag",
+  fomag: "fomag",
+  "4": "sura",
+  sura: "sura",
+  "5": "colsanitas",
+  colsanitas: "colsanitas",
+  "6": "coomeva_medicina_prepagada",
+  coomeva: "coomeva_medicina_prepagada",
+  "coomeva medicina prepagada": "coomeva_medicina_prepagada",
+  "7": "axa_colpatria",
+  axa: "axa_colpatria",
+  "axa colpatria": "axa_colpatria",
+  colpatria: "axa_colpatria",
+  "8": "particular",
+  particular: "particular",
+  "9": "otra_eps",
+  otra_eps: "otra_eps",
+  "otra eps": "otra_eps",
+};
+
+const EPS_LABELS: Record<string, string> = {
+  nueva_eps: "Nueva EPS",
+  salud_total: "Salud Total",
+  fomag: "FOMAG",
+  sura: "SURA",
+  colsanitas: "Colsanitas",
+  coomeva_medicina_prepagada: "Coomeva Medicina Prepagada",
+  axa_colpatria: "AXA Colpatria",
+  particular: "Particular",
+  otra_eps: "Otra EPS",
+};
+
+const DOCUMENT_VALUES: Record<string, string> = {
+  "1": "registro_civil",
+  registro_civil: "registro_civil",
+  "registro civil": "registro_civil",
+  "2": "tarjeta_identidad",
+  tarjeta_identidad: "tarjeta_identidad",
+  "tarjeta de identidad": "tarjeta_identidad",
+  "3": "cedula_ciudadania",
+  cedula_ciudadania: "cedula_ciudadania",
+  "cedula de ciudadania": "cedula_ciudadania",
+  "cédula de ciudadanía": "cedula_ciudadania",
+  cedula: "cedula_ciudadania",
+  "4": "pt",
+  pt: "pt",
+  "p t": "pt",
+};
+
+const DOCUMENT_LABELS: Record<string, string> = {
+  registro_civil: "Registro civil",
+  tarjeta_identidad: "Tarjeta de identidad",
+  cedula_ciudadania: "Cédula de ciudadanía",
+  pt: "PT",
+};
+
+function normalizeOption(value: unknown, options: Record<string, string>) {
+  const raw = cleanText(value).toLowerCase().replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  return options[raw] || options[raw.replace(/\s+/g, "_")] || cleanText(value);
+}
+
+function normalizeEps(value: unknown) {
+  return normalizeOption(value, EPS_VALUES);
+}
+
+function normalizeDocumentType(value: unknown) {
+  return normalizeOption(value, DOCUMENT_VALUES);
+}
+
+function epsLabel(value: string) {
+  return EPS_LABELS[value] || value;
+}
+
+function documentTypeLabel(value: string) {
+  return DOCUMENT_LABELS[value] || value;
+}
+
+
 function parseReason(reason?: string | null) {
   const text = String(reason || "");
 
@@ -84,8 +172,8 @@ export async function POST(req: Request) {
     const callerPhone = cleanPhone(body.caller_phone);
     const parsed = parseReason(body.reason);
 
-    const eps = cleanText(body.eps || parsed.eps || body.intent || "informacion");
-    const documentType = cleanText(body.document_type || parsed.document_type || "");
+    const eps = normalizeEps(body.eps || parsed.eps || body.intent || "informacion");
+    const documentType = normalizeDocumentType(body.document_type || parsed.document_type || "");
     const documentNumber = cleanDocumentNumber(body.document_number || parsed.document_number || "");
 
     if (!businessId) {
@@ -170,8 +258,8 @@ export async function POST(req: Request) {
           phone: callerPhone,
           notes: [
             "Creado automáticamente desde llamada entrante.",
-            eps ? `EPS: ${eps}` : "",
-            documentType ? `Tipo documento: ${documentType}` : "",
+            eps ? `EPS: ${epsLabel(eps)}` : "",
+            documentType ? `Tipo documento: ${documentTypeLabel(documentType)}` : "",
             documentNumber ? `Documento: ${documentNumber}` : "",
           ].filter(Boolean).join("\n"),
           crm_status: "en_llamada",
@@ -198,8 +286,8 @@ export async function POST(req: Request) {
         caller_phone: callerPhone,
         reason:
           cleanText(body.reason) ||
-          `Llamada entrante automática${eps ? ` · EPS: ${eps}` : ""}${
-            documentType ? ` · Documento: ${documentType}` : ""
+          `Llamada entrante automática${eps ? ` · EPS: ${epsLabel(eps)}` : ""}${
+            documentType ? ` · Documento: ${documentTypeLabel(documentType)}` : ""
           }${documentNumber ? ` · ID: ${documentNumber}` : ""}`,
         transcript: cleanText(body.transcript) || null,
         intent: eps || "informacion",

@@ -259,6 +259,33 @@ function normalizePhone(value: string | null | undefined) {
   return String(value || "").replace(/\D/g, "");
 }
 
+
+const EPS_OPTIONS = [
+  { value: "nueva_eps", label: "Nueva EPS" },
+  { value: "salud_total", label: "Salud Total" },
+  { value: "fomag", label: "FOMAG" },
+  { value: "sura", label: "SURA" },
+  { value: "colsanitas", label: "Colsanitas" },
+  { value: "coomeva_medicina_prepagada", label: "Coomeva Medicina Prepagada" },
+  { value: "axa_colpatria", label: "AXA Colpatria" },
+  { value: "particular", label: "Particular" },
+  { value: "otra_eps", label: "Otra EPS" },
+];
+
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: "registro_civil", label: "Registro civil" },
+  { value: "tarjeta_identidad", label: "Tarjeta de identidad" },
+  { value: "cedula_ciudadania", label: "Cédula de ciudadanía" },
+  { value: "pt", label: "PT" },
+];
+
+const epsLabel = (value?: string | null) =>
+  EPS_OPTIONS.find((item) => item.value === value)?.label || value || "Sin EPS";
+
+const documentTypeLabel = (value?: string | null) =>
+  DOCUMENT_TYPE_OPTIONS.find((item) => item.value === value)?.label || value || "Sin documento";
+
+
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -507,10 +534,13 @@ export default function DashboardPage() {
 
   const findCustomerForVoiceCall = (call: VoiceCall) => {
     const callPhone = normalizePhone(call.caller_phone);
+    const callDocument = String(call.document_number || "").replace(/\D/g, "");
     return customers.find((customer) => {
       const customerPhone = normalizePhone(customer.phone);
+      const customerDocument = String(customer.document_number || "").replace(/\D/g, "");
       return (
         (call.customer_id && customer.id === call.customer_id) ||
+        (!!callDocument && !!customerDocument && customerDocument === callDocument) ||
         (!!callPhone && !!customerPhone && customerPhone.endsWith(callPhone.slice(-9)))
       );
     }) || null;
@@ -896,6 +926,35 @@ export default function DashboardPage() {
     const existingCustomer = findCustomerForVoiceCall(call);
 
     if (existingCustomer) {
+      const { error: updateCustomerError } = await supabase
+        .from("customers")
+        .update({
+          eps: call.eps || call.intent || existingCustomer.eps || null,
+          document_type: call.document_type || existingCustomer.document_type || null,
+          document_number: call.document_number || existingCustomer.document_number || null,
+          crm_status: "en_llamada",
+          last_contact_at: new Date().toISOString(),
+        } as any)
+        .eq("id", existingCustomer.id);
+
+      if (updateCustomerError) {
+        alert(updateCustomerError.message);
+        return null;
+      }
+
+      await createCrmAction(
+        existingCustomer.id,
+        "Llamada vinculada desde Flowly Voice",
+        [
+          `Teléfono: ${call.caller_phone}`,
+          call.eps ? `EPS: ${epsLabel(call.eps)}` : "",
+          call.document_type ? `Documento: ${documentTypeLabel(call.document_type)}` : "",
+          call.document_number ? `ID: ${call.document_number}` : "",
+          call.reason || call.transcript || "",
+        ].filter(Boolean).join("\n"),
+        "llamada"
+      );
+
       const { error: updateCallError } = await supabase
         .from("voice_calls")
         .update({ status: "contactado", customer_id: existingCustomer.id })
@@ -915,8 +974,8 @@ export default function DashboardPage() {
     const customerNameFromCall = call.caller_name?.trim() || "Paciente desde llamada";
     const notes = [
       call.reason || call.transcript || "Creado desde Flowly Voice",
-      call.eps ? `EPS: ${call.eps}` : "",
-      call.document_type ? `Tipo documento: ${call.document_type}` : "",
+      call.eps ? `EPS: ${epsLabel(call.eps)}` : "",
+      call.document_type ? `Tipo documento: ${documentTypeLabel(call.document_type)}` : "",
       call.document_number ? `Documento: ${call.document_number}` : "",
     ].filter(Boolean).join("\n");
 
@@ -1312,7 +1371,7 @@ function CrmModule({
         crmActionNotes,
         `Paciente: ${customerName(selectedCustomer)}`,
         `Teléfono: ${selectedCustomer.phone || "Sin teléfono"}`,
-        selectedCustomer.eps ? `EPS: ${selectedCustomer.eps}` : "",
+        selectedCustomer.eps ? `EPS: ${epsLabel(selectedCustomer.eps)}` : "",
         selectedCustomer.document_number ? `Documento: ${selectedCustomer.document_number}` : "",
       ].filter(Boolean).join("\n"),
       "followup",
@@ -1457,17 +1516,15 @@ function CrmModule({
                   <input value={detailEmail} onChange={(e) => setDetailEmail(e.target.value)} placeholder="Email" className="input-dark" />
                   <select value={detailEps} onChange={(e) => setDetailEps(e.target.value)} className="input-dark">
                     <option value="">EPS / tipo paciente</option>
-                    <option value="particular">Particular</option>
-                    <option value="nueva_eps">Nueva EPS</option>
-                    <option value="salud_total">Salud Total</option>
-                    <option value="otra_eps">Otra EPS</option>
+                    {EPS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                   <select value={detailDocumentType} onChange={(e) => setDetailDocumentType(e.target.value)} className="input-dark">
                     <option value="">Tipo documento</option>
-                    <option value="tarjeta_identidad">Tarjeta de identidad</option>
-                    <option value="cedula_ciudadania">Cédula de ciudadanía</option>
-                    <option value="registro_civil">Registro civil</option>
-                    <option value="pasaporte">Pasaporte</option>
+                    {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                   <input value={detailDocumentNumber} onChange={(e) => setDetailDocumentNumber(e.target.value)} placeholder="Número de identificación" className="input-dark" />
                   <input value={detailAddress} onChange={(e) => setDetailAddress(e.target.value)} placeholder="Dirección" className="input-dark" />
@@ -2272,10 +2329,9 @@ function VoiceModule({
 
             <select value={voiceIntent} onChange={(e) => setVoiceIntent(e.target.value)} className="input-dark">
               <option value="informacion">Información</option>
-              <option value="particular">Paciente particular</option>
-              <option value="nueva_eps">Nueva EPS</option>
-              <option value="salud_total">Salud Total</option>
-              <option value="otra_eps">Otra EPS</option>
+              {EPS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
               <option value="reprogramar">Reprogramar cita</option>
               <option value="incidencia">Incidencia</option>
               <option value="seguimiento">Seguimiento</option>
@@ -2391,10 +2447,8 @@ function translateVoiceStatus(status: string) {
 function translateIntent(intent: string) {
   if (intent === "informacion") return "Información";
   if (intent === "nueva_cita") return "Nueva cita";
-  if (intent === "particular") return "Particular";
-  if (intent === "nueva_eps") return "Nueva EPS";
-  if (intent === "salud_total") return "Salud Total";
-  if (intent === "otra_eps") return "Otra EPS";
+  const eps = EPS_OPTIONS.find((option) => option.value === intent);
+  if (eps) return eps.label;
   if (intent === "reprogramar") return "Reprogramar";
   if (intent === "incidencia") return "Incidencia";
   if (intent === "seguimiento") return "Seguimiento";
@@ -2402,9 +2456,7 @@ function translateIntent(intent: string) {
 }
 
 function translateDocumentType(type: string) {
-  if (type === "tarjeta_identidad") return "Tarjeta de identidad";
-  if (type === "cedula_ciudadania") return "Cédula de ciudadanía";
-  return type;
+  return documentTypeLabel(type);
 }
 
 function translatePriority(priority: string) {
