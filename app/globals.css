@@ -328,3 +328,136 @@ select.input-dark, .input-dark option {
   .flowly-public h1 { letter-spacing: -.055em; }
   .flowly-product-stage { border-radius: 1.5rem; }
 }
+
+/* Fix contraste en selects nativos del sitio público */
+.flowly-public select,
+.flowly-nav select,
+.flowly-chip select,
+.flowly-input-light select {
+  color: #ffffff !important;
+  background-color: transparent;
+  color-scheme: dark;
+}
+.flowly-public select option,
+.flowly-nav select option,
+.flowly-chip select option,
+.flowly-input-light option,
+select.flowly-input-light option {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+.flowly-public select option:checked,
+.flowly-nav select option:checked,
+.flowly-chip select option:checked,
+.flowly-input-light option:checked {
+  background: linear-gradient(135deg, #22d3ee, #8b5cf6) !important;
+  color: #ffffff !important;
+}
+
+/* Demos: elimina paneles blancos y unifica con la estética tecnológica Flowly */
+.flowly-demo-shell {
+  color-scheme: dark;
+}
+.flowly-demo-shell .bg-white,
+.flowly-demo-shell .bg-neutral-50,
+.flowly-demo-shell .bg-neutral-100 {
+  background-color: rgba(255, 255, 255, .075) !important;
+  color: #ffffff !important;
+}
+.flowly-demo-shell .hover\:bg-white:hover,
+.flowly-demo-shell .hover\:bg-neutral-50:hover {
+  background-color: rgba(34, 211, 238, .12) !important;
+}
+.flowly-demo-shell .border,
+.flowly-demo-shell .border-neutral-100,
+.flowly-demo-shell .border-neutral-200,
+.flowly-demo-shell .border-gray-100,
+.flowly-demo-shell .border-gray-200 {
+  border-color: rgba(255, 255, 255, .12) !important;
+}
+.flowly-demo-shell .shadow-sm,
+.flowly-demo-shell .shadow,
+.flowly-demo-shell .shadow-2xl {
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .24) !important;
+}
+.flowly-demo-shell .rounded-3xl.bg-white,
+.flowly-demo-shell .rounded-3xl.bg-neutral-50,
+.flowly-demo-shell .rounded-\[2rem\].bg-white,
+.flowly-demo-shell .rounded-\[2rem\].bg-neutral-950,
+.flowly-demo-shell .rounded-\[2rem\].bg-neutral-50,
+.flowly-demo-shell .rounded-2xl.bg-neutral-50,
+.flowly-demo-shell .rounded-2xl.bg-white,
+.flowly-demo-shell .rounded-3xl.border,
+.flowly-demo-shell .rounded-2xl.border {
+  border: 1px solid rgba(255, 255, 255, .12) !important;
+  background: linear-gradient(145deg, rgba(255,255,255,.105), rgba(255,255,255,.045)) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(18px);
+}
+.flowly-demo-shell .text-neutral-400,
+.flowly-demo-shell .text-neutral-500,
+.flowly-demo-shell .text-neutral-600,
+.flowly-demo-shell .text-neutral-700,
+.flowly-demo-shell .text-gray-400,
+.flowly-demo-shell .text-gray-500,
+.flowly-demo-shell .text-gray-600,
+.flowly-demo-shell .text-gray-700 {
+  color: rgba(255, 255, 255, .62) !important;
+}
+.flowly-demo-shell .text-neutral-900,
+.flowly-demo-shell .text-neutral-950,
+.flowly-demo-shell .text-gray-900 {
+  color: #ffffff !important;
+}
+.flowly-demo-shell input,
+.flowly-demo-shell select,
+.flowly-demo-shell textarea {
+  border-color: rgba(255, 255, 255, .14) !important;
+  background-color: rgba(15, 23, 42, .72) !important;
+  color: #ffffff !important;
+  outline: none;
+  color-scheme: dark;
+}
+.flowly-demo-shell input::placeholder,
+.flowly-demo-shell textarea::placeholder {
+  color: rgba(255, 255, 255, .42) !important;
+}
+.flowly-demo-shell input:focus,
+.flowly-demo-shell select:focus,
+.flowly-demo-shell textarea:focus {
+  border-color: rgba(34,211,238,.68) !important;
+  box-shadow: 0 0 0 4px rgba(34,211,238,.12) !important;
+}
+.flowly-demo-shell select option {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+.flowly-demo-shell .bg-green-50 {
+  background-color: rgba(16, 185, 129, .14) !important;
+}
+.flowly-demo-shell .text-green-700 {
+  color: #86efac !important;
+}
+.flowly-demo-shell .bg-red-50 {
+  background-color: rgba(248, 113, 113, .14) !important;
+}
+.flowly-demo-shell .text-red-700 {
+  color: #fca5a5 !important;
+}
+.flowly-demo-shell .border-green-200 {
+  border-color: rgba(134, 239, 172, .35) !important;
+}
+.flowly-demo-shell .border-red-200 {
+  border-color: rgba(252, 165, 165, .35) !important;
+}
+.flowly-demo-shell .bg-violet-100 {
+  background-color: rgba(139, 92, 246, .18) !important;
+}
+.flowly-demo-shell .text-violet-600 {
+  color: #c4b5fd !important;
+}
+.flowly-demo-shell .bg-gradient-to-r.text-slate-950,
+.flowly-demo-shell .bg-gradient-to-br.text-slate-950,
+.flowly-demo-shell .flowly-primary.text-slate-950 {
+  color: #020617 !important;
+}
