@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 type SalesRole = "director" | "jefe" | "senior" | "asociado";
-type Tab = "resumen" | "presupuestos" | "leads" | "saldo" | "equipo";
+type Tab = "resumen" | "presupuestos" | "leads" | "saldo" | "metodos_pago" | "equipo";
 
 type SalesUser = {
   id: string;
@@ -33,6 +33,11 @@ type SalesUser = {
   manager_id: string | null;
   monthly_target: number | null;
   status: string | null;
+  payment_bank_name?: string | null;
+  payment_account_number?: string | null;
+  payment_account_holder?: string | null;
+  payment_account_address?: string | null;
+  payment_notes?: string | null;
 };
 
 type SalesLead = {
@@ -127,6 +132,11 @@ export default function ComercialPage() {
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("resumen");
+  const [paymentBankName, setPaymentBankName] = useState("");
+  const [paymentAccountNumber, setPaymentAccountNumber] = useState("");
+  const [paymentAccountHolder, setPaymentAccountHolder] = useState("");
+  const [paymentAccountAddress, setPaymentAccountAddress] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
 
   const [company, setCompany] = useState("");
   const [contactName, setContactName] = useState("");
@@ -164,6 +174,11 @@ export default function ComercialPage() {
 
     const current = salesUser as SalesUser;
     setMe(current);
+    setPaymentBankName(current.payment_bank_name || "");
+    setPaymentAccountNumber(current.payment_account_number || "");
+    setPaymentAccountHolder(current.payment_account_holder || current.full_name || "");
+    setPaymentAccountAddress(current.payment_account_address || "");
+    setPaymentNotes(current.payment_notes || "");
 
     const { data: allUsersData } = await supabase
       .from("sales_users")
@@ -296,6 +311,32 @@ export default function ComercialPage() {
     await loadData();
   };
 
+  const savePaymentMethods = async () => {
+    if (!me) return;
+    if (!paymentBankName.trim() || !paymentAccountNumber.trim() || !paymentAccountHolder.trim()) {
+      return alert("Indica banco, número de cuenta y titular para recibir pagos.");
+    }
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return router.push("/login");
+    const res = await fetch("/api/sales/payment-methods", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        payment_bank_name: paymentBankName.trim(),
+        payment_account_number: paymentAccountNumber.trim(),
+        payment_account_holder: paymentAccountHolder.trim(),
+        payment_account_address: paymentAccountAddress.trim(),
+        payment_notes: paymentNotes.trim(),
+      }),
+    });
+    const result = await res.json();
+    if (!res.ok) return alert(result.error || "No se pudieron guardar los métodos de pago");
+    await loadData();
+    alert("Métodos de pago guardados correctamente.");
+  };
+
+
   const logout = async () => {
     await supabase.auth.signOut();
     router.push("/");
@@ -345,6 +386,7 @@ export default function ComercialPage() {
           <TabButton label="Presupuestos" active={tab === "presupuestos"} onClick={() => setTab("presupuestos")} />
           <TabButton label="Leads" active={tab === "leads"} onClick={() => setTab("leads")} />
           <TabButton label="Saldo" active={tab === "saldo"} onClick={() => setTab("saldo")} />
+          <TabButton label="Métodos de pago" active={tab === "metodos_pago"} onClick={() => setTab("metodos_pago")} />
           {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <TabButton label="Equipo y rama" active={tab === "equipo"} onClick={() => setTab("equipo")} />}
         </nav>
 
@@ -402,6 +444,32 @@ export default function ComercialPage() {
           <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
             <Panel title="Saldo acumulado"><div className="rounded-[2rem] bg-white p-6 text-neutral-950"><p className="text-sm text-neutral-500">Disponible para solicitar</p><p className="mt-2 text-5xl font-semibold">{money(pendingBalance)}</p><p className="mt-2 text-sm text-neutral-500">Total histórico: {money(totalBalance)}</p><button onClick={requestPayout} className="mt-6 rounded-full bg-neutral-950 px-6 py-4 font-medium text-white"><Banknote size={18} className="inline" /> Cobrar saldo</button></div></Panel>
             <Panel title="Movimientos de comisión"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div><p className="font-medium capitalize">{commission.type}</p><p className="text-xs text-white/45">{commission.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p></div>)}{commissions.length === 0 && <Empty text="No hay comisiones registradas todavía." />}</div></Panel>
+          </section>
+        )}
+
+        {tab === "metodos_pago" && (
+          <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <Panel title="Métodos de pago">
+              <div className="grid gap-3">
+                <input value={paymentAccountHolder} onChange={(e) => setPaymentAccountHolder(e.target.value)} placeholder="Nombre completo del titular" className="input-dark" />
+                <input value={paymentBankName} onChange={(e) => setPaymentBankName(e.target.value)} placeholder="Banco" className="input-dark" />
+                <input value={paymentAccountNumber} onChange={(e) => setPaymentAccountNumber(e.target.value)} placeholder="Número de cuenta / IBAN / cuenta bancaria" className="input-dark" />
+                <textarea value={paymentAccountAddress} onChange={(e) => setPaymentAccountAddress(e.target.value)} placeholder="Dirección fiscal o dirección del titular" className="input-dark min-h-20" />
+                <textarea value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Notas para administración: país, tipo de cuenta, documento, instrucciones especiales..." className="input-dark min-h-20" />
+                <button onClick={savePaymentMethods} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white shadow-lg shadow-violet-950/40">Guardar métodos de pago</button>
+              </div>
+            </Panel>
+            <Panel title="Información para cobros">
+              <div className="space-y-3 text-sm text-white/65">
+                <p>Estos datos son visibles para administración cuando solicites cobrar saldo.</p>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-white/35">Resumen actual</p>
+                  <p className="mt-3 break-words"><strong>Titular:</strong> {paymentAccountHolder || "Sin configurar"}</p>
+                  <p className="mt-1 break-words"><strong>Banco:</strong> {paymentBankName || "Sin configurar"}</p>
+                  <p className="mt-1 break-words"><strong>Cuenta:</strong> {paymentAccountNumber || "Sin configurar"}</p>
+                </div>
+              </div>
+            </Panel>
           </section>
         )}
 
