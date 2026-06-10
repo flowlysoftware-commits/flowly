@@ -139,7 +139,15 @@ export default function Home() {
             </select>
           </label>
         </div>
-        <Link href={pricesHref} className="flowly-primary rounded-full px-5 py-2.5 text-sm font-semibold transition">Empezar</Link>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/login"
+            className="flowly-secondary inline-flex rounded-full px-4 py-2.5 text-xs font-semibold md:hidden sm:text-sm"
+          >
+            Área cliente
+          </Link>
+          <Link href={pricesHref} className="flowly-primary rounded-full px-4 py-2.5 text-xs font-semibold transition sm:px-5 sm:text-sm">Empezar</Link>
+        </div>
       </nav>
 
       <section className="relative z-10 mx-auto max-w-7xl px-6 pb-20 pt-14 text-center">
