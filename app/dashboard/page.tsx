@@ -213,6 +213,10 @@ type ModuleItem = {
   proFeatures: string[];
 };
 
+const DASHBOARD_TIME_ZONE = "America/Bogota";
+const DASHBOARD_TIME_ZONE_LABEL = "hora Colombia";
+const BOGOTA_UTC_OFFSET = "-05:00";
+
 const moduleCatalog: ModuleItem[] = [
   { key: "crm", slug: "crm", name: "CRM avanzado", short: "CRM", price: "+9,99€", badge: "Producto estrella", description: "Pipeline, filtros, notas, segmentos, historial y acciones comerciales por cliente.", Icon: UserCog, proFeatures: ["Ficha 360º de cliente", "Filtros por estado y contacto", "Notas y próximos pasos"] },
   { key: "whatsapp", slug: "whatsapp", name: "WhatsApp automático", short: "WhatsApp", price: "+9,99€", badge: "Automatización", description: "Conecta tu número, crea plantillas y prepara bots de confirmación, recordatorio y recuperación.", Icon: MessageCircle, proFeatures: ["Plantillas con variables", "Bot de recordatorio", "Conexión preparada para proveedor"] },
@@ -772,7 +776,9 @@ export default function DashboardPage() {
       patient_id: customerId,
       title: title.trim(),
       description: notes || null,
-      reminder_at: remindAt,
+      notes: notes || null,
+      remind_at: localDateTimeToBogotaIso(remindAt),
+      reminder_at: localDateTimeToBogotaIso(remindAt),
       status: "pending",
     });
     if (error) return alert(error.message);
@@ -1557,7 +1563,10 @@ function CrmModule({
                 <p className="mt-1 text-sm text-white/45">Configura una alerta para este paciente. Cuando llegue la fecha y hora aparecerá una notificación en el centro del panel.</p>
                 <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]">
                   <input value={reminderTitle} onChange={(e) => setReminderTitle(e.target.value)} placeholder="Título del recordatorio" className="input-dark" />
-                  <input type="datetime-local" value={reminderAt} onChange={(e) => setReminderAt(e.target.value)} className="input-dark" />
+                  <div>
+                    <input type="datetime-local" value={reminderAt} onChange={(e) => setReminderAt(e.target.value)} className="input-dark" />
+                    <p className="mt-1 text-xs text-white/45">Se guardará en hora Colombia (Bogotá).</p>
+                  </div>
                 </div>
                 <textarea value={reminderNotes} onChange={(e) => setReminderNotes(e.target.value)} placeholder="Notas internas del recordatorio" className="input-dark mt-3 min-h-20" />
                 <button onClick={saveReminder} className="btn-primary mt-3"><Clock size={17} /> Guardar recordatorio</button>
@@ -1791,6 +1800,20 @@ function mergeWhatsappTemplates(defaults: WhatsappTemplate[], custom: WhatsappTe
   return Array.from(map.values()).filter((template) => template.message);
 }
 
+function localDateTimeToBogotaIso(value: string) {
+  if (!value) return null;
+  const normalized = value.length === 16 ? `${value}:00` : value;
+  return new Date(`${normalized}${BOGOTA_UTC_OFFSET}`).toISOString();
+}
+
+function formatInDashboardTimeZone(raw: string) {
+  return new Intl.DateTimeFormat("es-CO", {
+    timeZone: DASHBOARD_TIME_ZONE,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(raw));
+}
+
 function getUpcomingReminders(reminders: CrmReminder[], days = 7) {
   const now = Date.now();
   const limit = now + days * 24 * 60 * 60 * 1000;
@@ -1830,7 +1853,7 @@ function reminderTime(reminder: CrmReminder) {
 function formatReminderDate(reminder: CrmReminder) {
   const raw = reminder.reminder_at || reminder.remind_at;
   if (!raw) return "Sin fecha";
-  return new Date(raw).toLocaleString("es-ES");
+  return `${formatInDashboardTimeZone(raw)} (${DASHBOARD_TIME_ZONE_LABEL})`;
 }
 
 function reminderCustomerName(reminder: CrmReminder, customers?: Customer[]) {
