@@ -248,7 +248,7 @@ export default function ComercialPage() {
     setLeads((leadsData || []) as SalesLead[]);
     setBudgets((budgetsData || []) as unknown as SalesBudget[]);
     setCommissions((commissionsData || []) as Commission[]);
-    setDocuments(((documentsData || []) as SalesDocumentTemplate[]).filter((document) => !document.assigned_sales_user_id || document.assigned_sales_user_id === current.id));
+    setDocuments(((documentsData || []) as SalesDocumentTemplate[]).filter((document) => canSeeDocument(document, current.id)));
     setSignatures((signaturesData || []) as SalesDocumentSignature[]);
     setTrainingFolders((foldersData || []) as TrainingFolder[]);
     setTrainingItems((itemsData || []) as TrainingItem[]);
@@ -404,6 +404,12 @@ export default function ComercialPage() {
   const getDocumentField = (document: SalesDocumentTemplate, key: string) => {
     const fields = document.pdf_fields || {};
     return typeof fields[key] === "string" ? fields[key] : "";
+  };
+
+  const canSeeDocument = (document: SalesDocumentTemplate, salesUserId: string) => {
+    if (document.is_active === false) return false;
+    if (document.assigned_sales_user_id) return document.assigned_sales_user_id === salesUserId;
+    return getDocumentField(document, "target_mode") === "all";
   };
 
   const renderDocumentContent = (document: SalesDocumentTemplate, extra?: { dni?: string; address?: string }) => {

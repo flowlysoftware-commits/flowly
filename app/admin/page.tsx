@@ -250,6 +250,7 @@ export default function AdminPage() {
   const [documentFileUrl, setDocumentFileUrl] = useState("");
   const [documentFileUploading, setDocumentFileUploading] = useState(false);
   const [documentAssignedSalesUser, setDocumentAssignedSalesUser] = useState("");
+  const [documentTargetMode, setDocumentTargetMode] = useState<"single" | "all">("single");
   const [trainingUploadMessage, setTrainingUploadMessage] = useState("");
   const [contractWorkerName, setContractWorkerName] = useState("");
   const [contractWorkerDni, setContractWorkerDni] = useState("");
@@ -580,7 +581,10 @@ export default function AdminPage() {
     setTrainingUploadMessage("Subiendo archivo a Flowly...");
     try {
       const publicUrl = await uploadAdminFile(file, "formaciones");
-      if (!publicUrl) return;
+      if (!publicUrl) {
+        setTrainingUploadMessage("No se pudo subir el archivo. Revisa Storage y vuelve a intentarlo.");
+        return;
+      }
       setTrainingUrl(publicUrl);
       setTrainingUploadMessage("Archivo subido correctamente. Ya puedes publicar la formación.");
       if (!trainingTitle.trim()) setTrainingTitle(file.name.replace(/\.[^.]+$/, ""));
@@ -593,19 +597,32 @@ export default function AdminPage() {
     }
   };
 
+  const getDocumentTargetMode = (document: SalesDocumentTemplate) => {
+    const fields = document.pdf_fields || {};
+    return fields.target_mode === "all" ? "all" : "single";
+  };
+
+  const documentAssigneeLabel = (document: SalesDocumentTemplate) => {
+    if (getDocumentTargetMode(document) === "all") return "Todos los comerciales";
+    if (document.assigned_sales_user_id) return sellerName(document.assigned_sales_user_id, salesUsers);
+    return "Sin destinatario visible";
+  };
+
   const createDocumentTemplate = async () => {
     if (!documentTitle.trim()) return alert("Indica el título del documento");
+    if (documentTargetMode === "single" && !documentAssignedSalesUser) return alert("Selecciona el comercial que debe recibir este documento.");
     const { error } = await supabase.from("sales_document_templates").insert({
       title: documentTitle.trim(),
       description: documentDescription.trim(),
       document_type: documentType,
       content: documentContent,
       file_url: documentFileUrl.trim() || null,
-      assigned_sales_user_id: documentAssignedSalesUser || null,
+      assigned_sales_user_id: documentTargetMode === "single" ? documentAssignedSalesUser : null,
       pdf_fields: {
         nombre: contractWorkerName.trim(),
         dni: contractWorkerDni.trim(),
         direccion: contractWorkerAddress.trim(),
+        target_mode: documentTargetMode,
       },
       requires_signature: documentRequiresSignature,
       is_active: true,
@@ -617,6 +634,7 @@ export default function AdminPage() {
     setDocumentContent("CONTRATO COMERCIAL\n\nEntre Flowly IA y {{nombre}}, con documento {{dni}} y dirección {{direccion}}, se acuerdan las condiciones comerciales indicadas por la empresa.\n\nFecha: {{fecha}}\nFirma: {{nombre}}");
     setDocumentFileUrl("");
     setDocumentAssignedSalesUser("");
+    setDocumentTargetMode("single");
     setContractWorkerName("");
     setContractWorkerDni("");
     setContractWorkerAddress("");
@@ -625,6 +643,25 @@ export default function AdminPage() {
 
   const updateDocumentTemplate = async (id: string, updates: Partial<SalesDocumentTemplate>) => {
     const { error } = await supabase.from("sales_document_templates").update(updates).eq("id", id);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const updateDocumentTarget = async (document: SalesDocumentTemplate, value: string) => {
+    const currentFields = document.pdf_fields || {};
+    const updates = value === "__all__"
+      ? { assigned_sales_user_id: null, pdf_fields: { ...currentFields, target_mode: "all" } }
+      : { assigned_sales_user_id: value || null, pdf_fields: { ...currentFields, target_mode: "single" } };
+    await updateDocumentTemplate(document.id, updates);
+  };
+
+  const deleteDocumentTemplate = async (document: SalesDocumentTemplate) => {
+    const signed = documentSignatures.some((item) => item.document_id === document.id);
+    const message = signed
+      ? "Este documento ya tiene firmas. Se ocultará del panel comercial y quedará archivado en admin. ¿Continuar?"
+      : "¿Eliminar este documento? Dejará de aparecer al comercial.";
+    if (!window.confirm(message)) return;
+    const { error } = await supabase.from("sales_document_templates").update({ is_active: false, assigned_sales_user_id: null }).eq("id", document.id);
     if (error) return alert(error.message);
     await load();
   };
@@ -811,7 +848,8 @@ export default function AdminPage() {
                 <input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" />
                 <div className="grid gap-3 md:grid-cols-2">
                   <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="contrato">Contrato</option><option value="legal">Legal</option><option value="comercial">Comercial</option><option value="otro">Otro</option></select>
-                  <select value={documentAssignedSalesUser} onChange={(e) => setDocumentAssignedSalesUser(e.target.value)} className="input-dark"><option value="">Enviar a todos los comerciales</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>
+                  <select value={documentTargetMode} onChange={(e) => setDocumentTargetMode(e.target.value as "single" | "all")} className="input-dark"><option value="single">Enviar a un comercial concreto</option><option value="all">Enviar a todos los comerciales</option></select>
+                  {documentTargetMode === "single" && <select value={documentAssignedSalesUser} onChange={(e) => setDocumentAssignedSalesUser(e.target.value)} className="input-dark"><option value="">Selecciona comercial destinatario</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
                 </div>
                 <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-violet-300/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
                   {documentFileUploading ? "Subiendo PDF..." : documentFileUrl ? "PDF subido · cambiar archivo" : "Subir PDF del contrato"}
@@ -830,7 +868,7 @@ export default function AdminPage() {
                 </div>
                 <textarea value={documentContent} onChange={(e) => setDocumentContent(e.target.value)} placeholder="Texto editable que acompaña al PDF. Variables: {{nombre}}, {{dni}}, {{direccion}}, {{fecha}}" className="input-dark min-h-44 font-mono text-xs" />
                 <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-sm text-white/70"><input type="checkbox" checked={documentRequiresSignature} onChange={(e) => setDocumentRequiresSignature(e.target.checked)} /> Requiere firma del comercial</label>
-                <button onClick={createDocumentTemplate} disabled={documentFileUploading} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white disabled:opacity-50"><FileText size={18} className="inline" /> Guardar PDF y contrato</button>
+                <button onClick={createDocumentTemplate} disabled={documentFileUploading} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white disabled:opacity-50"><FileText size={18} className="inline" /> Guardar y enviar documento</button>
               </div>
             </Panel>
             <Panel title="Documentos activos y firmas">
@@ -842,10 +880,10 @@ export default function AdminPage() {
                       <div className="min-w-0">
                         <p className="font-semibold break-words">{document.title}</p>
                         <p className="mt-1 text-sm text-white/45 break-words">{document.description || "Sin descripción"}</p>
-                        <p className="mt-2 text-xs text-violet-200">{signed.length} firmas · {document.file_url ? "PDF subido" : "Sin PDF"} · {document.requires_signature === false ? "Solo lectura" : "Firma requerida"}</p><p className="mt-1 text-xs text-cyan-200">Asignado a: {document.assigned_sales_user_id ? sellerName(document.assigned_sales_user_id, salesUsers) : "Todos los comerciales"}</p>
+                        <p className="mt-2 text-xs text-violet-200">{signed.length} firmas · {document.file_url ? "PDF subido" : "Sin PDF"} · {document.requires_signature === false ? "Solo lectura" : "Firma requerida"}</p><p className="mt-1 text-xs text-cyan-200">Asignado a: {documentAssigneeLabel(document)}</p>
                         {document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-cyan-200 underline">Abrir PDF</a>}
                       </div>
-                      <div className="grid gap-2 md:min-w-72"><select value={document.assigned_sales_user_id || ""} onChange={(e) => updateDocumentTemplate(document.id, { assigned_sales_user_id: e.target.value || null })} className="input-dark"><option value="">Todos los comerciales</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><div className="flex flex-wrap gap-2"><button onClick={() => { const value = window.prompt("Nuevo título", document.title); if (value) updateDocumentTemplate(document.id, { title: value }); }} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Editar título</button><button onClick={() => updateDocumentTemplate(document.id, { is_active: !document.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{document.is_active ? "Ocultar" : "Activar"}</button></div></div>
+                      <div className="grid gap-2 md:min-w-72"><select value={getDocumentTargetMode(document) === "all" ? "__all__" : (document.assigned_sales_user_id || "")} onChange={(e) => updateDocumentTarget(document, e.target.value)} className="input-dark"><option value="">Sin destinatario visible</option><option value="__all__">Todos los comerciales</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><div className="flex flex-wrap gap-2"><button onClick={() => { const value = window.prompt("Nuevo título", document.title); if (value) updateDocumentTemplate(document.id, { title: value }); }} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Editar título</button><button onClick={() => updateDocumentTemplate(document.id, { is_active: !document.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{document.is_active ? "Ocultar" : "Activar"}</button><button onClick={() => deleteDocumentTemplate(document)} className="rounded-full border border-rose-300/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">Eliminar enviado</button></div></div>
                     </div>
                     {document.file_url && <iframe src={document.file_url} className="mt-4 h-72 w-full rounded-2xl border border-white/10 bg-black/30" title={document.title} />}
                     <div className="mt-4 grid gap-2">{signed.slice(0, 6).map((signature) => <div key={signature.id} className="rounded-2xl bg-black/20 p-3 text-xs text-white/60"><strong className="text-white">{seller(signature.sales_user_id)?.full_name || signature.full_name || "Comercial"}</strong> · DNI {signature.dni || "-"} · {signature.signed_at ? new Date(signature.signed_at).toLocaleString("es-ES") : "sin fecha"}</div>)}{!signed.length && <p className="text-xs text-white/35">Sin firmas todavía.</p>}</div>
