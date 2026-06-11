@@ -96,6 +96,7 @@ type SalesDocumentTemplate = {
   document_type: string | null;
   content: string | null;
   file_url: string | null;
+  pdf_fields?: Record<string, string> | null;
   requires_signature: boolean | null;
   is_active: boolean | null;
   created_at?: string;
@@ -246,6 +247,10 @@ export default function AdminPage() {
   const [documentType, setDocumentType] = useState("contrato");
   const [documentContent, setDocumentContent] = useState("CONTRATO COMERCIAL\n\nEntre Flowly IA y {{nombre}}, con documento {{dni}} y dirección {{direccion}}, se acuerdan las condiciones comerciales indicadas por la empresa.\n\nFecha: {{fecha}}\nFirma: {{nombre}}");
   const [documentFileUrl, setDocumentFileUrl] = useState("");
+  const [documentFileUploading, setDocumentFileUploading] = useState(false);
+  const [contractWorkerName, setContractWorkerName] = useState("");
+  const [contractWorkerDni, setContractWorkerDni] = useState("");
+  const [contractWorkerAddress, setContractWorkerAddress] = useState("");
   const [documentRequiresSignature, setDocumentRequiresSignature] = useState(true);
   const [folderName, setFolderName] = useState("Formación en ventas");
   const [folderDescription, setFolderDescription] = useState("");
@@ -521,6 +526,22 @@ export default function AdminPage() {
   };
 
 
+  const uploadDocumentPdf = async (file: File) => {
+    if (!file) return;
+    if (file.type !== "application/pdf") return alert("Sube un archivo PDF válido.");
+    setDocumentFileUploading(true);
+    const safeName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.]+/g, "-").toLowerCase();
+    const path = `contratos/${Date.now()}-${safeName}`;
+    const { error } = await supabase.storage.from("sales-documents").upload(path, file, { cacheControl: "3600", upsert: false, contentType: "application/pdf" });
+    if (error) {
+      setDocumentFileUploading(false);
+      return alert(`${error.message}. Revisa que exista el bucket sales-documents en Supabase Storage.`);
+    }
+    const { data } = supabase.storage.from("sales-documents").getPublicUrl(path);
+    setDocumentFileUrl(data.publicUrl);
+    setDocumentFileUploading(false);
+  };
+
   const createDocumentTemplate = async () => {
     if (!documentTitle.trim()) return alert("Indica el título del documento");
     const { error } = await supabase.from("sales_document_templates").insert({
@@ -529,6 +550,11 @@ export default function AdminPage() {
       document_type: documentType,
       content: documentContent,
       file_url: documentFileUrl.trim() || null,
+      pdf_fields: {
+        nombre: contractWorkerName.trim(),
+        dni: contractWorkerDni.trim(),
+        direccion: contractWorkerAddress.trim(),
+      },
       requires_signature: documentRequiresSignature,
       is_active: true,
     });
@@ -538,6 +564,9 @@ export default function AdminPage() {
     setDocumentType("contrato");
     setDocumentContent("CONTRATO COMERCIAL\n\nEntre Flowly IA y {{nombre}}, con documento {{dni}} y dirección {{direccion}}, se acuerdan las condiciones comerciales indicadas por la empresa.\n\nFecha: {{fecha}}\nFirma: {{nombre}}");
     setDocumentFileUrl("");
+    setContractWorkerName("");
+    setContractWorkerDni("");
+    setContractWorkerAddress("");
     await load();
   };
 
@@ -721,7 +750,57 @@ export default function AdminPage() {
         )}
 
 
-        {tab === "documentos" && <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]"><Panel title="Subir / crear documento"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="contrato">Contrato</option><option value="legal">Legal</option><option value="comercial">Comercial</option><option value="otro">Otro</option></select><input value={documentFileUrl} onChange={(e) => setDocumentFileUrl(e.target.value)} placeholder="URL del archivo PDF/documento opcional" className="input-dark" /></div><textarea value={documentDescription} onChange={(e) => setDocumentDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" /><textarea value={documentContent} onChange={(e) => setDocumentContent(e.target.value)} placeholder="Contenido editable. Variables: {{nombre}}, {{dni}}, {{direccion}}, {{fecha}}" className="input-dark min-h-56 font-mono text-xs" /><label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-sm text-white/70"><input type="checkbox" checked={documentRequiresSignature} onChange={(e) => setDocumentRequiresSignature(e.target.checked)} /> Requiere firma del comercial</label><button onClick={createDocumentTemplate} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><FileText size={18} className="inline" /> Crear documento</button><p className="text-xs text-white/45">Para contratos genéricos usa variables: {'{{nombre}}'}, {'{{dni}}'}, {'{{direccion}}'} y {'{{fecha}}'}.</p></div></Panel><Panel title="Documentos activos y firmas"><div className="space-y-4">{documents.map((document) => { const signed = documentSignatures.filter((item) => item.document_id === document.id); return <div key={document.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div className="min-w-0"><p className="font-semibold break-words">{document.title}</p><p className="mt-1 text-sm text-white/45 break-words">{document.description || "Sin descripción"}</p><p className="mt-2 text-xs text-violet-200">{signed.length} firmas · {document.requires_signature === false ? "Solo lectura" : "Firma requerida"}</p>{document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-cyan-200 underline">Abrir archivo</a>}</div><div className="flex flex-wrap gap-2"><button onClick={() => { const value = window.prompt("Nuevo título", document.title); if (value) updateDocumentTemplate(document.id, { title: value }); }} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Editar título</button><button onClick={() => updateDocumentTemplate(document.id, { is_active: !document.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{document.is_active ? "Ocultar" : "Activar"}</button></div></div><div className="mt-4 grid gap-2">{signed.slice(0, 6).map((signature) => <div key={signature.id} className="rounded-2xl bg-black/20 p-3 text-xs text-white/60"><strong className="text-white">{seller(signature.sales_user_id)?.full_name || signature.full_name || "Comercial"}</strong> · DNI {signature.dni || "-"} · {signature.signed_at ? new Date(signature.signed_at).toLocaleString("es-ES") : "sin fecha"}</div>)}{!signed.length && <p className="text-xs text-white/35">Sin firmas todavía.</p>}</div></div>; })}{!documents.length && <Empty text="Todavía no hay documentos." />}</div></Panel></section>}
+        {tab === "documentos" && (
+          <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
+            <Panel title="Subir PDF y preparar contrato">
+              <div className="grid gap-3">
+                <input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="contrato">Contrato</option><option value="legal">Legal</option><option value="comercial">Comercial</option><option value="otro">Otro</option></select>
+                  <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-violet-300/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+                    {documentFileUploading ? "Subiendo PDF..." : documentFileUrl ? "PDF subido · cambiar archivo" : "Subir PDF del contrato"}
+                    <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDocumentPdf(file); }} />
+                  </label>
+                </div>
+                {documentFileUrl && <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/30"><iframe src={documentFileUrl} className="h-[360px] w-full" title="Vista previa PDF" /></div>}
+                <textarea value={documentDescription} onChange={(e) => setDocumentDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" />
+                <div className="rounded-3xl border border-cyan-300/15 bg-cyan-400/10 p-4">
+                  <p className="text-sm font-semibold text-cyan-100">Datos editables sobre el contrato</p>
+                  <p className="mt-1 text-xs text-white/45">Rellena aquí los datos variables. El comercial los verá junto al PDF y podrá corregirlos antes de firmar.</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <input value={contractWorkerName} onChange={(e) => setContractWorkerName(e.target.value)} placeholder="Nombre trabajador" className="input-dark" />
+                    <input value={contractWorkerDni} onChange={(e) => setContractWorkerDni(e.target.value)} placeholder="DNI / documento" className="input-dark" />
+                    <input value={contractWorkerAddress} onChange={(e) => setContractWorkerAddress(e.target.value)} placeholder="Dirección" className="input-dark" />
+                  </div>
+                </div>
+                <textarea value={documentContent} onChange={(e) => setDocumentContent(e.target.value)} placeholder="Texto editable que acompaña al PDF. Variables: {{nombre}}, {{dni}}, {{direccion}}, {{fecha}}" className="input-dark min-h-44 font-mono text-xs" />
+                <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-sm text-white/70"><input type="checkbox" checked={documentRequiresSignature} onChange={(e) => setDocumentRequiresSignature(e.target.checked)} /> Requiere firma del comercial</label>
+                <button onClick={createDocumentTemplate} disabled={documentFileUploading} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white disabled:opacity-50"><FileText size={18} className="inline" /> Guardar PDF y contrato</button>
+              </div>
+            </Panel>
+            <Panel title="Documentos activos y firmas">
+              <div className="space-y-4">
+                {documents.map((document) => {
+                  const signed = documentSignatures.filter((item) => item.document_id === document.id);
+                  return <div key={document.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                    <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                      <div className="min-w-0">
+                        <p className="font-semibold break-words">{document.title}</p>
+                        <p className="mt-1 text-sm text-white/45 break-words">{document.description || "Sin descripción"}</p>
+                        <p className="mt-2 text-xs text-violet-200">{signed.length} firmas · {document.file_url ? "PDF subido" : "Sin PDF"} · {document.requires_signature === false ? "Solo lectura" : "Firma requerida"}</p>
+                        {document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-cyan-200 underline">Abrir PDF</a>}
+                      </div>
+                      <div className="flex flex-wrap gap-2"><button onClick={() => { const value = window.prompt("Nuevo título", document.title); if (value) updateDocumentTemplate(document.id, { title: value }); }} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Editar título</button><button onClick={() => updateDocumentTemplate(document.id, { is_active: !document.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{document.is_active ? "Ocultar" : "Activar"}</button></div>
+                    </div>
+                    {document.file_url && <iframe src={document.file_url} className="mt-4 h-72 w-full rounded-2xl border border-white/10 bg-black/30" title={document.title} />}
+                    <div className="mt-4 grid gap-2">{signed.slice(0, 6).map((signature) => <div key={signature.id} className="rounded-2xl bg-black/20 p-3 text-xs text-white/60"><strong className="text-white">{seller(signature.sales_user_id)?.full_name || signature.full_name || "Comercial"}</strong> · DNI {signature.dni || "-"} · {signature.signed_at ? new Date(signature.signed_at).toLocaleString("es-ES") : "sin fecha"}</div>)}{!signed.length && <p className="text-xs text-white/35">Sin firmas todavía.</p>}</div>
+                  </div>;
+                })}
+                {!documents.length && <Empty text="Todavía no hay documentos." />}
+              </div>
+            </Panel>
+          </section>
+        )}
 
         {tab === "formaciones" && <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]"><div className="grid gap-6"><Panel title="Crear carpeta de formación"><div className="grid gap-3"><input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Nombre de carpeta" className="input-dark" /><textarea value={folderDescription} onChange={(e) => setFolderDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" /><button onClick={createTrainingFolder} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><FolderOpen size={18} className="inline" /> Crear carpeta</button></div></Panel><Panel title="Añadir contenido"><div className="grid gap-3"><select value={trainingFolderId} onChange={(e) => setTrainingFolderId(e.target.value)} className="input-dark"><option value="">Seleccionar carpeta</option>{trainingFolders.filter((folder) => folder.is_active !== false).map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select><input value={trainingTitle} onChange={(e) => setTrainingTitle(e.target.value)} placeholder="Título del recurso" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><select value={trainingType} onChange={(e) => setTrainingType(e.target.value)} className="input-dark"><option value="video">Vídeo</option><option value="pdf">PDF</option><option value="texto">Texto</option><option value="link">Link</option></select><input value={trainingUrl} onChange={(e) => setTrainingUrl(e.target.value)} placeholder="URL opcional" className="input-dark" /></div><textarea value={trainingDescription} onChange={(e) => setTrainingDescription(e.target.value)} placeholder="Descripción corta" className="input-dark min-h-20" /><textarea value={trainingContent} onChange={(e) => setTrainingContent(e.target.value)} placeholder="Contenido o instrucciones" className="input-dark min-h-32" /><button onClick={createTrainingItem} className="rounded-full bg-white px-5 py-3 font-medium text-neutral-950"><BookOpen size={18} className="inline" /> Publicar formación</button></div></Panel></div><Panel title="Biblioteca de formaciones"><div className="space-y-5">{trainingFolders.map((folder) => <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-semibold">{folder.name}</p><p className="text-sm text-white/45">{folder.description || "Sin descripción"}</p></div><button onClick={() => updateTrainingFolder(folder.id, { is_active: !folder.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{folder.is_active === false ? "Activar" : "Ocultar"}</button></div><div className="mt-4 grid gap-2">{trainingItems.filter((item) => item.folder_id === folder.id).map((item) => <div key={item.id} className="rounded-2xl bg-black/20 p-3"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-medium">{item.title}</p><p className="text-xs text-white/45">{item.item_type || "recurso"} · {item.description || ""}</p></div><button onClick={() => updateTrainingItem(item.id, { is_active: !item.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{item.is_active === false ? "Activar" : "Ocultar"}</button></div></div>)}{!trainingItems.filter((item) => item.folder_id === folder.id).length && <p className="text-xs text-white/35">Carpeta vacía.</p>}</div></div>)}{!trainingFolders.length && <Empty text="Todavía no hay formación publicada." />}</div></Panel></section>}
 

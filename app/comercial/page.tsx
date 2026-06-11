@@ -71,6 +71,7 @@ type SalesDocumentTemplate = {
   document_type: string | null;
   content: string | null;
   file_url: string | null;
+  pdf_fields?: Record<string, string> | null;
   requires_signature: boolean | null;
   is_active: boolean | null;
   created_at?: string;
@@ -161,6 +162,7 @@ export default function ComercialPage() {
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [documents, setDocuments] = useState<SalesDocumentTemplate[]>([]);
   const [signatures, setSignatures] = useState<SalesDocumentSignature[]>([]);
+  const [documentDrafts, setDocumentDrafts] = useState<Record<string, { dni: string; address: string; signature: string }>>({});
   const [trainingFolders, setTrainingFolders] = useState<TrainingFolder[]>([]);
   const [trainingItems, setTrainingItems] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -386,35 +388,54 @@ export default function ComercialPage() {
   };
 
 
+  const updateDocumentDraft = (documentId: string, field: "dni" | "address" | "signature", value: string) => {
+    setDocumentDrafts((current) => ({
+      ...current,
+      [documentId]: {
+        dni: current[documentId]?.dni || "",
+        address: current[documentId]?.address || "",
+        signature: current[documentId]?.signature || me?.full_name || "",
+        [field]: value,
+      },
+    }));
+  };
+
+  const getDocumentField = (document: SalesDocumentTemplate, key: string) => {
+    const fields = document.pdf_fields || {};
+    return typeof fields[key] === "string" ? fields[key] : "";
+  };
+
   const renderDocumentContent = (document: SalesDocumentTemplate, extra?: { dni?: string; address?: string }) => {
     const today = new Date().toLocaleDateString("es-ES");
     return (document.content || "")
       .replaceAll("{{nombre}}", me?.full_name || "")
       .replaceAll("{{trabajador}}", me?.full_name || "")
       .replaceAll("{{email}}", me?.email || "")
-      .replaceAll("{{dni}}", extra?.dni || "________________")
-      .replaceAll("{{direccion}}", extra?.address || "________________")
+      .replaceAll("{{dni}}", extra?.dni || getDocumentField(document, "dni") || "________________")
+      .replaceAll("{{direccion}}", extra?.address || getDocumentField(document, "direccion") || "________________")
       .replaceAll("{{fecha}}", today);
   };
 
   const signDocument = async (document: SalesDocumentTemplate) => {
     if (!me) return;
     const existing = signatures.find((item) => item.document_id === document.id);
-    const dni = window.prompt("DNI / documento del trabajador", existing?.dni || "");
-    if (dni === null) return;
-    const address = window.prompt("Dirección del trabajador", existing?.address || "");
-    if (address === null) return;
-    const signature = window.prompt("Firma digital: escribe tu nombre completo", me.full_name);
-    if (!signature?.trim()) return alert("La firma es obligatoria.");
+    const draft = documentDrafts[document.id] || {
+      dni: existing?.dni || getDocumentField(document, "dni"),
+      address: existing?.address || getDocumentField(document, "direccion"),
+      signature: existing?.signature_text || me.full_name,
+    };
+    if (!draft.dni?.trim()) return alert("Indica tu DNI/documento antes de firmar.");
+    if (!draft.address?.trim()) return alert("Indica tu dirección antes de firmar.");
+    if (!draft.signature?.trim()) return alert("La firma es obligatoria.");
 
     const payload = {
       document_id: document.id,
       sales_user_id: me.id,
       status: "signed",
       full_name: me.full_name,
-      dni: dni.trim(),
-      address: address.trim(),
-      signature_text: signature.trim(),
+      dni: draft.dni.trim(),
+      address: draft.address.trim(),
+      signature_text: draft.signature.trim(),
       signed_at: new Date().toISOString(),
     };
 
@@ -568,11 +589,16 @@ export default function ComercialPage() {
 
 
         {tab === "documentos" && (
-          <section className="grid gap-6 lg:grid-cols-[1fr_.9fr]">
+          <section className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
             <Panel title="Documentos pendientes y firmados">
               <div className="space-y-4">
                 {documents.map((document) => {
                   const signature = signatures.find((item) => item.document_id === document.id);
+                  const draft = documentDrafts[document.id] || {
+                    dni: signature?.dni || getDocumentField(document, "dni"),
+                    address: signature?.address || getDocumentField(document, "direccion"),
+                    signature: signature?.signature_text || me.full_name,
+                  };
                   return (
                     <div key={document.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
                       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
@@ -581,12 +607,21 @@ export default function ComercialPage() {
                           <p className="mt-1 text-sm text-white/50 break-words">{document.description || "Documento comercial"}</p>
                           <p className="mt-2 text-xs text-violet-200">Estado: {signature?.status === "signed" ? `Firmado ${signature.signed_at ? new Date(signature.signed_at).toLocaleDateString("es-ES") : ""}` : "Pendiente de firma"}</p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/75">Ver archivo</a>}
-                          {document.requires_signature !== false && <button onClick={() => signDocument(document)} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950"><PenLine size={13} className="inline" /> {signature ? "Actualizar firma" : "Firmar"}</button>}
-                        </div>
+                        {document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/75">Abrir PDF</a>}
                       </div>
-                      {document.content && <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/25 p-4 text-xs leading-relaxed text-white/70">{renderDocumentContent(document, { dni: signature?.dni || undefined, address: signature?.address || undefined })}</pre>}
+                      {document.file_url && <iframe src={document.file_url} className="mt-4 h-[420px] w-full rounded-2xl border border-white/10 bg-black/30" title={document.title} />}
+                      <div className="mt-4 grid gap-4 lg:grid-cols-[.9fr_1.1fr]">
+                        <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4">
+                          <p className="text-sm font-semibold text-cyan-100">Datos del contrato</p>
+                          <div className="mt-3 grid gap-3">
+                            <input value={draft.dni} onChange={(e) => updateDocumentDraft(document.id, "dni", e.target.value)} placeholder="DNI / documento" className="input-dark" />
+                            <textarea value={draft.address} onChange={(e) => updateDocumentDraft(document.id, "address", e.target.value)} placeholder="Dirección" className="input-dark min-h-20" />
+                            <input value={draft.signature} onChange={(e) => updateDocumentDraft(document.id, "signature", e.target.value)} placeholder="Firma digital: nombre completo" className="input-dark" />
+                            {document.requires_signature !== false && <button onClick={() => signDocument(document)} className="rounded-full bg-white px-4 py-3 text-xs font-medium text-neutral-950"><PenLine size={13} className="inline" /> {signature ? "Actualizar firma" : "Firmar documento"}</button>}
+                          </div>
+                        </div>
+                        {document.content && <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/25 p-4 text-xs leading-relaxed text-white/70">{renderDocumentContent(document, { dni: draft.dni, address: draft.address })}</pre>}
+                      </div>
                     </div>
                   );
                 })}
@@ -595,8 +630,8 @@ export default function ComercialPage() {
             </Panel>
             <Panel title="Cómo funciona la firma">
               <div className="space-y-3 text-sm text-white/65">
-                <p>Administración sube documentos y contratos genéricos. Cuando firmas, Flowly guarda tu nombre, DNI/documento, dirección, firma digital y fecha.</p>
-                <p>Los contratos pueden incluir variables como <span className="text-violet-200">{'{{nombre}}'}</span>, <span className="text-violet-200">{'{{dni}}'}</span>, <span className="text-violet-200">{'{{direccion}}'}</span> y <span className="text-violet-200">{'{{fecha}}'}</span>.</p>
+                <p>Administración sube el PDF real del contrato. Tú lo ves en línea, completas o corriges tus datos y firmas desde el panel.</p>
+                <p>La firma guarda nombre, DNI/documento, dirección, texto firmado y fecha. Si el contrato tiene PDF, queda vinculado a esa firma.</p>
               </div>
             </Panel>
           </section>
