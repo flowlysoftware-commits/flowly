@@ -71,6 +71,7 @@ type SalesDocumentTemplate = {
   document_type: string | null;
   content: string | null;
   file_url: string | null;
+  assigned_sales_user_id?: string | null;
   pdf_fields?: Record<string, string> | null;
   requires_signature: boolean | null;
   is_active: boolean | null;
@@ -247,7 +248,7 @@ export default function ComercialPage() {
     setLeads((leadsData || []) as SalesLead[]);
     setBudgets((budgetsData || []) as unknown as SalesBudget[]);
     setCommissions((commissionsData || []) as Commission[]);
-    setDocuments((documentsData || []) as SalesDocumentTemplate[]);
+    setDocuments(((documentsData || []) as SalesDocumentTemplate[]).filter((document) => !document.assigned_sales_user_id || document.assigned_sales_user_id === current.id));
     setSignatures((signaturesData || []) as SalesDocumentSignature[]);
     setTrainingFolders((foldersData || []) as TrainingFolder[]);
     setTrainingItems((itemsData || []) as TrainingItem[]);

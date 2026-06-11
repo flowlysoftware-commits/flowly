@@ -96,6 +96,7 @@ type SalesDocumentTemplate = {
   document_type: string | null;
   content: string | null;
   file_url: string | null;
+  assigned_sales_user_id?: string | null;
   pdf_fields?: Record<string, string> | null;
   requires_signature: boolean | null;
   is_active: boolean | null;
@@ -248,6 +249,8 @@ export default function AdminPage() {
   const [documentContent, setDocumentContent] = useState("CONTRATO COMERCIAL\n\nEntre Flowly IA y {{nombre}}, con documento {{dni}} y dirección {{direccion}}, se acuerdan las condiciones comerciales indicadas por la empresa.\n\nFecha: {{fecha}}\nFirma: {{nombre}}");
   const [documentFileUrl, setDocumentFileUrl] = useState("");
   const [documentFileUploading, setDocumentFileUploading] = useState(false);
+  const [documentAssignedSalesUser, setDocumentAssignedSalesUser] = useState("");
+  const [trainingUploadMessage, setTrainingUploadMessage] = useState("");
   const [contractWorkerName, setContractWorkerName] = useState("");
   const [contractWorkerDni, setContractWorkerDni] = useState("");
   const [contractWorkerAddress, setContractWorkerAddress] = useState("");
@@ -527,40 +530,67 @@ export default function AdminPage() {
   };
 
 
-  const uploadDocumentPdf = async (file: File) => {
-    if (!file) return;
-    if (file.type !== "application/pdf") return alert("Sube un archivo PDF válido.");
-    setDocumentFileUploading(true);
-    const safeName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.]+/g, "-").toLowerCase();
-    const path = `contratos/${Date.now()}-${safeName}`;
-    const { error } = await supabase.storage.from("sales-documents").upload(path, file, { cacheControl: "3600", upsert: false, contentType: "application/pdf" });
-    if (error) {
-      setDocumentFileUploading(false);
-      return alert(`${error.message}. Revisa que exista el bucket sales-documents en Supabase Storage.`);
+  const uploadAdminFile = async (file: File, folder: "contratos" | "formaciones", acceptPdfOnly = false) => {
+    if (!file) return "";
+    if (acceptPdfOnly && file.type !== "application/pdf") {
+      alert("Sube un archivo PDF válido.");
+      return "";
     }
-    const { data } = supabase.storage.from("sales-documents").getPublicUrl(path);
-    setDocumentFileUrl(data.publicUrl);
-    setDocumentFileUploading(false);
+    const token = await getAdminToken();
+    if (!token) return "";
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", folder);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 90000);
+    try {
+      const res = await fetch("/api/admin/sales-upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+        signal: controller.signal,
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        alert(result.error || "No se pudo subir el archivo");
+        return "";
+      }
+      return result.publicUrl as string;
+    } catch (error: any) {
+      alert(error?.name === "AbortError" ? "La subida tardó demasiado. Prueba con un archivo más ligero." : "No se pudo completar la subida.");
+      return "";
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  const uploadDocumentPdf = async (file: File) => {
+    setDocumentFileUploading(true);
+    try {
+      const publicUrl = await uploadAdminFile(file, "contratos", true);
+      if (publicUrl) setDocumentFileUrl(publicUrl);
+    } finally {
+      setDocumentFileUploading(false);
+    }
   };
 
   const uploadTrainingFile = async (file: File) => {
     if (!file) return;
     setTrainingFileUploading(true);
-    const safeName = file.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9.]+/g, "-").toLowerCase();
-    const path = `formaciones/${Date.now()}-${safeName}`;
-    const { error } = await supabase.storage.from("sales-documents").upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type || "application/octet-stream" });
-    if (error) {
+    setTrainingUploadMessage("Subiendo archivo a Flowly...");
+    try {
+      const publicUrl = await uploadAdminFile(file, "formaciones");
+      if (!publicUrl) return;
+      setTrainingUrl(publicUrl);
+      setTrainingUploadMessage("Archivo subido correctamente. Ya puedes publicar la formación.");
+      if (!trainingTitle.trim()) setTrainingTitle(file.name.replace(/\.[^.]+$/, ""));
+      if (file.type.includes("pdf")) setTrainingType("pdf");
+      else if (file.type.includes("video")) setTrainingType("video");
+      else if (file.type.includes("image")) setTrainingType("imagen");
+      else setTrainingType("archivo");
+    } finally {
       setTrainingFileUploading(false);
-      return alert(`${error.message}. Revisa que exista el bucket sales-documents en Supabase Storage.`);
     }
-    const { data } = supabase.storage.from("sales-documents").getPublicUrl(path);
-    setTrainingUrl(data.publicUrl);
-    if (!trainingTitle.trim()) setTrainingTitle(file.name.replace(/\.[^.]+$/, ""));
-    if (file.type.includes("pdf")) setTrainingType("pdf");
-    else if (file.type.includes("video")) setTrainingType("video");
-    else if (file.type.includes("image")) setTrainingType("imagen");
-    else setTrainingType("archivo");
-    setTrainingFileUploading(false);
   };
 
   const createDocumentTemplate = async () => {
@@ -571,6 +601,7 @@ export default function AdminPage() {
       document_type: documentType,
       content: documentContent,
       file_url: documentFileUrl.trim() || null,
+      assigned_sales_user_id: documentAssignedSalesUser || null,
       pdf_fields: {
         nombre: contractWorkerName.trim(),
         dni: contractWorkerDni.trim(),
@@ -585,6 +616,7 @@ export default function AdminPage() {
     setDocumentType("contrato");
     setDocumentContent("CONTRATO COMERCIAL\n\nEntre Flowly IA y {{nombre}}, con documento {{dni}} y dirección {{direccion}}, se acuerdan las condiciones comerciales indicadas por la empresa.\n\nFecha: {{fecha}}\nFirma: {{nombre}}");
     setDocumentFileUrl("");
+    setDocumentAssignedSalesUser("");
     setContractWorkerName("");
     setContractWorkerDni("");
     setContractWorkerAddress("");
@@ -623,6 +655,7 @@ export default function AdminPage() {
     setTrainingDescription("");
     setTrainingContent("");
     setTrainingUrl("");
+    setTrainingUploadMessage("");
     await load();
   };
 
@@ -778,11 +811,12 @@ export default function AdminPage() {
                 <input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" />
                 <div className="grid gap-3 md:grid-cols-2">
                   <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="contrato">Contrato</option><option value="legal">Legal</option><option value="comercial">Comercial</option><option value="otro">Otro</option></select>
-                  <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-violet-300/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
-                    {documentFileUploading ? "Subiendo PDF..." : documentFileUrl ? "PDF subido · cambiar archivo" : "Subir PDF del contrato"}
-                    <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDocumentPdf(file); }} />
-                  </label>
+                  <select value={documentAssignedSalesUser} onChange={(e) => setDocumentAssignedSalesUser(e.target.value)} className="input-dark"><option value="">Enviar a todos los comerciales</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>
                 </div>
+                <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-violet-300/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+                  {documentFileUploading ? "Subiendo PDF..." : documentFileUrl ? "PDF subido · cambiar archivo" : "Subir PDF del contrato"}
+                  <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDocumentPdf(file); e.currentTarget.value = ""; }} />
+                </label>
                 {documentFileUrl && <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/30"><iframe src={documentFileUrl} className="h-[360px] w-full" title="Vista previa PDF" /></div>}
                 <textarea value={documentDescription} onChange={(e) => setDocumentDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" />
                 <div className="rounded-3xl border border-cyan-300/15 bg-cyan-400/10 p-4">
@@ -808,10 +842,10 @@ export default function AdminPage() {
                       <div className="min-w-0">
                         <p className="font-semibold break-words">{document.title}</p>
                         <p className="mt-1 text-sm text-white/45 break-words">{document.description || "Sin descripción"}</p>
-                        <p className="mt-2 text-xs text-violet-200">{signed.length} firmas · {document.file_url ? "PDF subido" : "Sin PDF"} · {document.requires_signature === false ? "Solo lectura" : "Firma requerida"}</p>
+                        <p className="mt-2 text-xs text-violet-200">{signed.length} firmas · {document.file_url ? "PDF subido" : "Sin PDF"} · {document.requires_signature === false ? "Solo lectura" : "Firma requerida"}</p><p className="mt-1 text-xs text-cyan-200">Asignado a: {document.assigned_sales_user_id ? sellerName(document.assigned_sales_user_id, salesUsers) : "Todos los comerciales"}</p>
                         {document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-cyan-200 underline">Abrir PDF</a>}
                       </div>
-                      <div className="flex flex-wrap gap-2"><button onClick={() => { const value = window.prompt("Nuevo título", document.title); if (value) updateDocumentTemplate(document.id, { title: value }); }} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Editar título</button><button onClick={() => updateDocumentTemplate(document.id, { is_active: !document.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{document.is_active ? "Ocultar" : "Activar"}</button></div>
+                      <div className="grid gap-2 md:min-w-72"><select value={document.assigned_sales_user_id || ""} onChange={(e) => updateDocumentTemplate(document.id, { assigned_sales_user_id: e.target.value || null })} className="input-dark"><option value="">Todos los comerciales</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><div className="flex flex-wrap gap-2"><button onClick={() => { const value = window.prompt("Nuevo título", document.title); if (value) updateDocumentTemplate(document.id, { title: value }); }} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Editar título</button><button onClick={() => updateDocumentTemplate(document.id, { is_active: !document.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{document.is_active ? "Ocultar" : "Activar"}</button></div></div>
                     </div>
                     {document.file_url && <iframe src={document.file_url} className="mt-4 h-72 w-full rounded-2xl border border-white/10 bg-black/30" title={document.title} />}
                     <div className="mt-4 grid gap-2">{signed.slice(0, 6).map((signature) => <div key={signature.id} className="rounded-2xl bg-black/20 p-3 text-xs text-white/60"><strong className="text-white">{seller(signature.sales_user_id)?.full_name || signature.full_name || "Comercial"}</strong> · DNI {signature.dni || "-"} · {signature.signed_at ? new Date(signature.signed_at).toLocaleString("es-ES") : "sin fecha"}</div>)}{!signed.length && <p className="text-xs text-white/35">Sin firmas todavía.</p>}</div>
@@ -823,7 +857,7 @@ export default function AdminPage() {
           </section>
         )}
 
-        {tab === "formaciones" && <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]"><div className="grid gap-6"><Panel title="Crear carpeta de formación"><div className="grid gap-3"><input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Nombre de carpeta" className="input-dark" /><textarea value={folderDescription} onChange={(e) => setFolderDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" /><button onClick={createTrainingFolder} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><FolderOpen size={18} className="inline" /> Crear carpeta</button></div></Panel><Panel title="Añadir contenido"><div className="grid gap-3"><select value={trainingFolderId} onChange={(e) => setTrainingFolderId(e.target.value)} className="input-dark"><option value="">Seleccionar carpeta</option>{trainingFolders.filter((folder) => folder.is_active !== false).map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select><input value={trainingTitle} onChange={(e) => setTrainingTitle(e.target.value)} placeholder="Título del recurso" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><select value={trainingType} onChange={(e) => setTrainingType(e.target.value)} className="input-dark"><option value="video">Vídeo</option><option value="pdf">PDF</option><option value="texto">Texto</option><option value="link">Link</option><option value="archivo">Archivo</option><option value="imagen">Imagen</option></select><input value={trainingUrl} onChange={(e) => setTrainingUrl(e.target.value)} placeholder="URL o archivo subido" className="input-dark" /></div><label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-violet-300/30 bg-violet-500/10 px-4 py-4 text-sm text-violet-100 hover:bg-violet-500/20"><FileText size={16} /> {trainingFileUploading ? "Subiendo archivo..." : trainingUrl ? "Archivo subido · cambiar archivo" : "Subir archivo de formación"}<input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && uploadTrainingFile(e.target.files[0])} /></label>{trainingUrl && <a href={trainingUrl} target="_blank" rel="noreferrer" className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-xs text-violet-100 break-all">Archivo enlazado: {trainingUrl}</a>}<textarea value={trainingDescription} onChange={(e) => setTrainingDescription(e.target.value)} placeholder="Descripción corta" className="input-dark min-h-20" /><textarea value={trainingContent} onChange={(e) => setTrainingContent(e.target.value)} placeholder="Contenido o instrucciones" className="input-dark min-h-32" /><button onClick={createTrainingItem} disabled={trainingFileUploading} className="rounded-full bg-white px-5 py-3 font-medium text-neutral-950 disabled:opacity-50"><BookOpen size={18} className="inline" /> Publicar formación</button></div></Panel></div><Panel title="Biblioteca de formaciones"><div className="space-y-5">{trainingFolders.map((folder) => <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-semibold">{folder.name}</p><p className="text-sm text-white/45">{folder.description || "Sin descripción"}</p></div><button onClick={() => updateTrainingFolder(folder.id, { is_active: !folder.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{folder.is_active === false ? "Activar" : "Ocultar"}</button></div><div className="mt-4 grid gap-2">{trainingItems.filter((item) => item.folder_id === folder.id).map((item) => <div key={item.id} className="rounded-2xl bg-black/20 p-3"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-medium">{item.title}</p><p className="text-xs text-white/45">{item.item_type || "recurso"} · {item.description || ""}</p>{item.url && <a href={item.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-full border border-white/10 px-3 py-1 text-xs text-violet-100">Ver archivo</a>}</div><button onClick={() => updateTrainingItem(item.id, { is_active: !item.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{item.is_active === false ? "Activar" : "Ocultar"}</button></div></div>)}{!trainingItems.filter((item) => item.folder_id === folder.id).length && <p className="text-xs text-white/35">Carpeta vacía.</p>}</div></div>)}{!trainingFolders.length && <Empty text="Todavía no hay formación publicada." />}</div></Panel></section>}
+        {tab === "formaciones" && <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]"><div className="grid gap-6"><Panel title="Crear carpeta de formación"><div className="grid gap-3"><input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Nombre de carpeta" className="input-dark" /><textarea value={folderDescription} onChange={(e) => setFolderDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" /><button onClick={createTrainingFolder} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><FolderOpen size={18} className="inline" /> Crear carpeta</button></div></Panel><Panel title="Añadir contenido"><div className="grid gap-3"><select value={trainingFolderId} onChange={(e) => setTrainingFolderId(e.target.value)} className="input-dark"><option value="">Seleccionar carpeta</option>{trainingFolders.filter((folder) => folder.is_active !== false).map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select><input value={trainingTitle} onChange={(e) => setTrainingTitle(e.target.value)} placeholder="Título del recurso" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><select value={trainingType} onChange={(e) => setTrainingType(e.target.value)} className="input-dark"><option value="video">Vídeo</option><option value="pdf">PDF</option><option value="texto">Texto</option><option value="link">Link</option><option value="archivo">Archivo</option><option value="imagen">Imagen</option></select><input value={trainingUrl} onChange={(e) => setTrainingUrl(e.target.value)} placeholder="URL o archivo subido" className="input-dark" /></div><label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-violet-300/30 bg-violet-500/10 px-4 py-4 text-sm text-violet-100 hover:bg-violet-500/20"><FileText size={16} /> {trainingFileUploading ? "Subiendo archivo..." : trainingUrl ? "Archivo subido · cambiar archivo" : "Subir archivo de formación"}<input type="file" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadTrainingFile(file); e.currentTarget.value = ""; }} /></label>{trainingUploadMessage && <p className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-xs text-white/60">{trainingUploadMessage}</p>}{trainingUrl && <a href={trainingUrl} target="_blank" rel="noreferrer" className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-xs text-violet-100 break-all">Archivo enlazado: {trainingUrl}</a>}<textarea value={trainingDescription} onChange={(e) => setTrainingDescription(e.target.value)} placeholder="Descripción corta" className="input-dark min-h-20" /><textarea value={trainingContent} onChange={(e) => setTrainingContent(e.target.value)} placeholder="Contenido o instrucciones" className="input-dark min-h-32" /><button onClick={createTrainingItem} disabled={trainingFileUploading} className="rounded-full bg-white px-5 py-3 font-medium text-neutral-950 disabled:opacity-50"><BookOpen size={18} className="inline" /> Publicar formación</button></div></Panel></div><Panel title="Biblioteca de formaciones"><div className="space-y-5">{trainingFolders.map((folder) => <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-semibold">{folder.name}</p><p className="text-sm text-white/45">{folder.description || "Sin descripción"}</p></div><button onClick={() => updateTrainingFolder(folder.id, { is_active: !folder.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{folder.is_active === false ? "Activar" : "Ocultar"}</button></div><div className="mt-4 grid gap-2">{trainingItems.filter((item) => item.folder_id === folder.id).map((item) => <div key={item.id} className="rounded-2xl bg-black/20 p-3"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-medium">{item.title}</p><p className="text-xs text-white/45">{item.item_type || "recurso"} · {item.description || ""}</p>{item.url && <a href={item.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-full border border-white/10 px-3 py-1 text-xs text-violet-100">Ver archivo</a>}</div><button onClick={() => updateTrainingItem(item.id, { is_active: !item.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{item.is_active === false ? "Activar" : "Ocultar"}</button></div></div>)}{!trainingItems.filter((item) => item.folder_id === folder.id).length && <p className="text-xs text-white/35">Carpeta vacía.</p>}</div></div>)}{!trainingFolders.length && <Empty text="Todavía no hay formación publicada." />}</div></Panel></section>}
 
         {tab === "leads" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Nuevo lead admin"><div className="grid gap-3"><input value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} placeholder="Empresa / negocio" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={leadContact} onChange={(e) => setLeadContact(e.target.value)} placeholder="Persona de contacto" className="input-dark" /><select value={leadSector} onChange={(e) => setLeadSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option></select></div><div className="grid gap-3 md:grid-cols-2"><input value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} placeholder="Email" className="input-dark" /></div><select value={leadAssigned} onChange={(e) => setLeadAssigned(e.target.value)} className="input-dark"><option value="">Sin asignar</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><textarea value={leadNotes} onChange={(e) => setLeadNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" /><button onClick={createLead} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><Plus size={18} className="inline" /> Crear lead</button></div></Panel><Panel title="Todos los leads"><LeadList leads={leads} salesUsers={salesUsers} onStatus={updateLead} /></Panel></section>}
 
