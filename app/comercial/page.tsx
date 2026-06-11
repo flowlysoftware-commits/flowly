@@ -9,11 +9,13 @@ import {
   ArrowRight,
   Banknote,
   BarChart3,
+  BookOpen,
   CheckCircle2,
   Clock,
   Euro,
   FileText,
   LogOut,
+  PenLine,
   Mail,
   Plus,
   Send,
@@ -23,7 +25,7 @@ import {
 } from "lucide-react";
 
 type SalesRole = "director" | "jefe" | "senior" | "asociado";
-type Tab = "resumen" | "presupuestos" | "leads" | "saldo" | "metodos_pago" | "equipo";
+type Tab = "resumen" | "presupuestos" | "leads" | "saldo" | "metodos_pago" | "documentos" | "formaciones" | "equipo";
 
 type SalesUser = {
   id: string;
@@ -61,6 +63,33 @@ type Commission = {
   status: string;
   created_at: string;
 };
+
+type SalesDocumentTemplate = {
+  id: string;
+  title: string;
+  description: string | null;
+  document_type: string | null;
+  content: string | null;
+  file_url: string | null;
+  requires_signature: boolean | null;
+  is_active: boolean | null;
+  created_at?: string;
+};
+
+type SalesDocumentSignature = {
+  id: string;
+  document_id: string;
+  sales_user_id: string;
+  status: string;
+  full_name: string | null;
+  dni: string | null;
+  address: string | null;
+  signature_text: string | null;
+  signed_at: string | null;
+};
+
+type TrainingFolder = { id: string; name: string; description: string | null; sort_order: number | null; is_active: boolean | null };
+type TrainingItem = { id: string; folder_id: string | null; title: string; description: string | null; content: string | null; url: string | null; item_type: string | null; sort_order: number | null; is_active: boolean | null };
 
 type SalesBudget = {
   id: string;
@@ -130,6 +159,10 @@ export default function ComercialPage() {
   const [leads, setLeads] = useState<SalesLead[]>([]);
   const [budgets, setBudgets] = useState<SalesBudget[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
+  const [documents, setDocuments] = useState<SalesDocumentTemplate[]>([]);
+  const [signatures, setSignatures] = useState<SalesDocumentSignature[]>([]);
+  const [trainingFolders, setTrainingFolders] = useState<TrainingFolder[]>([]);
+  const [trainingItems, setTrainingItems] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("resumen");
   const [paymentBankName, setPaymentBankName] = useState("");
@@ -191,15 +224,31 @@ export default function ComercialPage() {
     setTeam(members);
     const visibleIds = current.role === "asociado" ? [current.id] : [current.id, ...members.map((m) => m.id)];
 
-    const [{ data: leadsData }, { data: budgetsData }, { data: commissionsData }] = await Promise.all([
+    const [
+      { data: leadsData },
+      { data: budgetsData },
+      { data: commissionsData },
+      { data: documentsData },
+      { data: signaturesData },
+      { data: foldersData },
+      { data: itemsData },
+    ] = await Promise.all([
       supabase.from("sales_leads").select("*").in("assigned_to", visibleIds).order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").in("sales_user_id", visibleIds).order("created_at", { ascending: false }),
       supabase.from("commissions").select("*").eq("sales_user_id", current.id).order("created_at", { ascending: false }),
+      supabase.from("sales_document_templates").select("*").eq("is_active", true).order("created_at", { ascending: false }),
+      supabase.from("sales_document_signatures").select("*").eq("sales_user_id", current.id).order("created_at", { ascending: false }),
+      supabase.from("sales_training_folders").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
+      supabase.from("sales_training_items").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
     ]);
 
     setLeads((leadsData || []) as SalesLead[]);
     setBudgets((budgetsData || []) as unknown as SalesBudget[]);
     setCommissions((commissionsData || []) as Commission[]);
+    setDocuments((documentsData || []) as SalesDocumentTemplate[]);
+    setSignatures((signaturesData || []) as SalesDocumentSignature[]);
+    setTrainingFolders((foldersData || []) as TrainingFolder[]);
+    setTrainingItems((itemsData || []) as TrainingItem[]);
     setLoading(false);
   };
 
@@ -337,6 +386,48 @@ export default function ComercialPage() {
   };
 
 
+  const renderDocumentContent = (document: SalesDocumentTemplate, extra?: { dni?: string; address?: string }) => {
+    const today = new Date().toLocaleDateString("es-ES");
+    return (document.content || "")
+      .replaceAll("{{nombre}}", me?.full_name || "")
+      .replaceAll("{{trabajador}}", me?.full_name || "")
+      .replaceAll("{{email}}", me?.email || "")
+      .replaceAll("{{dni}}", extra?.dni || "________________")
+      .replaceAll("{{direccion}}", extra?.address || "________________")
+      .replaceAll("{{fecha}}", today);
+  };
+
+  const signDocument = async (document: SalesDocumentTemplate) => {
+    if (!me) return;
+    const existing = signatures.find((item) => item.document_id === document.id);
+    const dni = window.prompt("DNI / documento del trabajador", existing?.dni || "");
+    if (dni === null) return;
+    const address = window.prompt("Dirección del trabajador", existing?.address || "");
+    if (address === null) return;
+    const signature = window.prompt("Firma digital: escribe tu nombre completo", me.full_name);
+    if (!signature?.trim()) return alert("La firma es obligatoria.");
+
+    const payload = {
+      document_id: document.id,
+      sales_user_id: me.id,
+      status: "signed",
+      full_name: me.full_name,
+      dni: dni.trim(),
+      address: address.trim(),
+      signature_text: signature.trim(),
+      signed_at: new Date().toISOString(),
+    };
+
+    const query = existing
+      ? supabase.from("sales_document_signatures").update(payload).eq("id", existing.id)
+      : supabase.from("sales_document_signatures").insert(payload);
+    const { error } = await query;
+    if (error) return alert(error.message);
+    await loadData();
+    alert("Documento firmado correctamente.");
+  };
+
+
   const logout = async () => {
     await supabase.auth.signOut();
     router.push("/");
@@ -387,6 +478,8 @@ export default function ComercialPage() {
           <TabButton label="Leads" active={tab === "leads"} onClick={() => setTab("leads")} />
           <TabButton label="Saldo" active={tab === "saldo"} onClick={() => setTab("saldo")} />
           <TabButton label="Métodos de pago" active={tab === "metodos_pago"} onClick={() => setTab("metodos_pago")} />
+          <TabButton label="Documentos" active={tab === "documentos"} onClick={() => setTab("documentos")} />
+          <TabButton label="Formaciones" active={tab === "formaciones"} onClick={() => setTab("formaciones")} />
           {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <TabButton label="Equipo y rama" active={tab === "equipo"} onClick={() => setTab("equipo")} />}
         </nav>
 
@@ -468,6 +561,61 @@ export default function ComercialPage() {
                   <p className="mt-1 break-words"><strong>Banco:</strong> {paymentBankName || "Sin configurar"}</p>
                   <p className="mt-1 break-words"><strong>Cuenta:</strong> {paymentAccountNumber || "Sin configurar"}</p>
                 </div>
+              </div>
+            </Panel>
+          </section>
+        )}
+
+
+        {tab === "documentos" && (
+          <section className="grid gap-6 lg:grid-cols-[1fr_.9fr]">
+            <Panel title="Documentos pendientes y firmados">
+              <div className="space-y-4">
+                {documents.map((document) => {
+                  const signature = signatures.find((item) => item.document_id === document.id);
+                  return (
+                    <div key={document.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div className="min-w-0">
+                          <p className="text-lg font-semibold break-words">{document.title}</p>
+                          <p className="mt-1 text-sm text-white/50 break-words">{document.description || "Documento comercial"}</p>
+                          <p className="mt-2 text-xs text-violet-200">Estado: {signature?.status === "signed" ? `Firmado ${signature.signed_at ? new Date(signature.signed_at).toLocaleDateString("es-ES") : ""}` : "Pendiente de firma"}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/75">Ver archivo</a>}
+                          {document.requires_signature !== false && <button onClick={() => signDocument(document)} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950"><PenLine size={13} className="inline" /> {signature ? "Actualizar firma" : "Firmar"}</button>}
+                        </div>
+                      </div>
+                      {document.content && <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/25 p-4 text-xs leading-relaxed text-white/70">{renderDocumentContent(document, { dni: signature?.dni || undefined, address: signature?.address || undefined })}</pre>}
+                    </div>
+                  );
+                })}
+                {!documents.length && <Empty text="Todavía no tienes documentos asignados." />}
+              </div>
+            </Panel>
+            <Panel title="Cómo funciona la firma">
+              <div className="space-y-3 text-sm text-white/65">
+                <p>Administración sube documentos y contratos genéricos. Cuando firmas, Flowly guarda tu nombre, DNI/documento, dirección, firma digital y fecha.</p>
+                <p>Los contratos pueden incluir variables como <span className="text-violet-200">{'{{nombre}}'}</span>, <span className="text-violet-200">{'{{dni}}'}</span>, <span className="text-violet-200">{'{{direccion}}'}</span> y <span className="text-violet-200">{'{{fecha}}'}</span>.</p>
+              </div>
+            </Panel>
+          </section>
+        )}
+
+        {tab === "formaciones" && (
+          <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]">
+            <Panel title="Carpetas de formación">
+              <div className="space-y-3">
+                {trainingFolders.map((folder) => <div key={folder.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold"><BookOpen size={16} className="inline" /> {folder.name}</p><p className="mt-1 text-sm text-white/45">{folder.description || "Contenido formativo"}</p><p className="mt-2 text-xs text-violet-200">{trainingItems.filter((item) => item.folder_id === folder.id).length} recursos</p></div>)}
+                {!trainingFolders.length && <Empty text="Todavía no hay carpetas de formación." />}
+              </div>
+            </Panel>
+            <Panel title="Contenido disponible">
+              <div className="space-y-5">
+                {trainingFolders.map((folder) => {
+                  const items = trainingItems.filter((item) => item.folder_id === folder.id);
+                  return <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"><h3 className="text-lg font-semibold">{folder.name}</h3><div className="mt-4 grid gap-3">{items.map((item) => <div key={item.id} className="rounded-2xl bg-white/[0.07] p-4"><p className="font-medium break-words">{item.title}</p><p className="mt-1 text-sm text-white/45 break-words">{item.description || item.item_type || "Recurso"}</p>{item.content && <p className="mt-3 whitespace-pre-wrap text-sm text-white/65">{item.content}</p>}{item.url && <a href={item.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Abrir recurso</a>}</div>)}{!items.length && <Empty text="Esta carpeta todavía no tiene contenido." />}</div></div>;
+                })}
               </div>
             </Panel>
           </section>

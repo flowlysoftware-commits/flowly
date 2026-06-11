@@ -9,10 +9,12 @@ import { FIRST_BRANCH_RULE, buildCommissionLines, canManageTeam, getCommissionRu
 import {
   BarChart3,
   Banknote,
+  BookOpen,
   Crown,
   Euro,
   FileText,
   LogOut,
+  FolderOpen,
   Plus,
   Search,
   Send,
@@ -21,7 +23,7 @@ import {
 } from "lucide-react";
 
 type SalesRole = "director" | "jefe" | "senior" | "asociado";
-type AdminTab = "resumen" | "presupuestos" | "comerciales" | "metodos_pago" | "leads" | "comisiones" | "clientes";
+type AdminTab = "resumen" | "presupuestos" | "comerciales" | "metodos_pago" | "documentos" | "formaciones" | "leads" | "comisiones" | "clientes";
 
 type SalesUser = {
   id: string;
@@ -86,6 +88,33 @@ type SalesBudget = {
   sent_at: string | null;
   created_at: string;
 };
+
+type SalesDocumentTemplate = {
+  id: string;
+  title: string;
+  description: string | null;
+  document_type: string | null;
+  content: string | null;
+  file_url: string | null;
+  requires_signature: boolean | null;
+  is_active: boolean | null;
+  created_at?: string;
+};
+
+type SalesDocumentSignature = {
+  id: string;
+  document_id: string;
+  sales_user_id: string;
+  status: string;
+  full_name: string | null;
+  dni: string | null;
+  address: string | null;
+  signature_text: string | null;
+  signed_at: string | null;
+};
+
+type TrainingFolder = { id: string; name: string; description: string | null; sort_order: number | null; is_active: boolean | null };
+type TrainingItem = { id: string; folder_id: string | null; title: string; description: string | null; content: string | null; url: string | null; item_type: string | null; sort_order: number | null; is_active: boolean | null };
 
 type PlanOption = { key: string; name: string; price: number; description: string };
 type ModuleOption = { key: string; name: string; price: number };
@@ -157,6 +186,10 @@ export default function AdminPage() {
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [documents, setDocuments] = useState<SalesDocumentTemplate[]>([]);
+  const [documentSignatures, setDocumentSignatures] = useState<SalesDocumentSignature[]>([]);
+  const [trainingFolders, setTrainingFolders] = useState<TrainingFolder[]>([]);
+  const [trainingItems, setTrainingItems] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -208,6 +241,20 @@ export default function AdminPage() {
 
   const [manualSale, setManualSale] = useState<ManualSaleForm>({ businessId: "", salesUserId: "", plan: "premium", monthlyAmount: "84.99", setupAmount: "0", notes: "" });
   const [paymentLinks, setPaymentLinks] = useState<Record<string, string>>({});
+  const [documentTitle, setDocumentTitle] = useState("Contrato comercial");
+  const [documentDescription, setDocumentDescription] = useState("Contrato genérico para firma del trabajador");
+  const [documentType, setDocumentType] = useState("contrato");
+  const [documentContent, setDocumentContent] = useState("CONTRATO COMERCIAL\n\nEntre Flowly IA y {{nombre}}, con documento {{dni}} y dirección {{direccion}}, se acuerdan las condiciones comerciales indicadas por la empresa.\n\nFecha: {{fecha}}\nFirma: {{nombre}}");
+  const [documentFileUrl, setDocumentFileUrl] = useState("");
+  const [documentRequiresSignature, setDocumentRequiresSignature] = useState(true);
+  const [folderName, setFolderName] = useState("Formación en ventas");
+  const [folderDescription, setFolderDescription] = useState("");
+  const [trainingFolderId, setTrainingFolderId] = useState("");
+  const [trainingTitle, setTrainingTitle] = useState("");
+  const [trainingDescription, setTrainingDescription] = useState("");
+  const [trainingContent, setTrainingContent] = useState("");
+  const [trainingUrl, setTrainingUrl] = useState("");
+  const [trainingType, setTrainingType] = useState("video");
 
   const load = async () => {
     setLoading(true);
@@ -217,7 +264,7 @@ export default function AdminPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
-    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes] = await Promise.all([
+    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes, documentsRes, signaturesRes, foldersRes, trainingItemsRes] = await Promise.all([
       supabase.from("sales_users").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_leads").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").order("created_at", { ascending: false }),
@@ -226,6 +273,10 @@ export default function AdminPage() {
         ? fetch("/api/admin/commission-payouts", { headers: { Authorization: `Bearer ${token}` } }).then((res) => res.json())
         : Promise.resolve({ payouts: [] }),
       supabase.from("businesses").select("id, name, plan, subscription_status, created_at, sales_user_id, stripe_customer_id, stripe_subscription_id").order("created_at", { ascending: false }).limit(200),
+      supabase.from("sales_document_templates").select("*").order("created_at", { ascending: false }),
+      supabase.from("sales_document_signatures").select("*").order("signed_at", { ascending: false }),
+      supabase.from("sales_training_folders").select("*").order("sort_order", { ascending: true }),
+      supabase.from("sales_training_items").select("*").order("sort_order", { ascending: true }),
     ]);
 
     setSalesUsers((salesUsersRes.data || []) as SalesUser[]);
@@ -234,6 +285,10 @@ export default function AdminPage() {
     setCommissions((commissionsRes.data || []) as Commission[]);
     setPayouts(((payoutsRes as any).payouts || []) as Payout[]);
     setBusinesses((businessesRes.data || []) as Business[]);
+    setDocuments((documentsRes.data || []) as SalesDocumentTemplate[]);
+    setDocumentSignatures((signaturesRes.data || []) as SalesDocumentSignature[]);
+    setTrainingFolders((foldersRes.data || []) as TrainingFolder[]);
+    setTrainingItems((trainingItemsRes.data || []) as TrainingItem[]);
     setLoading(false);
   };
 
@@ -465,6 +520,76 @@ export default function AdminPage() {
     alert("Venta manual registrada y cliente vinculado. Solo se ha generado comisión de venta; la mensual se generará cuando entre el pago mensual real.");
   };
 
+
+  const createDocumentTemplate = async () => {
+    if (!documentTitle.trim()) return alert("Indica el título del documento");
+    const { error } = await supabase.from("sales_document_templates").insert({
+      title: documentTitle.trim(),
+      description: documentDescription.trim(),
+      document_type: documentType,
+      content: documentContent,
+      file_url: documentFileUrl.trim() || null,
+      requires_signature: documentRequiresSignature,
+      is_active: true,
+    });
+    if (error) return alert(error.message);
+    setDocumentTitle("Contrato comercial");
+    setDocumentDescription("Contrato genérico para firma del trabajador");
+    setDocumentType("contrato");
+    setDocumentContent("CONTRATO COMERCIAL\n\nEntre Flowly IA y {{nombre}}, con documento {{dni}} y dirección {{direccion}}, se acuerdan las condiciones comerciales indicadas por la empresa.\n\nFecha: {{fecha}}\nFirma: {{nombre}}");
+    setDocumentFileUrl("");
+    await load();
+  };
+
+  const updateDocumentTemplate = async (id: string, updates: Partial<SalesDocumentTemplate>) => {
+    const { error } = await supabase.from("sales_document_templates").update(updates).eq("id", id);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const createTrainingFolder = async () => {
+    if (!folderName.trim()) return alert("Indica el nombre de la carpeta");
+    const { error } = await supabase.from("sales_training_folders").insert({ name: folderName.trim(), description: folderDescription.trim(), is_active: true, sort_order: trainingFolders.length + 1 });
+    if (error) return alert(error.message);
+    setFolderName("");
+    setFolderDescription("");
+    await load();
+  };
+
+  const createTrainingItem = async () => {
+    if (!trainingFolderId || !trainingTitle.trim()) return alert("Selecciona carpeta e indica título");
+    const { error } = await supabase.from("sales_training_items").insert({
+      folder_id: trainingFolderId,
+      title: trainingTitle.trim(),
+      description: trainingDescription.trim(),
+      content: trainingContent.trim(),
+      url: trainingUrl.trim() || null,
+      item_type: trainingType,
+      is_active: true,
+      sort_order: trainingItems.filter((item) => item.folder_id === trainingFolderId).length + 1,
+    });
+    if (error) return alert(error.message);
+    setTrainingTitle("");
+    setTrainingDescription("");
+    setTrainingContent("");
+    setTrainingUrl("");
+    await load();
+  };
+
+  const updateTrainingFolder = async (id: string, updates: Partial<TrainingFolder>) => {
+    const { error } = await supabase.from("sales_training_folders").update(updates).eq("id", id);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const updateTrainingItem = async (id: string, updates: Partial<TrainingItem>) => {
+    const { error } = await supabase.from("sales_training_items").update(updates).eq("id", id);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const seller = (id?: string | null) => salesUsers.find((user) => user.id === id);
+
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
 
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#070711] text-white">Cargando admin...</main>;
@@ -492,6 +617,8 @@ export default function AdminPage() {
           <TabButton label="Presupuestos" active={tab === "presupuestos"} onClick={() => setTab("presupuestos")} />
           <TabButton label="Comerciales" active={tab === "comerciales"} onClick={() => setTab("comerciales")} />
           <TabButton label="Métodos de pago" active={tab === "metodos_pago"} onClick={() => setTab("metodos_pago")} />
+          <TabButton label="Documentos" active={tab === "documentos"} onClick={() => setTab("documentos")} />
+          <TabButton label="Formaciones" active={tab === "formaciones"} onClick={() => setTab("formaciones")} />
           <TabButton label="Leads" active={tab === "leads"} onClick={() => setTab("leads")} />
           <TabButton label="Comisiones" active={tab === "comisiones"} onClick={() => setTab("comisiones")} />
           <TabButton label="Clientes SaaS" active={tab === "clientes"} onClick={() => setTab("clientes")} />
@@ -592,6 +719,11 @@ export default function AdminPage() {
             )}
           </section>
         )}
+
+
+        {tab === "documentos" && <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]"><Panel title="Subir / crear documento"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="contrato">Contrato</option><option value="legal">Legal</option><option value="comercial">Comercial</option><option value="otro">Otro</option></select><input value={documentFileUrl} onChange={(e) => setDocumentFileUrl(e.target.value)} placeholder="URL del archivo PDF/documento opcional" className="input-dark" /></div><textarea value={documentDescription} onChange={(e) => setDocumentDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" /><textarea value={documentContent} onChange={(e) => setDocumentContent(e.target.value)} placeholder="Contenido editable. Variables: {{nombre}}, {{dni}}, {{direccion}}, {{fecha}}" className="input-dark min-h-56 font-mono text-xs" /><label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-sm text-white/70"><input type="checkbox" checked={documentRequiresSignature} onChange={(e) => setDocumentRequiresSignature(e.target.checked)} /> Requiere firma del comercial</label><button onClick={createDocumentTemplate} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><FileText size={18} className="inline" /> Crear documento</button><p className="text-xs text-white/45">Para contratos genéricos usa variables: {'{{nombre}}'}, {'{{dni}}'}, {'{{direccion}}'} y {'{{fecha}}'}.</p></div></Panel><Panel title="Documentos activos y firmas"><div className="space-y-4">{documents.map((document) => { const signed = documentSignatures.filter((item) => item.document_id === document.id); return <div key={document.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div className="min-w-0"><p className="font-semibold break-words">{document.title}</p><p className="mt-1 text-sm text-white/45 break-words">{document.description || "Sin descripción"}</p><p className="mt-2 text-xs text-violet-200">{signed.length} firmas · {document.requires_signature === false ? "Solo lectura" : "Firma requerida"}</p>{document.file_url && <a href={document.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-cyan-200 underline">Abrir archivo</a>}</div><div className="flex flex-wrap gap-2"><button onClick={() => { const value = window.prompt("Nuevo título", document.title); if (value) updateDocumentTemplate(document.id, { title: value }); }} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Editar título</button><button onClick={() => updateDocumentTemplate(document.id, { is_active: !document.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{document.is_active ? "Ocultar" : "Activar"}</button></div></div><div className="mt-4 grid gap-2">{signed.slice(0, 6).map((signature) => <div key={signature.id} className="rounded-2xl bg-black/20 p-3 text-xs text-white/60"><strong className="text-white">{seller(signature.sales_user_id)?.full_name || signature.full_name || "Comercial"}</strong> · DNI {signature.dni || "-"} · {signature.signed_at ? new Date(signature.signed_at).toLocaleString("es-ES") : "sin fecha"}</div>)}{!signed.length && <p className="text-xs text-white/35">Sin firmas todavía.</p>}</div></div>; })}{!documents.length && <Empty text="Todavía no hay documentos." />}</div></Panel></section>}
+
+        {tab === "formaciones" && <section className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]"><div className="grid gap-6"><Panel title="Crear carpeta de formación"><div className="grid gap-3"><input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Nombre de carpeta" className="input-dark" /><textarea value={folderDescription} onChange={(e) => setFolderDescription(e.target.value)} placeholder="Descripción" className="input-dark min-h-20" /><button onClick={createTrainingFolder} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><FolderOpen size={18} className="inline" /> Crear carpeta</button></div></Panel><Panel title="Añadir contenido"><div className="grid gap-3"><select value={trainingFolderId} onChange={(e) => setTrainingFolderId(e.target.value)} className="input-dark"><option value="">Seleccionar carpeta</option>{trainingFolders.filter((folder) => folder.is_active !== false).map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select><input value={trainingTitle} onChange={(e) => setTrainingTitle(e.target.value)} placeholder="Título del recurso" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><select value={trainingType} onChange={(e) => setTrainingType(e.target.value)} className="input-dark"><option value="video">Vídeo</option><option value="pdf">PDF</option><option value="texto">Texto</option><option value="link">Link</option></select><input value={trainingUrl} onChange={(e) => setTrainingUrl(e.target.value)} placeholder="URL opcional" className="input-dark" /></div><textarea value={trainingDescription} onChange={(e) => setTrainingDescription(e.target.value)} placeholder="Descripción corta" className="input-dark min-h-20" /><textarea value={trainingContent} onChange={(e) => setTrainingContent(e.target.value)} placeholder="Contenido o instrucciones" className="input-dark min-h-32" /><button onClick={createTrainingItem} className="rounded-full bg-white px-5 py-3 font-medium text-neutral-950"><BookOpen size={18} className="inline" /> Publicar formación</button></div></Panel></div><Panel title="Biblioteca de formaciones"><div className="space-y-5">{trainingFolders.map((folder) => <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-semibold">{folder.name}</p><p className="text-sm text-white/45">{folder.description || "Sin descripción"}</p></div><button onClick={() => updateTrainingFolder(folder.id, { is_active: !folder.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{folder.is_active === false ? "Activar" : "Ocultar"}</button></div><div className="mt-4 grid gap-2">{trainingItems.filter((item) => item.folder_id === folder.id).map((item) => <div key={item.id} className="rounded-2xl bg-black/20 p-3"><div className="flex flex-col justify-between gap-2 md:flex-row md:items-center"><div><p className="font-medium">{item.title}</p><p className="text-xs text-white/45">{item.item_type || "recurso"} · {item.description || ""}</p></div><button onClick={() => updateTrainingItem(item.id, { is_active: !item.is_active })} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">{item.is_active === false ? "Activar" : "Ocultar"}</button></div></div>)}{!trainingItems.filter((item) => item.folder_id === folder.id).length && <p className="text-xs text-white/35">Carpeta vacía.</p>}</div></div>)}{!trainingFolders.length && <Empty text="Todavía no hay formación publicada." />}</div></Panel></section>}
 
         {tab === "leads" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Nuevo lead admin"><div className="grid gap-3"><input value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} placeholder="Empresa / negocio" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={leadContact} onChange={(e) => setLeadContact(e.target.value)} placeholder="Persona de contacto" className="input-dark" /><select value={leadSector} onChange={(e) => setLeadSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option></select></div><div className="grid gap-3 md:grid-cols-2"><input value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} placeholder="Email" className="input-dark" /></div><select value={leadAssigned} onChange={(e) => setLeadAssigned(e.target.value)} className="input-dark"><option value="">Sin asignar</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><textarea value={leadNotes} onChange={(e) => setLeadNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" /><button onClick={createLead} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><Plus size={18} className="inline" /> Crear lead</button></div></Panel><Panel title="Todos los leads"><LeadList leads={leads} salesUsers={salesUsers} onStatus={updateLead} /></Panel></section>}
 
