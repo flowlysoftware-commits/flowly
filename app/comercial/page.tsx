@@ -802,19 +802,42 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
   const maxWatchedRef = useRef(Number(progress?.watched_seconds || 0));
   const completedRef = useRef(Boolean(progress?.completed_at));
   const youtubeId = getYouTubeId(item.url);
+  const [playerMessage, setPlayerMessage] = useState("");
 
   useEffect(() => { completedRef.current = Boolean(progress?.completed_at); }, [progress?.completed_at]);
+
+  const openFullscreen = async () => {
+    const element = youtubeId ? youtubeBoxRef.current : videoRef.current;
+    try {
+      if (element?.requestFullscreen) await element.requestFullscreen();
+      else setPlayerMessage("Pantalla completa no disponible en este navegador.");
+    } catch {
+      setPlayerMessage("No se pudo abrir pantalla completa. Prueba desde el botón nativo del reproductor.");
+    }
+  };
 
   useEffect(() => {
     if (!youtubeId || !youtubeBoxRef.current) return;
     let interval: number | undefined;
+    let fallback: number | undefined;
+
     const createPlayer = () => {
       if (!youtubeBoxRef.current || playerRef.current || !(window as any).YT?.Player) return;
       playerRef.current = new (window as any).YT.Player(youtubeBoxRef.current, {
         videoId: youtubeId,
-        playerVars: { controls: 0, disablekb: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+        playerVars: {
+          controls: 1,
+          disablekb: 1,
+          fs: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          origin: window.location.origin,
+          enablejsapi: 1,
+        },
         events: {
           onReady: () => {
+            setPlayerMessage("");
             interval = window.setInterval(() => {
               const player = playerRef.current;
               if (!player?.getCurrentTime) return;
@@ -822,6 +845,7 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
               const duration = Number(player.getDuration?.() || 0);
               if (current > maxWatchedRef.current + 2 && !completedRef.current) {
                 player.seekTo(maxWatchedRef.current, true);
+                setPlayerMessage("Avance bloqueado hasta completar el vídeo.");
                 return;
               }
               if (current > maxWatchedRef.current) maxWatchedRef.current = current;
@@ -829,10 +853,10 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
               if (duration && current >= duration * 0.95 && !completedRef.current) {
                 completedRef.current = true;
                 onComplete(Math.round(duration), Math.round(duration));
-              } else if (percent > Number(progress?.progress_percent || 0)) {
+              } else if (percent > Number(progress?.progress_percent || 0) && Math.round(maxWatchedRef.current) % 10 === 0) {
                 onProgress({ watched_seconds: Math.round(maxWatchedRef.current), duration_seconds: Math.round(duration || 0), progress_percent: percent, status: "in_progress" });
               }
-            }, 2500);
+            }, 1200);
           },
           onStateChange: (event: any) => {
             if (event.data === 0 && !completedRef.current) {
@@ -841,9 +865,11 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
               onComplete(Math.round(duration), Math.round(duration));
             }
           },
+          onError: () => setPlayerMessage("No se pudo reproducir este vídeo. Revisa que el enlace sea público u oculto y permita inserción."),
         },
       });
     };
+
     if (!(window as any).YT?.Player) {
       const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
       if (!existing) {
@@ -853,15 +879,32 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
       }
       const prev = (window as any).onYouTubeIframeAPIReady;
       (window as any).onYouTubeIframeAPIReady = () => { prev?.(); createPlayer(); };
-      const fallback = window.setInterval(createPlayer, 500);
-      return () => { window.clearInterval(fallback); if (interval) window.clearInterval(interval); playerRef.current?.destroy?.(); playerRef.current = null; };
+      fallback = window.setInterval(createPlayer, 500);
+    } else {
+      createPlayer();
     }
-    createPlayer();
-    return () => { if (interval) window.clearInterval(interval); playerRef.current?.destroy?.(); playerRef.current = null; };
+
+    return () => {
+      if (fallback) window.clearInterval(fallback);
+      if (interval) window.clearInterval(interval);
+      playerRef.current?.destroy?.();
+      playerRef.current = null;
+    };
   }, [youtubeId]);
 
   if (youtubeId) {
-    return <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/40"><div ref={youtubeBoxRef} className="aspect-video w-full" /><p className="border-t border-white/10 px-4 py-3 text-xs text-white/45">Vídeo bloqueado: no se puede avanzar. El CHECK aparece al verlo completo.</p></div>;
+    return (
+      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+        <div ref={youtubeBoxRef} className="aspect-video w-full" />
+        <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-4 py-3">
+          <button onClick={() => playerRef.current?.playVideo?.()} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Reproducir</button>
+          <button onClick={() => playerRef.current?.pauseVideo?.()} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/70">Pausar</button>
+          <button onClick={openFullscreen} className="rounded-full border border-violet-300/30 bg-violet-500/10 px-4 py-2 text-xs text-violet-100">Pantalla completa</button>
+          <span className="text-xs text-white/45">Vídeo bloqueado: no se puede avanzar. El CHECK aparece al verlo completo.</span>
+        </div>
+        {playerMessage && <p className="border-t border-white/10 px-4 py-3 text-xs text-amber-200">{playerMessage}</p>}
+      </div>
+    );
   }
 
   return (
@@ -869,15 +912,27 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
       <video
         ref={videoRef}
         src={item.url || ""}
-        className="w-full rounded-xl"
-        controls={false}
+        className="w-full rounded-xl bg-black"
+        controls
+        controlsList="nodownload noplaybackrate"
+        disablePictureInPicture
         playsInline
-        onTimeUpdate={(e) => {
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          const video = e.currentTarget;
+          if (maxWatchedRef.current > 0 && maxWatchedRef.current < video.duration) video.currentTime = maxWatchedRef.current;
+        }}
+        onPlay={() => setPlayerMessage("")}
+        onError={() => setPlayerMessage("No se pudo reproducir este archivo. Revisa que sea un vídeo compatible, por ejemplo MP4 H.264, y que el enlace sea público o firmado.")}
+        onSeeking={(e) => {
           const video = e.currentTarget;
           if (video.currentTime > maxWatchedRef.current + 1.5 && !completedRef.current) {
             video.currentTime = maxWatchedRef.current;
-            return;
+            setPlayerMessage("Avance bloqueado hasta completar el vídeo.");
           }
+        }}
+        onTimeUpdate={(e) => {
+          const video = e.currentTarget;
           if (video.currentTime > maxWatchedRef.current) maxWatchedRef.current = video.currentTime;
           const percent = video.duration ? Math.min(99, Math.round((maxWatchedRef.current / video.duration) * 100)) : 0;
           if (video.duration && video.currentTime >= video.duration * 0.95 && !completedRef.current) {
@@ -895,7 +950,13 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
           }
         }}
       />
-      <div className="mt-3 flex flex-wrap items-center gap-2"><button onClick={() => videoRef.current?.play()} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Reproducir</button><button onClick={() => videoRef.current?.pause()} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/70">Pausar</button><span className="text-xs text-white/45">Avance bloqueado hasta completar el vídeo.</span></div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button onClick={() => videoRef.current?.play().catch(() => setPlayerMessage("El navegador bloqueó la reproducción. Pulsa play dentro del reproductor."))} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Reproducir</button>
+        <button onClick={() => videoRef.current?.pause()} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/70">Pausar</button>
+        <button onClick={openFullscreen} className="rounded-full border border-violet-300/30 bg-violet-500/10 px-4 py-2 text-xs text-violet-100">Pantalla completa</button>
+        <span className="text-xs text-white/45">Avance bloqueado hasta completar el vídeo.</span>
+      </div>
+      {playerMessage && <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">{playerMessage}</p>}
     </div>
   );
 }
