@@ -412,7 +412,13 @@ export default function DashboardPage() {
       supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_templates").select("*").eq("business_id", businessId).eq("is_active", true).order("label", { ascending: true }),
       supabase.from("crm_reminders").select("*").eq("business_id", businessId).order("reminder_at", { ascending: true }),
-      supabase.from("business_avatars").select("*").eq("business_id", businessId).maybeSingle(),
+      supabase
+        .from("business_avatars")
+        .select("*")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     const loadedCompanyProfile = (companyRes.data as CompanyProfile | null) || null;
@@ -440,6 +446,8 @@ export default function DashboardPage() {
     setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
     setWhatsappTemplatesData(((whatsappTemplatesRes.data || []) as WhatsappTemplate[]).map(normalizeWhatsappTemplate));
     setCrmReminders(((crmRemindersRes.data || []) as unknown as CrmReminder[]).map(normalizeCrmReminder));
+    setBusinessAvatar((avatarRes.data as BusinessAvatar | null) || null);
+    if (avatarRes.error) console.warn("No se pudo cargar la Mascota IA", avatarRes.error.message);
     setLoading(false);
   };
 
@@ -1228,7 +1236,20 @@ export default function DashboardPage() {
                   <p className="mt-3 max-w-2xl text-white/60">Centro operativo de reservas, clientes, servicios, módulos y suscripción.</p>
                 </div>
               </div>
-              <div className="rounded-[1.5rem] border border-violet-300/20 bg-violet-500/15 px-5 py-4 text-violet-100"><p className="text-sm text-violet-200">Estado suscripción</p><p className="mt-1 text-2xl font-semibold capitalize">{business.subscription_status || "trialing"}</p></div>
+              <div className="grid gap-3 sm:min-w-[260px]">
+                {businessAvatar?.avatar_url && (
+                  <div className="rounded-[1.5rem] border border-cyan-300/20 bg-cyan-500/10 p-4 text-cyan-50 shadow-xl shadow-cyan-950/20">
+                    <div className="flex items-center gap-3">
+                      <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-14 w-14 rounded-2xl border border-white/10 object-cover" />
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Mascota IA activa</p>
+                        <p className="mt-1 text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="rounded-[1.5rem] border border-violet-300/20 bg-violet-500/15 px-5 py-4 text-violet-100"><p className="text-sm text-violet-200">Estado suscripción</p><p className="mt-1 text-2xl font-semibold capitalize">{business.subscription_status || "trialing"}</p></div>
+              </div>
             </div>
           </header>
 
