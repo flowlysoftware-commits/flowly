@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildCommissionLines } from "@/lib/salesCommissions";
+import { generateAndStoreBrandAvatar } from "@/lib/brandAvatar";
+
+export const runtime = "nodejs";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -17,7 +20,7 @@ const premiumModules = [
 
 export async function POST(request: Request) {
   try {
-    const { sessionId, password, businessName, businessType, logoUrl, theme, primaryGoal } = await request.json();
+    const { sessionId, password, businessName, businessType, logoUrl, theme, primaryGoal, createAvatar, avatarName, avatarStyle, avatarPersonality } = await request.json();
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     if (session.status !== "complete") {
@@ -97,6 +100,23 @@ export async function POST(request: Request) {
 
     if (businessError) {
       return NextResponse.json({ error: businessError.message }, { status: 400 });
+    }
+
+    if (business?.id && createAvatar) {
+      try {
+        await generateAndStoreBrandAvatar({
+          businessId: business.id,
+          businessName,
+          businessType,
+          logoUrl: logoUrl || null,
+          avatarName: avatarName || "Nia",
+          avatarStyle: avatarStyle || "robot-premium",
+          avatarPersonality: avatarPersonality || "cercana, estratégica y orientada a ventas",
+          brandColors: theme === "violet" ? ["#7c3aed", "#06b6d4"] : ["#2563eb", "#7c3aed"],
+        });
+      } catch (avatarError) {
+        console.warn("Avatar generation warning:", avatarError);
+      }
     }
 
     if (business?.id && modules.length > 0) {

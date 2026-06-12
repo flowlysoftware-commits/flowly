@@ -43,6 +43,20 @@ type Business = {
   panel_theme?: string | null;
 };
 
+type BusinessAvatar = {
+  id?: string;
+  business_id: string;
+  avatar_name: string | null;
+  avatar_style: string | null;
+  avatar_personality: string | null;
+  logo_url: string | null;
+  avatar_url: string | null;
+  prompt: string | null;
+  brand_colors?: string[] | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 type CompanyProfile = {
   id?: string;
   business_id: string;
@@ -290,6 +304,11 @@ export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [businessAvatar, setBusinessAvatar] = useState<BusinessAvatar | null>(null);
+  const [avatarName, setAvatarName] = useState("Nia");
+  const [avatarStyle, setAvatarStyle] = useState("robot-premium");
+  const [avatarPersonality, setAvatarPersonality] = useState("cercana, estratégica y muy orientada a ventas");
+  const [avatarGenerating, setAvatarGenerating] = useState(false);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -379,7 +398,7 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, crmRemindersRes] = await Promise.all([
+    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, crmRemindersRes, avatarRes] = await Promise.all([
       supabase.from("company_profiles").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -393,6 +412,7 @@ export default function DashboardPage() {
       supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_templates").select("*").eq("business_id", businessId).eq("is_active", true).order("label", { ascending: true }),
       supabase.from("crm_reminders").select("*").eq("business_id", businessId).order("reminder_at", { ascending: true }),
+      supabase.from("business_avatars").select("*").eq("business_id", businessId).maybeSingle(),
     ]);
 
     const loadedCompanyProfile = (companyRes.data as CompanyProfile | null) || null;
@@ -1078,6 +1098,41 @@ export default function DashboardPage() {
     await loadData();
   };
 
+  const generateBusinessAvatar = async () => {
+    if (!business?.id) return alert("No se encontró el negocio");
+    setAvatarGenerating(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch("/api/brand-avatar/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          businessName: companyName || business.name,
+          businessType: business.business_type || "negocio local",
+          logoUrl: companyProfile?.logo_url || business.logo_url || null,
+          avatarName,
+          avatarStyle,
+          avatarPersonality,
+          brandColors: [companyPrimaryColor, companySecondaryColor].filter(Boolean),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) return alert(data.error || "No se pudo generar la mascota IA");
+      setBusinessAvatar(data.avatar as BusinessAvatar);
+      alert("Mascota IA generada y guardada en el panel.");
+    } catch (error) {
+      console.error(error);
+      alert("Error generando la mascota IA");
+    } finally {
+      setAvatarGenerating(false);
+    }
+  };
+
   const deleteVoiceCall = async (id: string) => {
     const { error } = await supabase.from("voice_calls").delete().eq("id", id);
     if (error) return alert(error.message);
@@ -1111,8 +1166,14 @@ export default function DashboardPage() {
       <div className="mx-auto flex max-w-[1540px] flex-col gap-6 px-5 py-6 lg:flex-row">
         <aside className="flowly-app-panel h-fit rounded-[2rem] p-4 lg:sticky lg:top-6 lg:w-80">
           <div className="mb-5 rounded-[1.5rem] bg-neutral-950/70 p-5">
-            <Image src="/logo.png" alt="Flowly IA" width={156} height={42} className="h-auto w-36 object-contain" priority />
+            <div className="flex items-center gap-3">
+              <Image src="/logo.png" alt="Flowly IA" width={136} height={38} className="h-auto w-32 object-contain" priority />
+              {businessAvatar?.avatar_url && (
+                <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-12 w-12 rounded-2xl border border-cyan-300/25 object-cover shadow-lg shadow-cyan-500/20" />
+              )}
+            </div>
             <p className="mt-3 text-sm text-violet-200">Panel cliente</p>
+            {businessAvatar?.avatar_name && <p className="mt-1 text-xs text-white/40">Mascota IA: {businessAvatar.avatar_name}</p>}
           </div>
 
           <nav className="grid gap-2">
@@ -1215,7 +1276,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === "area" && <AreaSection business={business} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} />}
+          {activeTab === "area" && <AreaSection business={business} businessAvatar={businessAvatar} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} />}
           {activeTab === "agenda" && <AgendaSection appointments={appointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
           {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
@@ -1250,15 +1311,24 @@ export default function DashboardPage() {
             logoUploading={logoUploading}
             uploadCompanyLogo={uploadCompanyLogo}
             saveCompanyProfile={saveCompanyProfile}
+            businessAvatar={businessAvatar}
+            avatarName={avatarName}
+            setAvatarName={setAvatarName}
+            avatarStyle={avatarStyle}
+            setAvatarStyle={setAvatarStyle}
+            avatarPersonality={avatarPersonality}
+            setAvatarPersonality={setAvatarPersonality}
+            avatarGenerating={avatarGenerating}
+            generateBusinessAvatar={generateBusinessAvatar}
           />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} />}
         </section>
       </div>
     </Shell>
   );
 }
 
-function AreaSection({ business, activeModules, inactiveModules, bookingUrl, openBillingPortal, setActiveTab }: { business: Business; activeModules: ModuleItem[]; inactiveModules: ModuleItem[]; bookingUrl: string; openBillingPortal: () => void; setActiveTab: (tab: ActiveTab) => void }) {
+function AreaSection({ business, businessAvatar, activeModules, inactiveModules, bookingUrl, openBillingPortal, setActiveTab }: { business: Business; businessAvatar: BusinessAvatar | null; activeModules: ModuleItem[]; inactiveModules: ModuleItem[]; bookingUrl: string; openBillingPortal: () => void; setActiveTab: (tab: ActiveTab) => void }) {
   const coreModules = ["Agenda", "CRM", "WhatsApp", "Voice", "Facturación", "TPV", "Marketing", "IA"];
   return (
     <section className="grid gap-6">
@@ -1272,6 +1342,15 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
             <p className="mt-4 max-w-3xl text-sm leading-6 text-white/62">Vista ejecutiva para dirigir el negocio: suscripción, reservas, CRM, automatizaciones, redes, pagos y módulos premium desde un único sistema operativo.</p>
           </div>
           <div className="grid min-w-[280px] gap-3 rounded-[2rem] border border-white/10 bg-black/25 p-4 backdrop-blur-xl">
+            {businessAvatar?.avatar_url && (
+              <div className="flex items-center gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-3">
+                <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-16 w-16 rounded-2xl object-cover" />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Asistente IA</p>
+                  <p className="text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</p>
+                </div>
+              </div>
+            )}
             <InfoBox label="Negocio" value={business.name} />
             <InfoBox label="Plan" value={business.plan || "basic"} />
             <InfoBox label="Estado" value={business.subscription_status || "trialing"} />
@@ -1314,7 +1393,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   );
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -1949,12 +2028,24 @@ function MarketingModule({ records, customers, title, setTitle, notes, setNotes,
   );
 }
 
-function AiModule({ records, customers, appointments, revenue, title, setTitle, notes, setNotes, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+function AiModule({ records, customers, appointments, revenue, title, setTitle, notes, setNotes, createRecord, deleteRecord, businessAvatar }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Copiloto");
   const occupancySignal = appointments.length ? "Datos suficientes" : "Necesita agenda";
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description="Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA." actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={setTab} />} />
+      <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description={businessAvatar?.avatar_name ? `${businessAvatar.avatar_name} es la mascota IA del negocio: analiza CRM, agenda, ventas y campañas para dar notas ejecutivas dentro del panel.` : "Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA."} actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={setTab} />} />
+      {businessAvatar?.avatar_url && (
+        <div className="rounded-[2rem] border border-cyan-300/20 bg-gradient-to-br from-cyan-500/15 via-violet-500/10 to-black/20 p-5 shadow-2xl shadow-cyan-950/20">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center">
+            <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-24 w-24 rounded-3xl border border-white/10 object-cover" />
+            <div>
+              <p className="text-sm uppercase tracking-[0.18em] text-cyan-100/70">Mascota IA activa</p>
+              <h3 className="mt-1 text-2xl font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</h3>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/58">Hoy puede ayudarte a revisar clientes sin seguimiento, huecos libres de agenda, campañas recomendadas y tareas comerciales prioritarias.</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Bot />} label="Prompts" value={records.length} helper="Guardados" /><Metric icon={<Users />} label="Clientes" value={customers.length} helper="Contexto CRM" /><Metric icon={<CalendarDays />} label="Agenda" value={appointments.length} helper={occupancySignal} /><Metric icon={<TrendingUp />} label="Ingresos" value={`${revenue.toFixed(2)}€`} helper="Lectura financiera" /></div>
       {tab === "Copiloto" && <GlassCard title="Insights ejecutivos"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{["Resumen diario del negocio", "Huecos libres a cubrir", "Clientes con riesgo de fuga", "Servicios con más demanda", "Campaña recomendada", "Seguimiento de llamadas", "Caja prevista", "Tareas para el equipo"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Tarjeta preparada para respuesta IA real.</p></div>)}</div></GlassCard>}
       {tab === "Automatizaciones" && <GlassCard title="Automatizaciones IA listas"><div className="grid gap-3 md:grid-cols-3">{["Responder leads", "Crear recordatorios", "Reactivar clientes", "Sugerir campañas", "Clasificar llamadas", "Resumen semanal"].map((x) => <div key={x} className="rounded-3xl border border-violet-300/20 bg-violet-500/10 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Estado: preparado para conectar API y reglas.</p></div>)}</div></GlassCard>}
@@ -2792,6 +2883,15 @@ function SettingsSection({
   logoUploading,
   uploadCompanyLogo,
   saveCompanyProfile,
+  businessAvatar,
+  avatarName,
+  setAvatarName,
+  avatarStyle,
+  setAvatarStyle,
+  avatarPersonality,
+  setAvatarPersonality,
+  avatarGenerating,
+  generateBusinessAvatar,
 }: {
   business: Business;
   settings: BookingSettings;
@@ -2821,6 +2921,15 @@ function SettingsSection({
   logoUploading: boolean;
   uploadCompanyLogo: (file: File) => void;
   saveCompanyProfile: () => void;
+  businessAvatar: BusinessAvatar | null;
+  avatarName: string;
+  setAvatarName: (v: string) => void;
+  avatarStyle: string;
+  setAvatarStyle: (v: string) => void;
+  avatarPersonality: string;
+  setAvatarPersonality: (v: string) => void;
+  avatarGenerating: boolean;
+  generateBusinessAvatar: () => void;
 }) {
   return (
     <section className="grid gap-6">
@@ -2877,6 +2986,30 @@ function SettingsSection({
             <button onClick={saveCompanyProfile} className="btn-primary">
               <Settings size={17} /> Guardar perfil de empresa
             </button>
+          </div>
+        </GlassCard>
+
+        <GlassCard title="Mascota IA de marca">
+          <div className="grid gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-cyan-300/20 bg-cyan-400/10">
+                {businessAvatar?.avatar_url ? <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-full w-full object-cover" /> : <Bot className="text-cyan-100" size={34} />}
+              </div>
+              <div>
+                <p className="text-sm text-white/55">Crea un avatar fusionado con el estilo visual del negocio.</p>
+                <p className="mt-1 text-xs leading-5 text-white/35">Se guarda en Supabase Storage y aparece en el header, dashboard y módulo IA.</p>
+              </div>
+            </div>
+            <input value={avatarName} onChange={(e) => setAvatarName(e.target.value)} placeholder="Nombre de la mascota. Ej: Nia" className="input-dark" />
+            <select value={avatarStyle} onChange={(e) => setAvatarStyle(e.target.value)} className="input-dark">
+              <option value="robot-premium">Robot premium SaaS</option>
+              <option value="humanoide-corporativo">Asistente humanoide corporativo</option>
+              <option value="animal-futurista">Mascota animal futurista</option>
+              <option value="minimalista-branding">Minimalista de marca</option>
+              <option value="cyberpunk-elegante">Cyberpunk elegante</option>
+            </select>
+            <textarea value={avatarPersonality} onChange={(e) => setAvatarPersonality(e.target.value)} placeholder="Personalidad: cercana, profesional, comercial..." className="input-dark min-h-24" />
+            <button onClick={generateBusinessAvatar} disabled={avatarGenerating} className="btn-primary disabled:opacity-60"><Bot size={17} /> {avatarGenerating ? "Generando mascota IA..." : businessAvatar?.avatar_url ? "Regenerar mascota IA" : "Crear mi mascota IA"}</button>
           </div>
         </GlassCard>
 
