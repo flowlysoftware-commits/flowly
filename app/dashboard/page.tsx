@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
   Bot,
+  ChevronRight,
   CalendarDays,
   CheckCircle2,
   Clock,
@@ -21,13 +22,16 @@ import {
   Receipt,
   Scissors,
   Search,
+  Send,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   Store,
   TrendingUp,
   UserCog,
   UserRound,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -213,6 +217,8 @@ type ClinicalDocument = {
 
 type CoreTab = "area" | "agenda" | "servicios" | "empleados" | "clientes" | "recordatorios" | "ajustes";
 type ActiveTab = CoreTab | `module:${string}`;
+type AssistantMessage = { role: "assistant" | "user"; content: string };
+type AssistantTourStep = { title: string; body: string; target: ActiveTab; cta: string };
 
 type ModuleItem = {
   key: string;
@@ -327,6 +333,12 @@ export default function DashboardPage() {
   const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
   const [selectedCrmCustomerId, setSelectedCrmCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("area");
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantTourOpen, setAssistantTourOpen] = useState(false);
+  const [assistantTourStep, setAssistantTourStep] = useState(0);
+  const [assistantQuestion, setAssistantQuestion] = useState("");
+  const [assistantThinking, setAssistantThinking] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([]);
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -455,6 +467,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!business?.id) return;
+    const key = `flowly-avatar-tour-${business.id}`;
+    if (!window.localStorage.getItem(key)) {
+      const timer = window.setTimeout(() => {
+        setAssistantTourStep(0);
+        setAssistantTourOpen(true);
+        setAssistantOpen(false);
+      }, 900);
+      return () => window.clearTimeout(timer);
+    }
+  }, [business?.id]);
+
+  useEffect(() => {
+    if (!businessAvatar?.avatar_name) return;
+    setAssistantMessages((current) => current.length ? current : [{ role: "assistant", content: `Hola, soy ${businessAvatar.avatar_name}. Estoy aquí para ayudarte a moverte por Flowly, explicarte cada módulo y recomendarte acciones dentro del panel.` }]);
+  }, [businessAvatar?.avatar_name]);
+
+  useEffect(() => {
+    if (!business?.id) return;
 
     const channel = supabase
       .channel(`flowly-voice-${business.id}`)
@@ -538,6 +568,13 @@ export default function DashboardPage() {
   const nextAppointments = appointments.slice(0, 6);
   const whatsappTemplatesEffective = useMemo(() => mergeWhatsappTemplates(whatsappTemplates, whatsappTemplatesData), [whatsappTemplatesData]);
   const upcomingReminders = useMemo(() => getUpcomingReminders(crmReminders, 7), [crmReminders]);
+  const assistantTourSteps = useMemo<AssistantTourStep[]>(() => [
+    { title: "Bienvenido al centro operativo", body: "Este panel reúne agenda, clientes, servicios, recordatorios y módulos contratados. Yo te acompaño desde aquí sin que tengas que buscar cada opción.", target: "area", cta: "Ver dashboard" },
+    { title: "Agenda y reservas", body: "Aquí puedes crear citas, confirmar reservas, ver próximos huecos y preparar el calendario del negocio.", target: "agenda", cta: "Abrir agenda" },
+    { title: "CRM de clientes", body: "En clientes y CRM puedes guardar datos, seguimiento, historial, recordatorios y acciones comerciales.", target: activeModules.some((item) => item.key === "crm") ? "module:crm" : "clientes", cta: "Ver clientes" },
+    { title: "Módulos premium", body: "Los módulos contratados se sincronizan con este panel: WhatsApp, Voice, IA, TPV, facturación, marketing y estadísticas.", target: activeModules[0] ? (`module:${activeModules[0].slug}` as ActiveTab) : "area", cta: "Ver módulos" },
+    { title: "Pregúntame cualquier cosa", body: "Puedes preguntarme cómo enviar un WhatsApp, crear un servicio, revisar clientes sin seguimiento o entender una métrica del panel.", target: "area", cta: "Hablar con asistente" },
+  ], [activeModules]);
 
   const resetRecordForm = () => { setRecordTitle(""); setRecordNotes(""); setRecordAmount(""); setRecordStatus("active"); };
   const resetVoiceForm = () => {
@@ -559,6 +596,61 @@ export default function DashboardPage() {
 
   const normalizePhone = (value?: string | null) =>
     String(value || "").replace(/\D/g, "");
+
+  const completeAssistantTour = () => {
+    if (business?.id) window.localStorage.setItem(`flowly-avatar-tour-${business.id}`, "completed");
+    setAssistantTourOpen(false);
+    setAssistantOpen(true);
+  };
+
+  const nextAssistantTourStep = () => {
+    const step = assistantTourSteps[assistantTourStep];
+    if (step?.target) setActiveTab(step.target);
+    if (assistantTourStep >= assistantTourSteps.length - 1) return completeAssistantTour();
+    setAssistantTourStep((value) => value + 1);
+  };
+
+  const restartAssistantTour = () => {
+    setAssistantTourStep(0);
+    setAssistantTourOpen(true);
+    setAssistantOpen(false);
+  };
+
+  const sendAssistantMessage = async () => {
+    const question = assistantQuestion.trim();
+    if (!question || assistantThinking || !business) return;
+
+    const nextMessages: AssistantMessage[] = [...assistantMessages, { role: "user", content: question }];
+    setAssistantMessages(nextMessages);
+    setAssistantQuestion("");
+    setAssistantThinking(true);
+
+    try {
+      const res = await fetch("/api/brand-avatar/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          messages: nextMessages.slice(-8),
+          context: {
+            business: { name: business.name, type: business.business_type, plan: business.plan },
+            avatar: { name: businessAvatar?.avatar_name || "Mascota IA", personality: businessAvatar?.avatar_personality || "cercana y útil" },
+            activeTab,
+            metrics: { customers: customers.length, appointments: appointments.length, pendingAppointments, upcomingReminders: upcomingReminders.length, services: services.length, employees: employees.length, revenue },
+            modules: activeModules.map((item) => ({ key: item.key, name: item.name, slug: item.slug })),
+          },
+        }),
+      });
+      const data = await res.json();
+      const answer = res.ok ? data.answer : data.error;
+      setAssistantMessages((current) => [...current, { role: "assistant", content: answer || "No he podido responder ahora mismo. Revisa la configuración de OPENAI_API_KEY." }]);
+    } catch (error) {
+      console.error(error);
+      setAssistantMessages((current) => [...current, { role: "assistant", content: "No he podido conectar con la IA ahora mismo. Inténtalo de nuevo en unos segundos." }]);
+    } finally {
+      setAssistantThinking(false);
+    }
+  };
 
   const findCustomerForVoiceCall = (call: VoiceCall) => {
     const callPhone = normalizePhone(call.caller_phone);
@@ -1343,9 +1435,159 @@ export default function DashboardPage() {
             generateBusinessAvatar={generateBusinessAvatar}
           />}
           {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} />}
+
+          <FloatingAvatarAssistant
+            businessAvatar={businessAvatar}
+            businessName={business.name}
+            open={assistantOpen}
+            setOpen={setAssistantOpen}
+            messages={assistantMessages}
+            question={assistantQuestion}
+            setQuestion={setAssistantQuestion}
+            thinking={assistantThinking}
+            sendMessage={sendAssistantMessage}
+            tourOpen={assistantTourOpen}
+            tourStep={assistantTourStep}
+            tourSteps={assistantTourSteps}
+            nextTourStep={nextAssistantTourStep}
+            closeTour={completeAssistantTour}
+            restartTour={restartAssistantTour}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
         </section>
       </div>
     </Shell>
+  );
+}
+
+
+function FloatingAvatarAssistant({
+  businessAvatar,
+  businessName,
+  open,
+  setOpen,
+  messages,
+  question,
+  setQuestion,
+  thinking,
+  sendMessage,
+  tourOpen,
+  tourStep,
+  tourSteps,
+  nextTourStep,
+  closeTour,
+  restartTour,
+  activeTab,
+  setActiveTab,
+}: {
+  businessAvatar: BusinessAvatar | null;
+  businessName: string;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  messages: AssistantMessage[];
+  question: string;
+  setQuestion: (value: string) => void;
+  thinking: boolean;
+  sendMessage: () => void;
+  tourOpen: boolean;
+  tourStep: number;
+  tourSteps: AssistantTourStep[];
+  nextTourStep: () => void;
+  closeTour: () => void;
+  restartTour: () => void;
+  activeTab: ActiveTab;
+  setActiveTab: (tab: ActiveTab) => void;
+}) {
+  const avatarUrl = businessAvatar?.avatar_url;
+  const avatarName = businessAvatar?.avatar_name || "Flowly";
+  const currentStep = tourSteps[tourStep];
+
+  return (
+    <>
+      <div className="pointer-events-none fixed bottom-6 right-5 z-40 flex flex-col items-end gap-3 md:bottom-8 md:right-8">
+        {tourOpen && currentStep && (
+          <div className="pointer-events-auto w-[min(92vw,430px)] overflow-hidden rounded-[2rem] border border-cyan-300/25 bg-neutral-950/90 p-5 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl">
+            <div className="flex items-start gap-4">
+              <div className="flowly-avatar-stage-small shrink-0">
+                {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img-small" /> : <Bot size={34} />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-cyan-100/65">Tour guiado · paso {tourStep + 1}/{tourSteps.length}</p>
+                    <h3 className="mt-1 text-xl font-semibold text-white">{currentStep.title}</h3>
+                  </div>
+                  <button onClick={closeTour} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/10"><X size={16} /></button>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-white/62">{currentStep.body}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button onClick={nextTourStep} className="btn-primary py-2 text-sm">{currentStep.cta} <ChevronRight size={16} /></button>
+                  <button onClick={() => { setActiveTab(currentStep.target); }} className="btn-secondary py-2 text-sm">Ir ahora</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {open && (
+          <div className="pointer-events-auto w-[min(94vw,420px)] overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-950/92 shadow-2xl shadow-black/50 backdrop-blur-2xl">
+            <div className="border-b border-white/10 bg-gradient-to-r from-cyan-500/15 via-violet-500/15 to-fuchsia-500/10 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flowly-avatar-stage-mini">{avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img-mini" /> : <Bot size={24} />}</div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{avatarName}, asistente de {businessName}</p>
+                    <p className="text-xs text-cyan-100/55">Puede guiarte por el panel y responder dudas operativas.</p>
+                  </div>
+                </div>
+                <button onClick={() => setOpen(false)} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/10"><X size={16} /></button>
+              </div>
+            </div>
+
+            <div className="max-h-[44vh] space-y-3 overflow-y-auto p-4">
+              {messages.map((message, index) => (
+                <div key={`${message.role}-${index}`} className={message.role === "user" ? "ml-auto max-w-[86%] rounded-2xl bg-white px-4 py-3 text-sm text-neutral-950" : "max-w-[90%] rounded-2xl border border-white/10 bg-white/[0.07] px-4 py-3 text-sm leading-6 text-white/78"}>
+                  {message.content}
+                </div>
+              ))}
+              {thinking && <div className="max-w-[80%] rounded-2xl border border-cyan-300/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">{avatarName} está pensando...</div>}
+            </div>
+
+            <div className="border-t border-white/10 p-4">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {["Hazme un tour", "¿Cómo envío WhatsApp?", "¿Qué clientes debo revisar?"].map((quick) => (
+                  <button key={quick} onClick={() => quick === "Hazme un tour" ? restartTour() : setQuestion(quick)} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/65 hover:bg-white/10">{quick}</button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
+                  placeholder={`Pregunta a ${avatarName} sobre el panel...`}
+                  className="input-dark h-12 flex-1"
+                />
+                <button onClick={sendMessage} disabled={thinking || !question.trim()} className="btn-primary h-12 px-4 disabled:opacity-50"><Send size={17} /></button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button onClick={() => setOpen(!open)} className="pointer-events-auto group relative flex items-end gap-3">
+          <div className="hidden rounded-2xl border border-white/10 bg-neutral-950/80 px-4 py-3 text-left shadow-xl shadow-black/30 backdrop-blur-xl md:block">
+            <p className="text-sm font-semibold text-white">¿Te ayudo?</p>
+            <p className="text-xs text-white/50">Pulsa para hablar con {avatarName}</p>
+          </div>
+          <div className="flowly-avatar-stage">
+            <div className="flowly-avatar-glow" />
+            {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img" /> : <Bot className="relative z-10 text-cyan-100" size={54} />}
+            <div className="flowly-avatar-shadow" />
+          </div>
+          <span className="absolute -right-1 bottom-7 rounded-full border border-white/10 bg-cyan-400 px-2 py-1 text-[10px] font-bold text-neutral-950 shadow-lg shadow-cyan-400/30"><Sparkles size={12} /></span>
+        </button>
+      </div>
+    </>
   );
 }
 

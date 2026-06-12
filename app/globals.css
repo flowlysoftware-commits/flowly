@@ -555,3 +555,94 @@ select.flowly-input-light option {
 select.input-dark, select.flowly-input-light { color-scheme: dark; }
 .input-dark option, .flowly-input-light option { background: #0f172a !important; color: #fff !important; }
 input[type="date"].input-dark { color-scheme: dark; }
+
+/* Mascota IA flotante: cuerpo entero, respiración y presencia de asistente premium */
+.flowly-avatar-stage,
+.flowly-avatar-stage-small,
+.flowly-avatar-stage-mini {
+  position: relative;
+  display: grid;
+  place-items: end center;
+  overflow: visible;
+  border: 1px solid rgba(34, 211, 238, .24);
+  background:
+    radial-gradient(circle at 50% 12%, rgba(34, 211, 238, .22), transparent 42%),
+    radial-gradient(circle at 50% 90%, rgba(139, 92, 246, .28), transparent 52%),
+    rgba(8, 13, 28, .84);
+  box-shadow: 0 26px 90px rgba(0, 0, 0, .42), 0 0 60px rgba(34, 211, 238, .16), inset 0 1px 0 rgba(255, 255, 255, .12);
+  backdrop-filter: blur(22px);
+}
+.flowly-avatar-stage {
+  width: 10.5rem;
+  height: 13rem;
+  border-radius: 3rem;
+  padding: .45rem .45rem 0;
+  animation: flowly-avatar-float 4.8s ease-in-out infinite;
+}
+.flowly-avatar-stage-small {
+  width: 5.4rem;
+  height: 6.4rem;
+  border-radius: 2rem;
+  padding: .3rem .3rem 0;
+  animation: flowly-avatar-breathe 3.8s ease-in-out infinite;
+}
+.flowly-avatar-stage-mini {
+  width: 3.1rem;
+  height: 3.4rem;
+  border-radius: 1.25rem;
+  padding: .18rem .18rem 0;
+  animation: flowly-avatar-breathe 3.8s ease-in-out infinite;
+}
+.flowly-avatar-img,
+.flowly-avatar-img-small,
+.flowly-avatar-img-mini {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 112%;
+  object-fit: cover;
+  object-position: center top;
+  filter: drop-shadow(0 24px 26px rgba(0,0,0,.42));
+  transform-origin: 50% 92%;
+  animation: flowly-avatar-breathe 3.8s ease-in-out infinite;
+}
+.flowly-avatar-img-small { height: 110%; border-radius: 1.7rem; }
+.flowly-avatar-img-mini { height: 108%; border-radius: 1rem; }
+.flowly-avatar-glow {
+  position: absolute;
+  inset: 12% 10% auto;
+  height: 46%;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, .22);
+  filter: blur(26px);
+  animation: flowly-avatar-pulse 3.8s ease-in-out infinite;
+}
+.flowly-avatar-shadow {
+  position: absolute;
+  bottom: -.7rem;
+  width: 72%;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, .20);
+  filter: blur(12px);
+  animation: flowly-avatar-shadow 4.8s ease-in-out infinite;
+}
+@keyframes flowly-avatar-breathe {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.035) translateY(-3px); }
+}
+@keyframes flowly-avatar-float {
+  0%, 100% { transform: translateY(0) rotate(-.4deg); }
+  50% { transform: translateY(-10px) rotate(.5deg); }
+}
+@keyframes flowly-avatar-pulse {
+  0%, 100% { opacity: .56; transform: scale(.95); }
+  50% { opacity: .92; transform: scale(1.08); }
+}
+@keyframes flowly-avatar-shadow {
+  0%, 100% { opacity: .55; transform: scaleX(1); }
+  50% { opacity: .28; transform: scaleX(.78); }
+}
+@media (max-width: 640px) {
+  .flowly-avatar-stage { width: 7.4rem; height: 9.4rem; border-radius: 2.2rem; }
+}
