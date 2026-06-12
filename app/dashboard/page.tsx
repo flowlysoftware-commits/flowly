@@ -1259,7 +1259,59 @@ export default function DashboardPage() {
 }
 
 function AreaSection({ business, activeModules, inactiveModules, bookingUrl, openBillingPortal, setActiveTab }: { business: Business; activeModules: ModuleItem[]; inactiveModules: ModuleItem[]; bookingUrl: string; openBillingPortal: () => void; setActiveTab: (tab: ActiveTab) => void }) {
-  return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
+  const coreModules = ["Agenda", "CRM", "WhatsApp", "Voice", "Facturación", "TPV", "Marketing", "IA"];
+  return (
+    <section className="grid gap-6">
+      <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-white/[0.12] via-violet-500/[0.10] to-cyan-500/[0.08] p-7 shadow-2xl shadow-violet-950/30">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-20 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-8 lg:flex-row lg:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-100">Flowly Command Center</p>
+            <h2 className="mt-3 max-w-4xl text-4xl font-semibold tracking-tight md:text-5xl">Panel principal sincronizado con todos los módulos</h2>
+            <p className="mt-4 max-w-3xl text-sm leading-6 text-white/62">Vista ejecutiva para dirigir el negocio: suscripción, reservas, CRM, automatizaciones, redes, pagos y módulos premium desde un único sistema operativo.</p>
+          </div>
+          <div className="grid min-w-[280px] gap-3 rounded-[2rem] border border-white/10 bg-black/25 p-4 backdrop-blur-xl">
+            <InfoBox label="Negocio" value={business.name} />
+            <InfoBox label="Plan" value={business.plan || "basic"} />
+            <InfoBox label="Estado" value={business.subscription_status || "trialing"} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric icon={<LayoutDashboard />} label="Módulos activos" value={activeModules.length} helper="Operativos" />
+        <Metric icon={<Store />} label="Sistema base" value="Core" helper="Agenda · CRM · Ajustes" />
+        <Metric icon={<MessageCircle />} label="Canales" value="Listos" helper="WhatsApp · Redes · Voz" />
+        <Metric icon={<CreditCard />} label="Pagos" value="Stripe" helper="Portal conectado" />
+      </div>
+
+      <section className="grid gap-6 xl:grid-cols-[1fr_.9fr]">
+        <GlassCard title="Accesos rápidos SaaS">
+          <div className="grid gap-3 md:grid-cols-2">
+            {activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />)}
+            {!activeModules.length && <Empty text="No hay módulos extra activos. El núcleo sigue funcionando con agenda, servicios, clientes, recordatorios y ajustes." />}
+          </div>
+        </GlassCard>
+        <GlassCard title="Reservas online y suscripción">
+          <p className="text-sm text-white/55">Enlace público para reservas, preparado para Google, Instagram, web del cliente y WhatsApp.</p>
+          <div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div>
+          <div className="mt-5 flex flex-wrap gap-3"><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="btn-primary">Copiar enlace</button><button onClick={openBillingPortal} className="btn-secondary"><CreditCard size={17} /> Gestionar suscripción</button></div>
+        </GlassCard>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[.9fr_1.1fr]">
+        <GlassCard title="Conexiones del cliente">
+          <IntegrationPanel items={[{ name: "Google Business Profile", detail: "Reservas, reseñas y presencia local" }, { name: "Instagram / Facebook", detail: "Botones, mensajes, campañas y píxel" }, { name: "WhatsApp Business", detail: "Plantillas, historial y campañas CRM" }, { name: "Stripe / pagos", detail: "Portal, facturación y señales" }, { name: "Web del cliente", detail: "Widget de reservas y tracking" }, { name: "Centralita / Voice", detail: "Llamadas, locuciones y IA de voz" }]} />
+        </GlassCard>
+        <GlassCard title="Mapa de producto">
+          <div className="grid gap-3 md:grid-cols-2">{coreModules.map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Sincronizado con el panel principal y preparado para datos por negocio.</p></div>)}</div>
+        </GlassCard>
+      </section>
+
+      <GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard>
+    </section>
+  );
 }
 
 function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
@@ -1271,6 +1323,8 @@ function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; all
   if (module.key === "ai") return <AiModule {...props} />;
   if (module.key === "whatsapp") return <WhatsappModule {...props} />;
   if (module.key === "voice") return <VoiceModule {...props} />;
+  if (module.key === "analytics") return <AnalyticsModule {...props} />;
+  if (module.key === "booking_premium") return <BookingPremiumModule {...props} />;
   const Icon = module.Icon;
   return <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard><div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-400/20 text-violet-100"><Icon /></div><h2 className="text-2xl font-semibold">{module.name}</h2><p className="mt-2 text-sm text-white/55">{module.description}</p><div className="mt-6 grid gap-3"><input value={props.title} onChange={(e) => props.setTitle(e.target.value)} placeholder="Título del registro" className="input-dark" />{module.amountEnabled && <input value={props.amount} onChange={(e) => props.setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" />}<textarea value={props.notes} onChange={(e) => props.setNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-32" /><button onClick={() => props.createRecord(module.key)} className="btn-primary"><Plus size={17} /> Guardar</button></div></GlassCard><RecordsCard title="Actividad" records={records} deleteRecord={props.deleteRecord} /></section>;
 }
@@ -1833,14 +1887,116 @@ function ReminderAlarm({ reminder, customers, completeReminder, dismiss, viewCus
   );
 }
 
-function MarketingModule({ records, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+
+function ModuleHero({ eyebrow, title, description, actions }: { eyebrow: string; title: string; description: string; actions?: React.ReactNode }) {
+  return (
+    <GlassCard>
+      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">{eyebrow}</p>
+          <h2 className="mt-2 text-3xl font-semibold">{title}</h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-white/55">{description}</p>
+        </div>
+        {actions}
+      </div>
+    </GlassCard>
+  );
+}
+
+function ModulePillTabs({ tabs, active, setActive }: { tabs: string[]; active: string; setActive: (tab: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2 rounded-[1.5rem] border border-white/10 bg-black/25 p-2">
+      {tabs.map((tab) => (
+        <button key={tab} onClick={() => setActive(tab)} className={active === tab ? "rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-4 py-2 text-sm text-white/58 hover:bg-white/10 hover:text-white"}>{tab}</button>
+      ))}
+    </div>
+  );
+}
+
+function IntegrationPanel({ items }: { items: { name: string; status?: string; detail: string }[] }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {items.map((item) => (
+        <div key={item.name} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">{item.name}</p>
+              <p className="mt-1 text-sm text-white/45">{item.detail}</p>
+            </div>
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">{item.status || "Preparado"}</span>
+          </div>
+          <button className="mt-4 w-full rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 hover:bg-white/10">Configurar conexión</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MarketingModule({ records, customers, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+  const [tab, setTab] = useState("Campañas");
   const budget = records.reduce((s, r) => s + Number(r.amount || 0), 0);
-  return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Megaphone />} label="Campañas" value={records.length} helper="Planificadas" /><Metric icon={<CreditCard />} label="Presupuesto" value={`${budget.toFixed(2)}€`} helper="Total" /><Metric icon={<TrendingUp />} label="Canales" value="Meta · Google" helper="Preparados" /><Metric icon={<CheckCircle2 />} label="Estado" value="Ready" helper="Integraciones" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva campaña"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="meta">Facebook / Instagram Ads</option><option value="google">Google Ads</option><option value="tiktok">TikTok Ads</option><option value="email">Email Marketing</option><option value="whatsapp">WhatsApp Campaign</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaña: Promo verano / Reactivación" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Presupuesto estimado" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Público, oferta, canal, objetivo, fechas y creatividad" className="input-dark min-h-32" /><button onClick={() => createRecord("marketing", status)} className="btn-primary"><Plus size={17} /> Guardar campaña</button></div></GlassCard><GlassCard title="Conectores publicitarios"><div className="grid gap-3 md:grid-cols-2">{["Meta Ads", "Google Ads", "TikTok Ads", "Email", "WhatsApp", "Landing"].map((x) => <div key={x} className="rounded-2xl bg-black/25 p-4"><p className="font-semibold">{x}</p><p className="mt-1 text-sm text-white/45">Preparado para conexión API</p></div>)}</div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
+  const activeCampaigns = records.filter((r) => !["done", "paused"].includes(r.status)).length;
+  const channels = ["Meta Ads", "Google Ads", "TikTok Ads", "WhatsApp", "Email", "Landing / Pixel"];
+  return (
+    <section className="grid gap-6">
+      <ModuleHero eyebrow="Growth OS" title="Marketing conectado al negocio" description="Planifica campañas, controla presupuesto, define canales, prepara creatividades y deja listas las conexiones de redes para cada cliente." actions={<ModulePillTabs tabs={["Campañas", "Canales", "Audiencias", "Calendario"]} active={tab} setActive={setTab} />} />
+      <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Megaphone />} label="Campañas" value={records.length} helper="Totales" /><Metric icon={<CreditCard />} label="Presupuesto" value={`${budget.toFixed(2)}€`} helper="Planificado" /><Metric icon={<Users />} label="Audiencia CRM" value={customers.length} helper="Clientes" /><Metric icon={<CheckCircle2 />} label="Activas" value={activeCampaigns} helper="En marcha" /></div>
+      {tab === "Campañas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva campaña profesional"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="meta">Facebook / Instagram Ads</option><option value="google">Google Ads</option><option value="tiktok">TikTok Ads</option><option value="email">Email Marketing</option><option value="whatsapp">WhatsApp Campaign</option><option value="organic">Contenido orgánico</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaña: Reactivación clientes VIP" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Presupuesto estimado" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Objetivo, público, oferta, fechas, creatividad, KPI principal y responsable" className="input-dark min-h-40" /><button onClick={() => createRecord("marketing", status)} className="btn-primary"><Plus size={17} /> Guardar campaña</button></div></GlassCard><GlassCard title="Pipeline de campañas"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
+      {tab === "Canales" && <GlassCard title="Conexiones del cliente"><IntegrationPanel items={channels.map((name) => ({ name, detail: name.includes("Meta") ? "Página, Instagram, pixel y cuenta publicitaria" : name.includes("Google") ? "Google Business Profile, Ads y Analytics" : name.includes("TikTok") ? "Cuenta publicitaria, pixel y eventos" : name.includes("WhatsApp") ? "Plantillas, listas y campañas desde CRM" : name.includes("Email") ? "Dominio, listas y automatizaciones" : "UTMs, eventos y conversiones" }))} /></GlassCard>}
+      {tab === "Audiencias" && <GlassCard title="Audiencias inteligentes"><div className="grid gap-3 md:grid-cols-3">{["Clientes nuevos", "Clientes sin cita 60 días", "VIP / mayor ticket", "Cumpleaños", "No asistieron", "Leads sin convertir"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Segmento preparado desde CRM para campañas y WhatsApp.</p></div>)}</div></GlassCard>}
+      {tab === "Calendario" && <GlassCard title="Calendario editorial"><div className="grid gap-3 md:grid-cols-4">{["Lunes: oferta", "Miércoles: contenido", "Viernes: remarketing", "Domingo: reporte"].map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Bloque operativo listo para automatizar.</p></div>)}</div></GlassCard>}
+    </section>
+  );
 }
 
 function AiModule({ records, customers, appointments, revenue, title, setTitle, notes, setNotes, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
-  return <section className="grid gap-6"><div className="rounded-[2rem] border border-violet-300/20 bg-violet-500/15 p-7"><p className="text-sm font-medium text-violet-200">IA Assistant activo</p><h2 className="mt-2 text-3xl font-semibold">Tu panel ahora funciona como centro de inteligencia</h2><p className="mt-2 text-white/60">Este módulo prepara prompts, análisis e insights. Cuando conectemos el proveedor IA, estas instrucciones se convertirán en respuestas automáticas reales.</p></div><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Bot />} label="Prompts" value={records.length} helper="Guardados" /><Metric icon={<Users />} label="Clientes" value={customers.length} helper="Analizables" /><Metric icon={<CalendarDays />} label="Reservas" value={appointments.length} helper="Dataset" /><Metric icon={<TrendingUp />} label="Ingresos" value={`${revenue.toFixed(2)}€`} helper="Contexto" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva instrucción IA"><div className="grid gap-3"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Resumen semanal del negocio" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Pide a Flowly IA que analice clientes inactivos, servicios más rentables, huecos libres o campañas recomendadas" className="input-dark min-h-32" /><button onClick={() => createRecord("ai", "prompt")} className="btn-primary"><Bot size={17} /> Guardar instrucción IA</button></div></GlassCard><GlassCard title="Insights sugeridos"><div className="grid gap-3">{["Clientes sin reservar en 60 días", "Servicios con más margen", "Horas con menor ocupación", "Campaña recomendada esta semana"].map((x) => <div key={x} className="rounded-2xl bg-black/25 p-4"><p className="font-semibold">{x}</p><p className="mt-1 text-sm text-white/45">Listo para automatizar con IA</p></div>)}</div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
+  const [tab, setTab] = useState("Copiloto");
+  const occupancySignal = appointments.length ? "Datos suficientes" : "Necesita agenda";
+  return (
+    <section className="grid gap-6">
+      <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description="Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA." actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={setTab} />} />
+      <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Bot />} label="Prompts" value={records.length} helper="Guardados" /><Metric icon={<Users />} label="Clientes" value={customers.length} helper="Contexto CRM" /><Metric icon={<CalendarDays />} label="Agenda" value={appointments.length} helper={occupancySignal} /><Metric icon={<TrendingUp />} label="Ingresos" value={`${revenue.toFixed(2)}€`} helper="Lectura financiera" /></div>
+      {tab === "Copiloto" && <GlassCard title="Insights ejecutivos"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{["Resumen diario del negocio", "Huecos libres a cubrir", "Clientes con riesgo de fuga", "Servicios con más demanda", "Campaña recomendada", "Seguimiento de llamadas", "Caja prevista", "Tareas para el equipo"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Tarjeta preparada para respuesta IA real.</p></div>)}</div></GlassCard>}
+      {tab === "Automatizaciones" && <GlassCard title="Automatizaciones IA listas"><div className="grid gap-3 md:grid-cols-3">{["Responder leads", "Crear recordatorios", "Reactivar clientes", "Sugerir campañas", "Clasificar llamadas", "Resumen semanal"].map((x) => <div key={x} className="rounded-3xl border border-violet-300/20 bg-violet-500/10 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Estado: preparado para conectar API y reglas.</p></div>)}</div></GlassCard>}
+      {tab === "Prompts" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva instrucción IA"><div className="grid gap-3"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Resumen semanal de dirección" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Define objetivo, datos que debe mirar, formato de respuesta y acciones que debe recomendar" className="input-dark min-h-40" /><button onClick={() => createRecord("ai", "prompt")} className="btn-primary"><Bot size={17} /> Guardar instrucción IA</button></div></GlassCard><GlassCard title="Biblioteca de prompts"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
+      {tab === "Conectores" && <GlassCard title="Proveedor IA y permisos"><IntegrationPanel items={[{ name: "OpenAI / proveedor IA", detail: "API key, modelo y límites por negocio" }, { name: "Permisos CRM", detail: "Datos que la IA puede leer y resumir" }, { name: "Acciones seguras", detail: "Confirmación antes de enviar mensajes o modificar datos" }, { name: "Base de conocimiento", detail: "Documentos, FAQs y tono del negocio" }]} /></GlassCard>}
+    </section>
+  );
 }
+
+function AnalyticsModule({ records, customers, appointments, services, revenue, expenses, manualIncome, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+  const [tab, setTab] = useState("Dirección");
+  const total = revenue + manualIncome;
+  const profit = total - expenses;
+  const conversion = customers.length ? Math.round((appointments.length / customers.length) * 100) : 0;
+  const byStatus = ["pending", "confirmed", "completed", "cancelled"].map((status) => ({ status, count: appointments.filter((a) => a.status === status).length }));
+  return (
+    <section className="grid gap-6">
+      <ModuleHero eyebrow="Business Analytics" title="Panel de métricas sincronizado" description="KPIs del panel principal, agenda, CRM, facturación, TPV y servicios en una capa ejecutiva para dirección." actions={<ModulePillTabs tabs={["Dirección", "Agenda", "Finanzas", "Servicios"]} active={tab} setActive={setTab} />} />
+      <div className="grid gap-4 md:grid-cols-4"><Metric icon={<TrendingUp />} label="Ingresos" value={`${total.toFixed(2)}€`} helper="Reservas + manual" /><Metric icon={<CreditCard />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /><Metric icon={<Users />} label="Conversión" value={`${conversion}%`} helper="Citas / clientes" /><Metric icon={<FileText />} label="Registros" value={records.length} helper="Análisis guardados" /></div>
+      {tab === "Dirección" && <GlassCard title="Scorecard ejecutivo"><div className="grid gap-3 md:grid-cols-3">{["Crecimiento mensual", "Clientes activos", "Ocupación estimada", "Ticket medio", "Retención", "Alertas operativas"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Indicador preparado para histórico avanzado.</p></div>)}</div></GlassCard>}
+      {tab === "Agenda" && <GlassCard title="Embudo de citas"><div className="grid gap-3 md:grid-cols-4">{byStatus.map((item) => <InfoBox key={item.status} label={translateStatus(item.status)} value={item.count} />)}</div></GlassCard>}
+      {tab === "Finanzas" && <GlassCard title="Lectura financiera"><div className="grid gap-3 md:grid-cols-4"><InfoBox label="Reservas" value={`${revenue.toFixed(2)}€`} /><InfoBox label="Manual" value={`${manualIncome.toFixed(2)}€`} /><InfoBox label="Gastos" value={`${expenses.toFixed(2)}€`} /><InfoBox label="Margen" value={`${profit.toFixed(2)}€`} /></div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard>}
+      {tab === "Servicios" && <GlassCard title="Ranking de servicios"><div className="grid gap-3 md:grid-cols-2">{services.map((service) => <div key={service.id} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{service.name}</p><p className="mt-1 text-sm text-white/45">{service.duration || service.duration_minutes || 30} min · {Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea servicios para activar el ranking." />}</div></GlassCard>}
+    </section>
+  );
+}
+
+function BookingPremiumModule({ records, employees, services, appointments, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+  const [tab, setTab] = useState("Reglas");
+  const activeRules = records.filter((r) => r.status !== "inactive").length;
+  return (
+    <section className="grid gap-6">
+      <ModuleHero eyebrow="Booking PRO" title="Reservas premium multinegocio" description="Reglas, políticas, bloqueos, experiencia de reserva y enlaces preparados para que cada cliente adapte el sistema a su negocio." actions={<ModulePillTabs tabs={["Reglas", "Bloqueos", "Experiencia", "Conexiones"]} active={tab} setActive={setTab} />} />
+      <div className="grid gap-4 md:grid-cols-4"><Metric icon={<SlidersHorizontal />} label="Reglas" value={records.length} helper="Configuradas" /><Metric icon={<CheckCircle2 />} label="Activas" value={activeRules} helper="Operativas" /><Metric icon={<UserRound />} label="Equipo" value={employees.length} helper="Profesionales" /><Metric icon={<CalendarDays />} label="Reservas" value={appointments.length} helper="Sincronizadas" /></div>
+      {tab === "Reglas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva regla premium"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="active">Activa</option><option value="draft">Borrador</option><option value="inactive">Inactiva</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Antelación mínima 24h" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe condición, horarios, servicios afectados, penalización o mensaje visible al cliente" className="input-dark min-h-40" /><button onClick={() => createRecord("booking_premium", status)} className="btn-primary"><Plus size={17} /> Guardar regla</button></div></GlassCard><GlassCard title="Reglas existentes"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
+      {tab === "Bloqueos" && <GlassCard title="Bloqueos y disponibilidad"><div className="grid gap-3 md:grid-cols-3">{["Vacaciones", "Mantenimiento", "Formación interna", "Festivos", "Sobrecupo controlado", "Lista de espera"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Configuración preparada para calendario avanzado.</p></div>)}</div></GlassCard>}
+      {tab === "Experiencia" && <GlassCard title="Portal de reserva del cliente"><div className="grid gap-3 md:grid-cols-2">{["Campos personalizados", "Política de cancelación", "Mensaje post-reserva", "Confirmación WhatsApp", "Pago o señal", "Servicios destacados"].map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Listo para personalizar por negocio.</p></div>)}</div></GlassCard>}
+      {tab === "Conexiones" && <GlassCard title="Canales de reserva"><IntegrationPanel items={[{ name: "Google Business Profile", detail: "Enlace de reservas público" }, { name: "Instagram", detail: "Botón reservar y link en bio" }, { name: "WhatsApp", detail: "Confirmaciones y recordatorios" }, { name: "Web del cliente", detail: "Widget embebible" }, { name: "Calendario externo", detail: "Sincronización futura" }, { name: "Pagos", detail: "Señales y reservas premium" }]} /></GlassCard>}
+    </section>
+  );
+}
+
 
 
 const whatsappTemplates = [
