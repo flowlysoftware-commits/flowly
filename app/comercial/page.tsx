@@ -531,17 +531,39 @@ export default function ComercialPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#5b21b6_0%,#0b1020_32%,#020617_100%)] px-6 py-8 text-white">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <p className="text-sm font-medium text-violet-300">Flowly IA · Panel comercial</p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight">{me.full_name}</h1>
-            <p className="mt-2 text-white/60">{roleLabels[me.role]} · Presupuestos, equipo, cartera y saldo acumulado</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <Link href="/comercial/equipo" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Ver equipo <ArrowRight size={16} className="inline" /></Link>}
-            <button onClick={logout} className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white"><LogOut size={16} className="inline" /> Salir</button>
+    <main className="relative min-h-screen overflow-hidden bg-[#020617] px-4 py-6 text-white sm:px-6 lg:px-8">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-cyan-500/20 blur-[120px]" />
+        <div className="absolute right-[-10rem] top-[-8rem] h-[34rem] w-[34rem] rounded-full bg-violet-600/25 blur-[140px]" />
+        <div className="absolute bottom-0 left-1/3 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-[120px]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.035)_1px,transparent_1px)] bg-[size:52px_52px] [mask-image:radial-gradient(circle_at_top,black,transparent_72%)]" />
+      </div>
+      <div className="relative mx-auto max-w-7xl">
+        <header className="mb-8 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-cyan-950/20 backdrop-blur-2xl sm:p-7">
+          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+            <div className="min-w-0">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100">
+                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,.9)]" /> Command Center
+              </div>
+              <h1 className="text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">Hola, {me.full_name}</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">{roleLabels[me.role]} · controla ventas, academia, documentos, red comercial y saldo desde un panel premium conectado en tiempo real.</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <StatusPill label="Sistema activo" tone="emerald" />
+                <StatusPill label={`Rama ${team.length} personas`} tone="cyan" />
+                <StatusPill label={`Objetivo ${targetProgress}%`} tone="violet" />
+              </div>
+            </div>
+            <div className="grid min-w-[260px] gap-3 rounded-[1.5rem] border border-white/10 bg-black/25 p-4 shadow-inner shadow-black/30">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-xs uppercase tracking-[0.22em] text-slate-500">Saldo disponible</span>
+                <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">Live</span>
+              </div>
+              <p className="text-4xl font-semibold tracking-tight text-white">{money(pendingBalance)}</p>
+              <div className="flex flex-wrap gap-3">
+                {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <Link href="/comercial/equipo" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/20">Ver equipo <ArrowRight size={16} /></Link>}
+                <button onClick={logout} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white transition hover:bg-white/15"><LogOut size={16} /> Salir</button>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -553,7 +575,7 @@ export default function ComercialPage() {
           <Metric icon={<Euro />} label="Saldo disponible" value={money(pendingBalance)} helper="Pendiente de cobro" />
         </section>
 
-        <nav className="mb-6 flex flex-wrap gap-3">
+        <nav className="sticky top-3 z-20 mb-6 flex flex-wrap gap-2 rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-2 shadow-2xl shadow-black/30 backdrop-blur-2xl">
           <TabButton label="Resumen" active={tab === "resumen"} onClick={() => setTab("resumen")} />
           <TabButton label="Presupuestos" active={tab === "presupuestos"} onClick={() => setTab("presupuestos")} />
           <TabButton label="Leads" active={tab === "leads"} onClick={() => setTab("leads")} />
@@ -593,8 +615,8 @@ export default function ComercialPage() {
                 </div>
                 <input value={setupAmount} onChange={(e) => setSetupAmount(e.target.value)} placeholder="Instalación" type="number" className="input-dark" />
                 <textarea value={budgetNotes} onChange={(e) => setBudgetNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" />
-                <div className="rounded-3xl bg-white p-5 text-neutral-950"><div className="flex justify-between"><span>Total mensual</span><strong>{planKey === "enterprise" ? "A medida" : money(monthlyTotal)}</strong></div><p className="mt-1 text-xs text-neutral-500">{selectedPlan.description}</p></div>
-                <button onClick={createBudget} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white shadow-lg shadow-violet-950/40"><Plus size={18} className="inline" /> Crear presupuesto</button>
+                <div className="rounded-3xl border border-cyan-300/20 bg-gradient-to-br from-cyan-400/15 to-violet-500/10 p-5 text-white shadow-lg shadow-cyan-950/20"><div className="flex justify-between gap-4"><span className="text-slate-300">Total mensual</span><strong className="text-cyan-100">{planKey === "enterprise" ? "A medida" : money(monthlyTotal)}</strong></div><p className="mt-1 text-xs text-slate-400">{selectedPlan.description}</p></div>
+                <button onClick={createBudget} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:scale-[1.01]"><Plus size={18} className="inline" /> Crear presupuesto</button>
               </div>
             </Panel>
             <Panel title="Mis presupuestos y equipo">
@@ -606,7 +628,7 @@ export default function ComercialPage() {
         {tab === "leads" && (
           <section className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
             <Panel title="Nuevo lead">
-              <div className="grid gap-3"><input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Empresa / negocio" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Persona de contacto" className="input-dark" /><select value={sector} onChange={(e) => setSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option></select></div><div className="grid gap-3 md:grid-cols-2"><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="input-dark" /></div><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" /><button onClick={createLead} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><Plus size={18} className="inline" /> Crear lead</button></div>
+              <div className="grid gap-3"><input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Empresa / negocio" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Persona de contacto" className="input-dark" /><select value={sector} onChange={(e) => setSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option></select></div><div className="grid gap-3 md:grid-cols-2"><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="input-dark" /></div><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" /><button onClick={createLead} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-500/20"><Plus size={18} className="inline" /> Crear lead</button></div>
             </Panel>
             <Panel title="Leads asignados">
               <div className="space-y-3">{leads.map((lead) => <div key={lead.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><h3 className="text-lg font-semibold">{lead.company}</h3><p className="mt-1 text-sm text-white/55">{lead.contact_name || "Sin contacto"} · {lead.phone || "Sin teléfono"} · {lead.sector || "Sector"}</p></div><select value={lead.status} onChange={(e) => updateLead(lead.id, e.target.value)} className="input-dark max-w-44 capitalize">{leadStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></div>{lead.notes && <p className="mt-3 text-sm text-white/50">{lead.notes}</p>}</div>)}{leads.length === 0 && <Empty text="Aún no tienes leads asignados." />}</div>
@@ -616,7 +638,7 @@ export default function ComercialPage() {
 
         {tab === "saldo" && (
           <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-            <Panel title="Saldo acumulado"><div className="rounded-[2rem] bg-white p-6 text-neutral-950"><p className="text-sm text-neutral-500">Disponible para solicitar</p><p className="mt-2 text-5xl font-semibold">{money(pendingBalance)}</p><p className="mt-2 text-sm text-neutral-500">Total histórico: {money(totalBalance)}</p><button onClick={requestPayout} className="mt-6 rounded-full bg-neutral-950 px-6 py-4 font-medium text-white"><Banknote size={18} className="inline" /> Cobrar saldo</button></div></Panel>
+            <Panel title="Saldo acumulado"><div className="relative overflow-hidden rounded-[2rem] border border-emerald-300/20 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-violet-500/10 p-6"><div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-emerald-300/20 blur-3xl" /><p className="relative text-sm text-emerald-100/75">Disponible para solicitar</p><p className="relative mt-2 break-words text-5xl font-semibold tracking-tight text-white">{money(pendingBalance)}</p><p className="relative mt-2 text-sm text-slate-300">Total histórico: {money(totalBalance)}</p><button onClick={requestPayout} className="relative mt-6 rounded-full bg-white px-6 py-4 font-semibold text-slate-950 shadow-lg shadow-emerald-500/20"><Banknote size={18} className="inline" /> Cobrar saldo</button></div></Panel>
             <Panel title="Movimientos de comisión"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div><p className="font-medium capitalize">{commission.type}</p><p className="text-xs text-white/45">{commission.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p></div>)}{commissions.length === 0 && <Empty text="No hay comisiones registradas todavía." />}</div></Panel>
           </section>
         )}
@@ -630,7 +652,7 @@ export default function ComercialPage() {
                 <input value={paymentAccountNumber} onChange={(e) => setPaymentAccountNumber(e.target.value)} placeholder="Número de cuenta / IBAN / cuenta bancaria" className="input-dark" />
                 <textarea value={paymentAccountAddress} onChange={(e) => setPaymentAccountAddress(e.target.value)} placeholder="Dirección fiscal o dirección del titular" className="input-dark min-h-20" />
                 <textarea value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Notas para administración: país, tipo de cuenta, documento, instrucciones especiales..." className="input-dark min-h-20" />
-                <button onClick={savePaymentMethods} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white shadow-lg shadow-violet-950/40">Guardar métodos de pago</button>
+                <button onClick={savePaymentMethods} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-500/20">Guardar métodos de pago</button>
               </div>
             </Panel>
             <Panel title="Información para cobros">
@@ -677,7 +699,7 @@ export default function ComercialPage() {
                             <input value={draft.dni} onChange={(e) => updateDocumentDraft(document.id, "dni", e.target.value)} placeholder="DNI / documento" className="input-dark" />
                             <textarea value={draft.address} onChange={(e) => updateDocumentDraft(document.id, "address", e.target.value)} placeholder="Dirección" className="input-dark min-h-20" />
                             <input value={draft.signature} onChange={(e) => updateDocumentDraft(document.id, "signature", e.target.value)} placeholder="Firma digital: nombre completo" className="input-dark" />
-                            {document.requires_signature !== false && <button onClick={() => signDocument(document)} className="rounded-full bg-white px-4 py-3 text-xs font-medium text-neutral-950"><PenLine size={13} className="inline" /> {signature ? "Actualizar firma" : "Firmar documento"}</button>}
+                            {document.requires_signature !== false && <button onClick={() => signDocument(document)} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-3 text-xs font-semibold text-slate-950"><PenLine size={13} className="inline" /> {signature ? "Actualizar firma" : "Firmar documento"}</button>}
                           </div>
                         </div>
                         {document.content && <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/25 p-4 text-xs leading-relaxed text-white/70">{renderDocumentContent(document, { dni: draft.dni, address: draft.address })}</pre>}
@@ -756,11 +778,12 @@ export default function ComercialPage() {
 function ProgressRing({ percent }: { percent: number }) {
   const safe = Math.max(0, Math.min(100, percent));
   return (
-    <div className="relative h-36 w-36">
-      <div className="absolute inset-0 rounded-full bg-[conic-gradient(#8b5cf6_var(--p),rgba(255,255,255,.12)_0)]" style={{ "--p": `${safe}%` } as React.CSSProperties} />
-      <div className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-[#09090f] text-center shadow-inner shadow-black/60">
-        <span className="text-3xl font-semibold">{safe}%</span>
-        <span className="text-[10px] uppercase tracking-[0.18em] text-white/40">completado</span>
+    <div className="relative h-40 w-40">
+      <div className="absolute inset-0 rounded-full bg-[conic-gradient(#22d3ee_var(--p),#8b5cf6_calc(var(--p)+10%),rgba(255,255,255,.10)_0)] shadow-[0_0_60px_rgba(34,211,238,.22)]" style={{ "--p": `${safe}%` } as React.CSSProperties} />
+      <div className="absolute inset-3 rounded-full bg-slate-950/90 shadow-inner shadow-black/70" />
+      <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-center backdrop-blur">
+        <span className="text-4xl font-semibold tracking-tight">{safe}%</span>
+        <span className="mt-1 text-[10px] uppercase tracking-[0.22em] text-cyan-100/60">academia</span>
       </div>
     </div>
   );
@@ -789,7 +812,7 @@ function TrainingCard({ item, progress, onProgress, onComplete }: { item: Traini
       {isVideo && item.url && <LockedVideoPlayer item={item} progress={progress} onProgress={onProgress} onComplete={onComplete} />}
       {item.url && item.item_type === "pdf" && <iframe src={item.url} className="mt-3 h-[420px] w-full rounded-2xl border border-white/10 bg-black/30" title={item.title} />}
       {item.url && item.item_type === "imagen" && <img src={item.url} alt={item.title} className="mt-3 max-h-[360px] w-full rounded-2xl border border-white/10 object-contain" />}
-      {!isVideo && !isCompleted && <button onClick={() => onComplete(0, 0)} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Marcar recurso como completado</button>}
+      {!isVideo && !isCompleted && <button onClick={() => onComplete(0, 0)} className="mt-3 rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2 text-xs font-semibold text-slate-950">Marcar recurso como completado</button>}
       {item.url && !isVideo && <a href={item.url} target="_blank" rel="noreferrer" className="ml-2 mt-3 inline-flex rounded-full border border-white/10 px-4 py-2 text-xs font-medium text-white/70">Abrir / descargar</a>}
     </div>
   );
@@ -897,7 +920,7 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
       <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/40">
         <div ref={youtubeBoxRef} className="aspect-video w-full" />
         <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-4 py-3">
-          <button onClick={() => playerRef.current?.playVideo?.()} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Reproducir</button>
+          <button onClick={() => playerRef.current?.playVideo?.()} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2 text-xs font-semibold text-slate-950">Reproducir</button>
           <button onClick={() => playerRef.current?.pauseVideo?.()} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/70">Pausar</button>
           <button onClick={openFullscreen} className="rounded-full border border-violet-300/30 bg-violet-500/10 px-4 py-2 text-xs text-violet-100">Pantalla completa</button>
           <span className="text-xs text-white/45">Vídeo bloqueado: no se puede avanzar. El CHECK aparece al verlo completo.</span>
@@ -951,7 +974,7 @@ function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: T
         }}
       />
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button onClick={() => videoRef.current?.play().catch(() => setPlayerMessage("El navegador bloqueó la reproducción. Pulsa play dentro del reproductor."))} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Reproducir</button>
+        <button onClick={() => videoRef.current?.play().catch(() => setPlayerMessage("El navegador bloqueó la reproducción. Pulsa play dentro del reproductor."))} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2 text-xs font-semibold text-slate-950">Reproducir</button>
         <button onClick={() => videoRef.current?.pause()} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/70">Pausar</button>
         <button onClick={openFullscreen} className="rounded-full border border-violet-300/30 bg-violet-500/10 px-4 py-2 text-xs text-violet-100">Pantalla completa</button>
         <span className="text-xs text-white/45">Avance bloqueado hasta completar el vídeo.</span>
@@ -1013,7 +1036,7 @@ function getDescendants(rootId: string, users: SalesUser[], maxLevels: number) {
 
 function OrgBack({ me, allUsers }: { me: SalesUser; allUsers: SalesUser[] }) {
   const chain = getUplineChain(me.id, allUsers, FIRST_BRANCH_RULE.maxLevels);
-  return <div className="space-y-3"><div className="rounded-2xl bg-white p-4 text-neutral-950"><p className="text-xs text-neutral-500">Tú</p><p className="font-semibold">{me.full_name}</p><p className="text-xs">{roleLabels[me.role]}</p></div>{chain.map((user) => <div key={user.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel superior {user.hierarchy_level}</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div>)}{chain.length === 0 && <Empty text="No tienes responsables por encima." />}</div>;
+  return <div className="space-y-3"><div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4"><p className="text-xs text-cyan-100/65">Tú</p><p className="font-semibold text-white">{me.full_name}</p><p className="text-xs text-slate-400">{roleLabels[me.role]}</p></div>{chain.map((user) => <div key={user.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-xs text-violet-200">Nivel superior {user.hierarchy_level}</p><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{roleLabels[user.role]}</p></div>)}{chain.length === 0 && <Empty text="No tienes responsables por encima." />}</div>;
 }
 
 function OrgForward({ root, allUsers }: { root: SalesUser; allUsers: SalesUser[] }) {
@@ -1028,11 +1051,43 @@ function OrgNode({ user, allUsers, level, rootRole }: { user: SalesUser; allUser
 }
 
 function BudgetList({ budgets, onSend, onStatus }: { budgets: SalesBudget[]; onSend: (budget: SalesBudget) => void; onStatus: (id: string, status: string) => void }) {
-  return <div className="space-y-3">{budgets.map((budget) => <div key={budget.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-start"><div><p className="text-lg font-semibold">{budget.client_name}</p><p className="text-sm text-white/50">{budget.company || "Sin empresa"} · {budget.client_email || "Sin email"}</p><p className="mt-2 text-sm text-violet-200">{budget.plan_name} · {money(Number(budget.monthly_amount || 0), budget.currency)} / mes</p><p className="mt-1 text-xs capitalize text-white/40">Estado: {budget.status}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => onSend(budget)} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950"><Send size={13} className="inline" /> Enviar</button><select value={budget.status} onChange={(e) => onStatus(budget.id, e.target.value)} className="rounded-full border border-white/10 bg-neutral-950 px-3 py-2 text-xs capitalize">{budgetStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></div></div>{budget.modules && budget.modules.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{budget.modules.map((module) => <span key={module.key} className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-100">{module.name}</span>)}</div>}</div>)}{budgets.length === 0 && <Empty text="No hay presupuestos todavía." />}</div>;
+  return <div className="space-y-3">{budgets.map((budget) => <div key={budget.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-start"><div><p className="text-lg font-semibold">{budget.client_name}</p><p className="text-sm text-white/50">{budget.company || "Sin empresa"} · {budget.client_email || "Sin email"}</p><p className="mt-2 text-sm text-violet-200">{budget.plan_name} · {money(Number(budget.monthly_amount || 0), budget.currency)} / mes</p><p className="mt-1 text-xs capitalize text-white/40">Estado: {budget.status}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => onSend(budget)} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2 text-xs font-semibold text-slate-950"><Send size={13} className="inline" /> Enviar</button><select value={budget.status} onChange={(e) => onStatus(budget.id, e.target.value)} className="rounded-full border border-white/10 bg-neutral-950 px-3 py-2 text-xs capitalize">{budgetStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></div></div>{budget.modules && budget.modules.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{budget.modules.map((module) => <span key={module.key} className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-100">{module.name}</span>)}</div>}</div>)}{budgets.length === 0 && <Empty text="No hay presupuestos todavía." />}</div>;
 }
 
-function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) { return <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-200">{icon}</div><p className="text-sm text-white/50">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-violet-200/80">{helper}</p></div>; }
-function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="rounded-[2rem] border border-white/10 bg-white/[0.08] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"><h2 className="mb-5 text-xl font-semibold">{title}</h2>{children}</div>; }
-function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={active ? "rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950" : "rounded-full border border-white/10 bg-white/[0.07] px-5 py-3 text-sm text-white/60"}>{label}</button>; }
-function Mini({ label, value }: { label: string; value: string | number }) { return <div className="rounded-2xl bg-white/10 px-4 py-3"><p className="font-semibold">{value}</p><p className="text-xs text-white/45">{label}</p></div>; }
-function Empty({ text }: { text: string }) { return <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-white/45">{text}</div>; }
+function StatusPill({ label, tone }: { label: string; tone: "emerald" | "cyan" | "violet" }) {
+  const tones = {
+    emerald: "border-emerald-300/20 bg-emerald-400/10 text-emerald-100",
+    cyan: "border-cyan-300/20 bg-cyan-400/10 text-cyan-100",
+    violet: "border-violet-300/20 bg-violet-400/10 text-violet-100",
+  };
+  return <span className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium ${tones[tone]}`}>{label}</span>;
+}
+
+function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) {
+  return (
+    <div className="group relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-white/[0.065] p-5 shadow-2xl shadow-black/25 backdrop-blur-2xl transition duration-300 hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.09]">
+      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-cyan-400/10 blur-2xl transition group-hover:bg-violet-400/20" />
+      <div className="relative mb-4 flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-100 shadow-lg shadow-cyan-950/30">{icon}</div>
+      <p className="relative text-sm text-slate-400">{label}</p>
+      <p className="relative mt-2 break-words text-3xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="relative mt-1 text-xs text-cyan-100/70">{helper}</p>
+    </div>
+  );
+}
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.065] p-6 shadow-2xl shadow-black/25 backdrop-blur-2xl">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/50 to-transparent" />
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold tracking-tight text-white">{title}</h2>
+        <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(34,211,238,.9)]" />
+      </div>
+      {children}
+    </div>
+  );
+}
+function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return <button onClick={onClick} className={active ? "rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/20" : "rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-300 transition hover:border-cyan-300/25 hover:bg-white/[0.08] hover:text-white"}>{label}</button>;
+}
+function Mini({ label, value }: { label: string; value: string | number }) { return <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3"><p className="break-words text-lg font-semibold text-white">{value}</p><p className="text-xs text-slate-400">{label}</p></div>; }
+function Empty({ text }: { text: string }) { return <div className="rounded-2xl border border-dashed border-cyan-300/20 bg-cyan-400/[0.035] p-8 text-center text-sm text-slate-400">{text}</div>; }
