@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -91,7 +91,8 @@ type SalesDocumentSignature = {
 };
 
 type TrainingFolder = { id: string; name: string; description: string | null; sort_order: number | null; is_active: boolean | null };
-type TrainingItem = { id: string; folder_id: string | null; title: string; description: string | null; content: string | null; url: string | null; item_type: string | null; sort_order: number | null; is_active: boolean | null };
+type TrainingItem = { id: string; folder_id: string | null; title: string; description: string | null; content: string | null; url: string | null; item_type: string | null; sort_order: number | null; is_active: boolean | null; requires_completion?: boolean | null; estimated_minutes?: number | null };
+type TrainingProgress = { id: string; sales_user_id: string; training_item_id: string; status: string | null; watched_seconds: number | null; duration_seconds: number | null; progress_percent: number | null; completed_at: string | null; updated_at?: string | null };
 
 type SalesBudget = {
   id: string;
@@ -166,6 +167,7 @@ export default function ComercialPage() {
   const [documentDrafts, setDocumentDrafts] = useState<Record<string, { dni: string; address: string; signature: string }>>({});
   const [trainingFolders, setTrainingFolders] = useState<TrainingFolder[]>([]);
   const [trainingItems, setTrainingItems] = useState<TrainingItem[]>([]);
+  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("resumen");
   const [paymentBankName, setPaymentBankName] = useState("");
@@ -235,6 +237,7 @@ export default function ComercialPage() {
       { data: signaturesData },
       { data: foldersData },
       { data: itemsData },
+      { data: progressData },
     ] = await Promise.all([
       supabase.from("sales_leads").select("*").in("assigned_to", visibleIds).order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").in("sales_user_id", visibleIds).order("created_at", { ascending: false }),
@@ -243,6 +246,7 @@ export default function ComercialPage() {
       supabase.from("sales_document_signatures").select("*").eq("sales_user_id", current.id).order("created_at", { ascending: false }),
       supabase.from("sales_training_folders").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
       supabase.from("sales_training_items").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
+      supabase.from("sales_training_progress").select("*").eq("sales_user_id", current.id),
     ]);
 
     setLeads((leadsData || []) as SalesLead[]);
@@ -252,6 +256,7 @@ export default function ComercialPage() {
     setSignatures((signaturesData || []) as SalesDocumentSignature[]);
     setTrainingFolders((foldersData || []) as TrainingFolder[]);
     setTrainingItems((itemsData || []) as TrainingItem[]);
+    setTrainingProgress((progressData || []) as TrainingProgress[]);
     setLoading(false);
   };
 
@@ -455,6 +460,54 @@ export default function ComercialPage() {
     alert("Documento firmado correctamente.");
   };
 
+  const trainingStats = useMemo(() => {
+    const activeItems = trainingItems.filter((item) => item.is_active !== false);
+    const completed = activeItems.filter((item) => trainingProgress.some((progress) => progress.training_item_id === item.id && progress.completed_at));
+    return { total: activeItems.length, completed: completed.length, percent: activeItems.length ? Math.round((completed.length / activeItems.length) * 100) : 0 };
+  }, [trainingItems, trainingProgress]);
+
+  const progressFor = (itemId: string) => trainingProgress.find((progress) => progress.training_item_id === itemId);
+
+  const saveTrainingProgress = async (item: TrainingItem, updates: Partial<TrainingProgress>) => {
+    if (!me) return;
+    const existing = progressFor(item.id);
+    const payload = {
+      sales_user_id: me.id,
+      training_item_id: item.id,
+      status: updates.completed_at ? "completed" : updates.status || existing?.status || "in_progress",
+      watched_seconds: Math.max(Number(existing?.watched_seconds || 0), Number(updates.watched_seconds || 0)),
+      duration_seconds: updates.duration_seconds ?? existing?.duration_seconds ?? null,
+      progress_percent: Math.max(Number(existing?.progress_percent || 0), Number(updates.progress_percent || 0)),
+      completed_at: updates.completed_at || existing?.completed_at || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("sales_training_progress")
+      .upsert(payload, { onConflict: "sales_user_id,training_item_id" })
+      .select("*")
+      .maybeSingle();
+
+    if (error) return alert(error.message);
+    if (data) {
+      setTrainingProgress((current) => {
+        const rest = current.filter((entry) => entry.training_item_id !== item.id || entry.sales_user_id !== me.id);
+        return [data as TrainingProgress, ...rest];
+      });
+    }
+  };
+
+  const completeTrainingItem = async (item: TrainingItem, watchedSeconds = 0, durationSeconds = 0) => {
+    if (progressFor(item.id)?.completed_at) return;
+    await saveTrainingProgress(item, {
+      status: "completed",
+      watched_seconds: watchedSeconds,
+      duration_seconds: durationSeconds || null,
+      progress_percent: 100,
+      completed_at: new Date().toISOString(),
+    });
+  };
+
 
   const logout = async () => {
     await supabase.auth.signOut();
@@ -645,18 +698,33 @@ export default function ComercialPage() {
         )}
 
         {tab === "formaciones" && (
-          <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]">
-            <Panel title="Carpetas de formación">
-              <div className="space-y-3">
-                {trainingFolders.map((folder) => <div key={folder.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold"><BookOpen size={16} className="inline" /> {folder.name}</p><p className="mt-1 text-sm text-white/45">{folder.description || "Contenido formativo"}</p><p className="mt-2 text-xs text-violet-200">{trainingItems.filter((item) => item.folder_id === folder.id).length} recursos</p></div>)}
-                {!trainingFolders.length && <Empty text="Todavía no hay carpetas de formación." />}
-              </div>
-            </Panel>
-            <Panel title="Contenido disponible">
+          <section className="grid gap-6 lg:grid-cols-[.82fr_1.18fr]">
+            <div className="grid gap-6">
+              <Panel title="Mi progreso de academia">
+                <div className="flex flex-col items-center gap-5 text-center">
+                  <ProgressRing percent={trainingStats.percent} />
+                  <div>
+                    <p className="text-lg font-semibold">{trainingStats.completed} de {trainingStats.total} cursos completados</p>
+                    <p className="mt-1 text-sm text-white/50">Los vídeos deben verse completos. El reproductor bloquea el avance manual y marca el CHECK al finalizar.</p>
+                  </div>
+                </div>
+              </Panel>
+              <Panel title="Carpetas de formación">
+                <div className="space-y-3">
+                  {trainingFolders.map((folder) => {
+                    const items = trainingItems.filter((item) => item.folder_id === folder.id);
+                    const done = items.filter((item) => progressFor(item.id)?.completed_at).length;
+                    return <div key={folder.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold"><BookOpen size={16} className="inline" /> {folder.name}</p><p className="mt-1 text-sm text-white/45">{folder.description || "Contenido formativo"}</p><p className="mt-2 text-xs text-violet-200">{done}/{items.length} recursos completados</p></div>;
+                  })}
+                  {!trainingFolders.length && <Empty text="Todavía no hay carpetas de formación." />}
+                </div>
+              </Panel>
+            </div>
+            <Panel title="Academia Flowly">
               <div className="space-y-5">
                 {trainingFolders.map((folder) => {
                   const items = trainingItems.filter((item) => item.folder_id === folder.id);
-                  return <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"><h3 className="text-lg font-semibold">{folder.name}</h3><div className="mt-4 grid gap-3">{items.map((item) => <div key={item.id} className="rounded-2xl bg-white/[0.07] p-4"><p className="font-medium break-words">{item.title}</p><p className="mt-1 text-sm text-white/45 break-words">{item.description || item.item_type || "Recurso"}</p>{item.content && <p className="mt-3 whitespace-pre-wrap text-sm text-white/65">{item.content}</p>}{item.url && item.item_type === "pdf" && <iframe src={item.url} className="mt-3 h-[360px] w-full rounded-2xl border border-white/10 bg-black/30" title={item.title} />}{item.url && item.item_type === "video" && <video src={item.url} controls className="mt-3 w-full rounded-2xl border border-white/10 bg-black/30" />}{item.url && item.item_type === "imagen" && <img src={item.url} alt={item.title} className="mt-3 max-h-[360px] w-full rounded-2xl border border-white/10 object-contain" />}{item.url && <a href={item.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Abrir / descargar recurso</a>}</div>)}{!items.length && <Empty text="Esta carpeta todavía no tiene contenido." />}</div></div>;
+                  return <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"><div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between"><div><h3 className="text-lg font-semibold">{folder.name}</h3><p className="text-sm text-white/45">{folder.description || "Contenido formativo"}</p></div><span className="text-xs text-violet-200">{items.filter((item) => progressFor(item.id)?.completed_at).length}/{items.length} completados</span></div><div className="mt-4 grid gap-4">{items.map((item) => <TrainingCard key={item.id} item={item} progress={progressFor(item.id)} onProgress={(updates) => saveTrainingProgress(item, updates)} onComplete={(watched, duration) => completeTrainingItem(item, watched, duration)} />)}{!items.length && <Empty text="Esta carpeta todavía no tiene contenido." />}</div></div>;
                 })}
               </div>
             </Panel>
@@ -681,6 +749,154 @@ export default function ComercialPage() {
         )}
       </div>
     </main>
+  );
+}
+
+
+function ProgressRing({ percent }: { percent: number }) {
+  const safe = Math.max(0, Math.min(100, percent));
+  return (
+    <div className="relative h-36 w-36">
+      <div className="absolute inset-0 rounded-full bg-[conic-gradient(#8b5cf6_var(--p),rgba(255,255,255,.12)_0)]" style={{ "--p": `${safe}%` } as React.CSSProperties} />
+      <div className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-[#09090f] text-center shadow-inner shadow-black/60">
+        <span className="text-3xl font-semibold">{safe}%</span>
+        <span className="text-[10px] uppercase tracking-[0.18em] text-white/40">completado</span>
+      </div>
+    </div>
+  );
+}
+
+function getYouTubeId(url?: string | null) {
+  if (!url) return "";
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+  return match?.[1] || "";
+}
+
+function TrainingCard({ item, progress, onProgress, onComplete }: { item: TrainingItem; progress?: TrainingProgress; onProgress: (updates: Partial<TrainingProgress>) => void; onComplete: (watched: number, duration: number) => void }) {
+  const isCompleted = Boolean(progress?.completed_at);
+  const percent = Math.round(Number(progress?.progress_percent || 0));
+  const isVideo = item.item_type === "video" || Boolean(getYouTubeId(item.url));
+  return (
+    <div className={isCompleted ? "rounded-3xl border border-emerald-300/25 bg-emerald-500/10 p-4" : "rounded-3xl border border-white/10 bg-white/[0.07] p-4"}>
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+        <div className="min-w-0">
+          <p className="font-semibold break-words">{item.title}</p>
+          <p className="mt-1 text-sm text-white/45 break-words">{item.description || item.item_type || "Recurso formativo"}</p>
+        </div>
+        <span className={isCompleted ? "inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200" : "inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs text-white/55"}>{isCompleted ? <CheckCircle2 size={14} /> : <Clock size={14} />} {isCompleted ? "Completado" : `${percent}%`}</span>
+      </div>
+      {item.content && <p className="mt-3 whitespace-pre-wrap text-sm text-white/65">{item.content}</p>}
+      {isVideo && item.url && <LockedVideoPlayer item={item} progress={progress} onProgress={onProgress} onComplete={onComplete} />}
+      {item.url && item.item_type === "pdf" && <iframe src={item.url} className="mt-3 h-[420px] w-full rounded-2xl border border-white/10 bg-black/30" title={item.title} />}
+      {item.url && item.item_type === "imagen" && <img src={item.url} alt={item.title} className="mt-3 max-h-[360px] w-full rounded-2xl border border-white/10 object-contain" />}
+      {!isVideo && !isCompleted && <button onClick={() => onComplete(0, 0)} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Marcar recurso como completado</button>}
+      {item.url && !isVideo && <a href={item.url} target="_blank" rel="noreferrer" className="ml-2 mt-3 inline-flex rounded-full border border-white/10 px-4 py-2 text-xs font-medium text-white/70">Abrir / descargar</a>}
+    </div>
+  );
+}
+
+function LockedVideoPlayer({ item, progress, onProgress, onComplete }: { item: TrainingItem; progress?: TrainingProgress; onProgress: (updates: Partial<TrainingProgress>) => void; onComplete: (watched: number, duration: number) => void }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const youtubeBoxRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<any>(null);
+  const maxWatchedRef = useRef(Number(progress?.watched_seconds || 0));
+  const completedRef = useRef(Boolean(progress?.completed_at));
+  const youtubeId = getYouTubeId(item.url);
+
+  useEffect(() => { completedRef.current = Boolean(progress?.completed_at); }, [progress?.completed_at]);
+
+  useEffect(() => {
+    if (!youtubeId || !youtubeBoxRef.current) return;
+    let interval: number | undefined;
+    const createPlayer = () => {
+      if (!youtubeBoxRef.current || playerRef.current || !(window as any).YT?.Player) return;
+      playerRef.current = new (window as any).YT.Player(youtubeBoxRef.current, {
+        videoId: youtubeId,
+        playerVars: { controls: 0, disablekb: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+        events: {
+          onReady: () => {
+            interval = window.setInterval(() => {
+              const player = playerRef.current;
+              if (!player?.getCurrentTime) return;
+              const current = Number(player.getCurrentTime() || 0);
+              const duration = Number(player.getDuration?.() || 0);
+              if (current > maxWatchedRef.current + 2 && !completedRef.current) {
+                player.seekTo(maxWatchedRef.current, true);
+                return;
+              }
+              if (current > maxWatchedRef.current) maxWatchedRef.current = current;
+              const percent = duration ? Math.min(99, Math.round((maxWatchedRef.current / duration) * 100)) : 0;
+              if (duration && current >= duration * 0.95 && !completedRef.current) {
+                completedRef.current = true;
+                onComplete(Math.round(duration), Math.round(duration));
+              } else if (percent > Number(progress?.progress_percent || 0)) {
+                onProgress({ watched_seconds: Math.round(maxWatchedRef.current), duration_seconds: Math.round(duration || 0), progress_percent: percent, status: "in_progress" });
+              }
+            }, 2500);
+          },
+          onStateChange: (event: any) => {
+            if (event.data === 0 && !completedRef.current) {
+              const duration = Number(playerRef.current?.getDuration?.() || maxWatchedRef.current || 0);
+              completedRef.current = true;
+              onComplete(Math.round(duration), Math.round(duration));
+            }
+          },
+        },
+      });
+    };
+    if (!(window as any).YT?.Player) {
+      const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+      if (!existing) {
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.body.appendChild(tag);
+      }
+      const prev = (window as any).onYouTubeIframeAPIReady;
+      (window as any).onYouTubeIframeAPIReady = () => { prev?.(); createPlayer(); };
+      const fallback = window.setInterval(createPlayer, 500);
+      return () => { window.clearInterval(fallback); if (interval) window.clearInterval(interval); playerRef.current?.destroy?.(); playerRef.current = null; };
+    }
+    createPlayer();
+    return () => { if (interval) window.clearInterval(interval); playerRef.current?.destroy?.(); playerRef.current = null; };
+  }, [youtubeId]);
+
+  if (youtubeId) {
+    return <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/40"><div ref={youtubeBoxRef} className="aspect-video w-full" /><p className="border-t border-white/10 px-4 py-3 text-xs text-white/45">Vídeo bloqueado: no se puede avanzar. El CHECK aparece al verlo completo.</p></div>;
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-3">
+      <video
+        ref={videoRef}
+        src={item.url || ""}
+        className="w-full rounded-xl"
+        controls={false}
+        playsInline
+        onTimeUpdate={(e) => {
+          const video = e.currentTarget;
+          if (video.currentTime > maxWatchedRef.current + 1.5 && !completedRef.current) {
+            video.currentTime = maxWatchedRef.current;
+            return;
+          }
+          if (video.currentTime > maxWatchedRef.current) maxWatchedRef.current = video.currentTime;
+          const percent = video.duration ? Math.min(99, Math.round((maxWatchedRef.current / video.duration) * 100)) : 0;
+          if (video.duration && video.currentTime >= video.duration * 0.95 && !completedRef.current) {
+            completedRef.current = true;
+            onComplete(Math.round(video.duration), Math.round(video.duration));
+          } else if (percent > Number(progress?.progress_percent || 0) && Math.round(maxWatchedRef.current) % 10 === 0) {
+            onProgress({ watched_seconds: Math.round(maxWatchedRef.current), duration_seconds: Math.round(video.duration || 0), progress_percent: percent, status: "in_progress" });
+          }
+        }}
+        onEnded={(e) => {
+          const video = e.currentTarget;
+          if (!completedRef.current) {
+            completedRef.current = true;
+            onComplete(Math.round(video.duration || maxWatchedRef.current), Math.round(video.duration || maxWatchedRef.current));
+          }
+        }}
+      />
+      <div className="mt-3 flex flex-wrap items-center gap-2"><button onClick={() => videoRef.current?.play()} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Reproducir</button><button onClick={() => videoRef.current?.pause()} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/70">Pausar</button><span className="text-xs text-white/45">Avance bloqueado hasta completar el vídeo.</span></div>
+    </div>
   );
 }
 
