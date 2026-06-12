@@ -500,7 +500,7 @@ export default function DashboardPage() {
 
   const activeModules = moduleCatalog.filter((item) => activeModuleKeys.includes(item.key));
   const inactiveModules = moduleCatalog.filter((item) => !activeModuleKeys.includes(item.key));
-  const activeModule = activeTab.startsWith("module:") ? moduleCatalog.find((item) => `module:${item.slug}` === activeTab) : null;
+  const activeModule = activeTab.startsWith("module:") ? moduleCatalog.find((item) => activeTab === `module:${item.slug}` || activeTab.startsWith(`module:${item.slug}:`)) : null;
 
   const bookingUrl = useMemo(() => (!origin || !business?.id ? "" : `${origin}/reservas/${business.id}`), [origin, business?.id]);
   const revenue = appointments.filter((item) => item.status !== "cancelled").reduce((sum, item) => sum + Number(firstRelation(item.services)?.price || 0), 0);
@@ -1119,7 +1119,36 @@ export default function DashboardPage() {
             {navItems.map(({ id, label, Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "menu-active" : "menu-item"}><Icon size={17} /> {label}</button>)}
           </nav>
 
-          {activeModules.length > 0 && <div className="mt-6"><p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/35">Módulos contratados</p><div className="grid gap-2">{activeModules.map((item) => { const Icon = item.Icon; const id = `module:${item.slug}` as ActiveTab; return <button key={item.key} onClick={() => { resetRecordForm(); setActiveTab(id); }} className={activeTab === id ? "menu-active" : "menu-item"}><Icon size={17} /> {item.short}</button>; })}</div></div>}
+          {activeModules.length > 0 && (
+            <div className="mt-6">
+              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/35">Módulos contratados</p>
+              <div className="grid gap-2">
+                {activeModules.map((item) => {
+                  const Icon = item.Icon;
+                  const id = `module:${item.slug}` as ActiveTab;
+                  const isActive = activeTab === id || activeTab.startsWith(`${id}:`);
+
+                  if (item.key === "whatsapp") {
+                    return (
+                      <div key={item.key} className="grid gap-2">
+                        <button onClick={() => { resetRecordForm(); setActiveTab("module:whatsapp:enviar"); }} className={isActive ? "menu-active" : "menu-item"}>
+                          <Icon size={17} /> {item.short}
+                        </button>
+                        {isActive && (
+                          <div className="ml-4 grid gap-2 border-l border-white/10 pl-3">
+                            <button onClick={() => setActiveTab("module:whatsapp:enviar")} className={activeTab === "module:whatsapp:enviar" || activeTab === "module:whatsapp" ? "menu-active" : "menu-item"}>Enviar</button>
+                            <button onClick={() => setActiveTab("module:whatsapp:plantillas")} className={activeTab === "module:whatsapp:plantillas" ? "menu-active" : "menu-item"}>Plantillas</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return <button key={item.key} onClick={() => { resetRecordForm(); setActiveTab(id); }} className={isActive ? "menu-active" : "menu-item"}><Icon size={17} /> {item.short}</button>;
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 grid gap-2 border-t border-white/10 pt-4">
             <button onClick={openBillingPortal} className="menu-item"><CreditCard size={17} /> Facturación Stripe</button>
@@ -1222,7 +1251,7 @@ export default function DashboardPage() {
             uploadCompanyLogo={uploadCompanyLogo}
             saveCompanyProfile={saveCompanyProfile}
           />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} />}
         </section>
       </div>
     </Shell>
@@ -1233,7 +1262,7 @@ function AreaSection({ business, activeModules, inactiveModules, bookingUrl, ope
   return <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><GlassCard><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-medium text-violet-300">Área personal</p><h2 className="mt-2 text-3xl font-semibold">Suscripción, módulos y personalización</h2><p className="mt-2 text-sm leading-6 text-white/55">Gestiona tu plan, abre Stripe, consulta módulos activos y contrata nuevas funcionalidades desde el plan Modular.</p></div><CreditCard className="text-violet-200" size={44} /></div><div className="mt-6 grid gap-4 md:grid-cols-3"><InfoBox label="Plan actual" value={business.plan || "basic"} /><InfoBox label="Estado" value={business.subscription_status || "trialing"} /><InfoBox label="Módulos" value={activeModules.length} /></div><div className="mt-6 flex flex-wrap gap-3"><button onClick={openBillingPortal} className="btn-primary"><CreditCard size={17} /> Gestionar suscripción</button><Link href="/precios#modular" className="btn-secondary">Contratar módulos nuevos</Link></div></GlassCard><GlassCard title="Reservas online"><p className="text-sm text-white/55">Comparte este enlace con tus clientes para que puedan reservar.</p><div className="mt-5 rounded-2xl bg-black/30 p-4"><code className="break-all text-sm text-white/75">{bookingUrl}</code></div><button onClick={() => { if (!bookingUrl) return; navigator.clipboard.writeText(bookingUrl); alert("Enlace copiado"); }} className="mt-4 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950">Copiar enlace</button></GlassCard><GlassCard title="Módulos activos"><div className="grid gap-3 md:grid-cols-2">{activeModules.length ? activeModules.map((item) => <ModuleAccessCard key={item.key} module={item} active onOpen={() => setActiveTab(`module:${item.slug}`)} />) : <p className="text-sm text-white/50">No tienes módulos extra activos. Tu plan incluye el núcleo de reservas, servicios y clientes.</p>}</div></GlassCard><GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard></section>;
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -1977,28 +2006,19 @@ function openWhatsappForCustomer(customer: Customer, template: string) {
 }
 
 function WhatsappModule({
-  records,
   customers,
-  title,
-  setTitle,
-  notes,
-  setNotes,
-  status,
-  setStatus,
-  createRecord,
-  deleteRecord,
-  whatsappMessages,
   whatsappTemplatesEffective,
   saveWhatsappTemplate,
   deleteWhatsappTemplate,
   saveWhatsappMessage,
+  activeTab,
+  setActiveTab,
 }: Parameters<typeof ModuleSection>[0]) {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState("llamada_perdida");
-  const [manualPhone, setManualPhone] = useState("");
-  const [manualMessage, setManualMessage] = useState("Hola, somos Neuronas IPS. Te contactamos sobre tu proceso de atención. Quedamos atentos a tu respuesta.");
-  const [manualTemplateKey, setManualTemplateKey] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState("");
+  const [customMessage, setCustomMessage] = useState("");
+  const [templateTitle, setTemplateTitle] = useState("");
+  const [templateMessage, setTemplateMessage] = useState("");
   const [editingTemplateKey, setEditingTemplateKey] = useState<string | null>(null);
   const [editingTemplateLabel, setEditingTemplateLabel] = useState("");
   const [editingTemplateMessage, setEditingTemplateMessage] = useState("");
@@ -2008,46 +2028,40 @@ function WhatsappModule({
     setLocalTemplates(whatsappTemplatesEffective);
   }, [whatsappTemplatesEffective]);
 
-  const quickTemplates = localTemplates.length ? localTemplates : whatsappTemplatesEffective;
+  const templates = localTemplates.length ? localTemplates : whatsappTemplatesEffective;
+  const currentView = activeTab === "module:whatsapp:plantillas" ? "plantillas" : "enviar";
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
-  const selectedTemplate = quickTemplates.find((template) => template.key === selectedTemplateKey) || quickTemplates[0] || whatsappTemplates[0];
-  const selectedManualTemplate = quickTemplates.find((template) => template.key === manualTemplateKey) || null;
+  const selectedTemplate = templates.find((template) => template.key === selectedTemplateKey) || null;
+  const finalMessage = customMessage || (selectedTemplate && selectedCustomer ? whatsappMessageForCustomer(selectedTemplate.message, selectedCustomer) : selectedTemplate?.message || "");
 
-  const filteredCustomers = customers.filter((customer) => {
-    const searchable = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""}`.toLowerCase();
-    return searchable.includes(customerSearch.toLowerCase().trim());
-  });
-
-  const sendSelectedTemplate = () => {
-    if (!selectedCustomer) return alert("Selecciona un paciente");
-    const message = whatsappMessageForCustomer(selectedTemplate.message, selectedCustomer);
-    saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", selectedTemplate.key, message);
-    openWhatsappForCustomer(selectedCustomer, selectedTemplate.message);
+  const handleSelectTemplate = (key: string) => {
+    setSelectedTemplateKey(key);
+    const template = templates.find((item) => item.key === key);
+    if (template) setCustomMessage(selectedCustomer ? whatsappMessageForCustomer(template.message, selectedCustomer) : template.message);
   };
 
-  const sendManualMessage = () => {
-    if (!openWhatsapp(manualPhone, manualMessage)) return alert("Añade un teléfono válido");
-    saveWhatsappMessage(null, manualPhone, "manual", manualMessage);
+  const sendMessage = () => {
+    if (!selectedCustomer) return alert("Selecciona un cliente");
+    if (!finalMessage.trim()) return alert("Escribe un mensaje o selecciona una plantilla");
+    if (!openWhatsapp(selectedCustomer.phone, finalMessage)) return alert("Este cliente no tiene teléfono válido para WhatsApp");
+    saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", selectedTemplate?.key || "manual", finalMessage);
   };
 
-  const applyTemplateToManual = (template: WhatsappTemplate) => {
-    setManualTemplateKey(template.key);
-    setManualMessage(template.message);
-  };
-
-  const applyTemplateToCrm = (template: WhatsappTemplate) => {
-    setSelectedTemplateKey(template.key);
-  };
-
-  const saveTemplate = async () => {
-    if (!title.trim() || !notes.trim()) return alert("Añade nombre y mensaje de la plantilla");
-    const newTemplate = { key: `custom_${Date.now()}`, label: title.trim(), message: notes.trim(), name: title.trim(), content: notes.trim(), category: status || "template", is_active: true };
+  const createTemplate = async () => {
+    if (!templateTitle.trim() || !templateMessage.trim()) return alert("Añade nombre y mensaje de la plantilla");
+    const newTemplate: WhatsappTemplate = {
+      key: `custom_${Date.now()}`,
+      label: templateTitle.trim(),
+      message: templateMessage.trim(),
+      name: templateTitle.trim(),
+      content: templateMessage.trim(),
+      category: "custom",
+      is_active: true,
+    };
     setLocalTemplates((current) => mergeWhatsappTemplates(current, [newTemplate]));
-    setSelectedTemplateKey(newTemplate.key);
-    applyTemplateToManual(newTemplate);
     await saveWhatsappTemplate(newTemplate);
-    setTitle("");
-    setNotes("");
+    setTemplateTitle("");
+    setTemplateMessage("");
   };
 
   const startEditTemplate = (template: WhatsappTemplate) => {
@@ -2058,200 +2072,147 @@ function WhatsappModule({
 
   const saveEditingTemplate = async () => {
     if (!editingTemplateKey) return;
-    const updatedTemplate = { id: quickTemplates.find((item) => item.key === editingTemplateKey)?.id, key: editingTemplateKey, label: editingTemplateLabel.trim(), message: editingTemplateMessage.trim(), name: editingTemplateLabel.trim(), content: editingTemplateMessage.trim(), category: "quick", is_active: true };
+    const currentTemplate = templates.find((item) => item.key === editingTemplateKey);
+    const updatedTemplate: WhatsappTemplate = {
+      id: currentTemplate?.id,
+      key: editingTemplateKey,
+      label: editingTemplateLabel.trim(),
+      message: editingTemplateMessage.trim(),
+      name: editingTemplateLabel.trim(),
+      content: editingTemplateMessage.trim(),
+      category: currentTemplate?.category || "custom",
+      is_active: true,
+    };
     setLocalTemplates((current) => mergeWhatsappTemplates(current, [updatedTemplate]));
-    if (manualTemplateKey === editingTemplateKey) setManualMessage(updatedTemplate.message);
     await saveWhatsappTemplate(updatedTemplate);
     setEditingTemplateKey(null);
     setEditingTemplateLabel("");
     setEditingTemplateMessage("");
   };
 
+  const removeTemplate = async (template: WhatsappTemplate) => {
+    setLocalTemplates((current) => current.filter((item) => item.key !== template.key));
+    if (selectedTemplateKey === template.key) {
+      setSelectedTemplateKey("");
+      setCustomMessage("");
+    }
+    await deleteWhatsappTemplate(template);
+  };
+
   return (
     <section className="grid gap-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Metric icon={<MessageCircle />} label="Modo" value="Manual" helper="Sin coste API" />
-        <Metric icon={<Users />} label="Pacientes" value={customers.length} helper="CRM conectado" />
-        <Metric icon={<FileText />} label="Plantillas" value={quickTemplates.length} helper="Rápidas" />
-        <Metric icon={<CheckCircle2 />} label="Coste" value="0€" helper="Abre WhatsApp" />
-        <Metric icon={<Clock />} label="Historial" value={whatsappMessages.length} helper="Mensajes abiertos" />
-      </div>
+      <GlassCard>
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">WhatsApp conectado al CRM</p>
+            <h2 className="mt-2 text-3xl font-semibold">Mensajes rápidos y plantillas</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
+              Un módulo limpio: selecciona un cliente del CRM, aplica una plantilla si quieres y termina el mensaje manualmente antes de abrir WhatsApp.
+            </p>
+          </div>
+          <div className="flex rounded-full border border-white/10 bg-black/25 p-1">
+            <button onClick={() => setActiveTab("module:whatsapp:enviar")} className={currentView === "enviar" ? "rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-5 py-2 text-sm text-white/60 hover:text-white"}>Enviar</button>
+            <button onClick={() => setActiveTab("module:whatsapp:plantillas")} className={currentView === "plantillas" ? "rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-5 py-2 text-sm text-white/60 hover:text-white"}>Plantillas</button>
+          </div>
+        </div>
+      </GlassCard>
 
-      <div className="rounded-[2rem] border border-green-300/25 bg-green-500/15 p-5">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">WhatsApp Manual activo</p>
-        <p className="mt-2 text-sm leading-6 text-white/65">
-          Este módulo no usa API de pago. Genera conversaciones con mensajes preparados usando WhatsApp Web o WhatsApp Desktop.
-          Ideal para empezar sin costes fijos por número.
-        </p>
-      </div>
-
-      <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
-        <GlassCard title="Enviar WhatsApp desde CRM">
-          <div className="grid gap-3">
-            <div className="relative">
-              <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
-              <input
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                placeholder="Buscar paciente por nombre, teléfono, EPS o documento"
-                className="input-dark pl-11"
+      {currentView === "enviar" ? (
+        <GlassCard title="Enviar WhatsApp">
+          <div className="mx-auto grid max-w-3xl gap-4">
+            <label className="grid gap-2 text-sm font-medium text-white/70">
+              Cliente
+              <Select
+                value={selectedCustomerId}
+                onChange={(value) => {
+                  setSelectedCustomerId(value);
+                  const customer = customers.find((item) => item.id === value);
+                  if (selectedTemplate && customer) setCustomMessage(whatsappMessageForCustomer(selectedTemplate.message, customer));
+                }}
+                placeholder="Seleccionar cliente del CRM"
+                options={customers.map((customer) => ({
+                  value: customer.id,
+                  label: `${customerName(customer)} · ${customer.phone || "Sin teléfono"}`,
+                }))}
               />
-            </div>
+            </label>
 
-            <Select
-              value={selectedCustomerId}
-              onChange={setSelectedCustomerId}
-              placeholder="Seleccionar paciente"
-              options={filteredCustomers.slice(0, 80).map((customer) => ({
-                value: customer.id,
-                label: `${customerName(customer)} · ${customer.phone || "Sin teléfono"}${customer.document_number ? ` · ID ${customer.document_number}` : ""}`,
-              }))}
-            />
+            <label className="grid gap-2 text-sm font-medium text-white/70">
+              Plantilla
+              <select value={selectedTemplateKey} onChange={(e) => handleSelectTemplate(e.target.value)} className="input-dark">
+                <option value="">Sin plantilla</option>
+                {templates.map((template) => (
+                  <option key={template.key} value={template.key}>{template.label}</option>
+                ))}
+              </select>
+            </label>
 
-            <select value={selectedTemplateKey} onChange={(e) => setSelectedTemplateKey(e.target.value)} className="input-dark">
-              {quickTemplates.map((template) => (
-                <option key={template.key} value={template.key}>{template.label}</option>
-              ))}
-            </select>
-
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/35">Vista previa</p>
-              <p className="mt-2 text-sm leading-6 text-white/70">
-                {selectedCustomer
-                  ? whatsappMessageForCustomer(selectedTemplate.message, selectedCustomer)
-                  : selectedTemplate.message}
-              </p>
-            </div>
+            <label className="grid gap-2 text-sm font-medium text-white/70">
+              Mensaje
+              <textarea
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Escribe aquí el mensaje o edita la plantilla seleccionada..."
+                className="input-dark min-h-48"
+              />
+            </label>
 
             {selectedCustomer && (
-              <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4 md:grid-cols-2">
-                <InfoBox label="Paciente" value={customerName(selectedCustomer)} />
+              <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.05] p-4 md:grid-cols-2">
+                <InfoBox label="Cliente" value={customerName(selectedCustomer)} />
                 <InfoBox label="Teléfono" value={selectedCustomer.phone || "Sin teléfono"} />
-                <InfoBox label="EPS" value={translateIntent(selectedCustomer.eps || "informacion")} />
-                <InfoBox label="Documento" value={selectedCustomer.document_number || "No indicado"} />
               </div>
             )}
 
-            <button onClick={sendSelectedTemplate} className="btn-primary">
-              <MessageCircle size={17} /> Abrir WhatsApp con plantilla
-            </button>
-          </div>
-        </GlassCard>
-
-        <GlassCard title="Mensaje libre">
-          <div className="grid gap-3">
-            <input
-              value={manualPhone}
-              onChange={(e) => setManualPhone(e.target.value)}
-              placeholder="Teléfono. Ej: 3001234567"
-              className="input-dark"
-            />
-            <select
-              value={manualTemplateKey}
-              onChange={(e) => {
-                const key = e.target.value;
-                setManualTemplateKey(key);
-                const template = quickTemplates.find((item) => item.key === key);
-                if (template) setManualMessage(template.message);
-              }}
-              className="input-dark"
-            >
-              <option value="">Usar plantilla guardada</option>
-              {quickTemplates.map((template) => (
-                <option key={template.key} value={template.key}>{template.label}</option>
-              ))}
-            </select>
-            {selectedManualTemplate && (
-              <p className="text-xs leading-5 text-white/45">
-                Plantilla seleccionada: <span className="text-white/70">{selectedManualTemplate.label}</span>. Puedes modificar el texto antes de abrir WhatsApp.
-              </p>
-            )}
-            <textarea
-              value={manualMessage}
-              onChange={(e) => setManualMessage(e.target.value)}
-              placeholder="Mensaje"
-              className="input-dark min-h-32"
-            />
-            <button onClick={sendManualMessage} className="btn-primary">
+            <button onClick={sendMessage} className="btn-primary justify-center">
               <MessageCircle size={17} /> Abrir WhatsApp
             </button>
           </div>
-
-          <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4">
-            <h3 className="font-semibold">Crear plantilla personalizada</h3>
-            <p className="mt-1 text-sm text-white/45">
-              Puedes usar variables: {"{nombre}"}, {"{telefono}"}, {"{eps}"}, {"{documento}"}.
-            </p>
-            <div className="mt-4 grid gap-3">
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark">
-                <option value="template">Plantilla general</option>
-                <option value="followup">Seguimiento</option>
-                <option value="appointment">Citas</option>
-                <option value="documents">Documentación</option>
-              </select>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre de plantilla" className="input-dark" />
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Hola {nombre}, somos Neuronas IPS..."
-                className="input-dark min-h-28"
-              />
-              <button onClick={saveTemplate} className="btn-secondary">
-                <Plus size={17} /> Guardar plantilla
-              </button>
+        </GlassCard>
+      ) : (
+        <GlassCard title="Plantillas WhatsApp">
+          <div className="mx-auto grid max-w-4xl gap-6">
+            <div className="rounded-[2rem] border border-white/10 bg-black/25 p-5">
+              <h3 className="text-lg font-semibold">Crear plantilla</h3>
+              <p className="mt-1 text-sm text-white/45">Puedes usar variables: {"{nombre}"}, {"{telefono}"}, {"{eps}"}, {"{documento}"}.</p>
+              <div className="mt-4 grid gap-3">
+                <input value={templateTitle} onChange={(e) => setTemplateTitle(e.target.value)} placeholder="Nombre de plantilla" className="input-dark" />
+                <textarea value={templateMessage} onChange={(e) => setTemplateMessage(e.target.value)} placeholder="Hola {nombre}, te escribimos para..." className="input-dark min-h-36" />
+                <button onClick={createTemplate} className="btn-secondary justify-center"><Plus size={17} /> Guardar plantilla</button>
+              </div>
             </div>
-          </div>
 
-          <div className="mt-6">
-            <RecordsList records={records} deleteRecord={deleteRecord} />
+            <div className="grid gap-3">
+              {templates.map((template) => (
+                <div key={template.key} className="rounded-[1.5rem] border border-white/10 bg-white/[0.05] p-5">
+                  {editingTemplateKey === template.key ? (
+                    <div className="grid gap-3">
+                      <input value={editingTemplateLabel} onChange={(e) => setEditingTemplateLabel(e.target.value)} className="input-dark" />
+                      <textarea value={editingTemplateMessage} onChange={(e) => setEditingTemplateMessage(e.target.value)} className="input-dark min-h-32" />
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={saveEditingTemplate} className="btn-primary">Guardar cambios</button>
+                        <button onClick={() => setEditingTemplateKey(null)} className="btn-secondary">Cancelar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                      <div>
+                        <p className="font-semibold">{template.label}</p>
+                        <p className="mt-2 text-sm leading-6 text-white/50">{template.message}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button onClick={() => startEditTemplate(template)} className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/75 hover:bg-white/10">Editar</button>
+                        <button onClick={() => removeTemplate(template)} className="rounded-full border border-red-300/20 px-4 py-2 text-xs text-red-200/80 hover:bg-red-500/10">Eliminar</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {!templates.length && <Empty text="Todavía no hay plantillas creadas." />}
+            </div>
           </div>
         </GlassCard>
-      </section>
-
-      <GlassCard title="Historial WhatsApp">
-        <div className="space-y-3">
-          {whatsappMessages.slice(0, 20).map((message) => (
-            <div key={message.id} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
-              <p className="text-sm font-semibold">{message.phone} · {message.template_key || "manual"}</p>
-              <p className="mt-2 text-sm leading-6 text-white/55">{message.message}</p>
-              <p className="mt-2 text-xs text-white/35">{new Date(message.created_at).toLocaleString("es-ES")}</p>
-            </div>
-          ))}
-          {!whatsappMessages.length && <Empty text="Todavía no hay mensajes WhatsApp registrados." />}
-        </div>
-      </GlassCard>
-
-      <GlassCard title="Plantillas rápidas">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {quickTemplates.map((template) => (
-            <div key={template.key} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
-              {editingTemplateKey === template.key ? (
-                <div className="grid gap-3">
-                  <input value={editingTemplateLabel} onChange={(e) => setEditingTemplateLabel(e.target.value)} className="input-dark" />
-                  <textarea value={editingTemplateMessage} onChange={(e) => setEditingTemplateMessage(e.target.value)} className="input-dark min-h-28" />
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={saveEditingTemplate} className="btn-primary">Guardar cambios</button>
-                    <button onClick={() => setEditingTemplateKey(null)} className="btn-secondary">Cancelar</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-semibold">{template.label}</p>
-                    <button onClick={() => startEditTemplate(template)} className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/75 hover:bg-white/10">Editar</button>
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-white/50">{template.message}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button onClick={() => applyTemplateToCrm(template)} className="rounded-full border border-green-300/25 bg-green-500/10 px-3 py-1 text-xs text-green-100 hover:bg-green-500/20">Usar en CRM</button>
-                    <button onClick={() => applyTemplateToManual(template)} className="rounded-full border border-sky-300/25 bg-sky-500/10 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/20">Usar en mensaje libre</button>
-                    {template.key.startsWith("custom_") && <button onClick={async () => { setLocalTemplates((current) => current.filter((item) => item.key !== template.key)); await deleteWhatsappTemplate(template); }} className="rounded-full border border-red-300/20 px-3 py-1 text-xs text-red-200/80 hover:bg-red-500/10">Eliminar</button>}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      </GlassCard>
+      )}
     </section>
   );
 }
