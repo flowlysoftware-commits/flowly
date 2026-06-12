@@ -25,15 +25,15 @@ export function buildBrandAvatarPrompt(input: GenerateBrandAvatarInput) {
   const colors = input.brandColors?.filter(Boolean).join(", ") || "electric blue, violet and cyan accents";
 
   return [
-    `Create a premium SaaS brand mascot avatar for a business called ${input.businessName}.`,
+    `Create a premium full-body SaaS brand mascot character for a business called ${input.businessName}.`,
     `Business type: ${input.businessType || "local business"}.`,
     `Mascot name: ${input.avatarName || "Nia"}.`,
     `Visual style: ${style}.`,
     `Personality: ${input.avatarPersonality || "warm, strategic, helpful and sales-oriented"}.`,
     `Use brand colors: ${colors}.`,
     input.logoUrl ? `The business logo is available at this URL for brand inspiration: ${input.logoUrl}. Use its visual language and colors as inspiration, but do not copy text or recreate the exact logo.` : "Use a modern premium identity inspired by tech SaaS products.",
-    "Dark premium glassmorphism context, soft glow, clean silhouette, centered character, transparent-looking background feel, high detail, corporate quality.",
-    "No text, no letters, no watermark, no extra logos, no mockup, no UI, no background clutter.",
+    "Full body visible from head to feet, standing pose, arms and legs visible, character-ready for UI animation, clean silhouette, centered character with generous padding, transparent-looking background feel, dark premium glassmorphism context, soft glow, high detail, corporate quality.",
+    "No text, no letters, no watermark, no extra logos, no mockup, no UI, no background clutter, do not crop the head or feet.",
   ].join(" ");
 }
 

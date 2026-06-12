@@ -1502,12 +1502,78 @@ function FloatingAvatarAssistant({
   const avatarUrl = businessAvatar?.avatar_url;
   const avatarName = businessAvatar?.avatar_name || "Flowly";
   const currentStep = tourSteps[tourStep];
+  const [positionIndex, setPositionIndex] = useState(0);
+  const [isWalking, setIsWalking] = useState(false);
+  const [characterMode, setCharacterMode] = useState<"idle" | "thinking" | "talking" | "tour">("idle");
+
+  const characterPositions = [
+    { left: "auto", right: "2.2rem", bottom: "2rem", facing: "left" },
+    { left: "2.2rem", right: "auto", bottom: "2.2rem", facing: "right" },
+    { left: "50%", right: "auto", bottom: "1.5rem", facing: "left" },
+    { left: "auto", right: "2.6rem", bottom: "38vh", facing: "left" },
+  ] as const;
+
+  const currentPosition = characterPositions[positionIndex % characterPositions.length];
+  const characterTransform = `${currentPosition.left === "50%" ? "translateX(-50%) " : ""}${currentPosition.facing === "right" ? "scaleX(-1)" : "scaleX(1)"}`;
+
+  useEffect(() => {
+    setCharacterMode(tourOpen ? "tour" : thinking ? "thinking" : open ? "talking" : "idle");
+  }, [open, thinking, tourOpen]);
+
+  useEffect(() => {
+    if (open || tourOpen) return;
+    const interval = window.setInterval(() => {
+      setIsWalking(true);
+      setPositionIndex((value) => (value + 1) % characterPositions.length);
+      window.setTimeout(() => setIsWalking(false), 1800);
+    }, 7600);
+    return () => window.clearInterval(interval);
+  }, [open, tourOpen, characterPositions.length]);
+
+  const openAndGreet = () => {
+    setOpen(true);
+    setIsWalking(false);
+  };
 
   return (
     <>
-      <div className="pointer-events-none fixed bottom-6 right-5 z-40 flex flex-col items-end gap-3 md:bottom-8 md:right-8">
+      <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
+        <div
+          className={`flowly-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} is-${characterMode}`}
+          style={{ left: currentPosition.left, right: currentPosition.right, bottom: currentPosition.bottom, transform: characterTransform }}
+        >
+          {!open && !tourOpen && (
+            <button onClick={openAndGreet} className="flowly-character-hotspot" aria-label={`Hablar con ${avatarName}`}>
+              <div className="flowly-character-speech">
+                <p>¿Te ayudo?</p>
+                <span>Habla conmigo o empieza el tour</span>
+              </div>
+            </button>
+          )}
+
+          <button onClick={openAndGreet} className="flowly-character-body" aria-label={`Abrir asistente ${avatarName}`}>
+            <div className="flowly-character-aura" />
+            <div className="flowly-character-halo" />
+            <div className="flowly-character-image-shell">
+              {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-character-image" /> : <Bot className="relative z-10 text-cyan-100" size={74} />}
+            </div>
+            <div className="flowly-character-feet">
+              <span />
+              <span />
+            </div>
+            <div className="flowly-character-shadow" />
+          </button>
+
+          <div className="flowly-character-status">
+            <span className="flowly-character-dot" />
+            {characterMode === "thinking" ? "pensando" : characterMode === "tour" ? "tour activo" : characterMode === "talking" ? "en conversación" : "asistente IA"}
+          </div>
+        </div>
+      </div>
+
+      <div className="pointer-events-none fixed bottom-6 right-5 z-50 flex flex-col items-end gap-3 md:bottom-8 md:right-8">
         {tourOpen && currentStep && (
-          <div className="pointer-events-auto w-[min(92vw,430px)] overflow-hidden rounded-[2rem] border border-cyan-300/25 bg-neutral-950/90 p-5 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl">
+          <div className="pointer-events-auto w-[min(92vw,460px)] overflow-hidden rounded-[2rem] border border-cyan-300/25 bg-neutral-950/90 p-5 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl">
             <div className="flex items-start gap-4">
               <div className="flowly-avatar-stage-small shrink-0">
                 {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img-small" /> : <Bot size={34} />}
@@ -1524,6 +1590,7 @@ function FloatingAvatarAssistant({
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button onClick={nextTourStep} className="btn-primary py-2 text-sm">{currentStep.cta} <ChevronRight size={16} /></button>
                   <button onClick={() => { setActiveTab(currentStep.target); }} className="btn-secondary py-2 text-sm">Ir ahora</button>
+                  <button onClick={() => { setOpen(true); closeTour(); }} className="btn-secondary py-2 text-sm">Preguntar</button>
                 </div>
               </div>
             </div>
@@ -1531,14 +1598,14 @@ function FloatingAvatarAssistant({
         )}
 
         {open && (
-          <div className="pointer-events-auto w-[min(94vw,420px)] overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-950/92 shadow-2xl shadow-black/50 backdrop-blur-2xl">
+          <div className="pointer-events-auto w-[min(94vw,440px)] overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-950/92 shadow-2xl shadow-black/50 backdrop-blur-2xl">
             <div className="border-b border-white/10 bg-gradient-to-r from-cyan-500/15 via-violet-500/15 to-fuchsia-500/10 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flowly-avatar-stage-mini">{avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img-mini" /> : <Bot size={24} />}</div>
                   <div>
                     <p className="text-sm font-semibold text-white">{avatarName}, asistente de {businessName}</p>
-                    <p className="text-xs text-cyan-100/55">Puede guiarte por el panel y responder dudas operativas.</p>
+                    <p className="text-xs text-cyan-100/55">Camino por el panel, hago tours y respondo dudas operativas.</p>
                   </div>
                 </div>
                 <button onClick={() => setOpen(false)} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/10"><X size={16} /></button>
@@ -1556,8 +1623,8 @@ function FloatingAvatarAssistant({
 
             <div className="border-t border-white/10 p-4">
               <div className="mb-3 flex flex-wrap gap-2">
-                {["Hazme un tour", "¿Cómo envío WhatsApp?", "¿Qué clientes debo revisar?"].map((quick) => (
-                  <button key={quick} onClick={() => quick === "Hazme un tour" ? restartTour() : setQuestion(quick)} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/65 hover:bg-white/10">{quick}</button>
+                {["Hazme un tour", "¿Cómo envío WhatsApp?", "¿Qué clientes debo revisar?", "Muévete por el panel"].map((quick) => (
+                  <button key={quick} onClick={() => quick === "Hazme un tour" ? restartTour() : quick === "Muévete por el panel" ? (setOpen(false), setIsWalking(true), setPositionIndex((value) => (value + 1) % characterPositions.length), window.setTimeout(() => setIsWalking(false), 1800)) : setQuestion(quick)} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/65 hover:bg-white/10">{quick}</button>
                 ))}
               </div>
               <div className="flex gap-2">
@@ -1573,19 +1640,6 @@ function FloatingAvatarAssistant({
             </div>
           </div>
         )}
-
-        <button onClick={() => setOpen(!open)} className="pointer-events-auto group relative flex items-end gap-3">
-          <div className="hidden rounded-2xl border border-white/10 bg-neutral-950/80 px-4 py-3 text-left shadow-xl shadow-black/30 backdrop-blur-xl md:block">
-            <p className="text-sm font-semibold text-white">¿Te ayudo?</p>
-            <p className="text-xs text-white/50">Pulsa para hablar con {avatarName}</p>
-          </div>
-          <div className="flowly-avatar-stage">
-            <div className="flowly-avatar-glow" />
-            {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img" /> : <Bot className="relative z-10 text-cyan-100" size={54} />}
-            <div className="flowly-avatar-shadow" />
-          </div>
-          <span className="absolute -right-1 bottom-7 rounded-full border border-white/10 bg-cyan-400 px-2 py-1 text-[10px] font-bold text-neutral-950 shadow-lg shadow-cyan-400/30"><Sparkles size={12} /></span>
-        </button>
       </div>
     </>
   );
