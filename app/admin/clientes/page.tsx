@@ -54,14 +54,14 @@ export default function ClientesPage() {
       : descartados;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#ede9fe_0%,#ffffff_35%,#f8fafc_100%)] px-6 py-8 text-neutral-950">
-      <div className="mx-auto max-w-7xl">
+    <main className="flowly-app-shell px-6 py-8 text-white">
+      <div className="flowly-app-content mx-auto max-w-7xl">
         <header className="mb-8">
-          <p className="text-sm font-medium text-violet-600">
+          <p className="text-sm font-medium text-cyan-200">
             Flowly IA · Administración
           </p>
           <h1 className="mt-2 text-4xl font-semibold">Clientes y contactos</h1>
-          <p className="mt-2 text-neutral-600">
+          <p className="mt-2 text-white/60">
             Gestiona formularios recibidos, leads comerciales, incidencias y
             solicitudes de demo.
           </p>
@@ -81,8 +81,8 @@ export default function ClientesPage() {
               onClick={() => setActiveTab(tab)}
               className={
                 activeTab === tab
-                  ? "rounded-full bg-neutral-950 px-5 py-3 text-sm text-white"
-                  : "rounded-full border border-neutral-200 bg-white px-5 py-3 text-sm text-neutral-600"
+                  ? "flowly-app-button flowly-app-button-active px-5 py-3 text-sm"
+                  : "flowly-app-button px-5 py-3 text-sm"
               }
             >
               {tab}
@@ -90,10 +90,10 @@ export default function ClientesPage() {
           ))}
         </section>
 
-        <section className="rounded-[2rem] bg-white p-5 shadow-sm">
+        <section className="flowly-app-panel rounded-[2rem] p-5">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-neutral-500">
+              <thead className="text-white/45">
                 <tr>
                   <th className="p-4">Contacto</th>
                   <th className="p-4">Tipo</th>
@@ -105,30 +105,30 @@ export default function ClientesPage() {
 
               <tbody>
                 {visibleContacts.map((contact) => (
-                  <tr key={contact.id} className="border-t">
+                  <tr key={contact.id} className="flowly-soft-row border-t">
                     <td className="p-4">
                       <p className="font-medium">{contact.name}</p>
-                      <p className="text-xs text-neutral-500">{contact.email}</p>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-white/45">{contact.email}</p>
+                      <p className="text-xs text-white/45">
                         {contact.phone || "Sin teléfono"}
                       </p>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-white/45">
                         {contact.company || "Sin negocio"}
                       </p>
                     </td>
 
                     <td className="p-4">
-                      <span className="rounded-full bg-violet-50 px-3 py-1 text-xs text-violet-700">
+                      <span className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-100">
                         {contact.type}
                       </span>
                     </td>
 
-                    <td className="max-w-md p-4 text-neutral-600">
+                    <td className="max-w-md p-4 text-white/60">
                       {contact.message}
                     </td>
 
                     <td className="p-4">
-                      <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs">
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">
                         {contact.status}
                       </span>
                     </td>
@@ -137,28 +137,28 @@ export default function ClientesPage() {
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => updateStatus(contact.id, "En gestión")}
-                          className="rounded-full border border-orange-200 px-3 py-2 text-xs text-orange-700"
+                          className="rounded-full border border-orange-300/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-100"
                         >
                           <Clock size={14} className="inline" /> Gestionar
                         </button>
 
                         <button
                           onClick={() => updateStatus(contact.id, "Convertido")}
-                          className="rounded-full border border-green-200 px-3 py-2 text-xs text-green-700"
+                          className="rounded-full border border-green-300/30 bg-green-500/10 px-3 py-2 text-xs text-green-100"
                         >
                           <CheckCircle2 size={14} className="inline" /> Convertido
                         </button>
 
                         <button
                           onClick={() => updateStatus(contact.id, "Descartado")}
-                          className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700"
+                          className="rounded-full border border-red-300/30 bg-red-500/10 px-3 py-2 text-xs text-red-100"
                         >
                           <XCircle size={14} className="inline" /> Descartar
                         </button>
 
                         <a
                           href={`mailto:${contact.email}?subject=Flowly IA&body=Hola ${contact.name}, hemos recibido tu solicitud.`}
-                          className="rounded-full border px-3 py-2 text-xs"
+                          className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-white/70"
                         >
                           Responder
                         </a>
@@ -170,7 +170,7 @@ export default function ClientesPage() {
             </table>
 
             {visibleContacts.length === 0 && (
-              <div className="p-10 text-center text-neutral-500">
+              <div className="p-10 text-center text-white/45">
                 No hay contactos en esta pestaña.
               </div>
             )}
@@ -183,11 +183,11 @@ export default function ClientesPage() {
 
 function Card({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-xl">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+    <div className="flowly-app-metric rounded-3xl p-6">
+      <div className="flowly-app-icon mb-4 flex h-11 w-11 items-center justify-center rounded-2xl">
         <UserRound size={22} />
       </div>
-      <p className="text-sm text-neutral-500">{label}</p>
+      <p className="text-sm text-white/45">{label}</p>
       <p className="mt-2 text-3xl font-semibold">{value}</p>
     </div>
   );

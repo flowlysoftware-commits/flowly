@@ -118,11 +118,11 @@ export default function AdminPresupuestosPage() {
     await load();
   };
 
-  if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#070711] text-white">Cargando presupuestos...</main>;
+  if (loading) return <main className="flowly-app-shell flex items-center justify-center"><div className="flowly-app-content text-white">Cargando presupuestos...</div></main>;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#5b21b6_0%,#0b1020_34%,#020617_100%)] px-6 py-8 text-white">
-      <div className="mx-auto max-w-7xl">
+    <main className="flowly-app-shell px-6 py-8 text-white">
+      <div className="flowly-app-content mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div className="flex items-center gap-4">
             <Image src="/logo.png" alt="Flowly IA" width={150} height={42} className="h-auto w-36 object-contain" />
@@ -199,6 +199,6 @@ export default function AdminPresupuestosPage() {
   );
 }
 
-function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) { return <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-200">{icon}</div><p className="text-sm text-white/50">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-violet-200/80">{helper}</p></div>; }
-function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="rounded-[2rem] border border-white/10 bg-white/[0.08] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"><h2 className="mb-5 text-xl font-semibold">{title}</h2>{children}</div>; }
+function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) { return <div className="flowly-app-metric rounded-[1.5rem] p-5"><div className="flowly-app-icon mb-4 flex h-11 w-11 items-center justify-center rounded-2xl">{icon}</div><p className="text-sm text-white/50">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-cyan-100/70">{helper}</p></div>; }
+function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="flowly-app-panel rounded-[2rem] p-6"><h2 className="mb-5 text-xl font-semibold">{title}</h2>{children}</div>; }
 function Empty({ text }: { text: string }) { return <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-white/45">{text}</div>; }

@@ -269,10 +269,10 @@ setBusiness(businessData);
 
   if (!business) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f8f7fb] px-6 text-center">
+    <main className="flex min-h-screen items-center justify-center flowly-app-shell px-6 text-center text-white">
       <div>
         <h1 className="text-2xl font-semibold">No se pudo cargar la página de reservas</h1>
-        <p className="mt-3 text-neutral-600">
+        <p className="mt-3 text-white/60">
           Revisa que el enlace sea correcto y que las reservas públicas estén activadas.
         </p>
       </div>
@@ -282,15 +282,15 @@ setBusiness(businessData);
 
   if (done) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#f3e8ff_0%,#ffffff_35%,#f8fafc_100%)] px-6">
-        <div className="w-full max-w-md rounded-[2rem] bg-white p-8 text-center shadow-xl">
+      <main className="flex min-h-screen items-center justify-center flowly-app-shell px-6 text-white">
+        <div className="flowly-app-content flowly-app-panel w-full max-w-md rounded-[2rem] p-8 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-green-100 text-green-600">
             <CheckCircle2 size={32} />
           </div>
 
           <h1 className="mt-6 text-3xl font-semibold">Reserva solicitada</h1>
 
-          <p className="mt-3 text-neutral-600">
+          <p className="mt-3 text-white/60">
             Hemos recibido tu reserva. El negocio podrá confirmarla desde su
             panel.
           </p>
@@ -300,28 +300,28 @@ setBusiness(businessData);
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f3e8ff_0%,#ffffff_35%,#f8fafc_100%)] px-6 py-10 text-neutral-950">
-      <div className="mx-auto max-w-3xl">
+    <main className="min-h-screen flowly-app-shell px-6 py-10 text-white">
+      <div className="flowly-app-content mx-auto max-w-3xl">
         <header className="mb-8 text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-200">
             <CalendarDays size={32} />
           </div>
 
-          <p className="text-sm font-medium text-violet-600">
+          <p className="text-sm font-medium text-cyan-200">
             Reservas online
           </p>
 
           <h1 className="mt-3 text-4xl font-semibold">{business.name}</h1>
 
-          <p className="mt-3 text-neutral-600">{business.business_type}</p>
+          <p className="mt-3 text-white/60">{business.business_type}</p>
         </header>
 
-        <section className="rounded-[2rem] bg-white p-6 shadow-xl shadow-violet-100">
+        <section className="flowly-app-panel rounded-[2rem] p-6">
           <div className="grid gap-5">
             <select
               value={selectedService}
               onChange={(e) => setSelectedService(e.target.value)}
-              className="rounded-2xl border px-4 py-3"
+              className="input-dark"
             >
               <option value="">Selecciona servicio</option>
               {services.map((service) => (
@@ -337,7 +337,7 @@ setBusiness(businessData);
                 setSelectedEmployee(e.target.value);
                 setTime("");
               }}
-              className="rounded-2xl border px-4 py-3"
+              className="input-dark"
             >
               <option value="">Selecciona profesional</option>
               {employees.map((employee) => (
@@ -354,7 +354,7 @@ setBusiness(businessData);
                 setDate(e.target.value);
                 setTime("");
               }}
-              className="rounded-2xl border px-4 py-3"
+              className="input-dark"
             />
 
             {date && !selectedDateIsOpen && (
@@ -365,7 +365,7 @@ setBusiness(businessData);
 
             {date && selectedEmployee && selectedDateIsOpen && (
               <div>
-                <p className="mb-3 text-sm font-medium text-neutral-700">
+                <p className="mb-3 text-sm font-medium text-white/70">
                   Horas disponibles
                 </p>
 
@@ -377,7 +377,7 @@ setBusiness(businessData);
                       className={
                         time === hour
                           ? "rounded-2xl bg-neutral-950 px-4 py-3 text-sm text-white"
-                          : "rounded-2xl border border-neutral-200 px-4 py-3 text-sm hover:bg-neutral-50"
+                          : "rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white/70 hover:bg-white/10"
                       }
                     >
                       {hour}
@@ -386,7 +386,7 @@ setBusiness(businessData);
                 </div>
 
                 {freeHours.length === 0 && (
-                  <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500">
+                  <div className="rounded-2xl border border-dashed border-white/15 p-6 text-center text-sm text-white/45">
                     No quedan horas disponibles para este profesional en este día.
                   </div>
                 )}
@@ -397,14 +397,14 @@ setBusiness(businessData);
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Tu nombre"
-              className="rounded-2xl border px-4 py-3"
+              className="input-dark"
             />
 
             <input
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
               placeholder="Tu teléfono"
-              className="rounded-2xl border px-4 py-3"
+              className="input-dark"
             />
 
             <input
@@ -412,13 +412,13 @@ setBusiness(businessData);
               onChange={(e) => setCustomerEmail(e.target.value)}
               placeholder="Tu email opcional"
               type="email"
-              className="rounded-2xl border px-4 py-3"
+              className="input-dark"
             />
 
             <button
               onClick={createBooking}
               disabled={loading}
-              className="rounded-full bg-neutral-950 px-6 py-4 text-white disabled:opacity-60"
+              className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-6 py-4 font-semibold text-slate-950 shadow-lg shadow-cyan-500/20 disabled:opacity-60"
             >
               {loading ? "Creando reserva..." : "Solicitar reserva"}
             </button>
