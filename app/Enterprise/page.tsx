@@ -234,7 +234,7 @@ export default function EnterpriseFactoryPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <input className="input-dark" value={monthlyAmount} onChange={(e) => setMonthlyAmount(e.target.value)} type="number" placeholder="Mensualidad" />
                 <input className="input-dark" value={setupAmount} onChange={(e) => setSetupAmount(e.target.value)} type="number" placeholder="Instalación" />
-                <select className="input-dark" value={currency} onChange={(e) => setCurrency(e.target.value)}><option value="EUR">EUR</option><option value="COP">COP</option></select>
+                <select className="input-dark" value={currency} onChange={(e) => setCurrency(e.target.value)}><option value="EUR">EUR</option><option value="USD">USD</option><option value="COP">COP</option></select>
               </div>
               <label className="mt-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-sm text-white/70">
                 <input type="checkbox" checked={createCheckout} onChange={(e) => setCreateCheckout(e.target.checked)} className="h-5 w-5" />
@@ -346,5 +346,6 @@ function Summary({ label, value }: { label: string; value: string }) {
 
 function money(value: number, currency: string) {
   if (currency === "COP") return `$${Math.round(value).toLocaleString("es-CO")} COP`;
+  if (currency === "USD") return `$${Number(value || 0).toLocaleString("es-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
   return `${Number(value || 0).toFixed(2)}€`;
 }

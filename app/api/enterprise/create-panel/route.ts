@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveFlowlyMarket, stripeUnitAmount } from "@/lib/stripePricing";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -16,7 +17,7 @@ type Body = {
   businessType?: string;
   monthlyAmount: number;
   setupAmount?: number;
-  currency?: "EUR" | "COP";
+  currency?: "EUR" | "COP" | "USD";
   createCheckout?: boolean;
   modules?: string[];
   logoUrl?: string;
@@ -75,7 +76,8 @@ export async function POST(request: Request) {
     const businessName = String(body.businessName || "").trim();
     const password = String(body.password || "").trim();
     const monthlyAmount = Number(body.monthlyAmount || 0);
-    const currency = body.currency || "EUR";
+    const market = resolveFlowlyMarket(undefined, body.currency);
+    const currency = market.currency;
     const selectedModules = (body.modules || []).filter((item) => enterpriseAllowedModules.includes(item));
 
     if (!email || !businessName || !password || monthlyAmount <= 0) {
@@ -247,14 +249,14 @@ export async function POST(request: Request) {
 
     let checkoutUrl: string | null = null;
     if (body.createCheckout && stripeCustomerId) {
-      const unitAmount = currency === "COP" ? Math.round(monthlyAmount) : Math.round(monthlyAmount * 100);
+      const unitAmount = stripeUnitAmount(monthlyAmount, market);
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         customer: stripeCustomerId,
         line_items: [
           {
             price_data: {
-              currency: currency.toLowerCase(),
+              currency: market.stripeCurrency,
               unit_amount: unitAmount,
               recurring: { interval: "month" },
               product_data: {
@@ -265,8 +267,8 @@ export async function POST(request: Request) {
             quantity: 1,
           },
         ],
-        metadata: { plan: "enterprise", business_id: businessId, modules: selectedModules.join(","), monthly_amount: String(monthlyAmount) },
-        subscription_data: { metadata: { plan: "enterprise", business_id: businessId, modules: selectedModules.join(",") } },
+        metadata: { plan: "enterprise", business_id: businessId, modules: selectedModules.join(","), monthly_amount: String(monthlyAmount), currency: market.currency },
+        subscription_data: { metadata: { plan: "enterprise", business_id: businessId, modules: selectedModules.join(","), currency: market.currency } },
         success_url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://flowlyia.com"}/login?enterprise=success`,
         cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://flowlyia.com"}/Enterprise?estado=cancelado`,
       });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { convertBasePrice, resolveFlowlyMarket, stripeUnitAmount } from "@/lib/stripePricing";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     const plan = body.plan as "basic" | "premium" | "modular";
     const selectedModuleIds = Array.isArray(body.modules) ? body.modules.map(String) : [];
     const referralCode = body.referralCode ? String(body.referralCode).trim() : "";
+    const market = resolveFlowlyMarket(body.country, body.currency);
     let salesUserId = "";
     if (referralCode) {
       const { data: salesUser } = await supabaseAdmin
@@ -39,20 +41,21 @@ export async function POST(request: Request) {
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
     let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-    let metadata: Record<string, string> = { plan, referral_code: referralCode, sales_user_id: salesUserId };
+    let metadata: Record<string, string> = { plan, referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency };
 
     if (plan === "modular") {
       const selectedModules = modularModules.filter((item) => selectedModuleIds.includes(item.id));
       const base = 19.99;
       const total = base + selectedModules.reduce((sum, item) => sum + item.price, 0);
+      const displayTotal = convertBasePrice(total, market);
       const moduleNames = selectedModules.map((item) => item.name).join(", ") || "Sin módulos extra";
       const moduleIds = selectedModules.map((item) => item.id).join(",");
 
       lineItems = [
         {
           price_data: {
-            currency: "eur",
-            unit_amount: Math.round(total * 100),
+            currency: market.stripeCurrency,
+            unit_amount: stripeUnitAmount(displayTotal, market),
             recurring: { interval: "month" },
             product_data: { name: "Flowly Modular", description: `Base Flowly + ${moduleNames}` },
           },
@@ -60,11 +63,29 @@ export async function POST(request: Request) {
         },
       ];
 
-      metadata = { plan, modules: moduleIds, monthly_amount: total.toFixed(2), referral_code: referralCode, sales_user_id: salesUserId };
+      metadata = { plan, modules: moduleIds, monthly_amount: displayTotal.toFixed(2), base_amount_eur: total.toFixed(2), referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency };
     } else {
-      const priceId = plan === "basic" ? process.env.STRIPE_BASIC_PRICE_ID : process.env.STRIPE_PREMIUM_PRICE_ID;
-      if (!priceId) return NextResponse.json({ error: "Price ID no configurado" }, { status: 400 });
-      lineItems = [{ price: priceId, quantity: 1 }];
+      const basePrice = plan === "basic" ? 29.99 : 59.99;
+      const displayPrice = convertBasePrice(basePrice, market);
+      metadata = { ...metadata, monthly_amount: displayPrice.toFixed(2), base_amount_eur: basePrice.toFixed(2) };
+
+      if (market.currency === "EUR") {
+        const priceId = plan === "basic" ? process.env.STRIPE_BASIC_PRICE_ID : process.env.STRIPE_PREMIUM_PRICE_ID;
+        if (!priceId) return NextResponse.json({ error: "Price ID no configurado" }, { status: 400 });
+        lineItems = [{ price: priceId, quantity: 1 }];
+      } else {
+        lineItems = [
+          {
+            price_data: {
+              currency: market.stripeCurrency,
+              unit_amount: stripeUnitAmount(displayPrice, market),
+              recurring: { interval: "month" },
+              product_data: { name: `Flowly ${plan === "basic" ? "Basic" : "Premium"}`, description: `Suscripción mensual Flowly · ${market.country}` },
+            },
+            quantity: 1,
+          },
+        ];
+      }
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -74,7 +95,7 @@ export async function POST(request: Request) {
       subscription_data: { trial_period_days: 30, metadata },
       metadata,
       success_url: `${siteUrl}/registro?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/precios?estado=cancelado`,
+      cancel_url: `${siteUrl}/precios?country=${market.country}&estado=cancelado`,
     });
 
     return NextResponse.json({ url: session.url });
