@@ -12,6 +12,7 @@ import {
   PhoneCall,
   Receipt,
   SlidersHorizontal,
+  Clock,
   Store,
   TrendingUp,
 } from "lucide-react";
@@ -28,7 +29,7 @@ type MarketConfig = {
   rate: number;
   badge: string;
 };
-type ModuleId = "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice";
+type ModuleId = "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice" | "time_tracking";
 type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }> };
 
 type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[] };
@@ -63,6 +64,7 @@ const modules: Module[] = [
   { id: "analytics", name: "Estadísticas avanzadas", price: 4.99, description: "KPIs, evolución, previsión y rendimiento.", Icon: TrendingUp },
   { id: "booking_premium", name: "Reservas Premium", price: 4.99, description: "Página de reservas más avanzada y personalizable.", Icon: SlidersHorizontal },
   { id: "voice", name: "Flowly Voice", price: 29.99, description: "Centralita, recepción y agendado por voz con IA.", Icon: PhoneCall },
+  { id: "time_tracking", name: "Módulo Fichaje", price: 11.99, description: "Registro de entrada, salida, pausas y control horario del equipo.", Icon: Clock },
 ];
 
 function formatMoney(value: number, country: Country) {
@@ -165,7 +167,7 @@ export default function PreciosPage() {
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/68">Elige un pack cerrado o crea tu propio Flowly con módulos. Los precios cambian automáticamente según el mercado seleccionado.</p>
         </section>
 
-        <section className="mt-16 grid gap-6 lg:grid-cols-3">
+        <section className="mt-16 grid gap-6 lg:grid-cols-4">
           {fixedPlans.map((plan) => (
             <div key={plan.id} className={plan.highlighted ? "flowly-glass rounded-[2rem] p-7 text-white" : "flowly-card rounded-[2rem] p-7"}>
               <p className={plan.highlighted ? "text-sm font-medium text-violet-200" : "text-sm font-medium text-cyan-200"}>{plan.highlighted ? "Más recomendado" : "Plan"}</p>
@@ -193,6 +195,17 @@ export default function PreciosPage() {
               })}
             </div>
             <button onClick={() => startCheckout("modular", selectedModules)} disabled={loadingPlan === "modular"} className="mt-7 w-full flowly-primary rounded-full px-5 py-4 font-medium">{loadingPlan === "modular" ? "Abriendo..." : "Contratar Modular"}</button>
+          </div>
+
+          <div className="flowly-glass rounded-[2rem] border border-cyan-300/20 p-7 shadow-2xl shadow-cyan-950/20">
+            <p className="text-sm font-medium text-cyan-200">A medida</p>
+            <h2 className="mt-3 text-3xl font-semibold">Enterprise</h2>
+            <p className="mt-3 text-white/60">Para empresas que necesitan módulos, integración, soporte e implementación personalizada.</p>
+            <div className="mt-7"><span className="text-5xl font-semibold">A medida</span></div>
+            <div className="mt-7 space-y-3 text-sm text-white/80">
+              {["Panel completamente personalizado", "Módulos a medida", "Implementación guiada", "Soporte comercial prioritario", "Integraciones y automatizaciones"].map((feature) => <div key={feature} className="flex gap-3"><Check size={18} className="text-cyan-200" /><span>{feature}</span></div>)}
+            </div>
+            <Link href="/contacto?tipo=Informacion%20comercial&mensaje=Quiero%20informacion%20comercial%20sobre%20Flowly%20Enterprise" className="mt-7 inline-flex w-full justify-center rounded-full bg-white px-5 py-4 font-semibold text-slate-950">Más información</Link>
           </div>
         </section>
       </div>

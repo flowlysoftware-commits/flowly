@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { CheckCircle2, Send, Sparkles } from "lucide-react";
@@ -14,6 +14,14 @@ export default function ContactoPage() {
   const [company, setCompany] = useState("");
   const [type, setType] = useState("Información");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tipo = params.get("tipo");
+    const mensaje = params.get("mensaje");
+    if (tipo) setType(tipo);
+    if (mensaje) setMessage(mensaje);
+  }, []);
 
   const submitContact = async () => {
     if (!name || !email || !message) {
@@ -62,7 +70,7 @@ export default function ContactoPage() {
                   <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" className="flowly-input-light rounded-2xl px-4 py-3" />
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" className="flowly-input-light rounded-2xl px-4 py-3" />
                   <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Nombre del negocio" className="flowly-input-light rounded-2xl px-4 py-3" />
-                  <select value={type} onChange={(e) => setType(e.target.value)} className="flowly-input-light rounded-2xl px-4 py-3"><option>Información</option><option>Comercial</option><option>Solicitar demo</option><option>Presupuesto</option><option>Incidencia</option><option>Soporte</option></select>
+                  <select value={type} onChange={(e) => setType(e.target.value)} className="flowly-input-light rounded-2xl px-4 py-3"><option>Información</option><option>Informacion comercial</option><option>Comercial</option><option>Solicitar demo</option><option>Presupuesto</option><option>Incidencia</option><option>Soporte</option></select>
                   <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Cuéntanos qué necesitas" className="flowly-input-light min-h-32 rounded-2xl px-4 py-3" />
                 </div>
                 <button onClick={submitContact} disabled={loading} className="flowly-primary mt-6 w-full rounded-full px-6 py-4 font-semibold"><Send size={16} className="inline" /> {loading ? "Enviando..." : "Enviar contacto"}</button>

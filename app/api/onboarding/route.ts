@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Buffer } from "node:buffer";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildCommissionLines } from "@/lib/salesCommissions";
@@ -16,11 +17,16 @@ const premiumModules = [
   "ai",
   "analytics",
   "booking_premium",
+  "time_tracking",
 ];
 
 export async function POST(request: Request) {
   try {
-    const { sessionId, password, businessName, businessType, logoUrl, theme, primaryGoal, createAvatar, avatarName, avatarStyle, avatarPersonality } = await request.json();
+    const { sessionId, password, businessName, businessType, logoUrl, logoBase64, logoFileName, logoMimeType, termsAccepted, termsVersion, theme, primaryGoal, createAvatar, avatarName, avatarStyle, avatarPersonality } = await request.json();
+
+    if (!termsAccepted) {
+      return NextResponse.json({ error: "Debes aceptar las condiciones de contratación de Flowly IA" }, { status: 400 });
+    }
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     if (session.status !== "complete") {
@@ -67,6 +73,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No se pudo crear el usuario" }, { status: 400 });
     }
 
+    let finalLogoUrl = logoUrl || null;
+    if (logoBase64 && typeof logoBase64 === "string" && logoBase64.startsWith("data:")) {
+      try {
+        const base64Payload = logoBase64.split(",")[1];
+        const buffer = Buffer.from(base64Payload, "base64");
+        const extension = String(logoFileName || "logo.png").split(".").pop() || "png";
+        const safeName = String(businessName || "negocio").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "negocio";
+        const filePath = `onboarding/${safeName}-${Date.now()}.${extension}`;
+        const { error: uploadError } = await supabaseAdmin.storage.from("business-logos").upload(filePath, buffer, {
+          contentType: logoMimeType || "image/png",
+          upsert: true,
+        });
+        if (!uploadError) {
+          const { data: publicUrlData } = supabaseAdmin.storage.from("business-logos").getPublicUrl(filePath);
+          finalLogoUrl = publicUrlData.publicUrl;
+        } else {
+          console.warn("Logo upload warning:", uploadError.message);
+        }
+      } catch (logoError) {
+        console.warn("Logo upload warning:", logoError);
+      }
+    }
+
     await supabaseAdmin.from("user_profiles").upsert(
       {
         user_id: userId,
@@ -90,7 +119,7 @@ export async function POST(request: Request) {
         stripe_subscription_id: String(session.subscription || ""),
         subscription_status: "trialing",
         public_booking_enabled: true,
-        logo_url: logoUrl || null,
+        logo_url: finalLogoUrl,
         panel_theme: theme || "dark",
         onboarding_goal: primaryGoal || null,
         sales_user_id: salesUserId,
@@ -108,7 +137,7 @@ export async function POST(request: Request) {
           businessId: business.id,
           businessName,
           businessType,
-          logoUrl: logoUrl || null,
+          logoUrl: finalLogoUrl,
           avatarName: avatarName || "Nia",
           avatarStyle: avatarStyle || "robot-premium",
           avatarPersonality: avatarPersonality || "cercana, estratégica y orientada a ventas",
@@ -151,6 +180,21 @@ export async function POST(request: Request) {
           });
           if (lines.length > 0) await supabaseAdmin.from("commissions").insert(lines);
         }
+      }
+    }
+
+    if (business?.id) {
+      try {
+        await supabaseAdmin.from("legal_acceptances").insert({
+          business_id: business.id,
+          user_id: userId,
+          email,
+          terms_version: termsVersion || "flowly-ia-v1",
+          accepted_at: new Date().toISOString(),
+          source: "onboarding",
+        });
+      } catch (legalError) {
+        console.warn("Legal acceptance warning:", legalError);
       }
     }
 

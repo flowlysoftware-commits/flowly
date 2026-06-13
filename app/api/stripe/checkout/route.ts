@@ -15,6 +15,7 @@ const modularModules = [
   { id: "analytics", name: "Estadísticas avanzadas", price: 4.99 },
   { id: "booking_premium", name: "Reservas Premium", price: 4.99 },
   { id: "voice", name: "Flowly Voice", price: 29.99 },
+  { id: "time_tracking", name: "Módulo Fichaje", price: 11.99 },
 ];
 
 export async function POST(request: Request) {

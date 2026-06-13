@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  Clock,
   CreditCard,
   FileText,
   HeartPulse,
@@ -36,7 +37,8 @@ type ModuleKey =
   | "marketing"
   | "ai"
   | "analytics"
-  | "booking_premium";
+  | "booking_premium"
+  | "time_tracking";
 
 type CreateResult = {
   success?: boolean;
@@ -59,6 +61,7 @@ const moduleOptions: { key: ModuleKey; label: string; description: string; Icon:
   { key: "ai", label: "IA Assistant", description: "Capa inteligente para análisis, resúmenes y automatizaciones.", Icon: Bot },
   { key: "marketing", label: "Marketing", description: "Campañas y preparación para Ads y captación.", Icon: Send },
   { key: "pos", label: "TPV", description: "Tickets, caja y ventas presenciales si el cliente lo necesita.", Icon: Store },
+  { key: "time_tracking", label: "Módulo Fichaje", description: "Entradas, salidas, pausas y control horario del equipo.", Icon: Clock },
 ];
 
 const defaultClinicModules: ModuleKey[] = ["crm", "voice", "whatsapp", "billing", "booking_premium", "analytics", "ai"];
@@ -221,7 +224,7 @@ export default function EnterpriseFactoryPage() {
               <div className="grid gap-3 md:grid-cols-2">
                 <input className="input-dark" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Nombre del negocio" />
                 <select className="input-dark" value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
-                  <option>Clínica</option><option>Fisioterapia</option><option>Psicología</option><option>Nutrición</option><option>Peluquería</option><option>Estética</option><option>Restaurante</option><option>Enterprise</option>
+                  <option>Clínica</option><option>Fisioterapia</option><option>Psicología</option><option>Nutrición</option><option>Peluquería</option><option>Estética</option><option>Restaurante</option><option>Otro</option><option>Enterprise</option>
                 </select>
                 <input className="input-dark" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Nombre contacto" />
                 <input className="input-dark" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" />

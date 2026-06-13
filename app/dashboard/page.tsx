@@ -248,6 +248,7 @@ const moduleCatalog: ModuleItem[] = [
   { key: "analytics", slug: "estadisticas", name: "Estadísticas avanzadas", short: "Estadísticas", price: "+4,99€", badge: "KPIs", description: "KPIs, ingresos previstos, ranking de servicios, ocupación y evolución del negocio.", Icon: TrendingUp, amountEnabled: true, proFeatures: ["KPIs operativos", "Ingresos previstos", "Evolución mensual"] },
   { key: "booking_premium", slug: "reservas-premium", name: "Reservas Premium", short: "Reservas Pro", price: "+4,99€", badge: "Booking PRO", description: "Reglas avanzadas, bloqueos, políticas y personalización de la experiencia de reservas.", Icon: SlidersHorizontal, proFeatures: ["Reglas avanzadas", "Bloqueos especiales", "Experiencia personalizada"] },
   { key: "voice", slug: "voice", name: "Flowly Voice", short: "Voice", price: "+29,99€", badge: "Voz IA", description: "Registro de llamadas y solicitudes telefónicas, preparado para centralita con IA.", Icon: PhoneCall, proFeatures: ["Registro de llamadas", "Intención detectada", "Preparado para centralita IA"] },
+  { key: "time_tracking", slug: "fichaje", name: "Módulo Fichaje", short: "Fichaje", price: "+11,99€", badge: "Control horario", description: "Registro de entrada, salida, pausas, jornada diaria y actividad del equipo.", Icon: Clock, proFeatures: ["Entrada y salida", "Pausas", "Resumen horario"] },
 ];
 
 const defaultSettings = (businessId: string): BookingSettings => ({
@@ -1287,23 +1288,66 @@ export default function DashboardPage() {
                   const id = `module:${item.slug}` as ActiveTab;
                   const isActive = activeTab === id || activeTab.startsWith(`${id}:`);
 
-                  if (item.key === "whatsapp") {
-                    return (
-                      <div key={item.key} className="grid gap-2">
-                        <button onClick={() => { resetRecordForm(); setActiveTab("module:whatsapp:enviar"); }} className={isActive ? "menu-active" : "menu-item"}>
-                          <Icon size={17} /> {item.short}
-                        </button>
-                        {isActive && (
-                          <div className="ml-4 grid gap-2 border-l border-white/10 pl-3">
-                            <button onClick={() => setActiveTab("module:whatsapp:enviar")} className={activeTab === "module:whatsapp:enviar" || activeTab === "module:whatsapp" ? "menu-active" : "menu-item"}>Enviar</button>
-                            <button onClick={() => setActiveTab("module:whatsapp:plantillas")} className={activeTab === "module:whatsapp:plantillas" ? "menu-active" : "menu-item"}>Plantillas</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  return <button key={item.key} onClick={() => { resetRecordForm(); setActiveTab(id); }} className={isActive ? "menu-active" : "menu-item"}><Icon size={17} /> {item.short}</button>;
+                  const submenus: Record<string, { label: string; tab: ActiveTab }[]> = {
+                    whatsapp: [
+                      { label: "Enviar", tab: "module:whatsapp:enviar" as ActiveTab },
+                      { label: "Plantillas", tab: "module:whatsapp:plantillas" as ActiveTab },
+                    ],
+                    crm: [
+                      { label: "Ficha 360", tab: "module:crm:ficha" as ActiveTab },
+                      { label: "Agenda CRM", tab: "module:crm:agenda" as ActiveTab },
+                      { label: "Pipeline", tab: "module:crm:pipeline" as ActiveTab },
+                    ],
+                    billing: [
+                      { label: "Ingresos", tab: "module:facturacion:ingresos" as ActiveTab },
+                      { label: "Gastos", tab: "module:facturacion:gastos" as ActiveTab },
+                      { label: "Proveedores", tab: "module:facturacion:proveedores" as ActiveTab },
+                    ],
+                    pos: [
+                      { label: "Nuevo ticket", tab: "module:tpv:ticket" as ActiveTab },
+                      { label: "Caja", tab: "module:tpv:caja" as ActiveTab },
+                    ],
+                    marketing: [
+                      { label: "Campañas", tab: "module:marketing:campanas" as ActiveTab },
+                      { label: "Calendario", tab: "module:marketing:calendario" as ActiveTab },
+                    ],
+                    ai: [
+                      { label: "Asistente", tab: "module:ia:asistente" as ActiveTab },
+                      { label: "Insights", tab: "module:ia:insights" as ActiveTab },
+                    ],
+                    analytics: [
+                      { label: "KPIs", tab: "module:estadisticas:kpis" as ActiveTab },
+                      { label: "Informes", tab: "module:estadisticas:informes" as ActiveTab },
+                    ],
+                    booking_premium: [
+                      { label: "Reglas", tab: "module:reservas-premium:reglas" as ActiveTab },
+                      { label: "Bloqueos", tab: "module:reservas-premium:bloqueos" as ActiveTab },
+                    ],
+                    voice: [
+                      { label: "Llamadas", tab: "module:voice:llamadas" as ActiveTab },
+                      { label: "Agenda desde llamada", tab: "module:voice:agenda" as ActiveTab },
+                    ],
+                    time_tracking: [
+                      { label: "Fichar", tab: "module:fichaje:fichar" as ActiveTab },
+                      { label: "Jornada", tab: "module:fichaje:jornada" as ActiveTab },
+                    ],
+                  };
+                  const children = submenus[item.key] || [];
+                  const defaultTab = children[0]?.tab || id;
+                  return (
+                    <div key={item.key} className="grid gap-2">
+                      <button onClick={() => { resetRecordForm(); setActiveTab(defaultTab); }} className={isActive ? "menu-active" : "menu-item"}>
+                        <Icon size={17} /> {item.short}
+                      </button>
+                      {isActive && children.length > 0 && (
+                        <div className="ml-4 grid gap-2 border-l border-white/10 pl-3">
+                          {children.map((child) => (
+                            <button key={child.label} onClick={() => setActiveTab(child.tab)} className={activeTab === child.tab || (child.tab === defaultTab && activeTab === id) ? "menu-active" : "menu-item"}>{child.label}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
                 })}
               </div>
             </div>
@@ -1768,6 +1812,7 @@ function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; all
   if (module.key === "voice") return <VoiceModule {...props} />;
   if (module.key === "analytics") return <AnalyticsModule {...props} />;
   if (module.key === "booking_premium") return <BookingPremiumModule {...props} />;
+  if (module.key === "time_tracking") return <TimeTrackingModule {...props} />;
   const Icon = module.Icon;
   return <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard><div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-400/20 text-violet-100"><Icon /></div><h2 className="text-2xl font-semibold">{module.name}</h2><p className="mt-2 text-sm text-white/55">{module.description}</p><div className="mt-6 grid gap-3"><input value={props.title} onChange={(e) => props.setTitle(e.target.value)} placeholder="Título del registro" className="input-dark" />{module.amountEnabled && <input value={props.amount} onChange={(e) => props.setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" />}<textarea value={props.notes} onChange={(e) => props.setNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-32" /><button onClick={() => props.createRecord(module.key)} className="btn-primary"><Plus size={17} /> Guardar</button></div></GlassCard><RecordsCard title="Actividad" records={records} deleteRecord={props.deleteRecord} /></section>;
 }
@@ -2562,6 +2607,31 @@ function AnalyticsModule({ records, customers, appointments, services, revenue, 
       {tab === "Servicios" && <GlassCard title="Ranking de servicios"><div className="grid gap-3 md:grid-cols-2">{services.map((service) => <div key={service.id} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{service.name}</p><p className="mt-1 text-sm text-white/45">{service.duration || service.duration_minutes || 30} min · {Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea servicios para activar el ranking." />}</div></GlassCard>}
     </section>
   );
+}
+
+function TimeTrackingModule({ records, employees, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+  const today = new Date().toLocaleDateString("es-ES");
+  const todayRecords = records.filter((record) => new Date(record.created_at).toLocaleDateString("es-ES") === today);
+  return <section className="grid gap-6">
+    <ModuleHero eyebrow="Flowly Fichaje" title="Control horario operativo para tu equipo" description="Registra entradas, salidas, pausas, incidencias y observaciones de jornada desde el panel." />
+    <div className="grid gap-4 md:grid-cols-4">
+      <Metric icon={<Clock />} label="Registros hoy" value={todayRecords.length} helper="Jornada activa" />
+      <Metric icon={<Users />} label="Equipo" value={employees.length} helper="Empleados" />
+      <Metric icon={<CheckCircle2 />} label="Entradas" value={records.filter((r) => r.status === "entrada").length} helper="Histórico" />
+      <Metric icon={<XCircle />} label="Incidencias" value={records.filter((r) => r.status === "incidencia").length} helper="Revisar" />
+    </div>
+    <section className="grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
+      <GlassCard title="Nuevo fichaje">
+        <div className="grid gap-3">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="entrada">Entrada</option><option value="salida">Salida</option><option value="pausa">Pausa</option><option value="vuelta_pausa">Vuelta de pausa</option><option value="incidencia">Incidencia</option></select>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Empleado o jornada" className="input-dark" />
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas: ubicación, turno, incidencia o comentario" className="input-dark min-h-28" />
+          <button onClick={() => createRecord("time_tracking", status || "entrada")} className="btn-primary"><Clock size={17} /> Guardar fichaje</button>
+        </div>
+      </GlassCard>
+      <RecordsCard title="Historial de fichajes" records={records} deleteRecord={deleteRecord} />
+    </section>
+  </section>;
 }
 
 function BookingPremiumModule({ records, employees, services, appointments, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {

@@ -702,7 +702,6 @@ export default function ComercialPage() {
                             {document.requires_signature !== false && <button onClick={() => signDocument(document)} className="rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-3 text-xs font-semibold text-slate-950"><PenLine size={13} className="inline" /> {signature ? "Actualizar firma" : "Firmar documento"}</button>}
                           </div>
                         </div>
-                        {document.content && <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/25 p-4 text-xs leading-relaxed text-white/70">{renderDocumentContent(document, { dni: draft.dni, address: draft.address })}</pre>}
                       </div>
                     </div>
                   );
