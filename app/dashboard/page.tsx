@@ -1503,15 +1503,16 @@ function FloatingAvatarAssistant({
   const spokenMessageRef = useRef("");
 
   const characterPositions = [
-    // Fase estable: la mascota permanece anclada como companion de escritorio.
-    // Evitamos desplazamientos artificiales por pantalla hasta que exista navegación 3D real por waypoints.
-    { left: "auto", right: "1.1rem", bottom: "1.1rem", facing: "left" as const, label: "companion" },
+    { x: 86, y: 74, facing: "left" as const, label: "companion" },
+    { x: 22, y: 31, facing: "right" as const, label: "sobre el logo" },
+    { x: 48, y: 69, facing: "left" as const, label: "centro del panel" },
+    { x: 76, y: 39, facing: "left" as const, label: "módulos" },
   ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
-  const characterTransform = currentPosition.left === "50%" ? "translateX(-50%)" : "none";
   const modelUrl = "/avatars/flowly-grandma.glb";
-  const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : tourOpen ? "point" : thinking ? "thinking" : "idle";
+  const isSitting = !open && !tourOpen && !isWalking && !isGreeting && !isSpeaking && positionIndex % characterPositions.length === 1;
+  const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : isSitting ? "sit" : tourOpen ? "point" : thinking ? "thinking" : "idle";
 
   const speak = (text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -1530,12 +1531,24 @@ function FloatingAvatarAssistant({
     window.speechSynthesis.speak(utterance);
   };
 
+  const walkTo = (index: number, after?: () => void) => {
+    setPositionIndex(index % characterPositions.length);
+    setIsWalking(true);
+    window.setTimeout(() => {
+      setIsWalking(false);
+      after?.();
+    }, 1700);
+  };
+
   useEffect(() => {
-    // Sin roaming automático: mover un modelo 3D de un punto a otro sin trayectorias reales
-    // se percibe como que “flota”. La vida ahora ocurre en el rig: respiración, mirada y gestos.
-    setPositionIndex(0);
-    setIsWalking(false);
-  }, [open, tourOpen]);
+    if (hasGreeted) return;
+    const helloTimer = window.setTimeout(() => openAndGreet(), 900);
+    const sitTimer = window.setTimeout(() => walkTo(1), 6200);
+    return () => {
+      window.clearTimeout(helloTimer);
+      window.clearTimeout(sitTimer);
+    };
+  }, [hasGreeted]);
 
   useEffect(() => {
     if (!tourOpen || !currentStep) return;
@@ -1555,6 +1568,7 @@ function FloatingAvatarAssistant({
   const openAndGreet = () => {
     setOpen(true);
     setIsWalking(false);
+    setPositionIndex(0);
     setIsGreeting(true);
     window.setTimeout(() => setIsGreeting(false), 2200);
     if (!hasGreeted) {
@@ -1565,23 +1579,26 @@ function FloatingAvatarAssistant({
 
   const moveCharacter = () => {
     setOpen(false);
-    setIsWalking(false);
-    setIsGreeting(true);
-    window.setTimeout(() => setIsGreeting(false), 2200);
+    const nextIndex = (positionIndex + 1) % characterPositions.length;
+    walkTo(nextIndex, () => {
+      if (nextIndex === 1) return;
+      setIsGreeting(true);
+      window.setTimeout(() => setIsGreeting(false), 1700);
+    });
   };
 
   const startTourWithVoice = () => {
     restartTour();
     setOpen(false);
-    setIsWalking(false);
+    walkTo(2);
   };
 
   return (
     <>
       <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
         <div
-          className={`flowly-3d-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} ${isSpeaking ? "is-speaking" : ""} ${tourOpen ? "is-tour" : ""}`}
-          style={{ left: currentPosition.left, right: currentPosition.right, bottom: currentPosition.bottom, transform: characterTransform }}
+          className={`flowly-3d-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} ${isSpeaking ? "is-speaking" : ""} ${tourOpen ? "is-tour" : ""} ${isSitting ? "is-sitting" : ""}`}
+          style={{ left: `${currentPosition.x}%`, top: `${currentPosition.y}%`, transform: "translate(-50%, -50%)" }}
         >
           {!open && !tourOpen && (
             <button onClick={openAndGreet} className="flowly-character-hotspot" aria-label={`Hablar con ${avatarName}`}>

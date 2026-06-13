@@ -1,12 +1,13 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Environment, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 
-type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour";
+type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit";
 
 type FlowlyAssistant3DProps = {
   modelUrl?: string;
@@ -15,106 +16,79 @@ type FlowlyAssistant3DProps = {
   onClick?: () => void;
 };
 
-type RigBones = {
-  hips?: THREE.Object3D;
-  spine?: THREE.Object3D;
-  chest?: THREE.Object3D;
-  neck?: THREE.Object3D;
-  head?: THREE.Object3D;
-  leftShoulder?: THREE.Object3D;
-  rightShoulder?: THREE.Object3D;
-  leftArm?: THREE.Object3D;
-  leftForeArm?: THREE.Object3D;
-  leftHand?: THREE.Object3D;
-  rightArm?: THREE.Object3D;
-  rightForeArm?: THREE.Object3D;
-  rightHand?: THREE.Object3D;
-  leftUpLeg?: THREE.Object3D;
-  leftLeg?: THREE.Object3D;
-  leftFoot?: THREE.Object3D;
-  leftToe?: THREE.Object3D;
-  rightUpLeg?: THREE.Object3D;
-  rightLeg?: THREE.Object3D;
-  rightFoot?: THREE.Object3D;
-  rightToe?: THREE.Object3D;
+type LoadedAnimation = {
+  key: Exclude<AssistantMode, "thinking" | "tour">;
+  object: THREE.Group;
 };
 
-type BoneRestPose = Map<string, THREE.Euler>;
+const ANIMATION_FILES: LoadedAnimation["key"][] = ["idle", "walk", "wave", "talk", "point", "sit"];
+const ANIMATION_URLS: Record<LoadedAnimation["key"], string> = {
+  idle: "/avatars/Idle.fbx",
+  walk: "/avatars/Walking.fbx",
+  wave: "/avatars/Waving.fbx",
+  talk: "/avatars/Talking.fbx",
+  point: "/avatars/Pointing.fbx",
+  sit: "/avatars/Sitting Talking.fbx",
+};
 
-function normalizeMode(mode: AssistantMode): Exclude<AssistantMode, "thinking" | "tour"> {
+function normalizeMode(mode: AssistantMode): LoadedAnimation["key"] {
   if (mode === "thinking") return "idle";
   if (mode === "tour") return "point";
   return mode;
 }
 
-function cleanBoneName(name: string) {
-  return name.toLowerCase().replace(/mixamorig|_|\.|-/g, "");
-}
+function sanitizeClip(clip: THREE.AnimationClip, name: string) {
+  const tracks = clip.tracks.filter((track) => {
+    const trackName = track.name.toLowerCase();
 
-function mapRigBones(root: THREE.Object3D): RigBones {
-  const bones: RigBones = {};
+    // Keep the character anchored in the WebGL stage. Position tracks from Mixamo move the hips/root
+    // through the scene and make the model slide, fall or disappear in a dashboard overlay.
+    if (trackName.endsWith(".position")) return false;
 
-  root.traverse((object) => {
-    if (object.type !== "Bone") return;
-    const name = cleanBoneName(object.name);
+    // Scale tracks are unnecessary and can distort the avatar when FBX units differ.
+    if (trackName.endsWith(".scale")) return false;
 
-    if (!bones.hips && name.includes("hips")) bones.hips = object;
-    if (!bones.spine && name === "spine") bones.spine = object;
-    if (!bones.chest && (name.includes("spine1") || name.includes("spine2") || name.includes("chest"))) bones.chest = object;
-    if (!bones.neck && name.includes("neck")) bones.neck = object;
-    if (!bones.head && name.includes("head")) bones.head = object;
-
-    if (!bones.leftShoulder && name.includes("leftshoulder")) bones.leftShoulder = object;
-    if (!bones.rightShoulder && name.includes("rightshoulder")) bones.rightShoulder = object;
-    if (!bones.leftArm && name.includes("leftarm") && !name.includes("fore")) bones.leftArm = object;
-    if (!bones.leftForeArm && name.includes("leftforearm")) bones.leftForeArm = object;
-    if (!bones.leftHand && name.includes("lefthand")) bones.leftHand = object;
-    if (!bones.rightArm && name.includes("rightarm") && !name.includes("fore")) bones.rightArm = object;
-    if (!bones.rightForeArm && name.includes("rightforearm")) bones.rightForeArm = object;
-    if (!bones.rightHand && name.includes("righthand")) bones.rightHand = object;
-
-    if (!bones.leftUpLeg && name.includes("leftupleg")) bones.leftUpLeg = object;
-    if (!bones.leftLeg && name.includes("leftleg") && !name.includes("upleg")) bones.leftLeg = object;
-    if (!bones.leftFoot && name.includes("leftfoot")) bones.leftFoot = object;
-    if (!bones.leftToe && name.includes("lefttoe")) bones.leftToe = object;
-    if (!bones.rightUpLeg && name.includes("rightupleg")) bones.rightUpLeg = object;
-    if (!bones.rightLeg && name.includes("rightleg") && !name.includes("upleg")) bones.rightLeg = object;
-    if (!bones.rightFoot && name.includes("rightfoot")) bones.rightFoot = object;
-    if (!bones.rightToe && name.includes("righttoe")) bones.rightToe = object;
+    return true;
   });
 
-  return bones;
+  return new THREE.AnimationClip(name, clip.duration || 2.4, tracks);
 }
 
-function captureRestPose(root: THREE.Object3D): BoneRestPose {
-  const restPose: BoneRestPose = new Map();
-  root.traverse((object) => {
-    if (object.type === "Bone") restPose.set(object.uuid, object.rotation.clone());
-  });
-  return restPose;
+function pickClip(fbx: THREE.Group, name: string) {
+  const clip = fbx.animations[0];
+  if (!clip) return null;
+  return sanitizeClip(clip, name);
 }
 
-function resetRestPose(root: THREE.Object3D, restPose: BoneRestPose) {
-  root.traverse((object) => {
-    if (object.type !== "Bone") return;
-    const rest = restPose.get(object.uuid);
-    if (rest) object.rotation.copy(rest);
-  });
-}
+function useMixamoClips() {
+  const idle = useLoader(FBXLoader, ANIMATION_URLS.idle) as THREE.Group;
+  const walk = useLoader(FBXLoader, ANIMATION_URLS.walk) as THREE.Group;
+  const wave = useLoader(FBXLoader, ANIMATION_URLS.wave) as THREE.Group;
+  const talk = useLoader(FBXLoader, ANIMATION_URLS.talk) as THREE.Group;
+  const point = useLoader(FBXLoader, ANIMATION_URLS.point) as THREE.Group;
+  const sit = useLoader(FBXLoader, ANIMATION_URLS.sit) as THREE.Group;
 
-function applyEuler(object: THREE.Object3D | undefined, x = 0, y = 0, z = 0) {
-  if (!object) return;
-  object.rotation.x += x;
-  object.rotation.y += y;
-  object.rotation.z += z;
+  return useMemo(() => {
+    const loaded: Record<LoadedAnimation["key"], THREE.AnimationClip | null> = {
+      idle: pickClip(idle, "idle"),
+      walk: pickClip(walk, "walk"),
+      wave: pickClip(wave, "wave"),
+      talk: pickClip(talk, "talk"),
+      point: pickClip(point, "point"),
+      sit: pickClip(sit, "sit"),
+    };
+    return loaded;
+  }, [idle, walk, wave, talk, point, sit]);
 }
 
 function Model({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing = "left" }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing">>) {
   const group = useRef<THREE.Group>(null);
+  const mixer = useRef<THREE.AnimationMixer | null>(null);
+  const activeAction = useRef<THREE.AnimationAction | null>(null);
+  const activeName = useRef("");
   const gltf = useGLTF(modelUrl) as unknown as { scene: THREE.Group };
+  const clips = useMixamoClips();
   const scene = useMemo(() => clone(gltf.scene) as THREE.Group, [gltf.scene]);
-  const rig = useMemo(() => mapRigBones(scene), [scene]);
-  const restPose = useMemo(() => captureRestPose(scene), [scene]);
   const activeMode = normalizeMode(mode);
 
   useEffect(() => {
@@ -124,125 +98,77 @@ function Model({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.frustumCulled = false;
-        if (Array.isArray(mesh.material)) {
-          mesh.material.forEach((material) => {
-            material.transparent = false;
-            material.needsUpdate = true;
-          });
-        } else if (mesh.material) {
-          mesh.material.transparent = false;
-          mesh.material.needsUpdate = true;
-        }
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.filter(Boolean).forEach((material) => {
+          material.transparent = false;
+          material.needsUpdate = true;
+        });
       }
     });
+
+    mixer.current = new THREE.AnimationMixer(scene);
+    return () => {
+      mixer.current?.stopAllAction();
+      mixer.current?.uncacheRoot(scene);
+      mixer.current = null;
+    };
   }, [scene]);
 
-  useFrame((state) => {
+  useEffect(() => {
+    const currentMixer = mixer.current;
+    if (!currentMixer) return;
+
+    const clip = clips[activeMode] || clips.idle;
+    if (!clip) return;
+    if (activeName.current === clip.name) return;
+
+    const nextAction = currentMixer.clipAction(clip);
+    nextAction.enabled = true;
+    nextAction.clampWhenFinished = false;
+    nextAction.loop = THREE.LoopRepeat;
+    nextAction.reset().fadeIn(activeName.current ? 0.22 : 0.01).play();
+
+    if (activeAction.current && activeAction.current !== nextAction) {
+      activeAction.current.fadeOut(0.2);
+    }
+
+    activeAction.current = nextAction;
+    activeName.current = clip.name;
+  }, [activeMode, clips]);
+
+  useFrame((state, delta) => {
     if (!group.current) return;
-
     const t = state.clock.elapsedTime;
-    const walk = activeMode === "walk";
-    const talk = activeMode === "talk";
-    const wave = activeMode === "wave";
-    const point = activeMode === "point";
-    const speed = walk ? 7.1 : 2.2;
-    const step = Math.sin(t * speed);
-    const stepFast = Math.sin(t * speed * 2);
-    const oppositeStep = Math.sin(t * speed + Math.PI);
-    const breathe = Math.sin(t * 2.05);
-    const idleShift = Math.sin(t * 0.72);
-    const aliveLook = Math.sin(t * 1.25);
+    mixer.current?.update(Math.min(delta, 0.045));
 
-    // Stable WebGL root. The character stays upright; all life is in the rig, not in a square moving around.
-    group.current.position.set(0, -1.29 + breathe * 0.012 + (walk ? Math.abs(stepFast) * 0.03 : 0), 0);
-    group.current.rotation.set(0, facing === "right" ? -0.38 : 0.38, 0);
-    group.current.scale.setScalar(1.16);
+    const breathing = Math.sin(t * 2.05);
+    const settle = Math.sin(t * 0.8);
+    const isWalking = activeMode === "walk";
+    const isSpeaking = activeMode === "talk";
+    const isSitting = activeMode === "sit";
 
-    resetRestPose(scene, restPose);
+    // Keep the model upright and stable. The walking sensation comes from Mixamo limbs,
+    // while the parent group adds only tiny body weight/grounding, not ugly sliding.
+    group.current.position.set(0, isSitting ? -1.18 : -1.31 + breathing * 0.007 + (isWalking ? Math.abs(Math.sin(t * 7.4)) * 0.018 : 0), 0);
+    group.current.rotation.set(0, facing === "right" ? -0.45 : 0.45, settle * 0.006);
+    group.current.scale.setScalar(isSitting ? 1.08 : 1.16);
 
-    // Natural neutral pose: very small corrections only.
-    // Evitamos forzar los brazos hacia delante; las animaciones de gesto se aplican solo en wave/talk/point.
-    applyEuler(rig.leftShoulder, 0.0, 0, 0.015);
-    applyEuler(rig.rightShoulder, 0.0, 0, -0.015);
-    applyEuler(rig.leftArm, 0.02, 0.015, 0.18);
-    applyEuler(rig.rightArm, 0.02, -0.015, -0.18);
-    applyEuler(rig.leftForeArm, 0.04, 0, 0.08);
-    applyEuler(rig.rightForeArm, 0.04, 0, -0.08);
-    applyEuler(rig.leftHand, 0.02, 0.02, 0.025);
-    applyEuler(rig.rightHand, 0.02, -0.02, -0.025);
+    // Small natural micro-life layered over the real FBX clips. This avoids the “dead mannequin” look
+    // without forcing arms into unnatural positions.
+    const head = scene.getObjectByName("mixamorigHead") || scene.getObjectByName("Head");
+    const neck = scene.getObjectByName("mixamorigNeck") || scene.getObjectByName("Neck");
+    const spine = scene.getObjectByName("mixamorigSpine") || scene.getObjectByName("Spine");
 
-    // Always alive: breathing, subtle weight shift, head scans, small hand motion.
-    applyEuler(rig.hips, 0, idleShift * 0.014, idleShift * 0.025);
-    applyEuler(rig.spine, breathe * 0.026, 0, breathe * 0.012 + idleShift * 0.018);
-    applyEuler(rig.chest, breathe * 0.032, 0, -breathe * 0.012 - idleShift * 0.012);
-    applyEuler(rig.neck, aliveLook * 0.018, Math.sin(t * 1.4) * 0.04, 0);
-    applyEuler(rig.head, Math.sin(t * 1.08) * 0.025, Math.sin(t * 1.67) * 0.052, Math.sin(t * 0.9) * 0.014);
-    applyEuler(rig.leftHand, Math.sin(t * 1.6) * 0.018, 0, Math.cos(t * 1.35) * 0.018);
-    applyEuler(rig.rightHand, Math.cos(t * 1.45) * 0.018, 0, -Math.sin(t * 1.55) * 0.018);
-
-    if (walk) {
-      // Walk cycle with real readable gait: hips, shoulders, arms, knees, ankles and head all move together.
-      const stride = 0.52;
-      const kneeLiftL = Math.max(0, -step) * 0.62;
-      const kneeLiftR = Math.max(0, -oppositeStep) * 0.62;
-      const footRollL = Math.sin(t * speed - 0.7) * 0.18;
-      const footRollR = Math.sin(t * speed + Math.PI - 0.7) * 0.18;
-
-      applyEuler(rig.hips, Math.abs(stepFast) * 0.035, 0, step * 0.055);
-      applyEuler(rig.spine, Math.abs(stepFast) * 0.025, 0, -step * 0.045);
-      applyEuler(rig.chest, 0, 0, step * 0.035);
-
-      applyEuler(rig.leftUpLeg, step * stride, 0.02, -0.02);
-      applyEuler(rig.rightUpLeg, oppositeStep * stride, -0.02, 0.02);
-      applyEuler(rig.leftLeg, kneeLiftL, 0, 0);
-      applyEuler(rig.rightLeg, kneeLiftR, 0, 0);
-      applyEuler(rig.leftFoot, footRollL, 0, 0);
-      applyEuler(rig.rightFoot, footRollR, 0, 0);
-      applyEuler(rig.leftToe, Math.max(0, step) * 0.18, 0, 0);
-      applyEuler(rig.rightToe, Math.max(0, oppositeStep) * 0.18, 0, 0);
-
-      applyEuler(rig.leftArm, -step * 0.22 - 0.02, 0, -0.01);
-      applyEuler(rig.rightArm, -oppositeStep * 0.22 - 0.02, 0, 0.01);
-      applyEuler(rig.leftForeArm, Math.max(0, step) * 0.1, 0, 0.025);
-      applyEuler(rig.rightForeArm, Math.max(0, oppositeStep) * 0.1, 0, -0.025);
-      applyEuler(rig.neck, Math.abs(stepFast) * -0.025, 0, -step * 0.022);
-      applyEuler(rig.head, Math.abs(stepFast) * -0.02, 0, step * 0.018);
+    if (head) {
+      head.rotation.y += Math.sin(t * 1.1) * 0.012;
+      head.rotation.x += Math.sin(t * 1.45) * 0.006 + (isSpeaking ? Math.sin(t * 8.5) * 0.012 : 0);
     }
-
-    if (wave) {
-      const waveMotion = Math.sin(t * 7.6);
-      applyEuler(rig.rightShoulder, -0.16, 0.18, -0.18);
-      applyEuler(rig.rightArm, -1.12, 0.2, 0.86);
-      applyEuler(rig.rightForeArm, -0.92 + waveMotion * 0.28, 0.22, -0.38 + waveMotion * 0.22);
-      applyEuler(rig.rightHand, 0.04, waveMotion * 0.4, waveMotion * 0.18);
-      applyEuler(rig.head, 0.015, -0.08 + waveMotion * 0.02, 0.02);
-      applyEuler(rig.spine, 0, -0.04, -0.02);
-    }
-
-    if (talk) {
-      const talkMotion = Math.sin(t * 8.4);
-      const explain = Math.sin(t * 3.2);
-      applyEuler(rig.rightArm, -0.36 + talkMotion * 0.09, 0.08, 0.18 + explain * 0.04);
-      applyEuler(rig.rightForeArm, -0.28 + talkMotion * 0.12, 0, -0.12 + explain * 0.08);
-      applyEuler(rig.leftArm, -0.22 - talkMotion * 0.07, -0.05, -0.12 - explain * 0.03);
-      applyEuler(rig.leftForeArm, -0.18 - talkMotion * 0.09, 0, 0.1 - explain * 0.06);
-      applyEuler(rig.head, talkMotion * 0.05, Math.sin(t * 2.75) * 0.052, Math.sin(t * 4.2) * 0.012);
-      applyEuler(rig.neck, talkMotion * 0.032, 0, 0);
-      applyEuler(rig.chest, talkMotion * 0.015, 0, explain * 0.02);
-    }
-
-    if (point) {
-      applyEuler(rig.rightShoulder, -0.05, -0.1, 0.1);
-      applyEuler(rig.rightArm, -0.78, -0.22, 0.5);
-      applyEuler(rig.rightForeArm, -0.22, -0.08, -0.24);
-      applyEuler(rig.rightHand, 0.05, 0.16, 0);
-      applyEuler(rig.head, 0.02, -0.18, 0);
-      applyEuler(rig.spine, 0, -0.1, 0);
-    }
+    if (neck) neck.rotation.y += Math.sin(t * 0.9) * 0.007;
+    if (spine) spine.rotation.x += breathing * 0.006;
   });
 
   return (
-    <group ref={group} position={[0, -1.29, 0]} rotation={[0, facing === "right" ? -0.38 : 0.38, 0]} scale={1.16}>
+    <group ref={group} position={[0, -1.31, 0]} rotation={[0, facing === "right" ? -0.45 : 0.45, 0]} scale={1.16}>
       <primitive object={scene} />
     </group>
   );
@@ -261,17 +187,17 @@ export default function FlowlyAssistant3D({ modelUrl = "/avatars/flowly-grandma.
   return (
     <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
       <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.08, 5.8], fov: 30 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
-        <ambientLight intensity={1.45} />
-        <directionalLight position={[2.4, 4, 3]} intensity={2.35} castShadow />
-        <pointLight position={[-2.2, 2.8, 2]} intensity={1.35} color="#8b5cf6" />
-        <pointLight position={[2.4, 1.2, 2.6]} intensity={1.1} color="#22d3ee" />
+        <ambientLight intensity={1.35} />
+        <directionalLight position={[2.4, 4, 3]} intensity={2.15} castShadow />
+        <pointLight position={[-2.2, 2.8, 2]} intensity={1.2} color="#8b5cf6" />
+        <pointLight position={[2.4, 1.2, 2.6]} intensity={1.0} color="#22d3ee" />
         <Suspense fallback={<ModelFallback />}>
           <Model modelUrl={modelUrl} mode={mode} facing={facing} />
           <Environment preset="city" />
         </Suspense>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.25, 0]} receiveShadow>
           <circleGeometry args={[1.05, 48]} />
-          <meshStandardMaterial color="#020617" transparent opacity={0.22} />
+          <meshStandardMaterial color="#020617" transparent opacity={0.18} />
         </mesh>
       </Canvas>
     </button>
@@ -279,3 +205,4 @@ export default function FlowlyAssistant3D({ modelUrl = "/avatars/flowly-grandma.
 }
 
 useGLTF.preload("/avatars/flowly-grandma.glb");
+ANIMATION_FILES.forEach((key) => useLoader.preload(FBXLoader, ANIMATION_URLS[key]));

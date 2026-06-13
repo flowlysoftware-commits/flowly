@@ -845,7 +845,7 @@ input[type="date"].input-dark { color-scheme: dark; }
     right: 1rem !important;
     left: auto !important;
     bottom: 1.4rem !important;
-    transform: scaleX(1) !important;
+    transform: translate(-50%, -50%) !important;
   }
   .flowly-character-speech { display: none; }
   .flowly-character-status { display: none; }
@@ -1031,7 +1031,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   z-index: 45;
   display: grid;
   place-items: center;
-  transition: filter .35s ease;
+  transition: left 1.55s cubic-bezier(.18,.88,.22,1), top 1.55s cubic-bezier(.18,.88,.22,1), filter .35s ease;
   filter: drop-shadow(0 26px 34px rgba(0,0,0,.34));
   perspective: 1200px;
 }
@@ -1046,7 +1046,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   cursor: pointer;
   overflow: visible;
   transform-origin: 50% 92%;
-  animation: flowly-3d-breathe 4.8s ease-in-out infinite;
+  animation: flowly-3d-breathe 5.2s ease-in-out infinite;
 }
 .flowly-3d-stage canvas {
   width: 100% !important;
@@ -1065,7 +1065,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   background: radial-gradient(circle, rgba(34,211,238,.22), rgba(139,92,246,.10) 45%, transparent 72%);
   filter: blur(22px);
   opacity: .95;
-  animation: flowly-3d-glow 3.8s ease-in-out infinite;
+  animation: flowly-3d-glow 4.6s ease-in-out infinite;
 }
 .flowly-3d-ground-shadow {
   position: absolute;
@@ -1076,13 +1076,17 @@ input[type="date"].input-dark { color-scheme: dark; }
   height: 1.15rem;
   border-radius: 999px;
   background: radial-gradient(ellipse, rgba(0,0,0,.42), transparent 70%);
-  animation: flowly-3d-shadow 3.8s ease-in-out infinite;
+  animation: flowly-3d-shadow 4.6s ease-in-out infinite;
 }
 .flowly-3d-character-wrap.is-walking .flowly-3d-stage {
-  animation: flowly-3d-walk 0.72s cubic-bezier(.45,0,.55,1) infinite;
+  animation: flowly-3d-step-weight 0.58s cubic-bezier(.45,0,.55,1) infinite;
 }
 .flowly-3d-character-wrap.is-speaking .flowly-3d-stage {
-  animation: flowly-3d-talk 0.86s ease-in-out infinite;
+  animation: flowly-3d-talk 0.92s ease-in-out infinite;
+}
+.flowly-3d-character-wrap.is-sitting {
+  width: clamp(9.5rem, 11vw, 13rem);
+  height: clamp(13rem, 18vw, 19rem);
 }
 .flowly-3d-character-wrap.is-tour .flowly-3d-light-rim {
   background: radial-gradient(circle, rgba(236,72,153,.24), rgba(34,211,238,.14) 45%, transparent 72%);
@@ -1098,9 +1102,9 @@ input[type="date"].input-dark { color-scheme: dark; }
   45% { transform: translateY(-2px) scale(1.003); }
   70% { transform: translateY(-1px) scale(.999); }
 }
-@keyframes flowly-3d-walk {
-  0%, 100% { transform: translateY(0) rotateZ(-.25deg); }
-  50% { transform: translateY(-3px) rotateZ(.25deg); }
+@keyframes flowly-3d-step-weight {
+  0%, 100% { transform: translateY(0) rotateZ(-.08deg); }
+  50% { transform: translateY(-1.5px) rotateZ(.08deg); }
 }
 @keyframes flowly-3d-talk {
   0%, 100% { transform: translateY(0) rotateZ(0deg) scale(1); }
@@ -1122,7 +1126,7 @@ input[type="date"].input-dark { color-scheme: dark; }
     right: .35rem !important;
     left: auto !important;
     bottom: .75rem !important;
-    transform: scaleX(1) !important;
+    transform: translate(-50%, -50%) !important;
   }
   .flowly-3d-character-wrap .flowly-character-speech { display: none; }
 }
