@@ -96,11 +96,6 @@ function applyOffset(basePose: Map<string, THREE.Quaternion>, object: THREE.Obje
   object.quaternion.copy(base).multiply(tempQuaternion);
 }
 
-
-function soften(value: number, amount = 1) {
-  return value * amount;
-}
-
 function Model({
   modelUrl = "/avatars/flowly-grandma.glb",
   mode = "idle",
@@ -132,124 +127,121 @@ function Model({
     if (!group.current) return;
 
     const t = state.clock.elapsedTime;
-    const breathe = Math.sin(t * 2.0);
-    const slow = Math.sin(t * 0.9);
-    const step = Math.sin(t * 6.2);
-    const opposite = Math.sin(t * 6.2 + Math.PI);
+    const breathe = Math.sin(t * 2.1);
+    const slow = Math.sin(t * 0.85);
+    const fast = Math.sin(t * 8.0);
+    const walkCycle = Math.sin(t * 7.2);
+    const walkOpposite = Math.sin(t * 7.2 + Math.PI);
     const isWalking = activeMode === "walk";
     const isSpeaking = activeMode === "talk";
     const isWaving = activeMode === "wave";
     const isPointing = activeMode === "point";
 
-    // Always return to the original Mixamo rest pose first.
-    // We only add small offsets. No forced world-direction solver: that was breaking shoulders.
+    // Reset every frame to the GLB rest pose, then layer a safe procedural pose.
+    // This avoids the broken FBX retargeting that made the character fall or keep its arms in T-pose.
     Object.values(rig).forEach((object) => {
       const base = object ? basePose.get(object.uuid) : undefined;
       if (object && base) object.quaternion.copy(base);
     });
 
-    // Relaxed arms. The model comes from Mixamo with arms too far forward/T-pose.
-    // These offsets keep shoulders connected and bring arms closer to the body.
-    const leftArmRestZ = soften(1.05, 1);
-    const rightArmRestZ = soften(-1.05, 1);
-    const leftArmRestX = 0.06 + breathe * 0.012;
-    const rightArmRestX = 0.06 - breathe * 0.012;
-    const leftForeRestZ = 0.24;
-    const rightForeRestZ = -0.24;
+    // Neutral pose: keep shoulders relaxed and elbows close to the body.
+    // IMPORTANT: the Mixamo grandma GLB uses opposite Z signs for each shoulder.
+    // Negative Z lowers the left arm; positive Z lowers the right arm.
+    // Previous patches used the inverse signs and pushed both arms upward/forward.
+    // The original Mixamo rest pose is very close to a T-pose; these offsets intentionally
+    // pull the arms down and slightly back so she does not look like she is holding them forward.
+    // Mixamo imports the grandma in a broad T-pose. Keep the shoulders clearly down by default.
+    // The previous values were too close to the rest pose and visually looked like both arms
+    // were pushed forward. These offsets intentionally make the default silhouette relaxed.
+    const leftArmDown = -1.72;
+    const rightArmDown = 1.72;
+    const leftForeArmRelax = -0.18;
+    const rightForeArmRelax = 0.18;
 
-    let leftArmX = leftArmRestX;
-    let rightArmX = rightArmRestX;
-    let leftArmY = 0.02;
-    let rightArmY = -0.02;
-    let leftArmZ = leftArmRestZ;
-    let rightArmZ = rightArmRestZ;
-    let leftForeArmX = 0.04;
-    let rightForeArmX = 0.04;
-    let leftForeArmZ = leftForeRestZ;
-    let rightForeArmZ = rightForeRestZ;
-    let leftHandZ = 0.03;
-    let rightHandZ = -0.03;
+    let leftArmZ = leftArmDown;
+    let rightArmZ = rightArmDown;
+    let leftArmX = 0.08 + breathe * 0.014;
+    let rightArmX = 0.08 - breathe * 0.014;
+    let leftArmY = -0.18;
+    let rightArmY = 0.18;
+    let leftForeArmZ = leftForeArmRelax;
+    let rightForeArmZ = rightForeArmRelax;
+    let leftHandZ = 0;
+    let rightHandZ = 0;
 
     if (isWalking) {
-      // Gentle counter swing. It should feel like she walks, not like she slides.
-      leftArmX += opposite * 0.18;
-      rightArmX += step * 0.18;
-      leftArmZ += opposite * 0.08;
-      rightArmZ += step * 0.08;
-      leftForeArmZ += opposite * 0.06;
-      rightForeArmZ += step * 0.06;
+      // Short, soft arm swing that follows the step cycle without becoming robotic.
+      leftArmX += walkOpposite * 0.14;
+      rightArmX += walkCycle * 0.14;
+      leftArmY += walkOpposite * 0.028;
+      rightArmY += walkCycle * 0.028;
+      leftForeArmZ += walkOpposite * 0.035;
+      rightForeArmZ += walkCycle * 0.035;
     }
 
     if (isSpeaking) {
-      // Conversational gestures stay subtle so arms do not float in front of the body.
-      leftArmX += Math.sin(t * 3.1) * 0.035;
-      rightArmX += Math.sin(t * 3.4 + 0.8) * 0.035;
-      leftArmZ += Math.sin(t * 2.2) * 0.035;
-      rightArmZ += Math.sin(t * 2.4 + 0.6) * 0.035;
-      leftForeArmZ += Math.sin(t * 4.3) * 0.045;
-      rightForeArmZ += Math.sin(t * 4.1 + 0.7) * 0.045;
+      // Small conversational gestures, not constant big waving.
+      leftArmZ = -1.56 + Math.sin(t * 3.1) * 0.045;
+      rightArmZ = 1.56 + Math.sin(t * 2.7) * 0.045;
+      leftArmX += 0.08 + Math.sin(t * 4.3) * 0.03;
+      rightArmX += 0.08 + Math.sin(t * 4.0 + 0.8) * 0.03;
+      leftForeArmZ -= 0.1 + Math.sin(t * 5.3) * 0.045;
+      rightForeArmZ += 0.1 + Math.sin(t * 5.1) * 0.045;
     }
 
     if (isWaving) {
-      // Right hand greeting; left arm remains relaxed.
-      rightArmX = -0.35;
-      rightArmY = -0.18;
-      rightArmZ = -0.45;
-      rightForeArmX = -0.18;
-      rightForeArmZ = -0.82 + Math.sin(t * 8.0) * 0.18;
-      rightHandZ = Math.sin(t * 9.6) * 0.16;
-      leftArmX = leftArmRestX;
-      leftArmZ = leftArmRestZ;
-      leftForeArmZ = leftForeRestZ;
+      // One clear greeting: right arm up, relaxed left arm down.
+      rightArmZ = -0.72;
+      rightArmX = -0.38;
+      rightArmY = 0.12;
+      rightForeArmZ = -0.92 + Math.sin(t * 7.5) * 0.16;
+      rightHandZ = Math.sin(t * 9.5) * 0.18;
     }
 
     if (isPointing) {
-      // Soft pointing, not a rigid zombie arm.
-      rightArmX = -0.08;
-      rightArmY = -0.05;
-      rightArmZ = -0.72;
-      rightForeArmX = 0.02;
-      rightForeArmZ = -0.42;
-      leftArmX = leftArmRestX;
-      leftArmZ = leftArmRestZ;
-      leftForeArmZ = leftForeRestZ;
+      rightArmZ = 0.82;
+      rightArmX = -0.1;
+      rightArmY = 0.1;
+      rightForeArmZ = 0.42;
+      leftArmZ = leftArmDown;
+      leftForeArmZ = leftForeArmRelax;
     }
 
     applyOffset(basePose, rig.leftArm, leftArmX, leftArmY, leftArmZ);
     applyOffset(basePose, rig.rightArm, rightArmX, rightArmY, rightArmZ);
-    applyOffset(basePose, rig.leftForeArm, leftForeArmX, 0, leftForeArmZ);
-    applyOffset(basePose, rig.rightForeArm, rightForeArmX, 0, rightForeArmZ);
-    applyOffset(basePose, rig.leftHand, 0.015, 0, leftHandZ);
-    applyOffset(basePose, rig.rightHand, 0.015, 0, rightHandZ);
+    applyOffset(basePose, rig.leftForeArm, 0.05, 0, leftForeArmZ);
+    applyOffset(basePose, rig.rightForeArm, 0.05, 0, rightForeArmZ);
+    applyOffset(basePose, rig.leftHand, 0.02, 0, leftHandZ);
+    applyOffset(basePose, rig.rightHand, 0.02, 0, rightHandZ);
 
-    applyOffset(basePose, rig.spine, breathe * 0.018 + (isWalking ? Math.abs(step) * 0.018 : 0), 0, slow * 0.012);
-    applyOffset(basePose, rig.spine1, breathe * 0.012, 0, slow * 0.008);
-    applyOffset(basePose, rig.spine2, breathe * 0.01, 0, slow * 0.006);
-    applyOffset(basePose, rig.neck, isSpeaking ? Math.sin(t * 4.8) * 0.026 : slow * 0.012, slow * 0.018, 0);
-    applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 7.0) * 0.028 : breathe * 0.01, slow * 0.024, 0);
+    applyOffset(basePose, rig.spine, breathe * 0.018 + (isWalking ? Math.abs(walkCycle) * 0.025 : 0), 0, slow * 0.012);
+    applyOffset(basePose, rig.spine1, breathe * 0.014, 0, slow * 0.01);
+    applyOffset(basePose, rig.spine2, breathe * 0.012, 0, slow * 0.008);
+    applyOffset(basePose, rig.neck, isSpeaking ? Math.sin(t * 5.5) * 0.03 : slow * 0.015, slow * 0.018, 0);
+    applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 8.0) * 0.035 : breathe * 0.012, slow * 0.025, 0);
 
     if (isWalking) {
-      applyOffset(basePose, rig.leftUpLeg, step * 0.32, 0, 0.018);
-      applyOffset(basePose, rig.rightUpLeg, opposite * 0.32, 0, -0.018);
-      applyOffset(basePose, rig.leftLeg, Math.max(0, -step) * 0.42, 0, 0);
-      applyOffset(basePose, rig.rightLeg, Math.max(0, -opposite) * 0.42, 0, 0);
-      applyOffset(basePose, rig.leftFoot, Math.sin(t * 6.2 + 0.5) * 0.10, 0, 0);
-      applyOffset(basePose, rig.rightFoot, Math.sin(t * 6.2 + Math.PI + 0.5) * 0.10, 0, 0);
+      applyOffset(basePose, rig.leftUpLeg, walkCycle * 0.38, 0, 0.035);
+      applyOffset(basePose, rig.rightUpLeg, walkOpposite * 0.38, 0, -0.035);
+      applyOffset(basePose, rig.leftLeg, Math.max(0, -walkCycle) * 0.55, 0, 0);
+      applyOffset(basePose, rig.rightLeg, Math.max(0, -walkOpposite) * 0.55, 0, 0);
+      applyOffset(basePose, rig.leftFoot, Math.sin(t * 7.2 + 0.6) * 0.16, 0, 0);
+      applyOffset(basePose, rig.rightFoot, Math.sin(t * 7.2 + Math.PI + 0.6) * 0.16, 0, 0);
     } else {
-      applyOffset(basePose, rig.leftUpLeg, 0.025 + breathe * 0.006, 0, 0.014);
-      applyOffset(basePose, rig.rightUpLeg, 0.025 - breathe * 0.006, 0, -0.014);
-      applyOffset(basePose, rig.leftLeg, -0.02, 0, 0);
-      applyOffset(basePose, rig.rightLeg, -0.02, 0, 0);
+      applyOffset(basePose, rig.leftUpLeg, 0.04 + breathe * 0.012, 0, 0.025);
+      applyOffset(basePose, rig.rightUpLeg, 0.04 - breathe * 0.012, 0, -0.025);
+      applyOffset(basePose, rig.leftLeg, -0.035, 0, 0);
+      applyOffset(basePose, rig.rightLeg, -0.035, 0, 0);
     }
 
     if (rig.mouth) {
-      rig.mouth.scale.y = isSpeaking ? 1 + Math.abs(Math.sin(t * 12)) * 0.10 : 1;
+      rig.mouth.scale.y = isSpeaking ? 1 + Math.abs(Math.sin(t * 12)) * 0.12 : 1;
     }
 
-    const bodyBob = isWalking ? Math.abs(step) * 0.028 : breathe * 0.01;
+    const bodyBob = isWalking ? Math.abs(walkCycle) * 0.035 : breathe * 0.012;
     group.current.position.set(0, -1.34 + bodyBob, 0);
-    group.current.rotation.set(0, facing === "right" ? -0.58 : 0.58, slow * 0.003);
-    group.current.scale.setScalar(1.16);
+    group.current.rotation.set(0, facing === "right" ? 0.34 : -0.34, slow * 0.004);
+    group.current.scale.setScalar(1.18);
   });
 
   return (
