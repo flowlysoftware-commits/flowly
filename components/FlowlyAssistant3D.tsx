@@ -147,8 +147,8 @@ function Model({
     // Neutral pose: keep shoulders relaxed and elbows close to the body.
     // The original Mixamo rest pose is very close to a T-pose; these offsets intentionally
     // pull the arms down and slightly back so she does not look like she is holding them forward.
-    const leftArmDown = 1.58;
-    const rightArmDown = -1.58;
+    const leftArmDown = 0.95;
+    const rightArmDown = -0.95;
     const leftForeArmRelax = 0.46;
     const rightForeArmRelax = -0.46;
 
@@ -156,8 +156,8 @@ function Model({
     let rightArmZ = rightArmDown;
     let leftArmX = -0.12 + breathe * 0.018;
     let rightArmX = -0.12 - breathe * 0.018;
-    let leftArmY = -0.34;
-    let rightArmY = 0.34;
+    let leftArmY = -0.08;
+    let rightArmY = 0.08;
     let leftForeArmZ = leftForeArmRelax;
     let rightForeArmZ = rightForeArmRelax;
     let leftHandZ = 0;
