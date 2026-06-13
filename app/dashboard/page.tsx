@@ -1297,31 +1297,43 @@ export default function DashboardPage() {
                       { label: "Ficha 360", tab: "module:crm:ficha" as ActiveTab },
                       { label: "Agenda CRM", tab: "module:crm:agenda" as ActiveTab },
                       { label: "Pipeline", tab: "module:crm:pipeline" as ActiveTab },
+                      { label: "Hoy", tab: "module:crm:hoy" as ActiveTab },
+                      { label: "Automatizaciones", tab: "module:crm:automatizaciones" as ActiveTab },
                     ],
                     billing: [
                       { label: "Ingresos", tab: "module:facturacion:ingresos" as ActiveTab },
                       { label: "Gastos", tab: "module:facturacion:gastos" as ActiveTab },
                       { label: "Proveedores", tab: "module:facturacion:proveedores" as ActiveTab },
+                      { label: "Presupuestos", tab: "module:facturacion:presupuestos" as ActiveTab },
                     ],
                     pos: [
                       { label: "Nuevo ticket", tab: "module:tpv:ticket" as ActiveTab },
                       { label: "Caja", tab: "module:tpv:caja" as ActiveTab },
+                      { label: "Historial", tab: "module:tpv:historial" as ActiveTab },
                     ],
                     marketing: [
                       { label: "Campañas", tab: "module:marketing:campanas" as ActiveTab },
+                      { label: "Canales", tab: "module:marketing:canales" as ActiveTab },
+                      { label: "Audiencias", tab: "module:marketing:audiencias" as ActiveTab },
                       { label: "Calendario", tab: "module:marketing:calendario" as ActiveTab },
                     ],
                     ai: [
-                      { label: "Asistente", tab: "module:ia:asistente" as ActiveTab },
-                      { label: "Insights", tab: "module:ia:insights" as ActiveTab },
+                      { label: "Copiloto", tab: "module:ia:copiloto" as ActiveTab },
+                      { label: "Automatizaciones", tab: "module:ia:automatizaciones" as ActiveTab },
+                      { label: "Prompts", tab: "module:ia:prompts" as ActiveTab },
+                      { label: "Conectores", tab: "module:ia:conectores" as ActiveTab },
                     ],
                     analytics: [
-                      { label: "KPIs", tab: "module:estadisticas:kpis" as ActiveTab },
-                      { label: "Informes", tab: "module:estadisticas:informes" as ActiveTab },
+                      { label: "Dirección", tab: "module:estadisticas:direccion" as ActiveTab },
+                      { label: "Agenda", tab: "module:estadisticas:agenda" as ActiveTab },
+                      { label: "Finanzas", tab: "module:estadisticas:finanzas" as ActiveTab },
+                      { label: "Servicios", tab: "module:estadisticas:servicios" as ActiveTab },
                     ],
                     booking_premium: [
                       { label: "Reglas", tab: "module:reservas-premium:reglas" as ActiveTab },
                       { label: "Bloqueos", tab: "module:reservas-premium:bloqueos" as ActiveTab },
+                      { label: "Experiencia", tab: "module:reservas-premium:experiencia" as ActiveTab },
+                      { label: "Conexiones", tab: "module:reservas-premium:conexiones" as ActiveTab },
                     ],
                     voice: [
                       { label: "Llamadas", tab: "module:voice:llamadas" as ActiveTab },
@@ -1330,6 +1342,7 @@ export default function DashboardPage() {
                     time_tracking: [
                       { label: "Fichar", tab: "module:fichaje:fichar" as ActiveTab },
                       { label: "Jornada", tab: "module:fichaje:jornada" as ActiveTab },
+                      { label: "Incidencias", tab: "module:fichaje:incidencias" as ActiveTab },
                     ],
                   };
                   const children = submenus[item.key] || [];
@@ -1817,17 +1830,31 @@ function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; all
   return <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard><div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-400/20 text-violet-100"><Icon /></div><h2 className="text-2xl font-semibold">{module.name}</h2><p className="mt-2 text-sm text-white/55">{module.description}</p><div className="mt-6 grid gap-3"><input value={props.title} onChange={(e) => props.setTitle(e.target.value)} placeholder="Título del registro" className="input-dark" />{module.amountEnabled && <input value={props.amount} onChange={(e) => props.setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" />}<textarea value={props.notes} onChange={(e) => props.setNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-32" /><button onClick={() => props.createRecord(module.key)} className="btn-primary"><Plus size={17} /> Guardar</button></div></GlassCard><RecordsCard title="Actividad" records={records} deleteRecord={props.deleteRecord} /></section>;
 }
 
-function BillingModule({ records, appointments, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+function BillingModule({ records, appointments, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+  const [view, setView] = useState("Ingresos");
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", proveedores: "Proveedores", presupuestos: "Presupuestos" }, setView);
+  }, [activeTab]);
+  useEffect(() => {
+    const nextStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : "income";
+    setStatus(nextStatus);
+  }, [view, setStatus]);
   const profit = revenue + manualIncome - expenses;
+  const viewStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : "income";
+  const viewRecords = records.filter((record) => view === "Ingresos" ? record.status === "income" : record.status === viewStatus);
   const suppliers = records.filter((r) => r.status === "supplier");
-  return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Reservas cobradas" value={`${revenue.toFixed(2)}€`} helper="Automático" /><Metric icon={<TrendingUp />} label="Ingresos manuales" value={`${manualIncome.toFixed(2)}€`} helper="Añadidos" /><Metric icon={<CreditCard />} label="Gastos" value={`${expenses.toFixed(2)}€`} helper="Manuales" /><Metric icon={<FileText />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nuevo movimiento financiero"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="income">Ingreso manual</option><option value="expense">Gasto</option><option value="supplier">Proveedor</option><option value="budget">Presupuesto</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Concepto: proveedor, factura, gasto, presupuesto..." className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas, proveedor, forma de pago, vencimiento o cliente relacionado" className="input-dark min-h-32" /><button onClick={() => createRecord("billing", status)} className="btn-primary"><Plus size={17} /> Guardar movimiento</button></div></GlassCard><GlassCard title="Control financiero"><div className="grid gap-3 md:grid-cols-2"><InfoBox label="Movimientos" value={records.length} /><InfoBox label="Proveedores" value={suppliers.length} /><InfoBox label="Reservas" value={appointments.length} /><InfoBox label="Beneficio estimado" value={`${profit.toFixed(2)}€`} /></div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
+  return <section className="grid gap-6"><ModuleHero eyebrow="Finance OS" title="Facturación y control económico" description="Gestiona ingresos, gastos, proveedores y presupuestos desde el submenú lateral. Cada sección filtra y prepara el formulario correcto automáticamente." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Proveedores", "Presupuestos"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Proveedores: "module:facturacion:proveedores", Presupuestos: "module:facturacion:presupuestos" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} /><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Reservas cobradas" value={`${revenue.toFixed(2)}€`} helper="Automático" /><Metric icon={<TrendingUp />} label="Ingresos manuales" value={`${manualIncome.toFixed(2)}€`} helper="Añadidos" /><Metric icon={<CreditCard />} label="Gastos" value={`${expenses.toFixed(2)}€`} helper="Manuales" /><Metric icon={<FileText />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title={`Nuevo registro · ${view}`}><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="income">Ingreso manual</option><option value="expense">Gasto</option><option value="supplier">Proveedor</option><option value="budget">Presupuesto</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={view === "Proveedores" ? "Proveedor / factura" : view === "Presupuestos" ? "Presupuesto para cliente" : view === "Gastos" ? "Concepto de gasto" : "Concepto de ingreso"} className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas, vencimiento, cliente, método de pago o responsable" className="input-dark min-h-32" /><button onClick={() => createRecord("billing", status || viewStatus)} className="btn-primary"><Plus size={17} /> Guardar {view.toLowerCase()}</button></div></GlassCard><GlassCard title={`${view} registrados`}><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Mostrados" value={viewRecords.length} /><InfoBox label="Proveedores" value={suppliers.length} /><InfoBox label="Total módulo" value={records.length} /></div><div className="mt-5"><RecordsList records={viewRecords} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
 }
 
-function PosModule({ records, services, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+function PosModule({ records, services, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+  const [view, setView] = useState("Nuevo ticket");
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:tpv:", { ticket: "Nuevo ticket", caja: "Caja", historial: "Historial" }, setView);
+  }, [activeTab]);
   const total = records.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const cash = records.filter((r) => r.status === "cash").reduce((s, r) => s + Number(r.amount || 0), 0);
   const card = records.filter((r) => r.status === "card").reduce((s, r) => s + Number(r.amount || 0), 0);
-  return <section className="grid gap-6"><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Store />} label="Caja total" value={`${total.toFixed(2)}€`} helper="Tickets" /><Metric icon={<CreditCard />} label="Tarjeta" value={`${card.toFixed(2)}€`} helper="TPV" /><Metric icon={<Receipt />} label="Efectivo" value={`${cash.toFixed(2)}€`} helper="Caja" /><Metric icon={<Scissors />} label="Servicios" value={services.length} helper="Catálogo" /></div><section className="grid gap-6 xl:grid-cols-[.75fr_1.25fr]"><GlassCard title="Nuevo ticket TPV"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="card">Tarjeta</option><option value="cash">Efectivo</option><option value="bizum">Bizum</option><option value="mixed">Mixto</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ticket: Corte + producto" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Total ticket" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Productos, descuentos, empleado o notas de caja" className="input-dark min-h-32" /><button onClick={() => createRecord("pos", status)} className="btn-primary"><Plus size={17} /> Cobrar y guardar ticket</button></div></GlassCard><GlassCard title="TPV operativo"><div className="grid gap-3 md:grid-cols-3">{services.slice(0, 6).map((s) => <div key={s.id} className="rounded-2xl bg-black/25 p-4"><p className="font-medium">{s.name}</p><p className="text-sm text-white/45">{Number(s.price).toFixed(2)}€</p></div>)}</div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
+  return <section className="grid gap-6"><ModuleHero eyebrow="Retail OS" title="TPV y caja operativa" description="El submenú lateral cambia entre creación de ticket, lectura de caja e historial para que el TPV tenga navegación real." actions={<ModulePillTabs tabs={["Nuevo ticket", "Caja", "Historial"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ "Nuevo ticket": "module:tpv:ticket", Caja: "module:tpv:caja", Historial: "module:tpv:historial" } as Record<string, ActiveTab>)[next] || "module:tpv:ticket", setView, next)} />} /><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Store />} label="Caja total" value={`${total.toFixed(2)}€`} helper="Tickets" /><Metric icon={<CreditCard />} label="Tarjeta" value={`${card.toFixed(2)}€`} helper="TPV" /><Metric icon={<Receipt />} label="Efectivo" value={`${cash.toFixed(2)}€`} helper="Caja" /><Metric icon={<Scissors />} label="Servicios" value={services.length} helper="Catálogo" /></div>{view === "Nuevo ticket" && <section className="grid gap-6 xl:grid-cols-[.75fr_1.25fr]"><GlassCard title="Nuevo ticket TPV"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="card">Tarjeta</option><option value="cash">Efectivo</option><option value="bizum">Bizum</option><option value="mixed">Mixto</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ticket: Corte + producto" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Total ticket" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Productos, descuentos, empleado o notas de caja" className="input-dark min-h-32" /><button onClick={() => createRecord("pos", status)} className="btn-primary"><Plus size={17} /> Cobrar y guardar ticket</button></div></GlassCard><GlassCard title="Artículos rápidos"><div className="grid gap-3 md:grid-cols-3">{services.slice(0, 6).map((s) => <div key={s.id} className="rounded-2xl bg-black/25 p-4"><p className="font-medium">{s.name}</p><p className="text-sm text-white/45">{Number(s.price).toFixed(2)}€</p></div>)}</div></GlassCard></section>}{view === "Caja" && <GlassCard title="Resumen de caja"><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Total" value={`${total.toFixed(2)}€`} /><InfoBox label="Efectivo" value={`${cash.toFixed(2)}€`} /><InfoBox label="Tarjeta" value={`${card.toFixed(2)}€`} /></div><div className="mt-5"><RecordsList records={records.slice(0, 12)} deleteRecord={deleteRecord} /></div></GlassCard>}{view === "Historial" && <GlassCard title="Historial de tickets"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard>}</section>;
 }
 
 function CrmModule({
@@ -1853,8 +1880,20 @@ function CrmModule({
   saveCrmReminder,
   completeCrmReminder,
   deleteCrmReminder,
+  activeTab,
+  setActiveTab,
 }: Parameters<typeof ModuleSection>[0]) {
   const [crmView, setCrmView] = useState("Ficha 360");
+
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:crm:", {
+      ficha: "Ficha 360",
+      agenda: "Agenda CRM",
+      pipeline: "Pipeline",
+      hoy: "Hoy",
+      automatizaciones: "Automatizaciones",
+    }, setCrmView);
+  }, [activeTab]);
   const [crmActionTitle, setCrmActionTitle] = useState("");
   const [crmActionNotes, setCrmActionNotes] = useState("");
   const [crmActionDueDate, setCrmActionDueDate] = useState("");
@@ -2059,7 +2098,7 @@ function CrmModule({
             <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">Clientes, agenda, WhatsApp y seguimiento en una ficha 360º.</h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/62">Un CRM operativo para negocios modernos: pipeline, tareas, recordatorios, documentos, llamadas, WhatsApp y decisiones rápidas desde una sola pantalla.</p>
           </div>
-          <ModulePillTabs tabs={["Ficha 360", "Agenda CRM", "Pipeline", "Hoy", "Automatizaciones"]} active={crmView} setActive={setCrmView} />
+          <ModulePillTabs tabs={["Ficha 360", "Agenda CRM", "Pipeline", "Hoy", "Automatizaciones"]} active={crmView} setActive={(tab) => selectModuleSubmenu(setActiveTab, ({ "Ficha 360": "module:crm:ficha", "Agenda CRM": "module:crm:agenda", Pipeline: "module:crm:pipeline", Hoy: "module:crm:hoy", Automatizaciones: "module:crm:automatizaciones" } as Record<string, ActiveTab>)[tab] || "module:crm:ficha", setCrmView, tab)} />
         </div>
       </div>
 
@@ -2533,6 +2572,18 @@ function ModulePillTabs({ tabs, active, setActive }: { tabs: string[]; active: s
   );
 }
 
+function syncModuleSubmenu(activeTab: ActiveTab, prefix: string, mapping: Record<string, string>, setTab: (tab: string) => void) {
+  if (!activeTab.startsWith(prefix)) return;
+  const key = activeTab.slice(prefix.length);
+  const next = mapping[key];
+  if (next) setTab(next);
+}
+
+function selectModuleSubmenu(setActiveTab: (tab: ActiveTab) => void, tab: ActiveTab, setLocalTab: (tab: string) => void, localTab: string) {
+  setLocalTab(localTab);
+  setActiveTab(tab);
+}
+
 function IntegrationPanel({ items }: { items: { name: string; status?: string; detail: string }[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -2552,14 +2603,18 @@ function IntegrationPanel({ items }: { items: { name: string; status?: string; d
   );
 }
 
-function MarketingModule({ records, customers, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+function MarketingModule({ records, customers, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Campañas");
+
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:marketing:", { campanas: "Campañas", canales: "Canales", audiencias: "Audiencias", calendario: "Calendario" }, setTab);
+  }, [activeTab]);
   const budget = records.reduce((s, r) => s + Number(r.amount || 0), 0);
   const activeCampaigns = records.filter((r) => !["done", "paused"].includes(r.status)).length;
   const channels = ["Meta Ads", "Google Ads", "TikTok Ads", "WhatsApp", "Email", "Landing / Pixel"];
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow="Growth OS" title="Marketing conectado al negocio" description="Planifica campañas, controla presupuesto, define canales, prepara creatividades y deja listas las conexiones de redes para cada cliente." actions={<ModulePillTabs tabs={["Campañas", "Canales", "Audiencias", "Calendario"]} active={tab} setActive={setTab} />} />
+      <ModuleHero eyebrow="Growth OS" title="Marketing conectado al negocio" description="Planifica campañas, controla presupuesto, define canales, prepara creatividades y deja listas las conexiones de redes para cada cliente." actions={<ModulePillTabs tabs={["Campañas", "Canales", "Audiencias", "Calendario"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Campañas: "module:marketing:campanas", Canales: "module:marketing:canales", Audiencias: "module:marketing:audiencias", Calendario: "module:marketing:calendario" } as Record<string, ActiveTab>)[next] || "module:marketing:campanas", setTab, next)} />} />
       <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Megaphone />} label="Campañas" value={records.length} helper="Totales" /><Metric icon={<CreditCard />} label="Presupuesto" value={`${budget.toFixed(2)}€`} helper="Planificado" /><Metric icon={<Users />} label="Audiencia CRM" value={customers.length} helper="Clientes" /><Metric icon={<CheckCircle2 />} label="Activas" value={activeCampaigns} helper="En marcha" /></div>
       {tab === "Campañas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva campaña profesional"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="meta">Facebook / Instagram Ads</option><option value="google">Google Ads</option><option value="tiktok">TikTok Ads</option><option value="email">Email Marketing</option><option value="whatsapp">WhatsApp Campaign</option><option value="organic">Contenido orgánico</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaña: Reactivación clientes VIP" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Presupuesto estimado" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Objetivo, público, oferta, fechas, creatividad, KPI principal y responsable" className="input-dark min-h-40" /><button onClick={() => createRecord("marketing", status)} className="btn-primary"><Plus size={17} /> Guardar campaña</button></div></GlassCard><GlassCard title="Pipeline de campañas"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
       {tab === "Canales" && <GlassCard title="Conexiones del cliente"><IntegrationPanel items={channels.map((name) => ({ name, detail: name.includes("Meta") ? "Página, Instagram, pixel y cuenta publicitaria" : name.includes("Google") ? "Google Business Profile, Ads y Analytics" : name.includes("TikTok") ? "Cuenta publicitaria, pixel y eventos" : name.includes("WhatsApp") ? "Plantillas, listas y campañas desde CRM" : name.includes("Email") ? "Dominio, listas y automatizaciones" : "UTMs, eventos y conversiones" }))} /></GlassCard>}
@@ -2569,12 +2624,16 @@ function MarketingModule({ records, customers, title, setTitle, notes, setNotes,
   );
 }
 
-function AiModule({ records, customers, appointments, revenue, title, setTitle, notes, setNotes, createRecord, deleteRecord, businessAvatar }: Parameters<typeof ModuleSection>[0]) {
+function AiModule({ records, customers, appointments, revenue, title, setTitle, notes, setNotes, createRecord, deleteRecord, businessAvatar, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Copiloto");
+
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:ia:", { copiloto: "Copiloto", asistente: "Copiloto", insights: "Copiloto", automatizaciones: "Automatizaciones", prompts: "Prompts", conectores: "Conectores" }, setTab);
+  }, [activeTab]);
   const occupancySignal = appointments.length ? "Datos suficientes" : "Necesita agenda";
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description={businessAvatar?.avatar_name ? `${businessAvatar.avatar_name} es la mascota IA del negocio: analiza CRM, agenda, ventas y campañas para dar notas ejecutivas dentro del panel.` : "Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA."} actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={setTab} />} />
+      <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description={businessAvatar?.avatar_name ? `${businessAvatar.avatar_name} es la mascota IA del negocio: analiza CRM, agenda, ventas y campañas para dar notas ejecutivas dentro del panel.` : "Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA."} actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Copiloto: "module:ia:copiloto", Automatizaciones: "module:ia:automatizaciones", Prompts: "module:ia:prompts", Conectores: "module:ia:conectores" } as Record<string, ActiveTab>)[next] || "module:ia:copiloto", setTab, next)} />} />
       {businessAvatar?.avatar_name && (
         <div className="rounded-[2rem] border border-cyan-300/20 bg-gradient-to-br from-cyan-500/15 via-violet-500/10 to-black/20 p-5 shadow-2xl shadow-cyan-950/20">
           <p className="text-sm uppercase tracking-[0.18em] text-cyan-100/70">Asistente 3D activo</p>
@@ -2591,15 +2650,19 @@ function AiModule({ records, customers, appointments, revenue, title, setTitle, 
   );
 }
 
-function AnalyticsModule({ records, customers, appointments, services, revenue, expenses, manualIncome, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+function AnalyticsModule({ records, customers, appointments, services, revenue, expenses, manualIncome, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Dirección");
+
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:estadisticas:", { direccion: "Dirección", kpis: "Dirección", agenda: "Agenda", finanzas: "Finanzas", informes: "Finanzas", servicios: "Servicios" }, setTab);
+  }, [activeTab]);
   const total = revenue + manualIncome;
   const profit = total - expenses;
   const conversion = customers.length ? Math.round((appointments.length / customers.length) * 100) : 0;
   const byStatus = ["pending", "confirmed", "completed", "cancelled"].map((status) => ({ status, count: appointments.filter((a) => a.status === status).length }));
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow="Business Analytics" title="Panel de métricas sincronizado" description="KPIs del panel principal, agenda, CRM, facturación, TPV y servicios en una capa ejecutiva para dirección." actions={<ModulePillTabs tabs={["Dirección", "Agenda", "Finanzas", "Servicios"]} active={tab} setActive={setTab} />} />
+      <ModuleHero eyebrow="Business Analytics" title="Panel de métricas sincronizado" description="KPIs del panel principal, agenda, CRM, facturación, TPV y servicios en una capa ejecutiva para dirección." actions={<ModulePillTabs tabs={["Dirección", "Agenda", "Finanzas", "Servicios"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Dirección: "module:estadisticas:direccion", Agenda: "module:estadisticas:agenda", Finanzas: "module:estadisticas:finanzas", Servicios: "module:estadisticas:servicios" } as Record<string, ActiveTab>)[next] || "module:estadisticas:direccion", setTab, next)} />} />
       <div className="grid gap-4 md:grid-cols-4"><Metric icon={<TrendingUp />} label="Ingresos" value={`${total.toFixed(2)}€`} helper="Reservas + manual" /><Metric icon={<CreditCard />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /><Metric icon={<Users />} label="Conversión" value={`${conversion}%`} helper="Citas / clientes" /><Metric icon={<FileText />} label="Registros" value={records.length} helper="Análisis guardados" /></div>
       {tab === "Dirección" && <GlassCard title="Scorecard ejecutivo"><div className="grid gap-3 md:grid-cols-3">{["Crecimiento mensual", "Clientes activos", "Ocupación estimada", "Ticket medio", "Retención", "Alertas operativas"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Indicador preparado para histórico avanzado.</p></div>)}</div></GlassCard>}
       {tab === "Agenda" && <GlassCard title="Embudo de citas"><div className="grid gap-3 md:grid-cols-4">{byStatus.map((item) => <InfoBox key={item.status} label={translateStatus(item.status)} value={item.count} />)}</div></GlassCard>}
@@ -2609,18 +2672,23 @@ function AnalyticsModule({ records, customers, appointments, services, revenue, 
   );
 }
 
-function TimeTrackingModule({ records, employees, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+function TimeTrackingModule({ records, employees, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+  const [view, setView] = useState("Fichar");
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:fichaje:", { fichar: "Fichar", jornada: "Jornada", incidencias: "Incidencias" }, setView);
+  }, [activeTab]);
   const today = new Date().toLocaleDateString("es-ES");
   const todayRecords = records.filter((record) => new Date(record.created_at).toLocaleDateString("es-ES") === today);
+  const incidentRecords = records.filter((record) => record.status === "incidencia");
   return <section className="grid gap-6">
-    <ModuleHero eyebrow="Flowly Fichaje" title="Control horario operativo para tu equipo" description="Registra entradas, salidas, pausas, incidencias y observaciones de jornada desde el panel." />
+    <ModuleHero eyebrow="Flowly Fichaje" title="Control horario operativo para tu equipo" description="El submenú lateral permite fichar, revisar la jornada o auditar incidencias sin quedarse en una pantalla estática." actions={<ModulePillTabs tabs={["Fichar", "Jornada", "Incidencias"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Fichar: "module:fichaje:fichar", Jornada: "module:fichaje:jornada", Incidencias: "module:fichaje:incidencias" } as Record<string, ActiveTab>)[next] || "module:fichaje:fichar", setView, next)} />} />
     <div className="grid gap-4 md:grid-cols-4">
       <Metric icon={<Clock />} label="Registros hoy" value={todayRecords.length} helper="Jornada activa" />
       <Metric icon={<Users />} label="Equipo" value={employees.length} helper="Empleados" />
       <Metric icon={<CheckCircle2 />} label="Entradas" value={records.filter((r) => r.status === "entrada").length} helper="Histórico" />
-      <Metric icon={<XCircle />} label="Incidencias" value={records.filter((r) => r.status === "incidencia").length} helper="Revisar" />
+      <Metric icon={<XCircle />} label="Incidencias" value={incidentRecords.length} helper="Revisar" />
     </div>
-    <section className="grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
+    {view === "Fichar" && <section className="grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
       <GlassCard title="Nuevo fichaje">
         <div className="grid gap-3">
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="entrada">Entrada</option><option value="salida">Salida</option><option value="pausa">Pausa</option><option value="vuelta_pausa">Vuelta de pausa</option><option value="incidencia">Incidencia</option></select>
@@ -2629,17 +2697,23 @@ function TimeTrackingModule({ records, employees, title, setTitle, notes, setNot
           <button onClick={() => createRecord("time_tracking", status || "entrada")} className="btn-primary"><Clock size={17} /> Guardar fichaje</button>
         </div>
       </GlassCard>
-      <RecordsCard title="Historial de fichajes" records={records} deleteRecord={deleteRecord} />
-    </section>
+      <RecordsCard title="Últimos fichajes" records={records.slice(0, 8)} deleteRecord={deleteRecord} />
+    </section>}
+    {view === "Jornada" && <GlassCard title="Jornada de hoy"><RecordsList records={todayRecords} deleteRecord={deleteRecord} /></GlassCard>}
+    {view === "Incidencias" && <GlassCard title="Incidencias pendientes"><RecordsList records={incidentRecords} deleteRecord={deleteRecord} /></GlassCard>}
   </section>;
 }
 
-function BookingPremiumModule({ records, employees, services, appointments, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord }: Parameters<typeof ModuleSection>[0]) {
+function BookingPremiumModule({ records, employees, services, appointments, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Reglas");
+
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:reservas-premium:", { reglas: "Reglas", bloqueos: "Bloqueos", experiencia: "Experiencia", conexiones: "Conexiones" }, setTab);
+  }, [activeTab]);
   const activeRules = records.filter((r) => r.status !== "inactive").length;
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow="Booking PRO" title="Reservas premium multinegocio" description="Reglas, políticas, bloqueos, experiencia de reserva y enlaces preparados para que cada cliente adapte el sistema a su negocio." actions={<ModulePillTabs tabs={["Reglas", "Bloqueos", "Experiencia", "Conexiones"]} active={tab} setActive={setTab} />} />
+      <ModuleHero eyebrow="Booking PRO" title="Reservas premium multinegocio" description="Reglas, políticas, bloqueos, experiencia de reserva y enlaces preparados para que cada cliente adapte el sistema a su negocio." actions={<ModulePillTabs tabs={["Reglas", "Bloqueos", "Experiencia", "Conexiones"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Reglas: "module:reservas-premium:reglas", Bloqueos: "module:reservas-premium:bloqueos", Experiencia: "module:reservas-premium:experiencia", Conexiones: "module:reservas-premium:conexiones" } as Record<string, ActiveTab>)[next] || "module:reservas-premium:reglas", setTab, next)} />} />
       <div className="grid gap-4 md:grid-cols-4"><Metric icon={<SlidersHorizontal />} label="Reglas" value={records.length} helper="Configuradas" /><Metric icon={<CheckCircle2 />} label="Activas" value={activeRules} helper="Operativas" /><Metric icon={<UserRound />} label="Equipo" value={employees.length} helper="Profesionales" /><Metric icon={<CalendarDays />} label="Reservas" value={appointments.length} helper="Sincronizadas" /></div>
       {tab === "Reglas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva regla premium"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="active">Activa</option><option value="draft">Borrador</option><option value="inactive">Inactiva</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Antelación mínima 24h" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe condición, horarios, servicios afectados, penalización o mensaje visible al cliente" className="input-dark min-h-40" /><button onClick={() => createRecord("booking_premium", status)} className="btn-primary"><Plus size={17} /> Guardar regla</button></div></GlassCard><GlassCard title="Reglas existentes"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
       {tab === "Bloqueos" && <GlassCard title="Bloqueos y disponibilidad"><div className="grid gap-3 md:grid-cols-3">{["Vacaciones", "Mantenimiento", "Formación interna", "Festivos", "Sobrecupo controlado", "Lista de espera"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Configuración preparada para calendario avanzado.</p></div>)}</div></GlassCard>}
