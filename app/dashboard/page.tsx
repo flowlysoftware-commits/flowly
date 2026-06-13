@@ -1956,6 +1956,53 @@ function CrmModule({
   const selectedLastAppointment = customerAppointments.slice().sort((a, b) => new Date(appointmentDate(b)).getTime() - new Date(appointmentDate(a)).getTime())[0];
   const selectedNextAppointment = customerAppointments.slice().sort((a, b) => new Date(appointmentDate(a)).getTime() - new Date(appointmentDate(b)).getTime()).find((appointment) => new Date(appointmentDate(appointment)).getTime() >= Date.now());
   const selectedNextReminder = customerReminders.find((reminder) => (reminder.status || "pending") === "pending");
+  const crmWeekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(todayStart);
+    date.setDate(todayStart.getDate() + index);
+    const end = new Date(date);
+    end.setDate(date.getDate() + 1);
+    return {
+      date,
+      appointments: appointments.filter((appointment) => {
+        const time = new Date(appointmentDate(appointment)).getTime();
+        return time >= date.getTime() && time < end.getTime();
+      }),
+      reminders: crmReminders.filter((reminder) => {
+        const time = reminderTime(reminder);
+        return (reminder.status || "pending") === "pending" && time >= date.getTime() && time < end.getTime();
+      }),
+    };
+  });
+  const next7Appointments = crmWeekDays.flatMap((day) => day.appointments).length;
+  const urgentCustomers = customers.filter((customer) => {
+    const status = customer.crm_status || "nuevo";
+    return ["nuevo", "contactado", "pendiente_documentacion", "pendiente_cita", "en_llamada"].includes(status) || !customer.next_follow_up_at;
+  });
+  const selectedHealthScore = selectedCustomer
+    ? Math.min(100,
+        18 +
+        (selectedCustomer.phone ? 12 : 0) +
+        (selectedCustomer.email ? 10 : 0) +
+        (selectedCustomer.document_number ? 12 : 0) +
+        (selectedCustomer.crm_status && selectedCustomer.crm_status !== "nuevo" ? 12 : 0) +
+        (selectedNextAppointment ? 14 : 0) +
+        (selectedNextReminder || selectedCustomer.next_follow_up_at ? 12 : 0) +
+        (customerMessages.length ? 5 : 0) +
+        (customerDocs.length ? 5 : 0))
+    : 0;
+  const crmPlaybook = selectedCustomer ? [
+    { label: "Datos de contacto", done: Boolean(selectedCustomer.phone || selectedCustomer.email) },
+    { label: "Documento o identificación", done: Boolean(selectedCustomer.document_number) },
+    { label: "Estado CRM definido", done: Boolean(selectedCustomer.crm_status && selectedCustomer.crm_status !== "nuevo") },
+    { label: "Próximo seguimiento", done: Boolean(selectedNextReminder || selectedCustomer.next_follow_up_at) },
+    { label: "Cita o acción agendada", done: Boolean(selectedNextAppointment || customerRecords.length) },
+  ] : [];
+  const suggestedActions = selectedCustomer ? [
+    { title: "Llamar y clasificar necesidad", notes: `Llamar a ${customerName(selectedCustomer)} para validar interés, urgencia y siguiente paso.`, status: "followup" },
+    { title: "Enviar WhatsApp de seguimiento", notes: `Enviar plantilla personalizada a ${customerName(selectedCustomer)} y registrar respuesta.`, status: "pendiente" },
+    { title: "Agendar cita / demo", notes: `Buscar disponibilidad y dejar cita confirmada para ${customerName(selectedCustomer)}.`, status: "opportunity" },
+    { title: "Solicitar documentación pendiente", notes: `Pedir documento, autorización o información pendiente a ${customerName(selectedCustomer)}.`, status: "pendiente_documentacion" },
+  ] : [];
 
   return (
     <section className="grid gap-6">
@@ -1967,7 +2014,7 @@ function CrmModule({
             <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">Clientes, agenda, WhatsApp y seguimiento en una ficha 360º.</h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/62">Un CRM operativo para negocios modernos: pipeline, tareas, recordatorios, documentos, llamadas, WhatsApp y decisiones rápidas desde una sola pantalla.</p>
           </div>
-          <ModulePillTabs tabs={["Ficha 360", "Pipeline", "Hoy"]} active={crmView} setActive={setCrmView} />
+          <ModulePillTabs tabs={["Ficha 360", "Agenda CRM", "Pipeline", "Hoy", "Automatizaciones"]} active={crmView} setActive={setCrmView} />
         </div>
       </div>
 
@@ -1975,7 +2022,7 @@ function CrmModule({
         <Metric icon={<Users />} label="Clientes CRM" value={customers.length} helper="Base total" />
         <Metric icon={<UserCog />} label="Activos" value={activeCustomers} helper="En gestión" />
         <Metric icon={<CheckCircle2 />} label="Seguimientos" value={pendingFollowups} helper="Acciones abiertas" />
-        <Metric icon={<CalendarDays />} label="Citas" value={scheduled} helper="Agenda conectada" />
+        <Metric icon={<CalendarDays />} label="Citas" value={scheduled} helper={`${next7Appointments} próximos 7 días`} />
         <Metric icon={<Clock />} label="Alertas" value={dueReminders} helper="Vencidas ahora" />
       </div>
 
@@ -1989,6 +2036,103 @@ function CrmModule({
             <InfoBox label="ID" value={incomingVoiceCall.document_number || "No indicado"} />
           </div>
         </div>
+      )}
+
+      {crmView === "Agenda CRM" && (
+        <section className="grid gap-6 xl:grid-cols-[1.45fr_.55fr]">
+          <GlassCard title="Agenda CRM · próximos 7 días">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+              {crmWeekDays.map((day) => (
+                <div key={day.date.toISOString()} className="min-h-56 rounded-3xl border border-white/10 bg-white/[0.045] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">{day.date.toLocaleDateString("es-ES", { weekday: "short" })}</p>
+                  <p className="mt-1 text-2xl font-semibold">{day.date.getDate()}</p>
+                  <div className="mt-4 space-y-2">
+                    {day.appointments.slice(0, 4).map((appointment) => {
+                      const customer = firstRelation(appointment.customers);
+                      const service = firstRelation(appointment.services);
+                      return (
+                        <button key={appointment.id} onClick={() => { if (appointment.customer_id) { setSelectedCrmCustomerId(appointment.customer_id); setCrmView("Ficha 360"); } }} className="w-full rounded-2xl bg-cyan-400/10 p-3 text-left hover:bg-cyan-400/15">
+                          <p className="truncate text-xs font-semibold text-cyan-100">{new Date(appointmentDate(appointment)).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {customerName(customer)}</p>
+                          <p className="mt-1 truncate text-[11px] text-white/45">{service?.name || "Cita CRM"}</p>
+                        </button>
+                      );
+                    })}
+                    {day.reminders.slice(0, 3).map((reminder) => (
+                      <button key={reminder.id} onClick={() => { const id = reminderCustomerId(reminder); if (id) { setSelectedCrmCustomerId(id); setCrmView("Ficha 360"); } }} className="w-full rounded-2xl bg-amber-400/10 p-3 text-left hover:bg-amber-400/15">
+                        <p className="truncate text-xs font-semibold text-amber-100">{new Date(reminderTime(reminder)).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {reminder.title}</p>
+                        <p className="mt-1 truncate text-[11px] text-white/45">{reminderCustomerName(reminder, customers)}</p>
+                      </button>
+                    ))}
+                    {!day.appointments.length && !day.reminders.length && <p className="rounded-2xl border border-dashed border-white/10 p-3 text-center text-[11px] text-white/35">Libre</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+          <div className="grid gap-6">
+            <GlassCard title="Agenda inteligente">
+              <div className="space-y-3">
+                <InfoBox label="Citas 7 días" value={next7Appointments} />
+                <InfoBox label="Alertas abiertas" value={crmWeekDays.flatMap((day) => day.reminders).length} />
+                <InfoBox label="Clientes urgentes" value={urgentCustomers.length} />
+              </div>
+            </GlassCard>
+            <GlassCard title="Prioridad comercial">
+              <div className="space-y-3">
+                {urgentCustomers.slice(0, 8).map((customer) => (
+                  <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]">
+                    <p className="truncate font-semibold">{customerName(customer)}</p>
+                    <p className="mt-1 truncate text-xs text-white/45">{translateCrmStatus(customer.crm_status || "nuevo")} · {customer.phone || "Sin teléfono"}</p>
+                  </button>
+                ))}
+              </div>
+            </GlassCard>
+          </div>
+        </section>
+      )}
+
+      {crmView === "Automatizaciones" && (
+        <section className="grid gap-6 xl:grid-cols-[.7fr_1.3fr]">
+          <GlassCard title="Motor CRM">
+            <p className="text-sm leading-6 text-white/55">Playbooks operativos para que ningún lead se quede sin seguimiento. Estas reglas convierten el CRM en agenda de trabajo diaria.</p>
+            <div className="mt-5 grid gap-3">
+              {[
+                { title: "Nuevo lead sin teléfono", body: "Solicitar contacto válido antes de avanzar de etapa." },
+                { title: "Pendiente documentación", body: "Crear alarma y WhatsApp automático de solicitud." },
+                { title: "Cita creada", body: "Registrar confirmación y seguimiento post-cita." },
+                { title: "Lead sin próximo paso", body: "Enviar a la cola de prioridad del día." },
+              ].map((rule) => (
+                <div key={rule.title} className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                  <p className="font-semibold">{rule.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-white/48">{rule.body}</p>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+          <GlassCard title="Centro de mando de seguimiento">
+            <div className="grid gap-4 md:grid-cols-2">
+              {crmStatusOptions.filter((status) => status.value !== "en_llamada").map((status) => {
+                const list = customers.filter((customer) => (customer.crm_status || "nuevo") === status.value);
+                return (
+                  <div key={status.value} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold">{status.label}</p>
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/65">{list.length}</span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {list.slice(0, 4).map((customer) => (
+                        <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]">
+                          <p className="truncate text-sm font-semibold">{customerName(customer)}</p>
+                          <p className="mt-1 truncate text-xs text-white/42">{customer.next_follow_up_at ? `Próximo paso ${new Date(customer.next_follow_up_at).toLocaleDateString("es-ES")}` : "Sin próximo paso"}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </GlassCard>
+        </section>
       )}
 
       {crmView === "Pipeline" && (
@@ -2108,11 +2252,29 @@ function CrmModule({
                       <button onClick={() => setCrmActionTitle(`Seguimiento · ${customerName(selectedCustomer)}`)} className="btn-secondary"><Plus size={17} /> Tarea</button>
                     </div>
                   </div>
-                  <div className="mt-5 grid gap-3 md:grid-cols-4">
+                  <div className="mt-5 grid gap-3 md:grid-cols-5">
+                    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-cyan-100/70">Score CRM</p>
+                      <div className="mt-3 flex items-end gap-2">
+                        <span className="text-3xl font-semibold text-cyan-50">{selectedHealthScore}</span>
+                        <span className="pb-1 text-sm text-white/45">/100</span>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-300" style={{ width: `${selectedHealthScore}%` }} /></div>
+                    </div>
                     <InfoBox label="Próxima cita" value={selectedNextAppointment ? new Date(appointmentDate(selectedNextAppointment)).toLocaleString("es-ES") : "Sin cita"} />
                     <InfoBox label="Próximo recordatorio" value={selectedNextReminder ? formatReminderDate(selectedNextReminder) : "Sin alarma"} />
                     <InfoBox label="Última cita" value={selectedLastAppointment ? new Date(appointmentDate(selectedLastAppointment)).toLocaleDateString("es-ES") : "Sin historial"} />
                     <InfoBox label="Actividad" value={`${customerRecords.length + customerMessages.length + customerDocs.length} eventos`} />
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-5">
+                    {crmPlaybook.map((step) => (
+                      <div key={step.label} className={`rounded-2xl border p-3 ${step.done ? "border-green-300/20 bg-green-400/10" : "border-white/10 bg-white/[0.045]"}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full ${step.done ? "bg-green-300 text-neutral-950" : "bg-white/10 text-white/45"}`}>{step.done ? <CheckCircle2 size={14} /> : <Clock size={14} />}</span>
+                          <p className="text-xs font-semibold text-white/70">{step.label}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </GlassCard>
 
@@ -2156,6 +2318,17 @@ function CrmModule({
                   </div>
 
                   <div className="grid gap-6">
+                    <GlassCard title="Playbook recomendado">
+                      <div className="space-y-3">
+                        {suggestedActions.map((action) => (
+                          <button key={action.title} onClick={() => { setCrmActionTitle(action.title); setCrmActionNotes(action.notes); }} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] p-4 text-left hover:bg-white/[0.09]">
+                            <p className="font-semibold">{action.title}</p>
+                            <p className="mt-1 line-clamp-2 text-sm leading-6 text-white/48">{action.notes}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </GlassCard>
+
                     <GlassCard title="Acciones rápidas">
                       <div className="grid gap-3">
                         <input value={crmActionTitle} onChange={(e) => setCrmActionTitle(e.target.value)} placeholder="Tarea: llamar, enviar propuesta, confirmar cita..." className="input-dark" />
