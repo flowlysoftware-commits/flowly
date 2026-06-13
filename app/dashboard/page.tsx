@@ -114,6 +114,9 @@ type WhatsappMessage = {
   template_key: string | null;
   message: string;
   status: string | null;
+  direction?: "inbound" | "outbound" | string | null;
+  provider_message_id?: string | null;
+  contact_name?: string | null;
   created_at: string;
 };
 
@@ -1254,6 +1257,7 @@ export default function DashboardPage() {
       phone,
       template_key: templateKey,
       message,
+      direction: "outbound",
       status: "opened",
     });
     if (error) console.error("WHATSAPP HISTORY ERROR", error.message);
@@ -3345,7 +3349,11 @@ function openWhatsappForCustomer(customer: Customer, template: string) {
 }
 
 function WhatsappModule({
+  business,
+  integrations,
+  reloadData,
   customers,
+  whatsappMessages,
   whatsappTemplatesEffective,
   saveWhatsappTemplate,
   deleteWhatsappTemplate,
@@ -3372,6 +3380,11 @@ function WhatsappModule({
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
   const selectedTemplate = templates.find((template) => template.key === selectedTemplateKey) || null;
   const finalMessage = customMessage || (selectedTemplate && selectedCustomer ? whatsappMessageForCustomer(selectedTemplate.message, selectedCustomer) : selectedTemplate?.message || "");
+  const whatsappConnection = integrations.find((integration) => integration.provider_key === "whatsapp_cloud" && integration.status === "connected");
+  const whatsappConfig = (whatsappConnection?.config || {}) as Record<string, unknown>;
+  const displayPhone = String(whatsappConfig.display_phone_number || whatsappConfig.verified_name || whatsappConfig.phone_number_id || "");
+  const conversations = whatsappMessages.slice(0, 12);
+  const [sending, setSending] = useState(false);
 
   const handleSelectTemplate = (key: string) => {
     setSelectedTemplateKey(key);
@@ -3379,11 +3392,48 @@ function WhatsappModule({
     if (template) setCustomMessage(selectedCustomer ? whatsappMessageForCustomer(template.message, selectedCustomer) : template.message);
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
+    if (!business) return alert("No se ha cargado el negocio");
     if (!selectedCustomer) return alert("Selecciona un cliente");
     if (!finalMessage.trim()) return alert("Escribe un mensaje o selecciona una plantilla");
-    if (!openWhatsapp(selectedCustomer.phone, finalMessage)) return alert("Este cliente no tiene teléfono válido para WhatsApp");
-    saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", selectedTemplate?.key || "manual", finalMessage);
+    if (!selectedCustomer.phone) return alert("Este cliente no tiene teléfono válido para WhatsApp");
+
+    if (!whatsappConnection) {
+      const fallback = confirm("WhatsApp Cloud todavía no está conectado. ¿Quieres abrir WhatsApp Web como alternativa manual?");
+      if (fallback && openWhatsapp(selectedCustomer.phone, finalMessage)) {
+        await saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", selectedTemplate?.key || "manual", finalMessage);
+      }
+      return;
+    }
+
+    setSending(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          customerId: selectedCustomer.id,
+          phone: selectedCustomer.phone,
+          templateKey: selectedTemplate?.key || "manual",
+          message: finalMessage,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo enviar el WhatsApp");
+      setCustomMessage("");
+      await reloadData();
+      alert("WhatsApp enviado desde Flowly");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Error enviando WhatsApp");
+    } finally {
+      setSending(false);
+    }
   };
 
   const createTemplate = async () => {
@@ -3443,11 +3493,21 @@ function WhatsappModule({
       <GlassCard>
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">WhatsApp conectado al CRM</p>
-            <h2 className="mt-2 text-3xl font-semibold">Mensajes rápidos y plantillas</h2>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">WhatsApp Cloud API oficial</p>
+            <h2 className="mt-2 text-3xl font-semibold">Conversaciones, plantillas y envío real</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
-              Un módulo limpio: selecciona un cliente del CRM, aplica una plantilla si quieres y termina el mensaje manualmente antes de abrir WhatsApp.
+              Envía WhatsApps desde Flowly usando la cuenta conectada del negocio. Los mensajes entrantes llegan por webhook y quedan guardados en el CRM.
             </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className={whatsappConnection ? "rounded-full border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-100" : "rounded-full border border-amber-300/25 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-100"}>
+                {whatsappConnection ? `Conectado${displayPhone ? ` · ${displayPhone}` : ""}` : "No conectado"}
+              </span>
+              {business && (
+                <Link href={`/api/integrations/connect/whatsapp_cloud?businessId=${business.id}`} className="rounded-full border border-cyan-300/25 bg-cyan-400/10 px-4 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/20">
+                  {whatsappConnection ? "Reconectar WhatsApp" : "Conectar WhatsApp"}
+                </Link>
+              )}
+            </div>
           </div>
           <div className="flex rounded-full border border-white/10 bg-black/25 p-1">
             <button onClick={() => setActiveTab("module:whatsapp:enviar")} className={currentView === "enviar" ? "rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-5 py-2 text-sm text-white/60 hover:text-white"}>Enviar</button>
@@ -3503,8 +3563,25 @@ function WhatsappModule({
               </div>
             )}
 
-            <button onClick={sendMessage} className="btn-primary justify-center">
-              <MessageCircle size={17} /> Abrir WhatsApp
+            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-sm font-semibold">Últimas conversaciones</p>
+              <div className="mt-3 grid gap-2">
+                {conversations.length ? conversations.map((message) => (
+                  <div key={message.id} className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-white/65">{message.contact_name || message.phone || "WhatsApp"}</p>
+                      <p className="mt-1 line-clamp-2 text-sm text-white/80">{message.message}</p>
+                    </div>
+                    <span className={message.direction === "inbound" ? "shrink-0 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-100" : "shrink-0 rounded-full bg-cyan-400/10 px-2.5 py-1 text-[11px] text-cyan-100"}>
+                      {message.direction === "inbound" ? "Recibido" : message.status || "Enviado"}
+                    </span>
+                  </div>
+                )) : <Empty text="Aún no hay conversaciones guardadas." />}
+              </div>
+            </div>
+
+            <button onClick={sendMessage} disabled={sending} className="btn-primary justify-center disabled:cursor-not-allowed disabled:opacity-50">
+              <MessageCircle size={17} /> {sending ? "Enviando..." : whatsappConnection ? "Enviar desde Flowly" : "Abrir WhatsApp manual"}
             </button>
           </div>
         </GlassCard>

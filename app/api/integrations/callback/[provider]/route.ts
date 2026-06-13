@@ -32,6 +32,42 @@ async function exchangeGoogle(code: string, redirectUri: string) {
   return data;
 }
 
+
+async function fetchWhatsappAssets(accessToken: string) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+
+  const businessesResponse = await fetch("https://graph.facebook.com/v19.0/me/businesses?fields=id,name", { headers, cache: "no-store" });
+  const businessesData = await businessesResponse.json().catch(() => ({}));
+  const businesses = Array.isArray(businessesData?.data) ? businessesData.data : [];
+
+  for (const business of businesses) {
+    const wabaResponse = await fetch(`https://graph.facebook.com/v19.0/${business.id}/owned_whatsapp_business_accounts?fields=id,name`, { headers, cache: "no-store" });
+    const wabaData = await wabaResponse.json().catch(() => ({}));
+    const wabas = Array.isArray(wabaData?.data) ? wabaData.data : [];
+
+    for (const waba of wabas) {
+      const phoneResponse = await fetch(`https://graph.facebook.com/v19.0/${waba.id}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating`, { headers, cache: "no-store" });
+      const phoneData = await phoneResponse.json().catch(() => ({}));
+      const phone = Array.isArray(phoneData?.data) ? phoneData.data[0] : null;
+      if (phone?.id) {
+        return {
+          meta_business_id: business.id,
+          meta_business_name: business.name || null,
+          waba_id: waba.id,
+          waba_name: waba.name || null,
+          business_account_id: waba.id,
+          phone_number_id: phone.id,
+          display_phone_number: phone.display_phone_number || null,
+          verified_name: phone.verified_name || null,
+          quality_rating: phone.quality_rating || null,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 async function exchangeMeta(code: string, redirectUri: string) {
   const url = new URL("https://graph.facebook.com/v19.0/oauth/access_token");
   url.searchParams.set("client_id", process.env.META_APP_ID || "");
@@ -59,6 +95,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
       : await exchangeMeta(code, redirectUri);
 
     const providerName = provider.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+    const whatsappAssets = provider === "whatsapp_cloud" && tokenData.access_token
+      ? await fetchWhatsappAssets(tokenData.access_token).catch(() => null)
+      : null;
+
     const { error } = await supabaseAdmin.from("business_integrations").upsert({
       business_id: businessId,
       provider_key: provider,
@@ -71,6 +111,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
         expires_in: tokenData.expires_in || null,
         token_type: tokenData.token_type || "Bearer",
         scope: tokenData.scope || null,
+        ...(whatsappAssets || {}),
       },
       connected_at: new Date().toISOString(),
       last_checked_at: new Date().toISOString(),

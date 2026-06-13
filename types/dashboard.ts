@@ -69,5 +69,8 @@ export type WhatsappMessage = {
   template_key: string | null;
   message: string;
   status: string | null;
+  direction?: "inbound" | "outbound" | string | null;
+  provider_message_id?: string | null;
+  contact_name?: string | null;
   created_at: string;
 };
