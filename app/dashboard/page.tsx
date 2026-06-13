@@ -1660,10 +1660,10 @@ function FloatingAvatarAssistant({
   const spokenMessageRef = useRef("");
 
   const characterPositions = [
-    { x: 82, y: 73, facing: "left" as const, label: "zona derecha", phrase: "Estoy por aquí si necesitas ayuda." },
-    { x: 67, y: 72, facing: "left" as const, label: "panel principal", phrase: "Este panel resume reservas, clientes e ingresos." },
-    { x: 50, y: 73, facing: "right" as const, label: "centro del panel", phrase: "Puedo explicarte cualquier módulo del negocio." },
-    { x: 33, y: 72, facing: "right" as const, label: "menú de módulos", phrase: "A la izquierda tienes CRM, WhatsApp, TPV y más." },
+    { x: 82, y: 74, facing: "left" as const, label: "zona derecha", phrase: "Estoy por aquí si necesitas ayuda." },
+    { x: 68, y: 74, facing: "left" as const, label: "resumen principal", phrase: "Este panel resume reservas, clientes e ingresos." },
+    { x: 54, y: 74, facing: "right" as const, label: "centro del panel", phrase: "Puedo explicarte cualquier módulo del negocio." },
+    { x: 38, y: 74, facing: "right" as const, label: "módulos", phrase: "A la izquierda tienes CRM, WhatsApp, TPV y más." },
   ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
@@ -1695,14 +1695,14 @@ function FloatingAvatarAssistant({
     const destination = characterPositions[next];
     setTravelFacing(destination.x >= origin.x ? "right" : "left");
     setIsWalking(true);
-    setBubbleText("Voy caminando por el panel...");
-    window.setTimeout(() => setPositionIndex(next), 120);
+    setBubbleText("Voy a revisar esa zona del panel...");
+    window.setTimeout(() => setPositionIndex(next), 180);
     window.setTimeout(() => {
       setIsWalking(false);
       const destination = characterPositions[next];
       setBubbleText(destination.phrase);
       after?.();
-    }, 2350);
+    }, 3200);
   };
 
   useEffect(() => {
@@ -1713,27 +1713,35 @@ function FloatingAvatarAssistant({
   useEffect(() => {
     if (typeof window === "undefined" || isHidden || open || tourOpen) return;
 
+    const autonomousPhrases = [
+      "Estoy vigilando que todo esté en orden.",
+      "Puedes preguntarme por CRM, agenda o WhatsApp.",
+      "Si quieres, te hago un tour rápido del panel.",
+      "Me moveré solo por zonas importantes para no molestar."
+    ];
+
     if (autonomousTimerRef.current) window.clearInterval(autonomousTimerRef.current);
     autonomousTimerRef.current = window.setInterval(() => {
+      if (document.hidden) return;
       setPositionIndex((current) => {
         const next = (current + 1) % characterPositions.length;
         const origin = characterPositions[current % characterPositions.length];
         const destination = characterPositions[next];
         setTravelFacing(destination.x >= origin.x ? "right" : "left");
         setIsWalking(true);
-        setBubbleText("Voy a revisar otra zona del panel...");
+        setIsGreeting(false);
+        setBubbleText("Voy a colocarme mejor...");
         window.setTimeout(() => {
           setIsWalking(false);
-          const destination = characterPositions[next];
-          setBubbleText(destination.phrase);
-          if (Math.random() > 0.62) {
+          setBubbleText(autonomousPhrases[Math.floor(Math.random() * autonomousPhrases.length)] || destination.phrase);
+          if (Math.random() > 0.7) {
             setIsGreeting(true);
-            window.setTimeout(() => setIsGreeting(false), 1500);
+            window.setTimeout(() => setIsGreeting(false), 1400);
           }
-        }, 2200);
+        }, 3200);
         return next;
       });
-    }, 12000);
+    }, 18000);
 
     return () => {
       if (autonomousTimerRef.current) window.clearInterval(autonomousTimerRef.current);

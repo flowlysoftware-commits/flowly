@@ -1031,7 +1031,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   z-index: 45;
   display: grid;
   place-items: center;
-  transition: left 2.05s cubic-bezier(.42,0,.18,1), top 2.05s cubic-bezier(.42,0,.18,1), filter .35s ease;
+  transition: left 3.05s cubic-bezier(.33,0,.12,1), top 3.05s cubic-bezier(.33,0,.12,1), filter .35s ease;
   filter: drop-shadow(0 26px 34px rgba(0,0,0,.34));
   perspective: 1200px;
 }
@@ -1135,7 +1135,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   background: radial-gradient(circle, rgba(236,72,153,.24), rgba(34,211,238,.14) 45%, transparent 72%);
 }
 .flowly-3d-character-wrap .flowly-character-hotspot {
-  inset: -2.8rem -1rem auto auto;
+  inset: -3.15rem -1.25rem auto auto;
 }
 .flowly-3d-character-wrap .flowly-character-speech {
   transform: none;
@@ -1146,10 +1146,10 @@ input[type="date"].input-dark { color-scheme: dark; }
   70% { transform: translateY(-1px) scale(.999); }
 }
 @keyframes flowly-3d-step-weight {
-  0%, 100% { transform: translateY(0) rotateZ(-.06deg); }
-  25% { transform: translateY(-.5px) rotateZ(.05deg); }
-  50% { transform: translateY(-1.4px) rotateZ(.06deg); }
-  75% { transform: translateY(-.5px) rotateZ(-.04deg); }
+  0%, 100% { transform: translateY(0) rotateZ(-.04deg); }
+  25% { transform: translateY(-.35px) rotateZ(.035deg); }
+  50% { transform: translateY(-1px) rotateZ(.045deg); }
+  75% { transform: translateY(-.35px) rotateZ(-.035deg); }
 }
 @keyframes flowly-3d-talk {
   0%, 100% { transform: translateY(0) rotateZ(0deg) scale(1); }
