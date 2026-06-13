@@ -160,15 +160,16 @@ function Model({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing
 
     resetRestPose(scene, restPose);
 
-    // Natural neutral pose: arms down, shoulders relaxed, slight body asymmetry.
-    applyEuler(rig.leftShoulder, 0.02, 0, 0.04);
-    applyEuler(rig.rightShoulder, -0.01, 0, -0.04);
-    applyEuler(rig.leftArm, 0.13, 0.04, 1.2);
-    applyEuler(rig.rightArm, 0.13, -0.04, -1.2);
-    applyEuler(rig.leftForeArm, 0.1, 0, 0.22);
-    applyEuler(rig.rightForeArm, 0.1, 0, -0.22);
-    applyEuler(rig.leftHand, 0.04, 0.03, 0.05);
-    applyEuler(rig.rightHand, 0.04, -0.03, -0.05);
+    // Natural neutral pose: very small corrections only.
+    // Evitamos forzar los brazos hacia delante; las animaciones de gesto se aplican solo en wave/talk/point.
+    applyEuler(rig.leftShoulder, 0.0, 0, 0.015);
+    applyEuler(rig.rightShoulder, 0.0, 0, -0.015);
+    applyEuler(rig.leftArm, 0.02, 0.015, 0.18);
+    applyEuler(rig.rightArm, 0.02, -0.015, -0.18);
+    applyEuler(rig.leftForeArm, 0.04, 0, 0.08);
+    applyEuler(rig.rightForeArm, 0.04, 0, -0.08);
+    applyEuler(rig.leftHand, 0.02, 0.02, 0.025);
+    applyEuler(rig.rightHand, 0.02, -0.02, -0.025);
 
     // Always alive: breathing, subtle weight shift, head scans, small hand motion.
     applyEuler(rig.hips, 0, idleShift * 0.014, idleShift * 0.025);
@@ -200,10 +201,10 @@ function Model({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing
       applyEuler(rig.leftToe, Math.max(0, step) * 0.18, 0, 0);
       applyEuler(rig.rightToe, Math.max(0, oppositeStep) * 0.18, 0, 0);
 
-      applyEuler(rig.leftArm, -step * 0.35 - 0.04, 0, -0.02);
-      applyEuler(rig.rightArm, -oppositeStep * 0.35 - 0.04, 0, 0.02);
-      applyEuler(rig.leftForeArm, Math.max(0, step) * 0.18, 0, 0.05);
-      applyEuler(rig.rightForeArm, Math.max(0, oppositeStep) * 0.18, 0, -0.05);
+      applyEuler(rig.leftArm, -step * 0.22 - 0.02, 0, -0.01);
+      applyEuler(rig.rightArm, -oppositeStep * 0.22 - 0.02, 0, 0.01);
+      applyEuler(rig.leftForeArm, Math.max(0, step) * 0.1, 0, 0.025);
+      applyEuler(rig.rightForeArm, Math.max(0, oppositeStep) * 0.1, 0, -0.025);
       applyEuler(rig.neck, Math.abs(stepFast) * -0.025, 0, -step * 0.022);
       applyEuler(rig.head, Math.abs(stepFast) * -0.02, 0, step * 0.018);
     }

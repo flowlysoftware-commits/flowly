@@ -1498,20 +1498,20 @@ function FloatingAvatarAssistant({
   const [positionIndex, setPositionIndex] = useState(0);
   const [isWalking, setIsWalking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isGreeting, setIsGreeting] = useState(false);
   const [hasGreeted, setHasGreeted] = useState(false);
   const spokenMessageRef = useRef("");
 
   const characterPositions = [
-    { left: "auto", right: "1.1rem", bottom: "1.1rem", facing: "left" as const, label: "esquina inferior" },
-    { left: "22rem", right: "auto", bottom: "1.2rem", facing: "right" as const, label: "menú lateral" },
-    { left: "50%", right: "auto", bottom: "0.8rem", facing: "left" as const, label: "centro del panel" },
-    { left: "auto", right: "2.4rem", bottom: "34vh", facing: "left" as const, label: "zona de métricas" },
+    // Fase estable: la mascota permanece anclada como companion de escritorio.
+    // Evitamos desplazamientos artificiales por pantalla hasta que exista navegación 3D real por waypoints.
+    { left: "auto", right: "1.1rem", bottom: "1.1rem", facing: "left" as const, label: "companion" },
   ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
   const characterTransform = currentPosition.left === "50%" ? "translateX(-50%)" : "none";
   const modelUrl = "/avatars/flowly-grandma.glb";
-  const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : tourOpen ? "point" : thinking ? "thinking" : open ? "wave" : "idle";
+  const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : tourOpen ? "point" : thinking ? "thinking" : "idle";
 
   const speak = (text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -1531,19 +1531,15 @@ function FloatingAvatarAssistant({
   };
 
   useEffect(() => {
-    if (open || tourOpen) return;
-    const interval = window.setInterval(() => {
-      setIsWalking(true);
-      setPositionIndex((value) => (value + 1) % characterPositions.length);
-      window.setTimeout(() => setIsWalking(false), 3200);
-    }, 11800);
-    return () => window.clearInterval(interval);
-  }, [open, tourOpen, characterPositions.length]);
+    // Sin roaming automático: mover un modelo 3D de un punto a otro sin trayectorias reales
+    // se percibe como que “flota”. La vida ahora ocurre en el rig: respiración, mirada y gestos.
+    setPositionIndex(0);
+    setIsWalking(false);
+  }, [open, tourOpen]);
 
   useEffect(() => {
     if (!tourOpen || !currentStep) return;
-    setIsWalking(true);
-    window.setTimeout(() => setIsWalking(false), 2400);
+    setIsWalking(false);
     speak(`${currentStep.title}. ${currentStep.body}`);
   }, [tourOpen, tourStep]);
 
@@ -1559,24 +1555,25 @@ function FloatingAvatarAssistant({
   const openAndGreet = () => {
     setOpen(true);
     setIsWalking(false);
+    setIsGreeting(true);
+    window.setTimeout(() => setIsGreeting(false), 2200);
     if (!hasGreeted) {
       setHasGreeted(true);
-      window.setTimeout(() => speak(`Hola, soy ${avatarName}. Puedo caminar por el panel, explicarte los módulos y responder dudas de ${businessName}.`), 220);
+      window.setTimeout(() => speak(`Hola, soy ${avatarName}. Estoy aquí para explicarte los módulos y responder dudas de ${businessName}.`), 220);
     }
   };
 
   const moveCharacter = () => {
     setOpen(false);
-    setIsWalking(true);
-    setPositionIndex((value) => (value + 1) % characterPositions.length);
-    window.setTimeout(() => setIsWalking(false), 3200);
+    setIsWalking(false);
+    setIsGreeting(true);
+    window.setTimeout(() => setIsGreeting(false), 2200);
   };
 
   const startTourWithVoice = () => {
     restartTour();
     setOpen(false);
-    setIsWalking(true);
-    window.setTimeout(() => setIsWalking(false), 2600);
+    setIsWalking(false);
   };
 
   return (

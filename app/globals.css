@@ -1031,7 +1031,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   z-index: 45;
   display: grid;
   place-items: center;
-  transition: left 3.15s linear, right 3.15s linear, bottom 3.15s linear, transform 3.15s linear, filter .35s ease;
+  transition: filter .35s ease;
   filter: drop-shadow(0 26px 34px rgba(0,0,0,.34));
   perspective: 1200px;
 }
@@ -1046,7 +1046,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   cursor: pointer;
   overflow: visible;
   transform-origin: 50% 92%;
-  animation: flowly-3d-breathe 4.4s ease-in-out infinite;
+  animation: flowly-3d-breathe 4.8s ease-in-out infinite;
 }
 .flowly-3d-stage canvas {
   width: 100% !important;
@@ -1094,15 +1094,13 @@ input[type="date"].input-dark { color-scheme: dark; }
   transform: none;
 }
 @keyframes flowly-3d-breathe {
-  0%, 100% { transform: translateY(0) scale(1) rotateX(0deg); }
-  45% { transform: translateY(-3px) scale(1.006) rotateX(.45deg); }
+  0%, 100% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(-2px) scale(1.003); }
   70% { transform: translateY(-1px) scale(.999); }
 }
 @keyframes flowly-3d-walk {
-  0%, 100% { transform: translateY(0) rotateZ(-1.05deg) translateX(-1px); }
-  25% { transform: translateY(-7px) rotateZ(.55deg) translateX(1px); }
-  50% { transform: translateY(0) rotateZ(1.05deg) translateX(2px); }
-  75% { transform: translateY(-7px) rotateZ(-.55deg) translateX(-1px); }
+  0%, 100% { transform: translateY(0) rotateZ(-.25deg); }
+  50% { transform: translateY(-3px) rotateZ(.25deg); }
 }
 @keyframes flowly-3d-talk {
   0%, 100% { transform: translateY(0) rotateZ(0deg) scale(1); }
