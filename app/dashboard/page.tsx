@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -1504,75 +1505,111 @@ function FloatingAvatarAssistant({
   const currentStep = tourSteps[tourStep];
   const [positionIndex, setPositionIndex] = useState(0);
   const [isWalking, setIsWalking] = useState(false);
-  const [characterMode, setCharacterMode] = useState<"idle" | "thinking" | "talking" | "tour">("idle");
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [hasGreeted, setHasGreeted] = useState(false);
+  const spokenMessageRef = useRef("");
 
   const characterPositions = [
-    { left: "auto", right: "2.2rem", bottom: "2rem", facing: "left" },
-    { left: "2.2rem", right: "auto", bottom: "2.2rem", facing: "right" },
-    { left: "50%", right: "auto", bottom: "1.5rem", facing: "left" },
-    { left: "auto", right: "2.6rem", bottom: "38vh", facing: "left" },
-  ] as const;
+    { left: "auto", right: "1.1rem", bottom: "1.1rem", facing: "left" as const, label: "esquina inferior" },
+    { left: "1.1rem", right: "auto", bottom: "1.2rem", facing: "right" as const, label: "menú lateral" },
+    { left: "50%", right: "auto", bottom: "0.8rem", facing: "left" as const, label: "centro del panel" },
+    { left: "auto", right: "2.4rem", bottom: "34vh", facing: "left" as const, label: "zona de métricas" },
+  ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
   const characterTransform = `${currentPosition.left === "50%" ? "translateX(-50%) " : ""}${currentPosition.facing === "right" ? "scaleX(-1)" : "scaleX(1)"}`;
+  const modelUrl = "/avatars/flowly-grandma.glb";
+  const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : tourOpen ? "point" : thinking ? "thinking" : open ? "wave" : "idle";
 
-  useEffect(() => {
-    setCharacterMode(tourOpen ? "tour" : thinking ? "thinking" : open ? "talking" : "idle");
-  }, [open, thinking, tourOpen]);
+  const speak = (text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const cleaned = text.replace(/\s+/g, " ").trim().slice(0, 260);
+    if (!cleaned) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.lang = "es-ES";
+    utterance.rate = 1.02;
+    utterance.pitch = 1.06;
+    utterance.volume = 0.85;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  };
 
   useEffect(() => {
     if (open || tourOpen) return;
     const interval = window.setInterval(() => {
       setIsWalking(true);
       setPositionIndex((value) => (value + 1) % characterPositions.length);
-      window.setTimeout(() => setIsWalking(false), 1800);
-    }, 7600);
+      window.setTimeout(() => setIsWalking(false), 2100);
+    }, 7800);
     return () => window.clearInterval(interval);
   }, [open, tourOpen, characterPositions.length]);
+
+  useEffect(() => {
+    if (!tourOpen || !currentStep) return;
+    setIsWalking(true);
+    window.setTimeout(() => setIsWalking(false), 1200);
+    speak(`${currentStep.title}. ${currentStep.body}`);
+  }, [tourOpen, tourStep]);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant") return;
+    const key = `${messages.length}-${last.content}`;
+    if (spokenMessageRef.current === key) return;
+    spokenMessageRef.current = key;
+    speak(last.content);
+  }, [messages]);
 
   const openAndGreet = () => {
     setOpen(true);
     setIsWalking(false);
+    if (!hasGreeted) {
+      setHasGreeted(true);
+      window.setTimeout(() => speak(`Hola, soy ${avatarName}. Puedo caminar por el panel, explicarte los módulos y responder dudas de ${businessName}.`), 220);
+    }
+  };
+
+  const moveCharacter = () => {
+    setOpen(false);
+    setIsWalking(true);
+    setPositionIndex((value) => (value + 1) % characterPositions.length);
+    window.setTimeout(() => setIsWalking(false), 2100);
+  };
+
+  const startTourWithVoice = () => {
+    restartTour();
+    setOpen(false);
+    setIsWalking(true);
+    window.setTimeout(() => setIsWalking(false), 1300);
   };
 
   return (
     <>
       <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
         <div
-          className={`flowly-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} is-${characterMode}`}
+          className={`flowly-3d-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} ${isSpeaking ? "is-speaking" : ""} ${tourOpen ? "is-tour" : ""}`}
           style={{ left: currentPosition.left, right: currentPosition.right, bottom: currentPosition.bottom, transform: characterTransform }}
         >
           {!open && !tourOpen && (
             <button onClick={openAndGreet} className="flowly-character-hotspot" aria-label={`Hablar con ${avatarName}`}>
               <div className="flowly-character-speech">
-                <p>¿Te ayudo?</p>
-                <span>Habla conmigo o empieza el tour</span>
+                <p>Hola 👋</p>
+                <span>Camino, hablo y te enseño Flowly</span>
               </div>
             </button>
           )}
 
-          <button onClick={openAndGreet} className="flowly-character-body" aria-label={`Abrir asistente ${avatarName}`}>
-            <div className="flowly-character-aura" />
-            <div className="flowly-character-halo" />
-            <div className="flowly-character-rig" aria-hidden="true">
-              <span className="flowly-character-arm flowly-character-arm-left" />
-              <span className="flowly-character-arm flowly-character-arm-right" />
-              <span className="flowly-character-leg flowly-character-leg-left" />
-              <span className="flowly-character-leg flowly-character-leg-right" />
-            </div>
-            <div className="flowly-character-image-shell">
-              {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-character-image" /> : <Bot className="relative z-10 text-cyan-100" size={74} />}
-            </div>
-            <div className="flowly-character-feet">
-              <span />
-              <span />
-            </div>
-            <div className="flowly-character-shadow" />
-          </button>
+          <div className="flowly-3d-light-rim" />
+          <FlowlyAssistant3D modelUrl={modelUrl} mode={characterMode} facing={currentPosition.facing} onClick={openAndGreet} />
+          <div className="flowly-3d-ground-shadow" />
 
           <div className="flowly-character-status">
             <span className="flowly-character-dot" />
-            {characterMode === "thinking" ? "pensando" : characterMode === "tour" ? "tour activo" : characterMode === "talking" ? "en conversación" : "asistente IA"}
+            {isSpeaking ? "hablando" : isWalking ? "caminando" : tourOpen ? "tour activo" : thinking ? "pensando" : "asistente 3D"}
           </div>
         </div>
       </div>
@@ -1595,7 +1632,7 @@ function FloatingAvatarAssistant({
                 <p className="mt-3 text-sm leading-6 text-white/62">{currentStep.body}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button onClick={nextTourStep} className="btn-primary py-2 text-sm">{currentStep.cta} <ChevronRight size={16} /></button>
-                  <button onClick={() => { setActiveTab(currentStep.target); }} className="btn-secondary py-2 text-sm">Ir ahora</button>
+                  <button onClick={() => { setActiveTab(currentStep.target); moveCharacter(); }} className="btn-secondary py-2 text-sm">Ir ahora</button>
                   <button onClick={() => { setOpen(true); closeTour(); }} className="btn-secondary py-2 text-sm">Preguntar</button>
                 </div>
               </div>
@@ -1610,8 +1647,8 @@ function FloatingAvatarAssistant({
                 <div className="flex items-center gap-3">
                   <div className="flowly-avatar-stage-mini">{avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img-mini" /> : <Bot size={24} />}</div>
                   <div>
-                    <p className="text-sm font-semibold text-white">{avatarName}, asistente de {businessName}</p>
-                    <p className="text-xs text-cyan-100/55">Camino por el panel, hago tours y respondo dudas operativas.</p>
+                    <p className="text-sm font-semibold text-white">{avatarName}, asistente 3D de {businessName}</p>
+                    <p className="text-xs text-cyan-100/55">Voz del navegador, tour guiado y consultas del panel.</p>
                   </div>
                 </div>
                 <button onClick={() => setOpen(false)} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/10"><X size={16} /></button>
@@ -1629,8 +1666,8 @@ function FloatingAvatarAssistant({
 
             <div className="border-t border-white/10 p-4">
               <div className="mb-3 flex flex-wrap gap-2">
-                {["Hazme un tour", "¿Cómo envío WhatsApp?", "¿Qué clientes debo revisar?", "Muévete por el panel"].map((quick) => (
-                  <button key={quick} onClick={() => quick === "Hazme un tour" ? restartTour() : quick === "Muévete por el panel" ? (setOpen(false), setIsWalking(true), setPositionIndex((value) => (value + 1) % characterPositions.length), window.setTimeout(() => setIsWalking(false), 1800)) : setQuestion(quick)} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/65 hover:bg-white/10">{quick}</button>
+                {["Hazme un tour", "¿Cómo envío WhatsApp?", "¿Qué clientes debo revisar?", "Camina por el panel"].map((quick) => (
+                  <button key={quick} onClick={() => quick === "Hazme un tour" ? startTourWithVoice() : quick === "Camina por el panel" ? moveCharacter() : setQuestion(quick)} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/65 hover:bg-white/10">{quick}</button>
                 ))}
               </div>
               <div className="flex gap-2">

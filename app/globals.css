@@ -1022,3 +1022,109 @@ input[type="date"].input-dark { color-scheme: dark; }
   .flowly-character-wrap { width: 8.4rem; height: 12.8rem; }
   .flowly-character-rig { opacity: .58; }
 }
+
+/* Mascota IA 4.0 · personaje 3D real en WebGL */
+.flowly-3d-character-wrap {
+  position: fixed;
+  width: clamp(13rem, 16vw, 19rem);
+  height: clamp(18rem, 25vw, 29rem);
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  transition: left 1.65s cubic-bezier(.22, 1, .36, 1), right 1.65s cubic-bezier(.22, 1, .36, 1), bottom 1.65s cubic-bezier(.22, 1, .36, 1), transform 1.65s cubic-bezier(.22, 1, .36, 1), filter .35s ease;
+  filter: drop-shadow(0 34px 48px rgba(0,0,0,.42));
+  perspective: 1200px;
+}
+.flowly-3d-stage {
+  position: relative;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  overflow: visible;
+  transform-origin: 50% 92%;
+  animation: flowly-3d-breathe 4.4s ease-in-out infinite;
+}
+.flowly-3d-stage canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  background: transparent !important;
+}
+.flowly-3d-light-rim {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 4%;
+  z-index: 1;
+  height: 24%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(34,211,238,.22), rgba(139,92,246,.10) 45%, transparent 72%);
+  filter: blur(22px);
+  opacity: .95;
+  animation: flowly-3d-glow 3.8s ease-in-out infinite;
+}
+.flowly-3d-ground-shadow {
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  bottom: 3.5%;
+  z-index: 2;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: radial-gradient(ellipse, rgba(0,0,0,.42), transparent 70%);
+  animation: flowly-3d-shadow 3.8s ease-in-out infinite;
+}
+.flowly-3d-character-wrap.is-walking .flowly-3d-stage {
+  animation: flowly-3d-walk 0.62s cubic-bezier(.45,0,.55,1) infinite;
+}
+.flowly-3d-character-wrap.is-speaking .flowly-3d-stage {
+  animation: flowly-3d-talk 0.86s ease-in-out infinite;
+}
+.flowly-3d-character-wrap.is-tour .flowly-3d-light-rim {
+  background: radial-gradient(circle, rgba(236,72,153,.24), rgba(34,211,238,.14) 45%, transparent 72%);
+}
+.flowly-3d-character-wrap .flowly-character-hotspot {
+  inset: -2.6rem -1.2rem auto auto;
+}
+.flowly-3d-character-wrap .flowly-character-speech {
+  transform: scaleX(var(--speech-scale, 1));
+}
+@keyframes flowly-3d-breathe {
+  0%, 100% { transform: translateY(0) scale(1) rotateX(0deg); }
+  45% { transform: translateY(-5px) scale(1.012) rotateX(1.2deg); }
+  70% { transform: translateY(-2px) scale(.998); }
+}
+@keyframes flowly-3d-walk {
+  0%, 100% { transform: translateY(0) rotateZ(-1.7deg); }
+  25% { transform: translateY(-10px) rotateZ(.9deg); }
+  50% { transform: translateY(0) rotateZ(1.7deg); }
+  75% { transform: translateY(-10px) rotateZ(-.9deg); }
+}
+@keyframes flowly-3d-talk {
+  0%, 100% { transform: translateY(0) rotateZ(0deg) scale(1); }
+  35% { transform: translateY(-4px) rotateZ(-.45deg) scale(1.012); }
+  70% { transform: translateY(1px) rotateZ(.45deg) scale(.998); }
+}
+@keyframes flowly-3d-glow {
+  0%, 100% { opacity: .62; transform: scale(.9); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes flowly-3d-shadow {
+  0%, 100% { opacity: .48; transform: scaleX(1); }
+  50% { opacity: .24; transform: scaleX(.72); }
+}
+@media (max-width: 768px) {
+  .flowly-3d-character-wrap {
+    width: 10.5rem;
+    height: 15.5rem;
+    right: .35rem !important;
+    left: auto !important;
+    bottom: .75rem !important;
+    transform: scaleX(1) !important;
+  }
+  .flowly-3d-character-wrap .flowly-character-speech { display: none; }
+}
