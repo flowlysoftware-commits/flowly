@@ -1654,13 +1654,15 @@ function FloatingAvatarAssistant({
   const [isGreeting, setIsGreeting] = useState(false);
   const [hasGreeted, setHasGreeted] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
+  const [bubbleText, setBubbleText] = useState("Hola 👋");
+  const autonomousTimerRef = useRef<number | null>(null);
   const spokenMessageRef = useRef("");
 
   const characterPositions = [
-    { x: 84, y: 74, facing: "left" as const, label: "companion" },
-    { x: 72, y: 73, facing: "left" as const, label: "panel principal" },
-    { x: 55, y: 74, facing: "right" as const, label: "centro del panel" },
-    { x: 34, y: 72, facing: "right" as const, label: "módulos" },
+    { x: 82, y: 73, facing: "left" as const, label: "zona derecha", phrase: "Estoy por aquí si necesitas ayuda." },
+    { x: 67, y: 72, facing: "left" as const, label: "panel principal", phrase: "Este panel resume reservas, clientes e ingresos." },
+    { x: 50, y: 73, facing: "right" as const, label: "centro del panel", phrase: "Puedo explicarte cualquier módulo del negocio." },
+    { x: 33, y: 72, facing: "right" as const, label: "menú de módulos", phrase: "A la izquierda tienes CRM, WhatsApp, TPV y más." },
   ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
@@ -1678,6 +1680,7 @@ function FloatingAvatarAssistant({
     utterance.rate = 1.02;
     utterance.pitch = 1.06;
     utterance.volume = 0.85;
+    setBubbleText(cleaned);
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
@@ -1685,18 +1688,47 @@ function FloatingAvatarAssistant({
   };
 
   const walkTo = (index: number, after?: () => void) => {
-    setPositionIndex(index % characterPositions.length);
+    const next = index % characterPositions.length;
     setIsWalking(true);
+    window.setTimeout(() => setPositionIndex(next), 90);
     window.setTimeout(() => {
       setIsWalking(false);
+      const destination = characterPositions[next];
+      setBubbleText(destination.phrase);
       after?.();
-    }, 2400);
+    }, 2350);
   };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     setIsHidden(window.localStorage.getItem("flowly-assistant-3d-hidden") === "1");
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isHidden || open || tourOpen) return;
+
+    if (autonomousTimerRef.current) window.clearInterval(autonomousTimerRef.current);
+    autonomousTimerRef.current = window.setInterval(() => {
+      setPositionIndex((current) => {
+        const next = (current + 1) % characterPositions.length;
+        setIsWalking(true);
+        window.setTimeout(() => {
+          setIsWalking(false);
+          const destination = characterPositions[next];
+          setBubbleText(destination.phrase);
+          if (Math.random() > 0.62) {
+            setIsGreeting(true);
+            window.setTimeout(() => setIsGreeting(false), 1500);
+          }
+        }, 2200);
+        return next;
+      });
+    }, 12000);
+
+    return () => {
+      if (autonomousTimerRef.current) window.clearInterval(autonomousTimerRef.current);
+    };
+  }, [isHidden, open, tourOpen]);
 
   useEffect(() => {
     if (hasGreeted || isHidden) return;
@@ -1727,6 +1759,7 @@ function FloatingAvatarAssistant({
     setOpen(true);
     setIsWalking(false);
     setPositionIndex(0);
+    setBubbleText(`Hola, soy ${avatarName}.`);
     setIsGreeting(true);
     window.setTimeout(() => setIsGreeting(false), 2200);
     if (!hasGreeted) {
@@ -1742,6 +1775,7 @@ function FloatingAvatarAssistant({
     setIsWalking(false);
     setIsGreeting(false);
     setIsSpeaking(false);
+    setBubbleText("Hola 👋");
     setIsHidden(true);
     if (typeof window !== "undefined") window.localStorage.setItem("flowly-assistant-3d-hidden", "1");
   };
@@ -1751,6 +1785,7 @@ function FloatingAvatarAssistant({
     const nextIndex = (positionIndex + 1) % characterPositions.length;
     walkTo(nextIndex, () => {
       if (nextIndex === 1) return;
+      setBubbleText(characterPositions[nextIndex].phrase);
       setIsGreeting(true);
       window.setTimeout(() => setIsGreeting(false), 1700);
     });
@@ -1784,8 +1819,8 @@ function FloatingAvatarAssistant({
           {!open && !tourOpen && (
             <button onClick={openAndGreet} className="flowly-character-hotspot" aria-label={`Hablar con ${avatarName}`}>
               <div className="flowly-character-speech">
-                <p>Hola 👋</p>
-                <span>Camino, hablo y te enseño Flowly</span>
+                <p>{isSpeaking ? "Te escucho" : isWalking ? "Voy para allá" : isGreeting ? "Hola 👋" : avatarName}</p>
+                <span>{bubbleText}</span>
               </div>
             </button>
           )}

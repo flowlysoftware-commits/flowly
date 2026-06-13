@@ -147,17 +147,20 @@ function Model({
     // Neutral pose: keep shoulders relaxed and elbows close to the body.
     // The original Mixamo rest pose is very close to a T-pose; these offsets intentionally
     // pull the arms down and slightly back so she does not look like she is holding them forward.
-    const leftArmDown = 0.95;
-    const rightArmDown = -0.95;
-    const leftForeArmRelax = 0.46;
-    const rightForeArmRelax = -0.46;
+    // Mixamo imports the grandma in a broad T-pose. Keep the shoulders clearly down by default.
+    // The previous values were too close to the rest pose and visually looked like both arms
+    // were pushed forward. These offsets intentionally make the default silhouette relaxed.
+    const leftArmDown = 1.72;
+    const rightArmDown = -1.72;
+    const leftForeArmRelax = 0.18;
+    const rightForeArmRelax = -0.18;
 
     let leftArmZ = leftArmDown;
     let rightArmZ = rightArmDown;
-    let leftArmX = -0.12 + breathe * 0.018;
-    let rightArmX = -0.12 - breathe * 0.018;
-    let leftArmY = -0.08;
-    let rightArmY = 0.08;
+    let leftArmX = 0.08 + breathe * 0.014;
+    let rightArmX = 0.08 - breathe * 0.014;
+    let leftArmY = -0.18;
+    let rightArmY = 0.18;
     let leftForeArmZ = leftForeArmRelax;
     let rightForeArmZ = rightForeArmRelax;
     let leftHandZ = 0;
@@ -165,40 +168,40 @@ function Model({
 
     if (isWalking) {
       // Short, soft arm swing that follows the step cycle without becoming robotic.
-      leftArmX += walkOpposite * 0.18;
-      rightArmX += walkCycle * 0.18;
-      leftArmY += walkOpposite * 0.045;
-      rightArmY += walkCycle * 0.045;
-      leftForeArmZ += walkOpposite * 0.05;
-      rightForeArmZ += walkCycle * 0.05;
+      leftArmX += walkOpposite * 0.14;
+      rightArmX += walkCycle * 0.14;
+      leftArmY += walkOpposite * 0.028;
+      rightArmY += walkCycle * 0.028;
+      leftForeArmZ += walkOpposite * 0.035;
+      rightForeArmZ += walkCycle * 0.035;
     }
 
     if (isSpeaking) {
       // Small conversational gestures, not constant big waving.
-      leftArmZ = 1.48 + Math.sin(t * 3.1) * 0.035;
-      rightArmZ = -1.48 + Math.sin(t * 2.7) * 0.035;
-      leftArmX += 0.06 + Math.sin(t * 4.3) * 0.035;
-      rightArmX += 0.05 + Math.sin(t * 4.0 + 0.8) * 0.035;
-      leftForeArmZ += Math.sin(t * 5.3) * 0.055;
-      rightForeArmZ += Math.sin(t * 5.1) * 0.055;
+      leftArmZ = 1.56 + Math.sin(t * 3.1) * 0.045;
+      rightArmZ = -1.56 + Math.sin(t * 2.7) * 0.045;
+      leftArmX += 0.08 + Math.sin(t * 4.3) * 0.03;
+      rightArmX += 0.08 + Math.sin(t * 4.0 + 0.8) * 0.03;
+      leftForeArmZ += 0.1 + Math.sin(t * 5.3) * 0.045;
+      rightForeArmZ -= 0.1 + Math.sin(t * 5.1) * 0.045;
     }
 
     if (isWaving) {
       // One clear greeting: right arm up, relaxed left arm down.
-      rightArmZ = -0.62;
-      rightArmX = -0.48;
-      rightArmY = 0.16;
-      rightForeArmZ = -0.86 + Math.sin(t * 7.5) * 0.16;
+      rightArmZ = -0.72;
+      rightArmX = -0.38;
+      rightArmY = 0.12;
+      rightForeArmZ = -0.92 + Math.sin(t * 7.5) * 0.16;
       rightHandZ = Math.sin(t * 9.5) * 0.18;
     }
 
     if (isPointing) {
-      rightArmZ = -0.92;
-      rightArmX = -0.18;
-      rightArmY = 0.12;
-      rightForeArmZ = -0.36;
-      leftArmZ = 1.56;
-      leftForeArmZ = 0.4;
+      rightArmZ = -0.98;
+      rightArmX = -0.1;
+      rightArmY = 0.1;
+      rightForeArmZ = -0.42;
+      leftArmZ = 1.72;
+      leftForeArmZ = 0.16;
     }
 
     applyOffset(basePose, rig.leftArm, leftArmX, leftArmY, leftArmZ);
@@ -234,12 +237,12 @@ function Model({
 
     const bodyBob = isWalking ? Math.abs(walkCycle) * 0.035 : breathe * 0.012;
     group.current.position.set(0, -1.34 + bodyBob, 0);
-    group.current.rotation.set(0, facing === "right" ? -0.34 : 0.34, slow * 0.004);
+    group.current.rotation.set(0, facing === "right" ? 0.34 : -0.34, slow * 0.004);
     group.current.scale.setScalar(1.18);
   });
 
   return (
-    <group ref={group} position={[0, -1.34, 0]} rotation={[0, facing === "right" ? -0.34 : 0.34, 0]} scale={1.18}>
+    <group ref={group} position={[0, -1.34, 0]} rotation={[0, facing === "right" ? 0.34 : -0.34, 0]} scale={1.18}>
       <primitive object={scene} />
     </group>
   );
