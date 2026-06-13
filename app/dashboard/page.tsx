@@ -1653,13 +1653,14 @@ function FloatingAvatarAssistant({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isGreeting, setIsGreeting] = useState(false);
   const [hasGreeted, setHasGreeted] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const spokenMessageRef = useRef("");
 
   const characterPositions = [
-    { x: 86, y: 73, facing: "left" as const, label: "companion" },
-    { x: 74, y: 68, facing: "left" as const, label: "panel principal" },
-    { x: 49, y: 70, facing: "right" as const, label: "centro del panel" },
-    { x: 30, y: 64, facing: "right" as const, label: "módulos" },
+    { x: 84, y: 74, facing: "left" as const, label: "companion" },
+    { x: 72, y: 73, facing: "left" as const, label: "panel principal" },
+    { x: 55, y: 74, facing: "right" as const, label: "centro del panel" },
+    { x: 34, y: 72, facing: "right" as const, label: "módulos" },
   ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
@@ -1693,12 +1694,17 @@ function FloatingAvatarAssistant({
   };
 
   useEffect(() => {
-    if (hasGreeted) return;
+    if (typeof window === "undefined") return;
+    setIsHidden(window.localStorage.getItem("flowly-assistant-3d-hidden") === "1");
+  }, []);
+
+  useEffect(() => {
+    if (hasGreeted || isHidden) return;
     const helloTimer = window.setTimeout(() => openAndGreet(), 900);
     return () => {
       window.clearTimeout(helloTimer);
     };
-  }, [hasGreeted]);
+  }, [hasGreeted, isHidden]);
 
   useEffect(() => {
     if (!tourOpen || !currentStep) return;
@@ -1716,6 +1722,8 @@ function FloatingAvatarAssistant({
   }, [messages]);
 
   const openAndGreet = () => {
+    setIsHidden(false);
+    if (typeof window !== "undefined") window.localStorage.removeItem("flowly-assistant-3d-hidden");
     setOpen(true);
     setIsWalking(false);
     setPositionIndex(0);
@@ -1725,6 +1733,17 @@ function FloatingAvatarAssistant({
       setHasGreeted(true);
       window.setTimeout(() => speak(`Hola, soy ${avatarName}. Estoy aquí para explicarte los módulos y responder dudas de ${businessName}.`), 220);
     }
+  };
+
+  const hideAssistant = () => {
+    window.speechSynthesis?.cancel();
+    setOpen(false);
+    closeTour();
+    setIsWalking(false);
+    setIsGreeting(false);
+    setIsSpeaking(false);
+    setIsHidden(true);
+    if (typeof window !== "undefined") window.localStorage.setItem("flowly-assistant-3d-hidden", "1");
   };
 
   const moveCharacter = () => {
@@ -1743,6 +1762,14 @@ function FloatingAvatarAssistant({
     walkTo(2);
   };
 
+  if (isHidden) {
+    return (
+      <button type="button" onClick={openAndGreet} className="flowly-3d-restore-button">
+        Mostrar asistente 3D
+      </button>
+    );
+  }
+
   return (
     <>
       <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
@@ -1750,6 +1777,10 @@ function FloatingAvatarAssistant({
           className={`flowly-3d-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} ${isSpeaking ? "is-speaking" : ""} ${tourOpen ? "is-tour" : ""}`}
           style={{ left: `${currentPosition.x}%`, top: `${currentPosition.y}%`, transform: "translate(-50%, -50%)" }}
         >
+          <button type="button" onClick={hideAssistant} className="flowly-3d-close-button" aria-label="Ocultar asistente 3D">
+            <X size={14} />
+          </button>
+
           {!open && !tourOpen && (
             <button onClick={openAndGreet} className="flowly-character-hotspot" aria-label={`Hablar con ${avatarName}`}>
               <div className="flowly-character-speech">
@@ -1765,7 +1796,7 @@ function FloatingAvatarAssistant({
 
           <div className="flowly-character-status">
             <span className="flowly-character-dot" />
-            {isSpeaking ? "hablando" : isWalking ? "caminando" : tourOpen ? "tour activo" : thinking ? "pensando" : "asistente 3D"}
+            {isSpeaking ? "hablando" : isWalking ? "caminando" : tourOpen ? "tour activo" : thinking ? "pensando" : "lista"}
           </div>
         </div>
       </div>
