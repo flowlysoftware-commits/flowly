@@ -96,6 +96,53 @@ function applyOffset(basePose: Map<string, THREE.Quaternion>, object: THREE.Obje
   object.quaternion.copy(base).multiply(tempQuaternion);
 }
 
+const targetVec = new THREE.Vector3();
+const targetVec2 = new THREE.Vector3();
+const targetVec3 = new THREE.Vector3();
+const parentWorldQuat = new THREE.Quaternion();
+const parentWorldQuatInv = new THREE.Quaternion();
+const desiredLocalDir = new THREE.Vector3();
+const restAxisLocal = new THREE.Vector3();
+const restAxisAfterBase = new THREE.Vector3();
+const deltaQuat = new THREE.Quaternion();
+const finalQuat = new THREE.Quaternion();
+const baseWorldA = new THREE.Vector3();
+const baseWorldB = new THREE.Vector3();
+
+function getRestSideDirection(bone: THREE.Object3D | undefined, child: THREE.Object3D | undefined) {
+  if (!bone || !child) return new THREE.Vector3(1, 0, 0);
+  bone.getWorldPosition(baseWorldA);
+  child.getWorldPosition(baseWorldB);
+  const side = new THREE.Vector3().copy(baseWorldB).sub(baseWorldA).setY(0);
+  if (side.lengthSq() < 0.0001) side.set(1, 0, 0);
+  return side.normalize();
+}
+
+function aimBoneToWorldDirection(
+  basePose: Map<string, THREE.Quaternion>,
+  bone: THREE.Object3D | undefined,
+  child: THREE.Object3D | undefined,
+  targetWorldDirection: THREE.Vector3,
+  influence = 1,
+) {
+  if (!bone || !child || !bone.parent) return;
+  const base = basePose.get(bone.uuid);
+  if (!base) return;
+
+  restAxisLocal.copy(child.position).normalize();
+  if (restAxisLocal.lengthSq() < 0.0001) return;
+
+  bone.parent.getWorldQuaternion(parentWorldQuat);
+  parentWorldQuatInv.copy(parentWorldQuat).invert();
+  desiredLocalDir.copy(targetWorldDirection).normalize().applyQuaternion(parentWorldQuatInv).normalize();
+
+  restAxisAfterBase.copy(restAxisLocal).applyQuaternion(base).normalize();
+  deltaQuat.setFromUnitVectors(restAxisAfterBase, desiredLocalDir);
+  finalQuat.copy(deltaQuat).multiply(base).normalize();
+
+  bone.quaternion.copy(base).slerp(finalQuat, THREE.MathUtils.clamp(influence, 0, 1));
+}
+
 function Model({
   modelUrl = "/avatars/flowly-grandma.glb",
   mode = "idle",
@@ -144,75 +191,50 @@ function Model({
       if (object && base) object.quaternion.copy(base);
     });
 
-    // Neutral pose: keep shoulders relaxed and elbows close to the body.
-    // IMPORTANT: the Mixamo grandma GLB uses opposite Z signs for each shoulder.
-    // Negative Z lowers the left arm; positive Z lowers the right arm.
-    // Previous patches used the inverse signs and pushed both arms upward/forward.
-    // The original Mixamo rest pose is very close to a T-pose; these offsets intentionally
-    // pull the arms down and slightly back so she does not look like she is holding them forward.
-    // Mixamo imports the grandma in a broad T-pose. Keep the shoulders clearly down by default.
-    // The previous values were too close to the rest pose and visually looked like both arms
-    // were pushed forward. These offsets intentionally make the default silhouette relaxed.
-    const leftArmDown = -1.72;
-    const rightArmDown = 1.72;
-    const leftForeArmRelax = -0.18;
-    const rightForeArmRelax = 0.18;
+    // Arms: use a bind-pose direction solver instead of hard-coded local axes.
+    // This fixes the forward/backward arm problem because it does not assume a Mixamo X/Y/Z axis.
+    scene.updateMatrixWorld(true);
+    const down = targetVec.set(0, -1, 0);
+    const up = targetVec2.set(0, 1, 0);
+    const forward = targetVec3.set(0, 0, 1);
+    const leftSide = getRestSideDirection(rig.leftArm, rig.leftForeArm);
+    const rightSide = getRestSideDirection(rig.rightArm, rig.rightForeArm);
 
-    let leftArmZ = leftArmDown;
-    let rightArmZ = rightArmDown;
-    let leftArmX = 0.08 + breathe * 0.014;
-    let rightArmX = 0.08 - breathe * 0.014;
-    let leftArmY = -0.18;
-    let rightArmY = 0.18;
-    let leftForeArmZ = leftForeArmRelax;
-    let rightForeArmZ = rightForeArmRelax;
-    let leftHandZ = 0;
-    let rightHandZ = 0;
+    const leftUpperTarget = leftSide.clone().multiplyScalar(0.18).add(down.clone().multiplyScalar(0.98)).normalize();
+    const rightUpperTarget = rightSide.clone().multiplyScalar(0.18).add(down.clone().multiplyScalar(0.98)).normalize();
+    const leftForeTarget = leftSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
+    const rightForeTarget = rightSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
 
     if (isWalking) {
-      // Short, soft arm swing that follows the step cycle without becoming robotic.
-      leftArmX += walkOpposite * 0.14;
-      rightArmX += walkCycle * 0.14;
-      leftArmY += walkOpposite * 0.028;
-      rightArmY += walkCycle * 0.028;
-      leftForeArmZ += walkOpposite * 0.035;
-      rightForeArmZ += walkCycle * 0.035;
+      leftUpperTarget.add(forward.clone().multiplyScalar(walkOpposite * 0.18)).normalize();
+      rightUpperTarget.add(forward.clone().multiplyScalar(walkCycle * 0.18)).normalize();
+      leftForeTarget.add(forward.clone().multiplyScalar(walkOpposite * 0.08)).normalize();
+      rightForeTarget.add(forward.clone().multiplyScalar(walkCycle * 0.08)).normalize();
     }
 
     if (isSpeaking) {
-      // Small conversational gestures, not constant big waving.
-      leftArmZ = -1.56 + Math.sin(t * 3.1) * 0.045;
-      rightArmZ = 1.56 + Math.sin(t * 2.7) * 0.045;
-      leftArmX += 0.08 + Math.sin(t * 4.3) * 0.03;
-      rightArmX += 0.08 + Math.sin(t * 4.0 + 0.8) * 0.03;
-      leftForeArmZ -= 0.1 + Math.sin(t * 5.3) * 0.045;
-      rightForeArmZ += 0.1 + Math.sin(t * 5.1) * 0.045;
+      leftUpperTarget.add(forward.clone().multiplyScalar(0.08 + Math.sin(t * 3.1) * 0.05)).normalize();
+      rightUpperTarget.add(forward.clone().multiplyScalar(0.08 + Math.sin(t * 3.4 + 0.6) * 0.05)).normalize();
     }
 
     if (isWaving) {
-      // One clear greeting: right arm up, relaxed left arm down.
-      rightArmZ = -0.72;
-      rightArmX = -0.38;
-      rightArmY = 0.12;
-      rightForeArmZ = -0.92 + Math.sin(t * 7.5) * 0.16;
-      rightHandZ = Math.sin(t * 9.5) * 0.18;
+      rightUpperTarget.copy(rightSide).multiplyScalar(0.2).add(up.clone().multiplyScalar(0.95)).add(forward.clone().multiplyScalar(0.05)).normalize();
+      rightForeTarget.copy(rightSide).multiplyScalar(0.35 + Math.sin(t * 7.5) * 0.12).add(up.clone().multiplyScalar(0.65)).normalize();
     }
 
     if (isPointing) {
-      rightArmZ = 0.82;
-      rightArmX = -0.1;
-      rightArmY = 0.1;
-      rightForeArmZ = 0.42;
-      leftArmZ = leftArmDown;
-      leftForeArmZ = leftForeArmRelax;
+      rightUpperTarget.copy(rightSide).multiplyScalar(0.7).add(forward.clone().multiplyScalar(0.45)).add(down.clone().multiplyScalar(0.18)).normalize();
+      rightForeTarget.copy(rightSide).multiplyScalar(0.9).add(forward.clone().multiplyScalar(0.35)).normalize();
     }
 
-    applyOffset(basePose, rig.leftArm, leftArmX, leftArmY, leftArmZ);
-    applyOffset(basePose, rig.rightArm, rightArmX, rightArmY, rightArmZ);
-    applyOffset(basePose, rig.leftForeArm, 0.05, 0, leftForeArmZ);
-    applyOffset(basePose, rig.rightForeArm, 0.05, 0, rightForeArmZ);
-    applyOffset(basePose, rig.leftHand, 0.02, 0, leftHandZ);
-    applyOffset(basePose, rig.rightHand, 0.02, 0, rightHandZ);
+    aimBoneToWorldDirection(basePose, rig.leftArm, rig.leftForeArm, leftUpperTarget, 0.94);
+    aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm, rightUpperTarget, 0.94);
+    scene.updateMatrixWorld(true);
+    aimBoneToWorldDirection(basePose, rig.leftForeArm, rig.leftHand, leftForeTarget, 0.86);
+    aimBoneToWorldDirection(basePose, rig.rightForeArm, rig.rightHand, rightForeTarget, 0.86);
+
+    applyOffset(basePose, rig.leftHand, 0.02, 0, isWalking ? walkOpposite * 0.04 : 0);
+    applyOffset(basePose, rig.rightHand, 0.02, 0, isWaving ? Math.sin(t * 9.5) * 0.18 : isWalking ? walkCycle * 0.04 : 0);
 
     applyOffset(basePose, rig.spine, breathe * 0.018 + (isWalking ? Math.abs(walkCycle) * 0.025 : 0), 0, slow * 0.012);
     applyOffset(basePose, rig.spine1, breathe * 0.014, 0, slow * 0.01);
