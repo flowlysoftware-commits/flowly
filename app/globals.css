@@ -1031,7 +1031,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   z-index: 45;
   display: grid;
   place-items: center;
-  transition: left 1.65s cubic-bezier(.22, 1, .36, 1), right 1.65s cubic-bezier(.22, 1, .36, 1), bottom 1.65s cubic-bezier(.22, 1, .36, 1), transform 1.65s cubic-bezier(.22, 1, .36, 1), filter .35s ease;
+  transition: left 3.15s linear, right 3.15s linear, bottom 3.15s linear, transform 3.15s linear, filter .35s ease;
   filter: drop-shadow(0 26px 34px rgba(0,0,0,.34));
   perspective: 1200px;
 }
@@ -1079,7 +1079,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   animation: flowly-3d-shadow 3.8s ease-in-out infinite;
 }
 .flowly-3d-character-wrap.is-walking .flowly-3d-stage {
-  animation: flowly-3d-walk 0.62s cubic-bezier(.45,0,.55,1) infinite;
+  animation: flowly-3d-walk 0.72s cubic-bezier(.45,0,.55,1) infinite;
 }
 .flowly-3d-character-wrap.is-speaking .flowly-3d-stage {
   animation: flowly-3d-talk 0.86s ease-in-out infinite;
@@ -1095,19 +1095,19 @@ input[type="date"].input-dark { color-scheme: dark; }
 }
 @keyframes flowly-3d-breathe {
   0%, 100% { transform: translateY(0) scale(1) rotateX(0deg); }
-  45% { transform: translateY(-5px) scale(1.012) rotateX(1.2deg); }
-  70% { transform: translateY(-2px) scale(.998); }
+  45% { transform: translateY(-3px) scale(1.006) rotateX(.45deg); }
+  70% { transform: translateY(-1px) scale(.999); }
 }
 @keyframes flowly-3d-walk {
-  0%, 100% { transform: translateY(0) rotateZ(-1.7deg); }
-  25% { transform: translateY(-10px) rotateZ(.9deg); }
-  50% { transform: translateY(0) rotateZ(1.7deg); }
-  75% { transform: translateY(-10px) rotateZ(-.9deg); }
+  0%, 100% { transform: translateY(0) rotateZ(-1.05deg) translateX(-1px); }
+  25% { transform: translateY(-7px) rotateZ(.55deg) translateX(1px); }
+  50% { transform: translateY(0) rotateZ(1.05deg) translateX(2px); }
+  75% { transform: translateY(-7px) rotateZ(-.55deg) translateX(-1px); }
 }
 @keyframes flowly-3d-talk {
   0%, 100% { transform: translateY(0) rotateZ(0deg) scale(1); }
-  35% { transform: translateY(-4px) rotateZ(-.45deg) scale(1.012); }
-  70% { transform: translateY(1px) rotateZ(.45deg) scale(.998); }
+  35% { transform: translateY(-2px) rotateZ(-.22deg) scale(1.004); }
+  70% { transform: translateY(1px) rotateZ(.22deg) scale(.999); }
 }
 @keyframes flowly-3d-glow {
   0%, 100% { opacity: .62; transform: scale(.9); }

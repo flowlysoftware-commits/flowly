@@ -1535,15 +1535,15 @@ function FloatingAvatarAssistant({
     const interval = window.setInterval(() => {
       setIsWalking(true);
       setPositionIndex((value) => (value + 1) % characterPositions.length);
-      window.setTimeout(() => setIsWalking(false), 2100);
-    }, 7800);
+      window.setTimeout(() => setIsWalking(false), 3200);
+    }, 11800);
     return () => window.clearInterval(interval);
   }, [open, tourOpen, characterPositions.length]);
 
   useEffect(() => {
     if (!tourOpen || !currentStep) return;
     setIsWalking(true);
-    window.setTimeout(() => setIsWalking(false), 1200);
+    window.setTimeout(() => setIsWalking(false), 2400);
     speak(`${currentStep.title}. ${currentStep.body}`);
   }, [tourOpen, tourStep]);
 
@@ -1569,14 +1569,14 @@ function FloatingAvatarAssistant({
     setOpen(false);
     setIsWalking(true);
     setPositionIndex((value) => (value + 1) % characterPositions.length);
-    window.setTimeout(() => setIsWalking(false), 2100);
+    window.setTimeout(() => setIsWalking(false), 3200);
   };
 
   const startTourWithVoice = () => {
     restartTour();
     setOpen(false);
     setIsWalking(true);
-    window.setTimeout(() => setIsWalking(false), 1300);
+    window.setTimeout(() => setIsWalking(false), 2600);
   };
 
   return (
