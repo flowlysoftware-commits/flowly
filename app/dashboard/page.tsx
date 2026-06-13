@@ -1554,6 +1554,12 @@ function FloatingAvatarAssistant({
           <button onClick={openAndGreet} className="flowly-character-body" aria-label={`Abrir asistente ${avatarName}`}>
             <div className="flowly-character-aura" />
             <div className="flowly-character-halo" />
+            <div className="flowly-character-rig" aria-hidden="true">
+              <span className="flowly-character-arm flowly-character-arm-left" />
+              <span className="flowly-character-arm flowly-character-arm-right" />
+              <span className="flowly-character-leg flowly-character-leg-left" />
+              <span className="flowly-character-leg flowly-character-leg-right" />
+            </div>
             <div className="flowly-character-image-shell">
               {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-character-image" /> : <Bot className="relative z-10 text-cyan-100" size={74} />}
             </div>

@@ -25,15 +25,18 @@ export function buildBrandAvatarPrompt(input: GenerateBrandAvatarInput) {
   const colors = input.brandColors?.filter(Boolean).join(", ") || "electric blue, violet and cyan accents";
 
   return [
-    `Create a premium full-body SaaS brand mascot character for a business called ${input.businessName}.`,
+    `Create a premium FULL-BODY animated assistant mascot character for a SaaS business called ${input.businessName}.`,
     `Business type: ${input.businessType || "local business"}.`,
     `Mascot name: ${input.avatarName || "Nia"}.`,
     `Visual style: ${style}.`,
     `Personality: ${input.avatarPersonality || "warm, strategic, helpful and sales-oriented"}.`,
     `Use brand colors: ${colors}.`,
-    input.logoUrl ? `The business logo is available at this URL for brand inspiration: ${input.logoUrl}. Use its visual language and colors as inspiration, but do not copy text or recreate the exact logo.` : "Use a modern premium identity inspired by tech SaaS products.",
-    "Full body visible from head to feet, standing pose, arms and legs visible, character-ready for UI animation, clean silhouette, centered character with generous padding, transparent-looking background feel, dark premium glassmorphism context, soft glow, high detail, corporate quality.",
-    "No text, no letters, no watermark, no extra logos, no mockup, no UI, no background clutter, do not crop the head or feet.",
+    input.logoUrl ? `The business logo is available at this URL for brand inspiration: ${input.logoUrl}. Use its visual language, palette and mood as inspiration, but do not copy text or recreate the exact logo.` : "Use a modern premium identity inspired by tech SaaS products.",
+    "The character MUST be visible from head to feet: full body, complete legs, complete shoes/feet, complete arms and hands. Do not crop any part of the body.",
+    "Design it as a riggable UI character for walking animations: upright front 3/4 pose, arms slightly separated from the torso, legs slightly separated, clear joints, clean readable silhouette, balanced proportions, friendly premium expression.",
+    "Centered character with generous empty padding around it, isolated on a transparent background, no scenery, no UI, no props that hide limbs, no close-up portrait, no bust, no head-only mascot.",
+    "High quality 3D/illustrated SaaS mascot, polished material, soft glow accents, realistic depth, corporate premium finish, suitable to walk over a dashboard screen.",
+    "No text, no letters, no watermark, no extra logos, no mockup, no background clutter.",
   ].join(" ");
 }
 
@@ -52,7 +55,9 @@ export async function generateAndStoreBrandAvatar(input: GenerateBrandAvatarInpu
       model: "gpt-image-1",
       prompt,
       size: "1024x1024",
-      quality: "low",
+      quality: "medium",
+      background: "transparent",
+      output_format: "png",
       n: 1,
     }),
   });
