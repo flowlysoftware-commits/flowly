@@ -36,7 +36,7 @@ type MarketConfig = {
   rate: number;
   badge: string;
 };
-type ModuleId = "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice" | "time_tracking" | "inventory" | "client_portal" | "surveys" | "hr" | "automations" | "digital_signature";
+type ModuleId = "agenda" | "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice" | "time_tracking" | "inventory" | "client_portal" | "surveys" | "hr" | "automations" | "digital_signature";
 type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }> };
 
 type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[] };
