@@ -96,6 +96,53 @@ function applyOffset(basePose: Map<string, THREE.Quaternion>, object: THREE.Obje
   object.quaternion.copy(base).multiply(tempQuaternion);
 }
 
+const worldStart = new THREE.Vector3();
+const worldEnd = new THREE.Vector3();
+const currentDirection = new THREE.Vector3();
+const desiredDirection = new THREE.Vector3();
+const worldQuaternion = new THREE.Quaternion();
+const parentWorldQuaternion = new THREE.Quaternion();
+const parentWorldInverse = new THREE.Quaternion();
+const targetWorldQuaternion = new THREE.Quaternion();
+const targetLocalQuaternion = new THREE.Quaternion();
+const alignQuaternion = new THREE.Quaternion();
+
+function alignBoneToWorldDirection(
+  bone: THREE.Object3D | undefined,
+  child: THREE.Object3D | undefined,
+  direction: [number, number, number],
+  strength = 1,
+) {
+  if (!bone || !child) return;
+  bone.updateWorldMatrix(true, false);
+  child.updateWorldMatrix(true, false);
+  bone.getWorldPosition(worldStart);
+  child.getWorldPosition(worldEnd);
+  currentDirection.subVectors(worldEnd, worldStart);
+  if (currentDirection.lengthSq() < 0.000001) return;
+  currentDirection.normalize();
+  desiredDirection.set(direction[0], direction[1], direction[2]);
+  if (desiredDirection.lengthSq() < 0.000001) return;
+  desiredDirection.normalize();
+
+  alignQuaternion.setFromUnitVectors(currentDirection, desiredDirection);
+  bone.getWorldQuaternion(worldQuaternion);
+  targetWorldQuaternion.copy(alignQuaternion).multiply(worldQuaternion);
+
+  if (bone.parent) {
+    bone.parent.getWorldQuaternion(parentWorldQuaternion);
+    parentWorldInverse.copy(parentWorldQuaternion).invert();
+    targetLocalQuaternion.copy(parentWorldInverse).multiply(targetWorldQuaternion);
+  } else {
+    targetLocalQuaternion.copy(targetWorldQuaternion);
+  }
+
+  if (strength >= 1) bone.quaternion.copy(targetLocalQuaternion);
+  else bone.quaternion.slerp(targetLocalQuaternion, strength);
+  bone.updateWorldMatrix(false, true);
+}
+
+
 function Model({
   modelUrl = "/avatars/flowly-grandma.glb",
   mode = "idle",
@@ -144,25 +191,16 @@ function Model({
       if (object && base) object.quaternion.copy(base);
     });
 
-    // Neutral pose: keep shoulders relaxed and elbows close to the body.
-    // The original Mixamo rest pose is very close to a T-pose; these offsets intentionally
-    // pull the arms down and slightly back so she does not look like she is holding them forward.
-    // Mixamo imports the grandma in a broad T-pose. Keep the shoulders clearly down by default.
-    // The previous values were too close to the rest pose and visually looked like both arms
-    // were pushed forward. These offsets intentionally make the default silhouette relaxed.
-    const leftArmDown = 1.72;
-    const rightArmDown = -1.72;
-    const leftForeArmRelax = 0.18;
-    const rightForeArmRelax = -0.18;
-
-    let leftArmZ = leftArmDown;
-    let rightArmZ = rightArmDown;
-    let leftArmX = 0.08 + breathe * 0.014;
-    let rightArmX = 0.08 - breathe * 0.014;
-    let leftArmY = -0.18;
-    let rightArmY = 0.18;
-    let leftForeArmZ = leftForeArmRelax;
-    let rightForeArmZ = rightForeArmRelax;
+    // Start from a very small procedural pose. The real arm correction happens below
+    // with alignBoneToWorldDirection(), which is more robust than guessing Mixamo axes.
+    let leftArmZ = 0;
+    let rightArmZ = 0;
+    let leftArmX = breathe * 0.01;
+    let rightArmX = -breathe * 0.01;
+    let leftArmY = 0;
+    let rightArmY = 0;
+    let leftForeArmZ = 0;
+    let rightForeArmZ = 0;
     let leftHandZ = 0;
     let rightHandZ = 0;
 
@@ -177,13 +215,11 @@ function Model({
     }
 
     if (isSpeaking) {
-      // Small conversational gestures, not constant big waving.
-      leftArmZ = 1.56 + Math.sin(t * 3.1) * 0.045;
-      rightArmZ = -1.56 + Math.sin(t * 2.7) * 0.045;
-      leftArmX += 0.08 + Math.sin(t * 4.3) * 0.03;
-      rightArmX += 0.08 + Math.sin(t * 4.0 + 0.8) * 0.03;
-      leftForeArmZ += 0.1 + Math.sin(t * 5.3) * 0.045;
-      rightForeArmZ -= 0.1 + Math.sin(t * 5.1) * 0.045;
+      // Conversational motion comes mostly from head and torso; arms stay relaxed.
+      leftArmX += Math.sin(t * 3.4) * 0.018;
+      rightArmX += Math.sin(t * 3.1 + 0.8) * 0.018;
+      leftForeArmZ += Math.sin(t * 4.8) * 0.018;
+      rightForeArmZ += Math.sin(t * 4.5 + 0.6) * 0.018;
     }
 
     if (isWaving) {
@@ -196,12 +232,12 @@ function Model({
     }
 
     if (isPointing) {
-      rightArmZ = -0.98;
-      rightArmX = -0.1;
-      rightArmY = 0.1;
-      rightForeArmZ = -0.42;
-      leftArmZ = 1.72;
-      leftForeArmZ = 0.16;
+      rightArmZ = -0.2;
+      rightArmX = -0.08;
+      rightArmY = 0.08;
+      rightForeArmZ = -0.18;
+      leftArmZ = 0;
+      leftForeArmZ = 0;
     }
 
     applyOffset(basePose, rig.leftArm, leftArmX, leftArmY, leftArmZ);
@@ -210,6 +246,26 @@ function Model({
     applyOffset(basePose, rig.rightForeArm, 0.05, 0, rightForeArmZ);
     applyOffset(basePose, rig.leftHand, 0.02, 0, leftHandZ);
     applyOffset(basePose, rig.rightHand, 0.02, 0, rightHandZ);
+
+    // Final arm solver: force the upper arms and forearms to point down/relaxed in model space.
+    // This removes the persistent "arms stretched forward" problem caused by the GLB bind pose.
+    if (isWaving) {
+      alignBoneToWorldDirection(rig.leftArm, rig.leftForeArm, [-0.35, -0.92, 0.04], 0.92);
+      alignBoneToWorldDirection(rig.leftForeArm, rig.leftHand, [-0.18, -0.96, 0.02], 0.9);
+      alignBoneToWorldDirection(rig.rightArm, rig.rightForeArm, [0.25, 0.58, 0.18], 0.85);
+      alignBoneToWorldDirection(rig.rightForeArm, rig.rightHand, [0.18, 0.55, 0.32 + Math.sin(t * 8.5) * 0.28], 0.85);
+    } else if (isPointing) {
+      alignBoneToWorldDirection(rig.leftArm, rig.leftForeArm, [-0.35, -0.92, 0.04], 0.92);
+      alignBoneToWorldDirection(rig.leftForeArm, rig.leftHand, [-0.18, -0.96, 0.02], 0.9);
+      alignBoneToWorldDirection(rig.rightArm, rig.rightForeArm, [0.62, -0.2, 0.76], 0.88);
+      alignBoneToWorldDirection(rig.rightForeArm, rig.rightHand, [0.62, -0.1, 0.78], 0.88);
+    } else {
+      const swing = isWalking ? Math.sin(t * 7.2) * 0.14 : Math.sin(t * 1.4) * 0.025;
+      alignBoneToWorldDirection(rig.leftArm, rig.leftForeArm, [-0.38, -0.92, 0.03 + swing], 0.94);
+      alignBoneToWorldDirection(rig.rightArm, rig.rightForeArm, [0.38, -0.92, 0.03 - swing], 0.94);
+      alignBoneToWorldDirection(rig.leftForeArm, rig.leftHand, [-0.1, -0.98, 0.02], 0.92);
+      alignBoneToWorldDirection(rig.rightForeArm, rig.rightHand, [0.1, -0.98, 0.02], 0.92);
+    }
 
     applyOffset(basePose, rig.spine, breathe * 0.018 + (isWalking ? Math.abs(walkCycle) * 0.025 : 0), 0, slow * 0.012);
     applyOffset(basePose, rig.spine1, breathe * 0.014, 0, slow * 0.01);

@@ -1655,6 +1655,7 @@ function FloatingAvatarAssistant({
   const [hasGreeted, setHasGreeted] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const [bubbleText, setBubbleText] = useState("Hola 👋");
+  const [travelFacing, setTravelFacing] = useState<"left" | "right">("left");
   const autonomousTimerRef = useRef<number | null>(null);
   const spokenMessageRef = useRef("");
 
@@ -1667,6 +1668,7 @@ function FloatingAvatarAssistant({
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
   const modelUrl = "/avatars/flowly-grandma.glb";
+  const assistantFacing = isWalking ? travelFacing : currentPosition.facing;
   const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : tourOpen ? "point" : thinking ? "thinking" : "idle";
 
   const speak = (text: string) => {
@@ -1689,8 +1691,12 @@ function FloatingAvatarAssistant({
 
   const walkTo = (index: number, after?: () => void) => {
     const next = index % characterPositions.length;
+    const origin = characterPositions[positionIndex % characterPositions.length];
+    const destination = characterPositions[next];
+    setTravelFacing(destination.x >= origin.x ? "right" : "left");
     setIsWalking(true);
-    window.setTimeout(() => setPositionIndex(next), 90);
+    setBubbleText("Voy caminando por el panel...");
+    window.setTimeout(() => setPositionIndex(next), 120);
     window.setTimeout(() => {
       setIsWalking(false);
       const destination = characterPositions[next];
@@ -1711,7 +1717,11 @@ function FloatingAvatarAssistant({
     autonomousTimerRef.current = window.setInterval(() => {
       setPositionIndex((current) => {
         const next = (current + 1) % characterPositions.length;
+        const origin = characterPositions[current % characterPositions.length];
+        const destination = characterPositions[next];
+        setTravelFacing(destination.x >= origin.x ? "right" : "left");
         setIsWalking(true);
+        setBubbleText("Voy a revisar otra zona del panel...");
         window.setTimeout(() => {
           setIsWalking(false);
           const destination = characterPositions[next];
@@ -1826,7 +1836,7 @@ function FloatingAvatarAssistant({
           )}
 
           <div className="flowly-3d-light-rim" />
-          <FlowlyAssistant3D modelUrl={modelUrl} mode={characterMode} facing={currentPosition.facing} onClick={openAndGreet} />
+          <FlowlyAssistant3D modelUrl={modelUrl} mode={characterMode} facing={assistantFacing} onClick={openAndGreet} />
           <div className="flowly-3d-ground-shadow" />
 
           <div className="flowly-character-status">
