@@ -15,6 +15,12 @@ const modularModules = [
   { id: "analytics", name: "Estadísticas avanzadas", price: 4.99 },
   { id: "booking_premium", name: "Reservas Premium", price: 4.99 },
   { id: "voice", name: "Flowly Voice", price: 29.99 },
+  { id: "inventory", name: "Inventario", price: 14.99 },
+  { id: "client_portal", name: "Portal Cliente", price: 19.99 },
+  { id: "surveys", name: "Encuestas", price: 7.99 },
+  { id: "hr", name: "RRHH", price: 19.99 },
+  { id: "automations", name: "Automatizaciones", price: 24.99 },
+  { id: "digital_signature", name: "Firma digital", price: 12.99 },
   { id: "time_tracking", name: "Módulo Fichaje", price: 11.99 },
 ];
 
@@ -42,7 +48,7 @@ export async function POST(request: Request) {
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
     let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-    let metadata: Record<string, string> = { plan, referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency };
+    let metadata: Record<string, string> = { plan, referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency, business_type: body.businessType ? String(body.businessType) : "" };
 
     if (plan === "modular") {
       const selectedModules = modularModules.filter((item) => selectedModuleIds.includes(item.id));
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
         },
       ];
 
-      metadata = { plan, modules: moduleIds, monthly_amount: displayTotal.toFixed(2), base_amount_eur: total.toFixed(2), referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency };
+      metadata = { plan, modules: moduleIds, monthly_amount: displayTotal.toFixed(2), base_amount_eur: total.toFixed(2), referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency, business_type: body.businessType ? String(body.businessType) : "" };
     } else {
       const basePrice = plan === "basic" ? 29.99 : 59.99;
       const displayPrice = convertBasePrice(basePrice, market);

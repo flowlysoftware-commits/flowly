@@ -104,7 +104,7 @@ function RegistroContent() {
           <div className="mt-6 grid gap-4">
             <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Nombre del negocio" className="flowly-input-light rounded-2xl px-4 py-3" />
             <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="flowly-input-light rounded-2xl px-4 py-3">
-              <option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Restaurante</option><option>Clínica</option><option>Fisioterapia</option><option>Academia</option><option>Otro</option>
+              <option>Clínica / Centro médico</option><option>Clínica dental</option><option>Fisioterapia</option><option>Veterinaria</option><option>Medicina estética</option><option>Peluquería</option><option>Barbería</option><option>Centro de estética</option><option>Spa</option><option>Gimnasio</option><option>Restaurante</option><option>Cafetería</option><option>Hotel</option><option>Taller mecánico</option><option>Inmobiliaria</option><option>Despacho legal</option><option>Asesoría</option><option>Academia</option><option>Autoescuela</option><option>Empresa de limpieza</option><option>Reformas</option><option>Instaladores</option><option>Agencia de marketing</option><option>Comercio minorista</option><option>Tienda de ropa</option><option>Tienda tecnológica</option><option>Ecommerce</option><option>Logística</option><option>Transporte</option><option>Otro</option>
             </select>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
               <p className="text-sm font-semibold text-white">Logo del negocio</p>

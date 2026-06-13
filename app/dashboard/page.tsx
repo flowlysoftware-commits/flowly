@@ -14,6 +14,12 @@ import {
   Clock,
   CreditCard,
   FileText,
+  Package,
+  ShieldCheck,
+  Workflow,
+  Star,
+  Briefcase,
+  FileSignature,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -248,6 +254,12 @@ const moduleCatalog: ModuleItem[] = [
   { key: "analytics", slug: "estadisticas", name: "Estadísticas avanzadas", short: "Estadísticas", price: "+4,99€", badge: "KPIs", description: "KPIs, ingresos previstos, ranking de servicios, ocupación y evolución del negocio.", Icon: TrendingUp, amountEnabled: true, proFeatures: ["KPIs operativos", "Ingresos previstos", "Evolución mensual"] },
   { key: "booking_premium", slug: "reservas-premium", name: "Reservas Premium", short: "Reservas Pro", price: "+4,99€", badge: "Booking PRO", description: "Reglas avanzadas, bloqueos, políticas y personalización de la experiencia de reservas.", Icon: SlidersHorizontal, proFeatures: ["Reglas avanzadas", "Bloqueos especiales", "Experiencia personalizada"] },
   { key: "voice", slug: "voice", name: "Flowly Voice", short: "Voice", price: "+29,99€", badge: "Voz IA", description: "Registro de llamadas y solicitudes telefónicas, preparado para centralita con IA.", Icon: PhoneCall, proFeatures: ["Registro de llamadas", "Intención detectada", "Preparado para centralita IA"] },
+  { key: "inventory", slug: "inventario", name: "Inventario", short: "Inventario", price: "+14,99€", badge: "Stock", description: "Control de productos, stock mínimo, entradas, salidas y alertas de reposición.", Icon: Package, amountEnabled: true, proFeatures: ["Productos y stock", "Alertas de mínimo", "Movimientos de inventario"] },
+  { key: "client_portal", slug: "portal-cliente", name: "Portal Cliente", short: "Portal", price: "+19,99€", badge: "Experiencia cliente", description: "Espacio privado para que los clientes vean citas, documentos, pagos y solicitudes.", Icon: ShieldCheck, proFeatures: ["Acceso privado", "Documentos y citas", "Solicitudes online"] },
+  { key: "surveys", slug: "encuestas", name: "Encuestas", short: "Encuestas", price: "+7,99€", badge: "Satisfacción", description: "Encuestas postservicio, NPS, valoraciones y seguimiento de experiencia.", Icon: Star, proFeatures: ["NPS", "Valoraciones", "Clientes en riesgo"] },
+  { key: "hr", slug: "rrhh", name: "RRHH", short: "RRHH", price: "+19,99€", badge: "Equipo", description: "Gestión de personal, vacaciones, incidencias, documentos internos y solicitudes.", Icon: Briefcase, proFeatures: ["Vacaciones", "Incidencias", "Expediente del equipo"] },
+  { key: "automations", slug: "automatizaciones", name: "Automatizaciones", short: "Automatizaciones", price: "+24,99€", badge: "No-code", description: "Flujos tipo si ocurre esto, haz esto: WhatsApp, tareas, recordatorios, CRM y agenda.", Icon: Workflow, proFeatures: ["Reglas visuales", "Acciones automáticas", "Flujos entre módulos"] },
+  { key: "digital_signature", slug: "firma-digital", name: "Firma digital", short: "Firma", price: "+12,99€", badge: "Documentos", description: "Firma de presupuestos, contratos, consentimientos y documentos desde el panel.", Icon: FileSignature, proFeatures: ["Firma online", "PDF firmado", "Trazabilidad"] },
   { key: "time_tracking", slug: "fichaje", name: "Módulo Fichaje", short: "Fichaje", price: "+11,99€", badge: "Control horario", description: "Registro de entrada, salida, pausas, jornada diaria y actividad del equipo.", Icon: Clock, proFeatures: ["Entrada y salida", "Pausas", "Resumen horario"] },
 ];
 
@@ -866,6 +878,28 @@ export default function DashboardPage() {
     await loadData();
   };
 
+  const activateModule = async (moduleKey: string) => {
+    if (!business) return;
+    const existing = modules.find((item) => item.module_key === moduleKey && item.status !== "cancelled");
+    if (existing) return alert("Este módulo ya está activo en tu panel.");
+
+    const { error } = await supabase.from("business_modules").insert({
+      business_id: business.id,
+      module_key: moduleKey,
+      status: "active",
+    });
+
+    if (error) {
+      const retry = await supabase
+        .from("business_modules")
+        .upsert({ business_id: business.id, module_key: moduleKey, status: "active" }, { onConflict: "business_id,module_key" });
+      if (retry.error) return alert(retry.error.message);
+    }
+
+    await loadData();
+    alert("Módulo añadido correctamente a tu panel.");
+  };
+
   const createVoiceCall = async () => {
     if (!business || !voiceCallerPhone) return alert("Añade al menos el teléfono de la llamada");
 
@@ -1351,6 +1385,36 @@ export default function DashboardPage() {
                       { label: "Jornada", tab: "module:fichaje:jornada" as ActiveTab },
                       { label: "Incidencias", tab: "module:fichaje:incidencias" as ActiveTab },
                     ],
+                    inventory: [
+                      { label: "Productos", tab: "module:inventario:productos" as ActiveTab },
+                      { label: "Movimientos", tab: "module:inventario:movimientos" as ActiveTab },
+                      { label: "Alertas", tab: "module:inventario:alertas" as ActiveTab },
+                    ],
+                    client_portal: [
+                      { label: "Inicio", tab: "module:portal-cliente:inicio" as ActiveTab },
+                      { label: "Solicitudes", tab: "module:portal-cliente:solicitudes" as ActiveTab },
+                      { label: "Accesos", tab: "module:portal-cliente:accesos" as ActiveTab },
+                    ],
+                    surveys: [
+                      { label: "Encuestas", tab: "module:encuestas:encuestas" as ActiveTab },
+                      { label: "Respuestas", tab: "module:encuestas:respuestas" as ActiveTab },
+                      { label: "NPS", tab: "module:encuestas:nps" as ActiveTab },
+                    ],
+                    hr: [
+                      { label: "Equipo", tab: "module:rrhh:equipo" as ActiveTab },
+                      { label: "Vacaciones", tab: "module:rrhh:vacaciones" as ActiveTab },
+                      { label: "Documentos", tab: "module:rrhh:documentos" as ActiveTab },
+                    ],
+                    automations: [
+                      { label: "Flujos", tab: "module:automatizaciones:flujos" as ActiveTab },
+                      { label: "Reglas", tab: "module:automatizaciones:reglas" as ActiveTab },
+                      { label: "Historial", tab: "module:automatizaciones:historial" as ActiveTab },
+                    ],
+                    digital_signature: [
+                      { label: "Pendientes", tab: "module:firma-digital:pendientes" as ActiveTab },
+                      { label: "Firmados", tab: "module:firma-digital:firmados" as ActiveTab },
+                      { label: "Plantillas", tab: "module:firma-digital:plantillas" as ActiveTab },
+                    ],
                   };
                   const children = submenus[item.key] || [];
                   const defaultTab = children[0]?.tab || id;
@@ -1446,7 +1510,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === "area" && <AreaSection business={business} businessAvatar={businessAvatar} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} />}
+          {activeTab === "area" && <AreaSection business={business} businessAvatar={businessAvatar} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} activateModule={activateModule} />}
           {activeTab === "agenda" && <AgendaSection appointments={appointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
           {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
@@ -1758,7 +1822,7 @@ function FloatingAvatarAssistant({
   );
 }
 
-function AreaSection({ business, businessAvatar, activeModules, inactiveModules, bookingUrl, openBillingPortal, setActiveTab }: { business: Business; businessAvatar: BusinessAvatar | null; activeModules: ModuleItem[]; inactiveModules: ModuleItem[]; bookingUrl: string; openBillingPortal: () => void; setActiveTab: (tab: ActiveTab) => void }) {
+function AreaSection({ business, businessAvatar, activeModules, inactiveModules, bookingUrl, openBillingPortal, setActiveTab, activateModule }: { business: Business; businessAvatar: BusinessAvatar | null; activeModules: ModuleItem[]; inactiveModules: ModuleItem[]; bookingUrl: string; openBillingPortal: () => void; setActiveTab: (tab: ActiveTab) => void; activateModule: (moduleKey: string) => void }) {
   const coreModules = ["Agenda", "CRM", "WhatsApp", "Voice", "Facturación", "TPV", "Marketing", "IA"];
   return (
     <section className="grid gap-6">
@@ -1816,7 +1880,7 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
         </GlassCard>
       </section>
 
-      <GlassCard title="Añadir módulos PRO"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} />)}</div></GlassCard>
+      <GlassCard title="Añadir módulos PRO"><div className="mb-4 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">Activa módulos directamente desde tu panel. El cargo se regularizará en tu suscripción o con el equipo comercial según tu contrato.</div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{inactiveModules.map((item) => <ModuleAccessCard key={item.key} module={item} onActivate={() => activateModule(item.key)} />)}</div></GlassCard>
     </section>
   );
 }
@@ -1833,8 +1897,57 @@ function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; all
   if (module.key === "analytics") return <AnalyticsModule {...props} />;
   if (module.key === "booking_premium") return <BookingPremiumModule {...props} />;
   if (module.key === "time_tracking") return <TimeTrackingModule {...props} />;
+  if (["inventory", "client_portal", "surveys", "hr", "automations", "digital_signature"].includes(module.key)) return <BusinessOpsModule {...props} />;
   const Icon = module.Icon;
   return <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard><div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-400/20 text-violet-100"><Icon /></div><h2 className="text-2xl font-semibold">{module.name}</h2><p className="mt-2 text-sm text-white/55">{module.description}</p><div className="mt-6 grid gap-3"><input value={props.title} onChange={(e) => props.setTitle(e.target.value)} placeholder="Título del registro" className="input-dark" />{module.amountEnabled && <input value={props.amount} onChange={(e) => props.setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" />}<textarea value={props.notes} onChange={(e) => props.setNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-32" /><button onClick={() => props.createRecord(module.key)} className="btn-primary"><Plus size={17} /> Guardar</button></div></GlassCard><RecordsCard title="Actividad" records={records} deleteRecord={props.deleteRecord} /></section>;
+}
+
+
+function BusinessOpsModule({ module, records, customers, employees, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab }: Parameters<typeof ModuleSection>[0]) {
+  const map: Record<string, { prefix: string; tabs: string[]; statuses: { label: string; value: string }[]; placeholder: string; metric: string; }> = {
+    inventory: { prefix: "module:inventario:", tabs: ["Productos", "Movimientos", "Alertas"], statuses: [{ label: "Producto", value: "product" }, { label: "Entrada", value: "stock_in" }, { label: "Salida", value: "stock_out" }, { label: "Stock bajo", value: "low_stock" }], placeholder: "Producto, referencia o movimiento", metric: "Stock y reposición" },
+    client_portal: { prefix: "module:portal-cliente:", tabs: ["Inicio", "Solicitudes", "Accesos"], statuses: [{ label: "Publicado", value: "published" }, { label: "Solicitud", value: "request" }, { label: "Acceso", value: "access" }], placeholder: "Página, solicitud o acceso del portal", metric: "Experiencia cliente" },
+    surveys: { prefix: "module:encuestas:", tabs: ["Encuestas", "Respuestas", "NPS"], statuses: [{ label: "Encuesta", value: "survey" }, { label: "Respuesta", value: "response" }, { label: "NPS positivo", value: "nps_positive" }, { label: "NPS riesgo", value: "nps_risk" }], placeholder: "Nombre de encuesta o respuesta", metric: "Satisfacción" },
+    hr: { prefix: "module:rrhh:", tabs: ["Equipo", "Vacaciones", "Documentos"], statuses: [{ label: "Empleado", value: "employee" }, { label: "Vacaciones", value: "vacation" }, { label: "Incidencia", value: "incident" }, { label: "Documento", value: "document" }], placeholder: "Empleado, solicitud o documento", metric: "Gestión interna" },
+    automations: { prefix: "module:automatizaciones:", tabs: ["Flujos", "Reglas", "Historial"], statuses: [{ label: "Flujo activo", value: "flow_active" }, { label: "Regla", value: "rule" }, { label: "Ejecución", value: "run" }, { label: "Pausada", value: "paused" }], placeholder: "Ej: Cliente nuevo → enviar WhatsApp", metric: "Procesos automáticos" },
+    digital_signature: { prefix: "module:firma-digital:", tabs: ["Pendientes", "Firmados", "Plantillas"], statuses: [{ label: "Pendiente firma", value: "pending_signature" }, { label: "Firmado", value: "signed" }, { label: "Plantilla", value: "template" }, { label: "Caducado", value: "expired" }], placeholder: "Contrato, presupuesto o consentimiento", metric: "Firma documental" },
+  };
+  const cfg = map[module.key] || map.inventory;
+  const [tab, setTab] = useState(cfg.tabs[0]);
+  useEffect(() => {
+    const mapping = Object.fromEntries(cfg.tabs.map((tabName) => [tabName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"), tabName]));
+    syncModuleSubmenu(activeTab, cfg.prefix, mapping, setTab);
+  }, [activeTab, cfg.prefix]);
+  const visibleRecords = records.filter((record) => tab === cfg.tabs[0] || record.status?.toLowerCase().includes(tab.toLowerCase().slice(0, 5)) || true);
+  const Icon = module.Icon;
+  return (
+    <section className="grid gap-6">
+      <ModuleHero eyebrow={module.badge} title={module.name} description={module.description} actions={<div className="flex flex-wrap gap-2">{cfg.tabs.map((item) => <button key={item} onClick={() => setTab(item)} className={tab === item ? "rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950" : "rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70"}>{item}</button>)}</div>} />
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard label="Registros" value={records.length} />
+        <MetricCard label="Clientes" value={customers.length} />
+        <MetricCard label="Equipo" value={employees.length} />
+        <MetricCard label="Estado" value={cfg.metric} />
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <GlassCard title={`Nuevo registro · ${tab}`}>
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-100"><Icon /></div>
+          <div className="grid gap-3">
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={cfg.placeholder} className="input-dark" />
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark">
+              {cfg.statuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+            {(module.amountEnabled || module.key === "inventory") && <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={module.key === "inventory" ? "Cantidad / importe / stock" : "Importe"} type="number" className="input-dark" />}
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas internas, instrucciones, URL o detalle operativo" className="input-dark min-h-32" />
+            <button onClick={() => createRecord(module.key, cfg.statuses[0].value)} className="btn-primary"><Plus size={17} /> Guardar en {module.short}</button>
+          </div>
+        </GlassCard>
+        <GlassCard title={`${tab} registrados`}>
+          <RecordsList records={visibleRecords} deleteRecord={deleteRecord} />
+        </GlassCard>
+      </div>
+    </section>
+  );
 }
 
 function BillingModule({ records, appointments, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
@@ -3692,9 +3805,10 @@ function RecordsCard({ title, records, deleteRecord }: { title: string; records:
 function RecordsList({ records, deleteRecord }: { records: ModuleRecord[]; deleteRecord: (id: string) => void }) { return <div className="space-y-3">{records.map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{record.title}</p>{record.notes && <p className="mt-2 text-sm leading-6 text-white/55">{record.notes}</p>}<p className="mt-2 text-xs text-white/35">{record.status} · {new Date(record.created_at).toLocaleString("es-ES")}</p></div>{record.amount !== null && <p className="rounded-full bg-violet-500/20 px-3 py-1 text-sm text-violet-100">{Number(record.amount).toFixed(2)}€</p>}</div><button onClick={() => deleteRecord(record.id)} className="mt-3 text-xs text-red-200/80">Eliminar</button></div>)}{!records.length && <Empty text="Aún no hay registros." />}</div>; }
 function Shell({ children }: { children: React.ReactNode; theme?: string }) { return <main className="flowly-app-shell text-white"><div className="flowly-app-content">{children}</div></main>; }
 function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) { return <div className="flowly-app-metric rounded-[1.7rem] p-5"><div className="flowly-app-icon mb-4 flex h-11 w-11 items-center justify-center rounded-2xl">{icon}</div><p className="text-sm text-white/50">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-cyan-100/60">{helper}</p></div>; }
+function MetricCard({ label, value }: { label: string; value: string | number }) { return <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/50">{label}</p><p className="mt-3 text-2xl font-semibold text-white">{value}</p></div>; }
 function GlassCard({ title, children }: { title?: string; children: React.ReactNode }) { return <div className="rounded-[2rem] border border-white/10 bg-white/[0.07] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">{title && <h2 className="mb-5 text-2xl font-semibold">{title}</h2>}{children}</div>; }
 function InfoBox({ label, value }: { label: string; value: string | number }) { return <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="text-sm text-white/45">{label}</p><p className="mt-2 text-2xl font-semibold capitalize">{value}</p></div>; }
-function ModuleAccessCard({ module, active = false, onOpen }: { module: ModuleItem; active?: boolean; onOpen?: () => void }) { const Icon = module.Icon; return <div className={active ? "rounded-2xl border border-violet-400/30 bg-violet-500/15 p-4" : "rounded-2xl border border-white/10 bg-white/[0.05] p-4"}><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-violet-100"><Icon size={18} /></div><div><p className="font-semibold">{module.name}</p><p className="mt-1 text-xs leading-5 text-white/45">{module.description}</p><div className="mt-3 flex flex-wrap gap-2">{active ? <button onClick={onOpen} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-950">Abrir</button> : <Link href="/precios#modular" className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/75">Añadir {module.price}</Link>}</div></div></div></div>; }
+function ModuleAccessCard({ module, active = false, onOpen, onActivate }: { module: ModuleItem; active?: boolean; onOpen?: () => void; onActivate?: () => void }) { const Icon = module.Icon; return <div className={active ? "rounded-2xl border border-violet-400/30 bg-violet-500/15 p-4" : "rounded-2xl border border-white/10 bg-white/[0.05] p-4"}><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-violet-100"><Icon size={18} /></div><div><p className="font-semibold">{module.name}</p><p className="mt-1 text-xs leading-5 text-white/45">{module.description}</p><div className="mt-3 flex flex-wrap gap-2">{active ? <button onClick={onOpen} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-950">Abrir</button> : <button onClick={onActivate} className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100">Añadir {module.price}</button>}</div></div></div></div>; }
 function Select({ value, onChange, placeholder, options }: { value: string; onChange: (value: string) => void; placeholder: string; options: { value: string; label: string }[] }) { return <select value={value} onChange={(e) => onChange(e.target.value)} className="input-dark"><option value="">{placeholder}</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>; }
 function DayToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.05] p-4"><span className="font-medium">{label}</span><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-5 w-5" /></label>; }
 function StatusButton({ children, onClick, tone }: { children: React.ReactNode; onClick: () => void; tone: "green" | "red" | "violet" }) { const className = tone === "green" ? "border-green-300/25 text-green-200" : tone === "red" ? "border-red-300/25 text-red-200" : "border-violet-300/25 text-violet-200"; return <button onClick={onClick} className={`rounded-full border px-3 py-2 text-xs ${className}`}>{children}</button>; }

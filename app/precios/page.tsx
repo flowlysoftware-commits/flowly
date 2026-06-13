@@ -13,6 +13,12 @@ import {
   Receipt,
   SlidersHorizontal,
   Clock,
+  Package,
+  ShieldCheck,
+  Workflow,
+  Star,
+  Briefcase,
+  FileSignature,
   Store,
   TrendingUp,
 } from "lucide-react";
@@ -29,7 +35,7 @@ type MarketConfig = {
   rate: number;
   badge: string;
 };
-type ModuleId = "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice" | "time_tracking";
+type ModuleId = "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice" | "time_tracking" | "inventory" | "client_portal" | "surveys" | "hr" | "automations" | "digital_signature";
 type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }> };
 
 type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[] };
@@ -54,6 +60,29 @@ const fixedPlans: Plan[] = [
   { id: "premium", name: "Premium", price: 59.99, description: "Para negocios que quieren crecer y automatizar.", highlighted: true, features: ["Todo lo incluido en Basic", "Módulo de contabilidad", "Control de ingresos y gastos", "Informes avanzados", "WhatsApp automático", "Automatizaciones inteligentes", "Clientes inactivos", "Gestión de bonos y membresías", "Soporte prioritario"] },
 ];
 
+
+type BusinessTypeId = "clinic" | "dental" | "physio" | "beauty" | "hair" | "barber" | "restaurant" | "cafe" | "retail" | "gym" | "academy" | "real_estate" | "legal" | "auto" | "services" | "hotel" | "other";
+
+const businessTypes: { id: BusinessTypeId; label: string; recommended: ModuleId[] }[] = [
+  { id: "clinic", label: "Clínica / Centro médico", recommended: ["crm", "whatsapp", "voice", "booking_premium", "digital_signature", "surveys"] },
+  { id: "dental", label: "Clínica dental", recommended: ["crm", "whatsapp", "voice", "booking_premium", "digital_signature", "surveys"] },
+  { id: "physio", label: "Fisioterapia / Salud deportiva", recommended: ["crm", "whatsapp", "booking_premium", "digital_signature", "surveys"] },
+  { id: "beauty", label: "Estética / Spa", recommended: ["crm", "whatsapp", "pos", "inventory", "surveys", "marketing"] },
+  { id: "hair", label: "Peluquería", recommended: ["crm", "whatsapp", "pos", "inventory", "booking_premium"] },
+  { id: "barber", label: "Barbería", recommended: ["crm", "whatsapp", "pos", "inventory", "booking_premium"] },
+  { id: "restaurant", label: "Restaurante", recommended: ["pos", "inventory", "hr", "time_tracking", "surveys"] },
+  { id: "cafe", label: "Cafetería / Panadería", recommended: ["pos", "inventory", "time_tracking", "surveys"] },
+  { id: "retail", label: "Comercio / Tienda", recommended: ["pos", "inventory", "crm", "marketing", "surveys"] },
+  { id: "gym", label: "Gimnasio / Centro deportivo", recommended: ["crm", "whatsapp", "client_portal", "billing", "time_tracking"] },
+  { id: "academy", label: "Academia / Formación", recommended: ["crm", "whatsapp", "client_portal", "digital_signature", "billing"] },
+  { id: "real_estate", label: "Inmobiliaria", recommended: ["crm", "whatsapp", "voice", "digital_signature", "automations"] },
+  { id: "legal", label: "Despacho legal / Asesoría", recommended: ["crm", "client_portal", "digital_signature", "billing", "automations"] },
+  { id: "auto", label: "Taller mecánico / Automoción", recommended: ["crm", "whatsapp", "inventory", "billing", "surveys"] },
+  { id: "services", label: "Empresa de servicios", recommended: ["crm", "whatsapp", "time_tracking", "hr", "billing", "automations"] },
+  { id: "hotel", label: "Hotel / Alojamiento", recommended: ["crm", "whatsapp", "client_portal", "surveys", "hr"] },
+  { id: "other", label: "Otro negocio", recommended: ["crm", "whatsapp", "billing", "analytics"] },
+];
+
 const modules: Module[] = [
   { id: "whatsapp", name: "WhatsApp automático", price: 9.99, description: "Confirmaciones, recordatorios y avisos automáticos.", Icon: MessageCircle },
   { id: "billing", name: "Facturación", price: 9.99, description: "Facturas, presupuestos, gastos e ingresos.", Icon: Receipt },
@@ -64,6 +93,12 @@ const modules: Module[] = [
   { id: "analytics", name: "Estadísticas avanzadas", price: 4.99, description: "KPIs, evolución, previsión y rendimiento.", Icon: TrendingUp },
   { id: "booking_premium", name: "Reservas Premium", price: 4.99, description: "Página de reservas más avanzada y personalizable.", Icon: SlidersHorizontal },
   { id: "voice", name: "Flowly Voice", price: 29.99, description: "Centralita, recepción y agendado por voz con IA.", Icon: PhoneCall },
+  { id: "inventory", name: "Inventario", price: 14.99, description: "Stock, productos, entradas, salidas y alertas de reposición.", Icon: Package },
+  { id: "client_portal", name: "Portal Cliente", price: 19.99, description: "Área privada para citas, documentos, pagos y solicitudes.", Icon: ShieldCheck },
+  { id: "surveys", name: "Encuestas", price: 7.99, description: "NPS, valoraciones y experiencia del cliente.", Icon: Star },
+  { id: "hr", name: "RRHH", price: 19.99, description: "Vacaciones, incidencias, equipo y documentos internos.", Icon: Briefcase },
+  { id: "automations", name: "Automatizaciones", price: 24.99, description: "Flujos no-code entre CRM, WhatsApp, agenda y tareas.", Icon: Workflow },
+  { id: "digital_signature", name: "Firma digital", price: 12.99, description: "Contratos, presupuestos y consentimientos firmables.", Icon: FileSignature },
   { id: "time_tracking", name: "Módulo Fichaje", price: 11.99, description: "Registro de entrada, salida, pausas y control horario del equipo.", Icon: Clock },
 ];
 
@@ -85,6 +120,7 @@ function formatMoney(value: number, country: Country) {
 export default function PreciosPage() {
   const [country, setCountry] = useState<Country>("ES");
   const [selectedModules, setSelectedModules] = useState<ModuleId[]>(["whatsapp", "analytics"]);
+  const [businessType, setBusinessType] = useState<BusinessTypeId>("other");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState("");
 
@@ -112,6 +148,12 @@ export default function PreciosPage() {
     return base + modules.filter((item) => selectedModules.includes(item.id)).reduce((sum, item) => sum + item.price, 0);
   }, [selectedModules]);
 
+  const chooseBusinessType = (id: BusinessTypeId) => {
+    setBusinessType(id);
+    const found = businessTypes.find((item) => item.id === id);
+    if (found) setSelectedModules(found.recommended);
+  };
+
   const toggleModule = (id: ModuleId) => {
     setSelectedModules((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   };
@@ -122,7 +164,7 @@ export default function PreciosPage() {
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, modules: moduleIds, country, currency: getMarket(country).currency, referralCode }),
+        body: JSON.stringify({ plan, modules: moduleIds, country, currency: getMarket(country).currency, referralCode, businessType }),
       });
       const data = await response.json();
       if (data.url) window.location.href = data.url;
@@ -182,6 +224,13 @@ export default function PreciosPage() {
           <div id="modular" className="flowly-card rounded-[2rem] p-7">
             <p className="text-sm font-medium text-cyan-200">Configurable</p>
             <h2 className="mt-3 text-3xl font-semibold">Flowly Modular</h2>
+              <div className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-left">
+                <label className="text-sm font-semibold text-cyan-100">Tipo de negocio</label>
+                <select value={businessType} onChange={(e) => chooseBusinessType(e.target.value as BusinessTypeId)} className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none">
+                  {businessTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                </select>
+                <p className="mt-2 text-xs text-white/55">Selecciona el sector y Flowly marcará automáticamente los módulos recomendados. Puedes cambiar la selección manualmente.</p>
+              </div>
             <p className="mt-3 text-white/60">Empieza desde una base ligera y añade solo los módulos que necesitas.</p>
             <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(modularTotal, country)}</span><span className="text-white/50"> / mes</span></div>
             <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm text-cyan-100">Base incluida: dashboard, clientes, reservas, calendario y servicios.</div>
