@@ -45,7 +45,16 @@ function getMessageText(message: WhatsAppMessage) {
   return message.type ? `[${message.type}]` : "";
 }
 
-async function findBusinessByPhoneNumberId(phoneNumberId?: string) {
+function normalizePhone(value: string | null | undefined) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+type WhatsAppIntegration = {
+  business_id: string;
+  config: Record<string, unknown> | null;
+};
+
+async function findIntegrationByPhoneNumberId(phoneNumberId?: string): Promise<WhatsAppIntegration | null> {
   if (!phoneNumberId) return null;
 
   const { data, error } = await supabaseAdmin
@@ -61,16 +70,25 @@ async function findBusinessByPhoneNumberId(phoneNumberId?: string) {
     return String(config.phone_number_id || config.phoneNumberId || "") === String(phoneNumberId);
   });
 
-  return match?.business_id || null;
+  return match ? { business_id: match.business_id as string, config: (match.config || {}) as Record<string, unknown> } : null;
+}
+
+async function findCustomerIdByPhone(businessId: string, phone: string) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+  const { data } = await supabaseAdmin.from("customers").select("id, phone").eq("business_id", businessId).limit(200);
+  const match = (data || []).find((customer) => normalizePhone(customer.phone) === normalized);
+  return match?.id || null;
 }
 
 async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue, message: WhatsAppMessage) {
   const phone = message.from || value.contacts?.[0]?.wa_id || "";
   const customerName = value.contacts?.find((contact) => contact.wa_id === phone)?.profile?.name || value.contacts?.[0]?.profile?.name || null;
+  const customerId = await findCustomerIdByPhone(businessId, phone);
 
   const payload = {
     business_id: businessId,
-    customer_id: null,
+    customer_id: customerId,
     phone,
     template_key: null,
     message: getMessageText(message),
@@ -84,6 +102,70 @@ async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue
 
   const { error } = await supabaseAdmin.from("whatsapp_messages").insert(payload);
   if (error) console.error("WHATSAPP WEBHOOK INSERT ERROR", error.message);
+}
+
+async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: string | undefined, to: string, text: string, trigger: string) {
+  const config = integration.config || {};
+  const accessToken = String(config.access_token || "");
+  const phoneId = String(config.phone_number_id || config.phoneNumberId || phoneNumberId || "");
+  const phone = normalizePhone(to);
+  if (!accessToken || !phoneId || !phone || !text.trim()) return;
+
+  const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: phone,
+      type: "text",
+      text: { preview_url: true, body: text },
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error("WHATSAPP BOT SEND ERROR", result?.error?.message || result);
+    return;
+  }
+
+  await supabaseAdmin.from("whatsapp_messages").insert({
+    business_id: integration.business_id,
+    customer_id: await findCustomerIdByPhone(integration.business_id, phone),
+    phone,
+    template_key: `bot:${trigger}`,
+    message: text,
+    direction: "outbound",
+    status: "sent",
+    provider_message_id: result?.messages?.[0]?.id || null,
+    raw_payload: result,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function runBotRules(integration: WhatsAppIntegration, phoneNumberId: string | undefined, message: WhatsAppMessage) {
+  const incomingText = getMessageText(message).trim();
+  const phone = message.from || "";
+  if (!incomingText || !phone) return;
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_bot_rules")
+    .select("trigger_text, response_message, match_mode, is_active")
+    .eq("business_id", integration.business_id)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (error || !data?.length) return;
+  const normalizedText = incomingText.toLowerCase();
+  const matchedRule = data.find((rule) => {
+    const trigger = String(rule.trigger_text || "").toLowerCase().trim();
+    if (!trigger) return false;
+    return rule.match_mode === "exact" ? normalizedText === trigger : normalizedText.includes(trigger);
+  });
+
+  if (matchedRule?.response_message) {
+    await sendAutoReply(integration, phoneNumberId, phone, String(matchedRule.response_message), String(matchedRule.trigger_text || "bot"));
+  }
 }
 
 async function updateMessageStatus(businessId: string, status: WhatsAppStatus) {
@@ -128,19 +210,20 @@ export async function POST(request: NextRequest) {
       for (const change of changes) {
         const value = (change?.value || {}) as WhatsAppChangeValue;
         const phoneNumberId = value.metadata?.phone_number_id;
-        const businessId = await findBusinessByPhoneNumberId(phoneNumberId);
+        const integration = await findIntegrationByPhoneNumberId(phoneNumberId);
 
-        if (!businessId) {
+        if (!integration) {
           console.warn("WHATSAPP WEBHOOK WITHOUT BUSINESS MATCH", { phoneNumberId });
           continue;
         }
 
         for (const message of value.messages || []) {
-          await saveInboundMessage(businessId, value, message);
+          await saveInboundMessage(integration.business_id, value, message);
+          await runBotRules(integration, phoneNumberId, message);
         }
 
         for (const status of value.statuses || []) {
-          await updateMessageStatus(businessId, status);
+          await updateMessageStatus(integration.business_id, status);
         }
       }
     }

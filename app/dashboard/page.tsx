@@ -134,6 +134,18 @@ type WhatsappTemplate = {
   updated_at?: string | null;
 };
 
+type WhatsappBotRule = {
+  id?: string;
+  business_id?: string;
+  name: string;
+  trigger_text: string;
+  response_message: string;
+  match_mode?: "contains" | "exact" | string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 type CrmReminder = {
   id: string;
   business_id: string;
@@ -360,6 +372,7 @@ export default function DashboardPage() {
   const [clinicalDocuments, setClinicalDocuments] = useState<ClinicalDocument[]>([]);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsappMessage[]>([]);
   const [whatsappTemplatesData, setWhatsappTemplatesData] = useState<WhatsappTemplate[]>([]);
+  const [whatsappBotRules, setWhatsappBotRules] = useState<WhatsappBotRule[]>([]);
   const [crmReminders, setCrmReminders] = useState<CrmReminder[]>([]);
   const [dueReminder, setDueReminder] = useState<CrmReminder | null>(null);
   const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
@@ -443,7 +456,7 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, integrationsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, crmRemindersRes, avatarRes] = await Promise.all([
+    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, integrationsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, whatsappBotRulesRes, crmRemindersRes, avatarRes] = await Promise.all([
       supabase.from("company_profiles").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -457,6 +470,7 @@ export default function DashboardPage() {
       supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_templates").select("*").eq("business_id", businessId).eq("is_active", true).order("label", { ascending: true }),
+      supabase.from("whatsapp_bot_rules").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("crm_reminders").select("*").eq("business_id", businessId).order("reminder_at", { ascending: true }),
       supabase
         .from("business_avatars")
@@ -493,6 +507,8 @@ export default function DashboardPage() {
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
     setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
     setWhatsappTemplatesData(((whatsappTemplatesRes.data || []) as WhatsappTemplate[]).map(normalizeWhatsappTemplate));
+    setWhatsappBotRules((whatsappBotRulesRes.data || []) as WhatsappBotRule[]);
+    if (whatsappBotRulesRes.error) console.warn("No se pudieron cargar bots WhatsApp", whatsappBotRulesRes.error.message);
     setCrmReminders(((crmRemindersRes.data || []) as unknown as CrmReminder[]).map(normalizeCrmReminder));
     setBusinessAvatar((avatarRes.data as BusinessAvatar | null) || null);
     if (avatarRes.error) console.warn("No se pudo cargar la Mascota IA", avatarRes.error.message);
@@ -1360,8 +1376,10 @@ export default function DashboardPage() {
                       { label: "Configuración", tab: "module:agenda-pro:configuracion" as ActiveTab },
                     ],
                     whatsapp: [
+                      { label: "Bandeja", tab: "module:whatsapp:bandeja" as ActiveTab },
                       { label: "Enviar", tab: "module:whatsapp:enviar" as ActiveTab },
                       { label: "Plantillas", tab: "module:whatsapp:plantillas" as ActiveTab },
+                      { label: "Bots", tab: "module:whatsapp:bots" as ActiveTab },
                     ],
                     crm: [
                       { label: "Ficha 360", tab: "module:crm:ficha" as ActiveTab },
@@ -1584,7 +1602,7 @@ export default function DashboardPage() {
             avatarGenerating={avatarGenerating}
             generateBusinessAvatar={generateBusinessAvatar}
           />}
-          {activeModule && <ModuleSection business={business} integrations={businessIntegrations} reloadData={loadData} module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
+          {activeModule && <ModuleSection business={business} integrations={businessIntegrations} reloadData={loadData} module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} whatsappBotRules={whatsappBotRules} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
 
           <FloatingAvatarAssistant
             businessAvatar={businessAvatar}
@@ -1995,7 +2013,7 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
   );
 }
 
-function ModuleSection(props: { business: Business | null; integrations: BusinessIntegration[]; reloadData: () => Promise<void>; module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null; settings?: BookingSettings | null }) {
+function ModuleSection(props: { business: Business | null; integrations: BusinessIntegration[]; reloadData: () => Promise<void>; module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; whatsappBotRules: WhatsappBotRule[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null; settings?: BookingSettings | null }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -3355,6 +3373,7 @@ function WhatsappModule({
   customers,
   whatsappMessages,
   whatsappTemplatesEffective,
+  whatsappBotRules,
   saveWhatsappTemplate,
   deleteWhatsappTemplate,
   saveWhatsappMessage,
@@ -3376,7 +3395,7 @@ function WhatsappModule({
   }, [whatsappTemplatesEffective]);
 
   const templates = localTemplates.length ? localTemplates : whatsappTemplatesEffective;
-  const currentView = activeTab === "module:whatsapp:plantillas" ? "plantillas" : "enviar";
+  const currentView = activeTab === "module:whatsapp:plantillas" ? "plantillas" : activeTab === "module:whatsapp:bots" ? "bots" : activeTab === "module:whatsapp:enviar" ? "enviar" : "bandeja";
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
   const selectedTemplate = templates.find((template) => template.key === selectedTemplateKey) || null;
   const finalMessage = customMessage || (selectedTemplate && selectedCustomer ? whatsappMessageForCustomer(selectedTemplate.message, selectedCustomer) : selectedTemplate?.message || "");
@@ -3385,6 +3404,41 @@ function WhatsappModule({
   const displayPhone = String(whatsappConfig.display_phone_number || whatsappConfig.verified_name || whatsappConfig.phone_number_id || "");
   const conversations = whatsappMessages.slice(0, 12);
   const [sending, setSending] = useState(false);
+  const [selectedConversationPhone, setSelectedConversationPhone] = useState("");
+  const [replyMessage, setReplyMessage] = useState("");
+  const [botName, setBotName] = useState("");
+  const [botTrigger, setBotTrigger] = useState("");
+  const [botResponse, setBotResponse] = useState("");
+  const [botMatchMode, setBotMatchMode] = useState("contains");
+  const [localBotRules, setLocalBotRules] = useState<WhatsappBotRule[]>([]);
+
+  useEffect(() => {
+    setLocalBotRules(whatsappBotRules || []);
+  }, [whatsappBotRules]);
+
+  const conversationGroups = useMemo(() => {
+    const map = new Map<string, { phone: string; customer: Customer | null; contactName: string; lastMessage: WhatsappMessage; messages: WhatsappMessage[]; unread: number }>();
+    const sorted = [...whatsappMessages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    for (const message of sorted) {
+      const phoneKey = normalizePhone(message.phone);
+      if (!phoneKey) continue;
+      const customer = customers.find((item) => normalizePhone(item.phone) === phoneKey) || null;
+      const current = map.get(phoneKey) || { phone: phoneKey, customer, contactName: message.contact_name || customerName(customer), lastMessage: message, messages: [], unread: 0 };
+      current.customer = current.customer || customer;
+      current.contactName = message.contact_name || customerName(current.customer) || current.contactName || phoneKey;
+      current.messages.push(message);
+      current.lastMessage = message;
+      if (message.direction === "inbound" && message.status === "received") current.unread += 1;
+      map.set(phoneKey, current);
+    }
+    return Array.from(map.values()).sort((a, b) => new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime());
+  }, [whatsappMessages, customers]);
+
+  useEffect(() => {
+    if (!selectedConversationPhone && conversationGroups[0]?.phone) setSelectedConversationPhone(conversationGroups[0].phone);
+  }, [conversationGroups, selectedConversationPhone]);
+
+  const selectedConversation = conversationGroups.find((item) => item.phone === selectedConversationPhone) || conversationGroups[0] || null;
 
   const handleSelectTemplate = (key: string) => {
     setSelectedTemplateKey(key);
@@ -3434,6 +3488,83 @@ function WhatsappModule({
     } finally {
       setSending(false);
     }
+  };
+
+
+  const sendConversationReply = async () => {
+    if (!business) return alert("No se ha cargado el negocio");
+    if (!selectedConversation) return alert("Selecciona una conversación");
+    if (!replyMessage.trim()) return alert("Escribe una respuesta");
+    if (!whatsappConnection) return alert("Conecta WhatsApp Cloud antes de responder desde Flowly");
+    setSending(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          customerId: selectedConversation.customer?.id || null,
+          phone: selectedConversation.phone,
+          templateKey: "reply",
+          message: replyMessage,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo enviar la respuesta");
+      setReplyMessage("");
+      await reloadData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Error respondiendo WhatsApp");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const createBotRule = async () => {
+    if (!business) return alert("No se ha cargado el negocio");
+    if (!botName.trim() || !botTrigger.trim() || !botResponse.trim()) return alert("Completa nombre, palabra clave y respuesta del bot");
+    const payload = {
+      business_id: business.id,
+      name: botName.trim(),
+      trigger_text: botTrigger.trim().toLowerCase(),
+      response_message: botResponse.trim(),
+      match_mode: botMatchMode,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase.from("whatsapp_bot_rules").insert(payload).select("*").maybeSingle();
+    if (error) return alert(error.message);
+    setLocalBotRules((current) => [data as WhatsappBotRule, ...current]);
+    setBotName("");
+    setBotTrigger("");
+    setBotResponse("");
+    await reloadData();
+  };
+
+  const toggleBotRule = async (rule: WhatsappBotRule) => {
+    if (!business || !rule.id) return;
+    const { error } = await supabase
+      .from("whatsapp_bot_rules")
+      .update({ is_active: !rule.is_active, updated_at: new Date().toISOString() })
+      .eq("id", rule.id)
+      .eq("business_id", business.id);
+    if (error) return alert(error.message);
+    setLocalBotRules((current) => current.map((item) => item.id === rule.id ? { ...item, is_active: !rule.is_active } : item));
+    await reloadData();
+  };
+
+  const deleteBotRule = async (rule: WhatsappBotRule) => {
+    if (!business || !rule.id) return;
+    if (!confirm("¿Eliminar esta regla de bot?")) return;
+    const { error } = await supabase.from("whatsapp_bot_rules").delete().eq("id", rule.id).eq("business_id", business.id);
+    if (error) return alert(error.message);
+    setLocalBotRules((current) => current.filter((item) => item.id !== rule.id));
+    await reloadData();
   };
 
   const createTemplate = async () => {
@@ -3509,14 +3640,58 @@ function WhatsappModule({
               )}
             </div>
           </div>
-          <div className="flex rounded-full border border-white/10 bg-black/25 p-1">
+          <div className="flex flex-wrap rounded-[1.5rem] border border-white/10 bg-black/25 p-1">
+            <button onClick={() => setActiveTab("module:whatsapp:bandeja")} className={currentView === "bandeja" ? "rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-5 py-2 text-sm text-white/60 hover:text-white"}>Bandeja</button>
             <button onClick={() => setActiveTab("module:whatsapp:enviar")} className={currentView === "enviar" ? "rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-5 py-2 text-sm text-white/60 hover:text-white"}>Enviar</button>
             <button onClick={() => setActiveTab("module:whatsapp:plantillas")} className={currentView === "plantillas" ? "rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-5 py-2 text-sm text-white/60 hover:text-white"}>Plantillas</button>
+            <button onClick={() => setActiveTab("module:whatsapp:bots")} className={currentView === "bots" ? "rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950" : "rounded-full px-5 py-2 text-sm text-white/60 hover:text-white"}>Bots</button>
           </div>
         </div>
       </GlassCard>
 
-      {currentView === "enviar" ? (
+      {currentView === "bandeja" ? (
+        <section className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
+          <GlassCard title="Bandeja de conversaciones">
+            <div className="grid gap-3">
+              {conversationGroups.length ? conversationGroups.map((conversation) => (
+                <button key={conversation.phone} onClick={() => setSelectedConversationPhone(conversation.phone)} className={selectedConversation?.phone === conversation.phone ? "rounded-[1.5rem] border border-cyan-300/35 bg-cyan-400/10 p-4 text-left" : "rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 text-left hover:bg-white/[0.08]"}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{conversation.contactName || conversation.phone}</p>
+                      <p className="mt-1 truncate text-xs text-white/45">+{conversation.phone}</p>
+                    </div>
+                    {conversation.unread > 0 && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[11px] font-bold text-neutral-950">{conversation.unread}</span>}
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-sm text-white/65">{conversation.lastMessage.message}</p>
+                </button>
+              )) : <Empty text="Aún no hay conversaciones. Cuando alguien escriba a tu WhatsApp conectado aparecerá aquí." />}
+            </div>
+          </GlassCard>
+          <GlassCard title={selectedConversation ? `Chat · ${selectedConversation.contactName || selectedConversation.phone}` : "Chat"}>
+            {selectedConversation ? (
+              <div className="grid gap-4">
+                <div className="max-h-[32rem] overflow-y-auto rounded-[2rem] border border-white/10 bg-black/25 p-4">
+                  <div className="grid gap-3">
+                    {selectedConversation.messages.map((message) => (
+                      <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[82%] rounded-[1.35rem] rounded-bl-md border border-white/10 bg-white/[0.07] p-3" : "ml-auto max-w-[82%] rounded-[1.35rem] rounded-br-md border border-cyan-300/20 bg-cyan-400/15 p-3"}>
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-white/85">{message.message}</p>
+                        <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/35">{message.direction === "inbound" ? "Cliente" : message.status || "Enviado"} · {new Date(message.created_at).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-3 rounded-[2rem] border border-white/10 bg-white/[0.045] p-4">
+                  <textarea value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder="Responder desde Flowly..." className="input-dark min-h-28" />
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-xs text-white/45">Respondes usando la cuenta WhatsApp Cloud conectada.</span>
+                    <button onClick={sendConversationReply} disabled={sending || !whatsappConnection} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"><Send size={16} /> {sending ? "Enviando..." : "Responder"}</button>
+                  </div>
+                </div>
+              </div>
+            ) : <Empty text="Selecciona una conversación." />}
+          </GlassCard>
+        </section>
+      ) : currentView === "enviar" ? (
         <GlassCard title="Enviar WhatsApp">
           <div className="mx-auto grid max-w-3xl gap-4">
             <label className="grid gap-2 text-sm font-medium text-white/70">
@@ -3585,7 +3760,7 @@ function WhatsappModule({
             </button>
           </div>
         </GlassCard>
-      ) : (
+      ) : currentView === "plantillas" ? (
         <GlassCard title="Plantillas WhatsApp">
           <div className="mx-auto grid max-w-4xl gap-6">
             <div className="rounded-[2rem] border border-white/10 bg-black/25 p-5">
@@ -3628,6 +3803,43 @@ function WhatsappModule({
             </div>
           </div>
         </GlassCard>
+      ) : (
+        <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+          <GlassCard title="Crear bot de respuesta">
+            <div className="grid gap-3">
+              <input value={botName} onChange={(e) => setBotName(e.target.value)} placeholder="Nombre de la regla: Precios, Citas, Horario..." className="input-dark" />
+              <select value={botMatchMode} onChange={(e) => setBotMatchMode(e.target.value)} className="input-dark">
+                <option value="contains">Si el mensaje contiene</option>
+                <option value="exact">Si el mensaje es exactamente</option>
+              </select>
+              <input value={botTrigger} onChange={(e) => setBotTrigger(e.target.value)} placeholder="Palabra clave: precio, cita, horario..." className="input-dark" />
+              <textarea value={botResponse} onChange={(e) => setBotResponse(e.target.value)} placeholder="Respuesta automática que enviará Flowly" className="input-dark min-h-40" />
+              <button onClick={createBotRule} className="btn-primary justify-center"><Bot size={17} /> Crear bot</button>
+            </div>
+          </GlassCard>
+          <GlassCard title="Bots activos">
+            <div className="grid gap-3">
+              {localBotRules.length ? localBotRules.map((rule) => (
+                <div key={rule.id || rule.trigger_text} className="rounded-[1.5rem] border border-white/10 bg-white/[0.05] p-5">
+                  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold">{rule.name}</p>
+                        <span className={rule.is_active ? "rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-100" : "rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/45"}>{rule.is_active ? "Activo" : "Pausado"}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-white/45">{rule.match_mode === "exact" ? "Coincide exactamente" : "Contiene"}: <span className="text-cyan-100">{rule.trigger_text}</span></p>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{rule.response_message}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button onClick={() => toggleBotRule(rule)} className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/75 hover:bg-white/10">{rule.is_active ? "Pausar" : "Activar"}</button>
+                      <button onClick={() => deleteBotRule(rule)} className="rounded-full border border-red-300/20 px-4 py-2 text-xs text-red-200/80 hover:bg-red-500/10">Eliminar</button>
+                    </div>
+                  </div>
+                </div>
+              )) : <Empty text="Crea reglas para responder automáticamente a palabras clave como precio, cita u horario." />}
+            </div>
+          </GlassCard>
+        </section>
       )}
     </section>
   );
