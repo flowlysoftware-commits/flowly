@@ -51,7 +51,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     url.searchParams.set("redirect_uri", redirectUri);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("state", state);
-    url.searchParams.set("scope", provider === "whatsapp_cloud" ? "whatsapp_business_management,whatsapp_business_messaging,business_management" : "ads_read,ads_management,business_management,pages_show_list,instagram_basic");
+   url.searchParams.set(
+  "scope",
+  provider === "whatsapp_cloud"
+    ? "whatsapp_business_management,whatsapp_business_messaging"
+    : "ads_read,ads_management,business_management,pages_show_list,instagram_basic"
+);
     return NextResponse.redirect(url);
   }
 
