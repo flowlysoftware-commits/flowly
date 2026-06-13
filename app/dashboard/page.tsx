@@ -1269,9 +1269,6 @@ export default function DashboardPage() {
           <div className="mb-5 rounded-[1.5rem] bg-neutral-950/70 p-5">
             <div className="flex items-center gap-3">
               <Image src="/logo.png" alt="Flowly IA" width={136} height={38} className="h-auto w-32 object-contain" priority />
-              {businessAvatar?.avatar_url && (
-                <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-12 w-12 rounded-2xl border border-cyan-300/25 object-cover shadow-lg shadow-cyan-500/20" />
-              )}
             </div>
             <p className="mt-3 text-sm text-violet-200">Panel cliente</p>
             {businessAvatar?.avatar_name && <p className="mt-1 text-xs text-white/40">Mascota IA: {businessAvatar.avatar_name}</p>}
@@ -1330,15 +1327,10 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="grid gap-3 sm:min-w-[260px]">
-                {businessAvatar?.avatar_url && (
+                {businessAvatar?.avatar_name && (
                   <div className="rounded-[1.5rem] border border-cyan-300/20 bg-cyan-500/10 p-4 text-cyan-50 shadow-xl shadow-cyan-950/20">
-                    <div className="flex items-center gap-3">
-                      <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-14 w-14 rounded-2xl border border-white/10 object-cover" />
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Mascota IA activa</p>
-                        <p className="mt-1 text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</p>
-                      </div>
-                    </div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Asistente 3D activo</p>
+                    <p className="mt-1 text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"} camina por el panel</p>
                   </div>
                 )}
                 <div className="rounded-[1.5rem] border border-violet-300/20 bg-violet-500/15 px-5 py-4 text-violet-100"><p className="text-sm text-violet-200">Estado suscripción</p><p className="mt-1 text-2xl font-semibold capitalize">{business.subscription_status || "trialing"}</p></div>
@@ -1511,13 +1503,13 @@ function FloatingAvatarAssistant({
 
   const characterPositions = [
     { left: "auto", right: "1.1rem", bottom: "1.1rem", facing: "left" as const, label: "esquina inferior" },
-    { left: "1.1rem", right: "auto", bottom: "1.2rem", facing: "right" as const, label: "menú lateral" },
+    { left: "22rem", right: "auto", bottom: "1.2rem", facing: "right" as const, label: "menú lateral" },
     { left: "50%", right: "auto", bottom: "0.8rem", facing: "left" as const, label: "centro del panel" },
     { left: "auto", right: "2.4rem", bottom: "34vh", facing: "left" as const, label: "zona de métricas" },
   ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
-  const characterTransform = `${currentPosition.left === "50%" ? "translateX(-50%) " : ""}${currentPosition.facing === "right" ? "scaleX(-1)" : "scaleX(1)"}`;
+  const characterTransform = currentPosition.left === "50%" ? "translateX(-50%)" : "none";
   const modelUrl = "/avatars/flowly-grandma.glb";
   const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : tourOpen ? "point" : thinking ? "thinking" : open ? "wave" : "idle";
 
@@ -1619,7 +1611,7 @@ function FloatingAvatarAssistant({
           <div className="pointer-events-auto w-[min(92vw,460px)] overflow-hidden rounded-[2rem] border border-cyan-300/25 bg-neutral-950/90 p-5 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl">
             <div className="flex items-start gap-4">
               <div className="flowly-avatar-stage-small shrink-0">
-                {avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img-small" /> : <Bot size={34} />}
+                <Bot size={34} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
@@ -1645,7 +1637,7 @@ function FloatingAvatarAssistant({
             <div className="border-b border-white/10 bg-gradient-to-r from-cyan-500/15 via-violet-500/15 to-fuchsia-500/10 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flowly-avatar-stage-mini">{avatarUrl ? <img src={avatarUrl} alt={avatarName} className="flowly-avatar-img-mini" /> : <Bot size={24} />}</div>
+                  <div className="flowly-avatar-stage-mini"><Bot size={24} /></div>
                   <div>
                     <p className="text-sm font-semibold text-white">{avatarName}, asistente 3D de {businessName}</p>
                     <p className="text-xs text-cyan-100/55">Voz del navegador, tour guiado y consultas del panel.</p>
@@ -1702,13 +1694,11 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
             <p className="mt-4 max-w-3xl text-sm leading-6 text-white/62">Vista ejecutiva para dirigir el negocio: suscripción, reservas, CRM, automatizaciones, redes, pagos y módulos premium desde un único sistema operativo.</p>
           </div>
           <div className="grid min-w-[280px] gap-3 rounded-[2rem] border border-white/10 bg-black/25 p-4 backdrop-blur-xl">
-            {businessAvatar?.avatar_url && (
-              <div className="flex items-center gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-3">
-                <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-16 w-16 rounded-2xl object-cover" />
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Asistente IA</p>
-                  <p className="text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</p>
-                </div>
+            {businessAvatar?.avatar_name && (
+              <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Asistente 3D</p>
+                <p className="text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</p>
+                <p className="mt-1 text-xs text-white/45">Personaje interactivo activo en pantalla.</p>
               </div>
             )}
             <InfoBox label="Negocio" value={business.name} />
@@ -2394,16 +2384,11 @@ function AiModule({ records, customers, appointments, revenue, title, setTitle, 
   return (
     <section className="grid gap-6">
       <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description={businessAvatar?.avatar_name ? `${businessAvatar.avatar_name} es la mascota IA del negocio: analiza CRM, agenda, ventas y campañas para dar notas ejecutivas dentro del panel.` : "Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA."} actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={setTab} />} />
-      {businessAvatar?.avatar_url && (
+      {businessAvatar?.avatar_name && (
         <div className="rounded-[2rem] border border-cyan-300/20 bg-gradient-to-br from-cyan-500/15 via-violet-500/10 to-black/20 p-5 shadow-2xl shadow-cyan-950/20">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-24 w-24 rounded-3xl border border-white/10 object-cover" />
-            <div>
-              <p className="text-sm uppercase tracking-[0.18em] text-cyan-100/70">Mascota IA activa</p>
-              <h3 className="mt-1 text-2xl font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</h3>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/58">Hoy puede ayudarte a revisar clientes sin seguimiento, huecos libres de agenda, campañas recomendadas y tareas comerciales prioritarias.</p>
-            </div>
-          </div>
+          <p className="text-sm uppercase tracking-[0.18em] text-cyan-100/70">Asistente 3D activo</p>
+          <h3 className="mt-1 text-2xl font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/58">El personaje 3D flotante puede hacer tours, hablar con voz del navegador y guiar al usuario por CRM, Agenda, WhatsApp, Voice, IA, pagos y estadísticas.</p>
         </div>
       )}
       <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Bot />} label="Prompts" value={records.length} helper="Guardados" /><Metric icon={<Users />} label="Clientes" value={customers.length} helper="Contexto CRM" /><Metric icon={<CalendarDays />} label="Agenda" value={appointments.length} helper={occupancySignal} /><Metric icon={<TrendingUp />} label="Ingresos" value={`${revenue.toFixed(2)}€`} helper="Lectura financiera" /></div>

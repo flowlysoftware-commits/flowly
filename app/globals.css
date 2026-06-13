@@ -1026,13 +1026,13 @@ input[type="date"].input-dark { color-scheme: dark; }
 /* Mascota IA 4.0 · personaje 3D real en WebGL */
 .flowly-3d-character-wrap {
   position: fixed;
-  width: clamp(13rem, 16vw, 19rem);
-  height: clamp(18rem, 25vw, 29rem);
+  width: clamp(10.5rem, 13vw, 15.5rem);
+  height: clamp(16rem, 22vw, 24rem);
   z-index: 45;
   display: grid;
   place-items: center;
   transition: left 1.65s cubic-bezier(.22, 1, .36, 1), right 1.65s cubic-bezier(.22, 1, .36, 1), bottom 1.65s cubic-bezier(.22, 1, .36, 1), transform 1.65s cubic-bezier(.22, 1, .36, 1), filter .35s ease;
-  filter: drop-shadow(0 34px 48px rgba(0,0,0,.42));
+  filter: drop-shadow(0 26px 34px rgba(0,0,0,.34));
   perspective: 1200px;
 }
 .flowly-3d-stage {
@@ -1088,10 +1088,10 @@ input[type="date"].input-dark { color-scheme: dark; }
   background: radial-gradient(circle, rgba(236,72,153,.24), rgba(34,211,238,.14) 45%, transparent 72%);
 }
 .flowly-3d-character-wrap .flowly-character-hotspot {
-  inset: -2.6rem -1.2rem auto auto;
+  inset: -2.8rem -1rem auto auto;
 }
 .flowly-3d-character-wrap .flowly-character-speech {
-  transform: scaleX(var(--speech-scale, 1));
+  transform: none;
 }
 @keyframes flowly-3d-breathe {
   0%, 100% { transform: translateY(0) scale(1) rotateX(0deg); }
@@ -1119,8 +1119,8 @@ input[type="date"].input-dark { color-scheme: dark; }
 }
 @media (max-width: 768px) {
   .flowly-3d-character-wrap {
-    width: 10.5rem;
-    height: 15.5rem;
+    width: 8.8rem;
+    height: 14rem;
     right: .35rem !important;
     left: auto !important;
     bottom: .75rem !important;

@@ -76,8 +76,8 @@ function Model({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing
     const wave = mode === "wave";
     const point = mode === "point";
 
-    group.current.position.y = -1.05 + Math.sin(t * (walk ? 8 : 2.2)) * (walk ? 0.055 : 0.025);
-    group.current.rotation.y = (facing === "right" ? -0.42 : 0.42) + Math.sin(t * 1.3) * 0.035;
+    group.current.position.y = -1.22 + Math.sin(t * (walk ? 8 : 2.2)) * (walk ? 0.04 : 0.018);
+    group.current.rotation.y = (facing === "right" ? -0.28 : 0.28) + Math.sin(t * 1.3) * 0.025;
     group.current.rotation.z = Math.sin(t * (walk ? 7.5 : 1.8)) * (walk ? 0.045 : 0.014);
     group.current.rotation.x = talk ? Math.sin(t * 6.5) * 0.028 : 0;
 
@@ -100,7 +100,7 @@ function Model({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing
   });
 
   return (
-    <group ref={group} scale={1.82} position={[0, -1.05, 0]}>
+    <group ref={group} scale={1.18} position={[0, -1.22, 0]}>
       <primitive object={scene} />
     </group>
   );
@@ -118,7 +118,7 @@ function ModelFallback() {
 export default function FlowlyAssistant3D({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing = "left", onClick }: FlowlyAssistant3DProps) {
   return (
     <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
-      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.1, 4.2], fov: 34 }} gl={{ alpha: true, antialias: true }}>
+      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.15, 5.7], fov: 31 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
         <ambientLight intensity={1.45} />
         <directionalLight position={[2.4, 4, 3]} intensity={2.2} castShadow />
         <pointLight position={[-2.2, 2.8, 2]} intensity={1.4} color="#8b5cf6" />
@@ -137,4 +137,3 @@ export default function FlowlyAssistant3D({ modelUrl = "/avatars/flowly-grandma.
 }
 
 useGLTF.preload("/avatars/flowly-grandma.glb");
-useGLTF.preload("/flowly-grandma.glb");
