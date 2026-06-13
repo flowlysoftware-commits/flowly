@@ -6,6 +6,7 @@ import { convertBasePrice, resolveFlowlyMarket, stripeUnitAmount } from "@/lib/s
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const modularModules = [
+  { id: "agenda", name: "Agenda PRO", price: 9.99 },
   { id: "whatsapp", name: "WhatsApp automático", price: 9.99 },
   { id: "billing", name: "Facturación", price: 9.99 },
   { id: "pos", name: "TPV", price: 14.99 },

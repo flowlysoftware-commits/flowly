@@ -143,6 +143,7 @@ const plans: PlanOption[] = [
 ];
 
 const modules: ModuleOption[] = [
+  { key: "agenda", name: "Agenda PRO", price: 9.99 },
   { key: "whatsapp", name: "WhatsApp automático", price: 9.99 },
   { key: "billing", name: "Facturación PRO", price: 9.99 },
   { key: "pos", name: "TPV", price: 14.99 },

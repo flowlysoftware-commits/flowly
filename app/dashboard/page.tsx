@@ -245,6 +245,7 @@ const DASHBOARD_TIME_ZONE_LABEL = "hora Colombia";
 const BOGOTA_UTC_OFFSET = "-05:00";
 
 const moduleCatalog: ModuleItem[] = [
+  { key: "agenda", slug: "agenda-pro", name: "Agenda PRO", short: "Agenda PRO", price: "+9,99€", badge: "Calendario", description: "Calendario visual por cuadrados con citas, huecos libres, agenda diaria/semanal y creación rápida de citas.", Icon: CalendarDays, proFeatures: ["Calendario visual", "Huecos libres", "Crear citas rápidas"] },
   { key: "crm", slug: "crm", name: "CRM avanzado", short: "CRM", price: "+9,99€", badge: "Producto estrella", description: "Pipeline, filtros, notas, segmentos, historial y acciones comerciales por cliente.", Icon: UserCog, proFeatures: ["Ficha 360º de cliente", "Filtros por estado y contacto", "Notas y próximos pasos"] },
   { key: "whatsapp", slug: "whatsapp", name: "WhatsApp automático", short: "WhatsApp", price: "+9,99€", badge: "Automatización", description: "Conecta tu número, crea plantillas y prepara bots de confirmación, recordatorio y recuperación.", Icon: MessageCircle, proFeatures: ["Plantillas con variables", "Bot de recordatorio", "Conexión preparada para proveedor"] },
   { key: "billing", slug: "facturacion", name: "Facturación", short: "Facturación", price: "+9,99€", badge: "Finanzas", description: "Control de ingresos, gastos, proveedores, caja prevista y movimientos manuales.", Icon: Receipt, amountEnabled: true, proFeatures: ["Gastos e ingresos", "Proveedores", "Suma automática de reservas"] },
@@ -1330,6 +1331,12 @@ export default function DashboardPage() {
                   const isActive = activeTab === id || activeTab.startsWith(`${id}:`);
 
                   const submenus: Record<string, { label: string; tab: ActiveTab }[]> = {
+                    agenda: [
+                      { label: "Calendario", tab: "module:agenda-pro:calendario" as ActiveTab },
+                      { label: "Huecos libres", tab: "module:agenda-pro:huecos" as ActiveTab },
+                      { label: "Crear cita", tab: "module:agenda-pro:nueva" as ActiveTab },
+                      { label: "Configuración", tab: "module:agenda-pro:configuracion" as ActiveTab },
+                    ],
                     whatsapp: [
                       { label: "Enviar", tab: "module:whatsapp:enviar" as ActiveTab },
                       { label: "Plantillas", tab: "module:whatsapp:plantillas" as ActiveTab },
@@ -1555,7 +1562,7 @@ export default function DashboardPage() {
             avatarGenerating={avatarGenerating}
             generateBusinessAvatar={generateBusinessAvatar}
           />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} />}
+          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
 
           <FloatingAvatarAssistant
             businessAvatar={businessAvatar}
@@ -1885,10 +1892,11 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
   );
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null }) {
+function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null; settings?: BookingSettings | null }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
+  if (module.key === "agenda") return <AgendaProModule {...props} />;
   if (module.key === "crm") return <CrmModule {...props} />;
   if (module.key === "marketing") return <MarketingModule {...props} />;
   if (module.key === "ai") return <AiModule {...props} />;
@@ -1903,7 +1911,7 @@ function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; all
 }
 
 
-function BusinessOpsModule({ module, records, customers, employees, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab }: Parameters<typeof ModuleSection>[0]) {
+function BusinessOpsModule({ module, records, customers, employees, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const map: Record<string, { prefix: string; tabs: string[]; statuses: { label: string; value: string }[]; placeholder: string; metric: string; }> = {
     inventory: { prefix: "module:inventario:", tabs: ["Productos", "Movimientos", "Alertas"], statuses: [{ label: "Producto", value: "product" }, { label: "Entrada", value: "stock_in" }, { label: "Salida", value: "stock_out" }, { label: "Stock bajo", value: "low_stock" }], placeholder: "Producto, referencia o movimiento", metric: "Stock y reposición" },
     client_portal: { prefix: "module:portal-cliente:", tabs: ["Inicio", "Solicitudes", "Accesos"], statuses: [{ label: "Publicado", value: "published" }, { label: "Solicitud", value: "request" }, { label: "Acceso", value: "access" }], placeholder: "Página, solicitud o acceso del portal", metric: "Experiencia cliente" },
@@ -1918,11 +1926,39 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
     const mapping = Object.fromEntries(cfg.tabs.map((tabName) => [tabName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"), tabName]));
     syncModuleSubmenu(activeTab, cfg.prefix, mapping, setTab);
   }, [activeTab, cfg.prefix]);
-  const visibleRecords = records.filter((record) => tab === cfg.tabs[0] || record.status?.toLowerCase().includes(tab.toLowerCase().slice(0, 5)) || true);
+  const statusGroups: Record<string, string[]> = {
+    Productos: ["product"],
+    Movimientos: ["stock_in", "stock_out", "movement"],
+    Alertas: ["low_stock"],
+    Inicio: ["published"],
+    Solicitudes: ["request"],
+    Accesos: ["access"],
+    Encuestas: ["survey"],
+    Respuestas: ["response"],
+    NPS: ["nps_positive", "nps_risk"],
+    Equipo: ["employee"],
+    Vacaciones: ["vacation"],
+    Documentos: ["document"],
+    Flujos: ["flow_active"],
+    Reglas: ["rule"],
+    Historial: ["run", "paused"],
+    Pendientes: ["pending_signature"],
+    Firmados: ["signed"],
+    Plantillas: ["template"],
+  };
+  const visibleRecords = records.filter((record) => {
+    const accepted = statusGroups[tab];
+    return !accepted || accepted.includes(String(record.status || ""));
+  });
+  useEffect(() => {
+    const accepted = statusGroups[tab];
+    const nextStatus = accepted?.[0] || cfg.statuses[0]?.value || "active";
+    setStatus(nextStatus);
+  }, [tab]);
   const Icon = module.Icon;
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow={module.badge} title={module.name} description={module.description} actions={<div className="flex flex-wrap gap-2">{cfg.tabs.map((item) => <button key={item} onClick={() => setTab(item)} className={tab === item ? "rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950" : "rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70"}>{item}</button>)}</div>} />
+      <ModuleHero eyebrow={module.badge} title={module.name} description={module.description} actions={<ModulePillTabs tabs={cfg.tabs} active={tab} setActive={(next) => { const key = next.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"); selectModuleSubmenu(setActiveTab, `${cfg.prefix}${key}` as ActiveTab, setTab, next); }} />} />
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Registros" value={records.length} />
         <MetricCard label="Clientes" value={customers.length} />
@@ -1939,7 +1975,7 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
             </select>
             {(module.amountEnabled || module.key === "inventory") && <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={module.key === "inventory" ? "Cantidad / importe / stock" : "Importe"} type="number" className="input-dark" />}
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas internas, instrucciones, URL o detalle operativo" className="input-dark min-h-32" />
-            <button onClick={() => createRecord(module.key, cfg.statuses[0].value)} className="btn-primary"><Plus size={17} /> Guardar en {module.short}</button>
+            <button onClick={() => createRecord(module.key, status || statusGroups[tab]?.[0] || cfg.statuses[0].value)} className="btn-primary"><Plus size={17} /> Guardar en {module.short}</button>
           </div>
         </GlassCard>
         <GlassCard title={`${tab} registrados`}>
@@ -2705,20 +2741,33 @@ function selectModuleSubmenu(setActiveTab: (tab: ActiveTab) => void, tab: Active
 }
 
 function IntegrationPanel({ items }: { items: { name: string; status?: string; detail: string }[] }) {
+  const [openItem, setOpenItem] = useState<string | null>(null);
+  const [savedItems, setSavedItems] = useState<Record<string, boolean>>({});
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {items.map((item) => (
-        <div key={item.name} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-semibold">{item.name}</p>
-              <p className="mt-1 text-sm text-white/45">{item.detail}</p>
+      {items.map((item) => {
+        const open = openItem === item.name;
+        const saved = savedItems[item.name];
+        return (
+          <div key={item.name} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">{item.name}</p>
+                <p className="mt-1 text-sm text-white/45">{item.detail}</p>
+              </div>
+              <span className={saved ? "rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100" : "rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100"}>{saved ? "Configurado" : item.status || "Preparado"}</span>
             </div>
-            <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">{item.status || "Preparado"}</span>
+            <button onClick={() => setOpenItem(open ? null : item.name)} className="mt-4 w-full rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 hover:bg-white/10">{open ? "Cerrar configuración" : "Configurar conexión"}</button>
+            {open && (
+              <div className="mt-4 grid gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4">
+                <input className="input-dark" placeholder="Usuario, URL, API key o identificador" />
+                <textarea className="input-dark min-h-24" placeholder="Notas de conexión, permisos, proveedor o instrucciones internas" />
+                <button onClick={() => { setSavedItems((current) => ({ ...current, [item.name]: true })); setOpenItem(null); }} className="btn-primary py-2 text-sm"><CheckCircle2 size={16} /> Guardar configuración</button>
+              </div>
+            )}
           </div>
-          <button className="mt-4 w-full rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 hover:bg-white/10">Configurar conexión</button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -2788,6 +2837,76 @@ function AnalyticsModule({ records, customers, appointments, services, revenue, 
       {tab === "Agenda" && <GlassCard title="Embudo de citas"><div className="grid gap-3 md:grid-cols-4">{byStatus.map((item) => <InfoBox key={item.status} label={translateStatus(item.status)} value={item.count} />)}</div></GlassCard>}
       {tab === "Finanzas" && <GlassCard title="Lectura financiera"><div className="grid gap-3 md:grid-cols-4"><InfoBox label="Reservas" value={`${revenue.toFixed(2)}€`} /><InfoBox label="Manual" value={`${manualIncome.toFixed(2)}€`} /><InfoBox label="Gastos" value={`${expenses.toFixed(2)}€`} /><InfoBox label="Margen" value={`${profit.toFixed(2)}€`} /></div><div className="mt-5"><RecordsList records={records} deleteRecord={deleteRecord} /></div></GlassCard>}
       {tab === "Servicios" && <GlassCard title="Ranking de servicios"><div className="grid gap-3 md:grid-cols-2">{services.map((service) => <div key={service.id} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{service.name}</p><p className="mt-1 text-sm text-white/45">{service.duration || service.duration_minutes || 30} min · {Number(service.price).toFixed(2)}€</p></div>)}{!services.length && <Empty text="Crea servicios para activar el ranking." />}</div></GlassCard>}
+    </section>
+  );
+}
+
+
+function AgendaProModule({ appointments, customers, employees, services, settings, selectedCrmCustomerId, setSelectedCrmCustomerId, createAppointmentForCustomer, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0] & { settings?: BookingSettings | null }) {
+  const [view, setView] = useState("Calendario");
+  const [newCustomerId, setNewCustomerId] = useState(selectedCrmCustomerId || "");
+  const [newEmployeeId, setNewEmployeeId] = useState("");
+  const [newServiceId, setNewServiceId] = useState("");
+  const [newDate, setNewDate] = useState("");
+
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:agenda-pro:", { calendario: "Calendario", huecos: "Huecos libres", nueva: "Crear cita", configuracion: "Configuración" }, setView);
+  }, [activeTab]);
+
+  const today = new Date();
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+    return date;
+  });
+  const startHour = Number((settings?.start_time || "09:00").slice(0, 2));
+  const endHour = Number((settings?.end_time || "19:00").slice(0, 2));
+  const hours = Array.from({ length: Math.max(1, endHour - startHour) }, (_, index) => startHour + index);
+  const futureAppointments = appointments
+    .filter((item) => new Date(appointmentDate(item)).getTime() >= new Date(today.toDateString()).getTime())
+    .sort((a, b) => new Date(appointmentDate(a)).getTime() - new Date(appointmentDate(b)).getTime());
+
+  const appointmentForSlot = (day: Date, hour: number) => appointments.find((item) => {
+    const date = new Date(appointmentDate(item));
+    return date.toDateString() === day.toDateString() && date.getHours() === hour && item.status !== "cancelled";
+  });
+
+  const calendarCells = [
+    <div key="corner" />,
+    ...weekDays.map((day) => (
+      <div key={`head-${day.toISOString()}`} className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+        <p className="text-xs uppercase text-cyan-100/60">{day.toLocaleDateString("es-ES", { weekday: "short" })}</p>
+        <p className="text-lg font-semibold">{day.getDate()}</p>
+      </div>
+    )),
+    ...hours.flatMap((hour) => [
+      <div key={`h-${hour}`} className="rounded-2xl bg-black/25 p-3 text-sm text-white/50">{String(hour).padStart(2, "0")}:00</div>,
+      ...weekDays.map((day) => {
+        const item = appointmentForSlot(day, hour);
+        return (
+          <div key={`${day.toISOString()}-${hour}`} className={item ? "min-h-20 rounded-2xl border border-violet-300/25 bg-violet-500/20 p-3" : "min-h-20 rounded-2xl border border-emerald-300/15 bg-emerald-400/10 p-3"}>
+            {item ? <><p className="text-sm font-semibold">{customerName(item.customers)}</p><p className="mt-1 text-xs text-white/45">{firstRelation(item.services)?.name || "Cita"}</p><p className="mt-2 rounded-full bg-black/25 px-2 py-1 text-xs capitalize text-white/60">{item.status}</p></> : <p className="text-xs text-emerald-100/70">Hueco libre</p>}
+          </div>
+        );
+      }),
+    ]),
+  ];
+
+  const createFromAgenda = () => {
+    if (!newCustomerId || !newEmployeeId || !newServiceId || !newDate) return alert("Selecciona cliente, empleado, servicio y fecha");
+    setSelectedCrmCustomerId(newCustomerId);
+    createAppointmentForCustomer(newCustomerId, newEmployeeId, newServiceId, newDate);
+    setNewDate("");
+  };
+
+  return (
+    <section className="grid gap-6">
+      <ModuleHero eyebrow="Agenda inteligente" title="Calendario operativo con huecos libres" description="Vista de agenda visual por cuadrados, próximas citas, disponibilidad y creación rápida conectada a clientes, empleados y servicios." actions={<ModulePillTabs tabs={["Calendario", "Huecos libres", "Crear cita", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Calendario: "module:agenda-pro:calendario", "Huecos libres": "module:agenda-pro:huecos", "Crear cita": "module:agenda-pro:nueva", Configuración: "module:agenda-pro:configuracion" } as Record<string, ActiveTab>)[next] || "module:agenda-pro:calendario", setView, next)} />} />
+      <div className="grid gap-4 md:grid-cols-4"><Metric icon={<CalendarDays />} label="Citas próximas" value={futureAppointments.length} helper="Agenda activa" /><Metric icon={<Clock />} label="Horario" value={`${settings?.start_time || "09:00"} - ${settings?.end_time || "19:00"}`} helper="Configurado" /><Metric icon={<Users />} label="Clientes" value={customers.length} helper="Disponibles" /><Metric icon={<UserRound />} label="Equipo" value={employees.length} helper="Asignables" /></div>
+      {view === "Calendario" && <GlassCard title="Calendario semanal por huecos"><div className="overflow-x-auto"><div className="grid min-w-[880px] grid-cols-[90px_repeat(7,1fr)] gap-2">{calendarCells}</div></div></GlassCard>}
+      {view === "Huecos libres" && <GlassCard title="Próximos huecos libres"><div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">{weekDays.flatMap((day) => hours.map((hour) => ({ day, hour }))).filter(({ day, hour }) => !appointmentForSlot(day, hour)).slice(0, 24).map(({ day, hour }) => <button key={`${day.toISOString()}-${hour}`} onClick={() => { const iso = new Date(day); iso.setHours(hour, 0, 0, 0); setNewDate(iso.toISOString().slice(0, 16)); setView("Crear cita"); setActiveTab("module:agenda-pro:nueva"); }} className="rounded-3xl border border-emerald-300/20 bg-emerald-400/10 p-4 text-left hover:bg-emerald-400/15"><p className="font-semibold">{day.toLocaleDateString("es-ES", { weekday: "long", day: "2-digit", month: "short" })}</p><p className="mt-1 text-sm text-emerald-100/70">{String(hour).padStart(2, "0")}:00 disponible</p></button>)}</div></GlassCard>}
+      {view === "Crear cita" && <section className="grid gap-6 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Crear cita rápida"><div className="grid gap-3"><select value={newCustomerId} onChange={(e) => setNewCustomerId(e.target.value)} className="input-dark"><option value="">Cliente</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customerName(customer)}</option>)}</select><select value={newEmployeeId} onChange={(e) => setNewEmployeeId(e.target.value)} className="input-dark"><option value="">Empleado</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select><select value={newServiceId} onChange={(e) => setNewServiceId(e.target.value)} className="input-dark"><option value="">Servicio</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {Number(service.price || 0).toFixed(2)}€</option>)}</select><input type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input-dark" /><button onClick={createFromAgenda} className="btn-primary"><Plus size={17} /> Crear cita</button></div></GlassCard><GlassCard title="Próximas citas"><div className="grid gap-3">{futureAppointments.slice(0, 8).map((item) => <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4"><p className="font-semibold">{customerName(item.customers)}</p><p className="mt-1 text-sm text-white/45">{new Date(appointmentDate(item)).toLocaleString("es-ES")} · {firstRelation(item.services)?.name || "Servicio"}</p></div>)}{!futureAppointments.length && <Empty text="No hay próximas citas." />}</div></GlassCard></section>}
+      {view === "Configuración" && <GlassCard title="Configuración de agenda"><IntegrationPanel items={[{ name: "Horario del negocio", detail: "Usa los ajustes generales de agenda para generar huecos libres." }, { name: "Google Calendar", detail: "Preparado para sincronización bidireccional." }, { name: "Recordatorios automáticos", detail: "Conecta WhatsApp y CRM para avisos previos a citas." }]} /></GlassCard>}
     </section>
   );
 }

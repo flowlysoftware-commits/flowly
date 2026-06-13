@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 type ModuleKey =
+  | "agenda"
   | "crm"
   | "voice"
   | "whatsapp"
@@ -52,6 +53,7 @@ type CreateResult = {
 };
 
 const moduleOptions: { key: ModuleKey; label: string; description: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  { key: "agenda", label: "Agenda PRO", description: "Calendario visual, huecos libres y citas rápidas.", Icon: CalendarDays },
   { key: "crm", label: "CRM clínico avanzado", description: "Pacientes, notas, seguimientos, historial y oportunidades.", Icon: Users },
   { key: "voice", label: "Centralita / Voice", description: "Llamadas, recepción, registros y futura IA telefónica.", Icon: PhoneCall },
   { key: "whatsapp", label: "WhatsApp automático", description: "Recordatorios, confirmaciones y mensajes configurables.", Icon: MessageCircle },
@@ -64,7 +66,7 @@ const moduleOptions: { key: ModuleKey; label: string; description: string; Icon:
   { key: "time_tracking", label: "Módulo Fichaje", description: "Entradas, salidas, pausas y control horario del equipo.", Icon: Clock },
 ];
 
-const defaultClinicModules: ModuleKey[] = ["crm", "voice", "whatsapp", "billing", "booking_premium", "analytics", "ai"];
+const defaultClinicModules: ModuleKey[] = ["agenda", "crm", "voice", "whatsapp", "billing", "booking_premium", "analytics", "ai"];
 
 export default function EnterpriseFactoryPage() {
   const router = useRouter();

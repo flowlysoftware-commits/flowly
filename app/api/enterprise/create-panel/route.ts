@@ -6,7 +6,7 @@ import { resolveFlowlyMarket, stripeUnitAmount } from "@/lib/stripePricing";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-const enterpriseAllowedModules = ["crm", "voice", "whatsapp", "billing", "pos", "marketing", "ai", "analytics", "booking_premium", "time_tracking"];
+const enterpriseAllowedModules = ["agenda", "crm", "voice", "whatsapp", "billing", "pos", "marketing", "ai", "analytics", "booking_premium", "time_tracking"];
 
 type Body = {
   businessName: string;

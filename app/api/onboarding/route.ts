@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const premiumModules = [
+  "agenda",
   "whatsapp",
   "billing",
   "crm",

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   Bot,
+  CalendarDays,
   Check,
   CreditCard,
   Megaphone,
@@ -67,9 +68,9 @@ const businessTypes: { id: BusinessTypeId; label: string; recommended: ModuleId[
   { id: "clinic", label: "Clínica / Centro médico", recommended: ["crm", "whatsapp", "voice", "booking_premium", "digital_signature", "surveys"] },
   { id: "dental", label: "Clínica dental", recommended: ["crm", "whatsapp", "voice", "booking_premium", "digital_signature", "surveys"] },
   { id: "physio", label: "Fisioterapia / Salud deportiva", recommended: ["crm", "whatsapp", "booking_premium", "digital_signature", "surveys"] },
-  { id: "beauty", label: "Estética / Spa", recommended: ["crm", "whatsapp", "pos", "inventory", "surveys", "marketing"] },
-  { id: "hair", label: "Peluquería", recommended: ["crm", "whatsapp", "pos", "inventory", "booking_premium"] },
-  { id: "barber", label: "Barbería", recommended: ["crm", "whatsapp", "pos", "inventory", "booking_premium"] },
+  { id: "beauty", label: "Estética / Spa", recommended: ["agenda", "crm", "whatsapp", "pos", "inventory", "surveys", "marketing"] },
+  { id: "hair", label: "Peluquería", recommended: ["agenda", "crm", "whatsapp", "pos", "inventory", "booking_premium"] },
+  { id: "barber", label: "Barbería", recommended: ["agenda", "crm", "whatsapp", "pos", "inventory", "booking_premium"] },
   { id: "restaurant", label: "Restaurante", recommended: ["pos", "inventory", "hr", "time_tracking", "surveys"] },
   { id: "cafe", label: "Cafetería / Panadería", recommended: ["pos", "inventory", "time_tracking", "surveys"] },
   { id: "retail", label: "Comercio / Tienda", recommended: ["pos", "inventory", "crm", "marketing", "surveys"] },
@@ -84,6 +85,7 @@ const businessTypes: { id: BusinessTypeId; label: string; recommended: ModuleId[
 ];
 
 const modules: Module[] = [
+  { id: "agenda", name: "Agenda PRO", price: 9.99, description: "Calendario visual, huecos libres y creación rápida de citas.", Icon: CalendarDays },
   { id: "whatsapp", name: "WhatsApp automático", price: 9.99, description: "Confirmaciones, recordatorios y avisos automáticos.", Icon: MessageCircle },
   { id: "billing", name: "Facturación", price: 9.99, description: "Facturas, presupuestos, gastos e ingresos.", Icon: Receipt },
   { id: "pos", name: "TPV", price: 14.99, description: "Cobros, caja, tickets y ventas presenciales.", Icon: Store },
