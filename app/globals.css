@@ -1026,12 +1026,12 @@ input[type="date"].input-dark { color-scheme: dark; }
 /* Mascota IA 4.0 · personaje 3D real en WebGL */
 .flowly-3d-character-wrap {
   position: fixed;
-  width: clamp(10.5rem, 13vw, 15.5rem);
-  height: clamp(16rem, 22vw, 24rem);
+  width: clamp(10.8rem, 13.5vw, 16rem);
+  height: clamp(17rem, 23vw, 25rem);
   z-index: 45;
   display: grid;
   place-items: center;
-  transition: left 1.55s cubic-bezier(.18,.88,.22,1), top 1.55s cubic-bezier(.18,.88,.22,1), filter .35s ease;
+  transition: left 2.4s cubic-bezier(.34,.02,.28,1), top 2.4s cubic-bezier(.34,.02,.28,1), filter .35s ease;
   filter: drop-shadow(0 26px 34px rgba(0,0,0,.34));
   perspective: 1200px;
 }
@@ -1079,14 +1079,10 @@ input[type="date"].input-dark { color-scheme: dark; }
   animation: flowly-3d-shadow 4.6s ease-in-out infinite;
 }
 .flowly-3d-character-wrap.is-walking .flowly-3d-stage {
-  animation: flowly-3d-step-weight 0.58s cubic-bezier(.45,0,.55,1) infinite;
+  animation: flowly-3d-step-weight 0.62s cubic-bezier(.45,0,.55,1) infinite;
 }
 .flowly-3d-character-wrap.is-speaking .flowly-3d-stage {
   animation: flowly-3d-talk 0.92s ease-in-out infinite;
-}
-.flowly-3d-character-wrap.is-sitting {
-  width: clamp(9.5rem, 11vw, 13rem);
-  height: clamp(13rem, 18vw, 19rem);
 }
 .flowly-3d-character-wrap.is-tour .flowly-3d-light-rim {
   background: radial-gradient(circle, rgba(236,72,153,.24), rgba(34,211,238,.14) 45%, transparent 72%);
@@ -1103,8 +1099,10 @@ input[type="date"].input-dark { color-scheme: dark; }
   70% { transform: translateY(-1px) scale(.999); }
 }
 @keyframes flowly-3d-step-weight {
-  0%, 100% { transform: translateY(0) rotateZ(-.08deg); }
-  50% { transform: translateY(-1.5px) rotateZ(.08deg); }
+  0%, 100% { transform: translateY(0) rotateZ(-.12deg); }
+  25% { transform: translateY(-1px) rotateZ(.08deg); }
+  50% { transform: translateY(-2.5px) rotateZ(.12deg); }
+  75% { transform: translateY(-1px) rotateZ(-.06deg); }
 }
 @keyframes flowly-3d-talk {
   0%, 100% { transform: translateY(0) rotateZ(0deg) scale(1); }

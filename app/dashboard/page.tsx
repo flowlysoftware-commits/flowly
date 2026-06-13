@@ -1656,16 +1656,15 @@ function FloatingAvatarAssistant({
   const spokenMessageRef = useRef("");
 
   const characterPositions = [
-    { x: 86, y: 74, facing: "left" as const, label: "companion" },
-    { x: 22, y: 31, facing: "right" as const, label: "sobre el logo" },
-    { x: 48, y: 69, facing: "left" as const, label: "centro del panel" },
-    { x: 76, y: 39, facing: "left" as const, label: "módulos" },
+    { x: 86, y: 73, facing: "left" as const, label: "companion" },
+    { x: 74, y: 68, facing: "left" as const, label: "panel principal" },
+    { x: 49, y: 70, facing: "right" as const, label: "centro del panel" },
+    { x: 30, y: 64, facing: "right" as const, label: "módulos" },
   ];
 
   const currentPosition = characterPositions[positionIndex % characterPositions.length];
   const modelUrl = "/avatars/flowly-grandma.glb";
-  const isSitting = !open && !tourOpen && !isWalking && !isGreeting && !isSpeaking && positionIndex % characterPositions.length === 1;
-  const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : isSitting ? "sit" : tourOpen ? "point" : thinking ? "thinking" : "idle";
+  const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : tourOpen ? "point" : thinking ? "thinking" : "idle";
 
   const speak = (text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -1690,16 +1689,14 @@ function FloatingAvatarAssistant({
     window.setTimeout(() => {
       setIsWalking(false);
       after?.();
-    }, 1700);
+    }, 2400);
   };
 
   useEffect(() => {
     if (hasGreeted) return;
     const helloTimer = window.setTimeout(() => openAndGreet(), 900);
-    const sitTimer = window.setTimeout(() => walkTo(1), 6200);
     return () => {
       window.clearTimeout(helloTimer);
-      window.clearTimeout(sitTimer);
     };
   }, [hasGreeted]);
 
@@ -1750,7 +1747,7 @@ function FloatingAvatarAssistant({
     <>
       <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
         <div
-          className={`flowly-3d-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} ${isSpeaking ? "is-speaking" : ""} ${tourOpen ? "is-tour" : ""} ${isSitting ? "is-sitting" : ""}`}
+          className={`flowly-3d-character-wrap pointer-events-auto ${isWalking ? "is-walking" : ""} ${isSpeaking ? "is-speaking" : ""} ${tourOpen ? "is-tour" : ""}`}
           style={{ left: `${currentPosition.x}%`, top: `${currentPosition.y}%`, transform: "translate(-50%, -50%)" }}
         >
           {!open && !tourOpen && (
