@@ -704,7 +704,7 @@ export default function DashboardPage() {
     setAppointmentCustomer(""); setAppointmentEmployee(""); setAppointmentService(""); setAppointmentDateValue(""); await loadData();
   };
   const updateAppointmentStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
+    const { error } = await supabase.from("appointments").update({ status }).eq("id", id).eq("business_id", business?.id || "");
     if (error) return alert(error.message);
     await loadData();
   };
@@ -847,7 +847,8 @@ export default function DashboardPage() {
     await supabase
       .from("customers")
       .update({ crm_status: "cita_agendada", next_follow_up_at: null })
-      .eq("id", customerId);
+      .eq("id", customerId)
+      .eq("business_id", business.id);
 
     await loadData();
     alert("Cita agendada desde CRM");
@@ -860,7 +861,7 @@ export default function DashboardPage() {
     await loadData();
   };
   const deleteModuleRecord = async (id: string) => {
-    const { error } = await supabase.from("module_records").delete().eq("id", id);
+    const { error } = await supabase.from("module_records").delete().eq("id", id).eq("business_id", business?.id || "");
     if (error) return alert(error.message);
     await loadData();
   };
@@ -886,7 +887,7 @@ export default function DashboardPage() {
   };
 
   const updateVoiceCallStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("voice_calls").update({ status }).eq("id", id);
+    const { error } = await supabase.from("voice_calls").update({ status }).eq("id", id).eq("business_id", business?.id || "");
     if (error) return alert(error.message);
     await loadData();
   };
@@ -898,7 +899,8 @@ export default function DashboardPage() {
     const { error } = await supabase
       .from("customers")
       .update({ ...updates, last_contact_at: new Date().toISOString() })
-      .eq("id", customerId);
+      .eq("id", customerId)
+      .eq("business_id", business?.id || "");
 
     if (error) return alert(error.message);
     await loadData();
@@ -938,7 +940,7 @@ export default function DashboardPage() {
   };
 
   const completeCrmReminder = async (id: string) => {
-    const { error } = await supabase.from("crm_reminders").update({ status: "completed" }).eq("id", id);
+    const { error } = await supabase.from("crm_reminders").update({ status: "completed" }).eq("id", id).eq("business_id", business?.id || "");
     if (error) return alert(error.message);
     setDueReminder((current) => (current?.id === id ? null : current));
     setDismissedReminderIds((ids) => ids.filter((item) => item !== id));
@@ -946,7 +948,7 @@ export default function DashboardPage() {
   };
 
   const deleteCrmReminder = async (id: string) => {
-    const { error } = await supabase.from("crm_reminders").delete().eq("id", id);
+    const { error } = await supabase.from("crm_reminders").delete().eq("id", id).eq("business_id", business?.id || "");
     if (error) return alert(error.message);
     setDueReminder((current) => (current?.id === id ? null : current));
     setDismissedReminderIds((ids) => ids.filter((item) => item !== id));
@@ -972,7 +974,7 @@ export default function DashboardPage() {
 
     const existingId = template.id || whatsappTemplatesData.find((item) => item.key === templateKey)?.id;
     const query = existingId
-      ? supabase.from("whatsapp_templates").update(payload).eq("id", existingId)
+      ? supabase.from("whatsapp_templates").update(payload).eq("id", existingId).eq("business_id", business.id)
       : supabase.from("whatsapp_templates").insert(payload);
 
     const { data, error } = await query.select("*").maybeSingle();
@@ -996,7 +998,8 @@ export default function DashboardPage() {
     const { error } = await supabase
       .from("whatsapp_templates")
       .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq("id", existingId);
+      .eq("id", existingId)
+      .eq("business_id", business.id);
     if (error) return alert(error.message);
     setWhatsappTemplatesData((current) => current.filter((item) => item.id !== existingId));
     await loadData();
@@ -1057,7 +1060,8 @@ export default function DashboardPage() {
           crm_status: "en_llamada",
           last_contact_at: new Date().toISOString(),
         } as any)
-        .eq("id", existingCustomer.id);
+        .eq("id", existingCustomer.id)
+        .eq("business_id", business.id);
 
       if (updateCustomerError) {
         alert(updateCustomerError.message);
@@ -1080,7 +1084,8 @@ export default function DashboardPage() {
       const { error: updateCallError } = await supabase
         .from("voice_calls")
         .update({ status: "contactado", customer_id: existingCustomer.id })
-        .eq("id", call.id);
+        .eq("id", call.id)
+        .eq("business_id", business.id);
 
       if (updateCallError) {
         alert(updateCallError.message);
@@ -1126,7 +1131,8 @@ export default function DashboardPage() {
     const { error: updateCallError } = await supabase
       .from("voice_calls")
       .update({ status: "contactado", customer_id: newCustomer.id })
-      .eq("id", call.id);
+      .eq("id", call.id)
+      .eq("business_id", business.id);
 
     if (updateCallError) {
       alert(updateCallError.message);
@@ -1176,7 +1182,8 @@ export default function DashboardPage() {
         customer_id: customerId,
         appointment_id: appointmentData.id,
       })
-      .eq("id", call.id);
+      .eq("id", call.id)
+      .eq("business_id", business.id);
 
     if (updateCallError) return alert(updateCallError.message);
 
@@ -1236,7 +1243,7 @@ export default function DashboardPage() {
   };
 
   const deleteVoiceCall = async (id: string) => {
-    const { error } = await supabase.from("voice_calls").delete().eq("id", id);
+    const { error } = await supabase.from("voice_calls").delete().eq("id", id).eq("business_id", business?.id || "");
     if (error) return alert(error.message);
     await loadData();
   };
