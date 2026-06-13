@@ -44,7 +44,9 @@ function Model({ modelUrl = "/avatars/flowly-grandma.glb", mode = "idle", facing
     Object.values(actions).forEach((action) => action?.fadeOut(0.18));
     const next = clipName ? actions[clipName] : null;
     next?.reset().fadeIn(0.2).play();
-    return () => next?.fadeOut(0.18);
+    return () => {
+      next?.fadeOut(0.18);
+    };
   }, [actions, activeMode, gltf.animations, hasClips]);
 
   useEffect(() => {
