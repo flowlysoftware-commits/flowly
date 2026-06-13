@@ -188,6 +188,20 @@ type ModuleRecord = {
   created_at: string;
 };
 
+type BusinessIntegration = {
+  id?: string;
+  business_id: string;
+  provider_key: string;
+  provider_name: string;
+  category?: string | null;
+  status: "pending" | "connected" | "error" | "disabled" | string;
+  config?: Record<string, unknown> | null;
+  notes?: string | null;
+  last_checked_at?: string | null;
+  connected_at?: string | null;
+  updated_at?: string | null;
+};
+
 type VoiceCall = {
   id: string;
   business_id: string;
@@ -338,6 +352,7 @@ export default function DashboardPage() {
   const [settings, setSettings] = useState<BookingSettings | null>(null);
   const [modules, setModules] = useState<BusinessModule[]>([]);
   const [moduleRecords, setModuleRecords] = useState<ModuleRecord[]>([]);
+  const [businessIntegrations, setBusinessIntegrations] = useState<BusinessIntegration[]>([]);
   const [voiceCalls, setVoiceCalls] = useState<VoiceCall[]>([]);
   const [clinicalDocuments, setClinicalDocuments] = useState<ClinicalDocument[]>([]);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsappMessage[]>([]);
@@ -425,7 +440,7 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, crmRemindersRes, avatarRes] = await Promise.all([
+    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, integrationsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, crmRemindersRes, avatarRes] = await Promise.all([
       supabase.from("company_profiles").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -434,6 +449,7 @@ export default function DashboardPage() {
       supabase.from("booking_settings").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("business_modules").select("*").eq("business_id", businessId).eq("status", "active"),
       supabase.from("module_records").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      supabase.from("business_integrations").select("*").eq("business_id", businessId).order("provider_name", { ascending: true }),
       supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -468,6 +484,8 @@ export default function DashboardPage() {
     setSettings((settingsRes.data as BookingSettings) || defaultSettings(businessId));
     setModules((modulesRes.data || []) as BusinessModule[]);
     setModuleRecords((recordsRes.data || []) as ModuleRecord[]);
+    setBusinessIntegrations(((integrationsRes.data || []) as BusinessIntegration[]) || []);
+    if (integrationsRes.error) console.warn("No se pudieron cargar integraciones", integrationsRes.error.message);
     setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
     setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
@@ -1517,7 +1535,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === "area" && <AreaSection business={business} businessAvatar={businessAvatar} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} activateModule={activateModule} />}
+          {activeTab === "area" && <AreaSection business={business} businessAvatar={businessAvatar} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} activateModule={activateModule} integrations={businessIntegrations} reloadData={loadData} />}
           {activeTab === "agenda" && <AgendaSection appointments={appointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
           {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
@@ -1562,7 +1580,7 @@ export default function DashboardPage() {
             avatarGenerating={avatarGenerating}
             generateBusinessAvatar={generateBusinessAvatar}
           />}
-          {activeModule && <ModuleSection module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
+          {activeModule && <ModuleSection business={business} integrations={businessIntegrations} reloadData={loadData} module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
 
           <FloatingAvatarAssistant
             businessAvatar={businessAvatar}
@@ -1829,7 +1847,7 @@ function FloatingAvatarAssistant({
   );
 }
 
-function AreaSection({ business, businessAvatar, activeModules, inactiveModules, bookingUrl, openBillingPortal, setActiveTab, activateModule }: { business: Business; businessAvatar: BusinessAvatar | null; activeModules: ModuleItem[]; inactiveModules: ModuleItem[]; bookingUrl: string; openBillingPortal: () => void; setActiveTab: (tab: ActiveTab) => void; activateModule: (moduleKey: string) => void }) {
+function AreaSection({ business, businessAvatar, activeModules, inactiveModules, bookingUrl, openBillingPortal, setActiveTab, activateModule, integrations, reloadData }: { business: Business; businessAvatar: BusinessAvatar | null; activeModules: ModuleItem[]; inactiveModules: ModuleItem[]; bookingUrl: string; openBillingPortal: () => void; setActiveTab: (tab: ActiveTab) => void; activateModule: (moduleKey: string) => void; integrations: BusinessIntegration[]; reloadData: () => Promise<void> }) {
   const coreModules = ["Agenda", "CRM", "WhatsApp", "Voice", "Facturación", "TPV", "Marketing", "IA"];
   return (
     <section className="grid gap-6">
@@ -1880,7 +1898,7 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
 
       <section className="grid gap-6 xl:grid-cols-[.9fr_1.1fr]">
         <GlassCard title="Conexiones del cliente">
-          <IntegrationPanel items={[{ name: "Google Business Profile", detail: "Reservas, reseñas y presencia local" }, { name: "Instagram / Facebook", detail: "Botones, mensajes, campañas y píxel" }, { name: "WhatsApp Business", detail: "Plantillas, historial y campañas CRM" }, { name: "Stripe / pagos", detail: "Portal, facturación y señales" }, { name: "Web del cliente", detail: "Widget de reservas y tracking" }, { name: "Centralita / Voice", detail: "Llamadas, locuciones y IA de voz" }]} />
+          <IntegrationPanel business={business} integrations={integrations} reloadData={reloadData} items={[{ name: "Google Business Profile", detail: "Reservas, reseñas y presencia local" }, { name: "Instagram / Facebook", detail: "Botones, mensajes, campañas y píxel" }, { name: "WhatsApp Business", detail: "Plantillas, historial y campañas CRM" }, { name: "Stripe / pagos", detail: "Portal, facturación y señales" }, { name: "Web del cliente", detail: "Widget de reservas y tracking" }, { name: "Centralita / Voice", detail: "Llamadas, locuciones y IA de voz" }]} />
         </GlassCard>
         <GlassCard title="Mapa de producto">
           <div className="grid gap-3 md:grid-cols-2">{coreModules.map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Sincronizado con el panel principal y preparado para datos por negocio.</p></div>)}</div>
@@ -1892,7 +1910,7 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
   );
 }
 
-function ModuleSection(props: { module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null; settings?: BookingSettings | null }) {
+function ModuleSection(props: { business: Business | null; integrations: BusinessIntegration[]; reloadData: () => Promise<void>; module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null; settings?: BookingSettings | null }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -2740,14 +2758,111 @@ function selectModuleSubmenu(setActiveTab: (tab: ActiveTab) => void, tab: Active
   setActiveTab(tab);
 }
 
-function IntegrationPanel({ items }: { items: { name: string; status?: string; detail: string }[] }) {
+
+const integrationBlueprints: Record<string, { key: string; category: string; oauth?: boolean; fields: { name: string; label: string; placeholder: string; secret?: boolean; required?: boolean }[] }> = {
+  "Meta Ads": { key: "meta_ads", category: "marketing", oauth: true, fields: [{ name: "access_token", label: "Access token", placeholder: "Token de Meta Graph API", secret: true }, { name: "ad_account_id", label: "Ad Account ID", placeholder: "act_123456789" }, { name: "pixel_id", label: "Pixel ID", placeholder: "123456789" }, { name: "page_id", label: "Página Facebook", placeholder: "ID de página" }, { name: "instagram_id", label: "Instagram Business ID", placeholder: "ID de Instagram" }] },
+  "Instagram / Facebook": { key: "meta_ads", category: "marketing", oauth: true, fields: [{ name: "access_token", label: "Access token", placeholder: "Token de Meta Graph API", secret: true }, { name: "ad_account_id", label: "Ad Account ID", placeholder: "act_123456789" }, { name: "pixel_id", label: "Pixel ID", placeholder: "123456789" }, { name: "page_id", label: "Página Facebook", placeholder: "ID de página" }, { name: "instagram_id", label: "Instagram Business ID", placeholder: "ID de Instagram" }] },
+  "Google Ads": { key: "google_ads", category: "marketing", oauth: true, fields: [{ name: "access_token", label: "OAuth access token", placeholder: "Token OAuth Google", secret: true }, { name: "customer_id", label: "Customer ID", placeholder: "123-456-7890" }, { name: "developer_token", label: "Developer token", placeholder: "Google Ads developer token", secret: true }] },
+  "Google Business Profile": { key: "google_business", category: "marketing", oauth: true, fields: [{ name: "access_token", label: "OAuth access token", placeholder: "Token OAuth Google", secret: true }, { name: "account_id", label: "Account ID", placeholder: "accounts/123" }, { name: "location_id", label: "Location ID", placeholder: "locations/456" }] },
+  "Google Calendar": { key: "google_calendar", category: "agenda", oauth: true, fields: [{ name: "access_token", label: "OAuth access token", placeholder: "Token OAuth Google", secret: true }, { name: "calendar_id", label: "Calendar ID", placeholder: "primary o email del calendario" }] },
+  "TikTok Ads": { key: "tiktok_ads", category: "marketing", fields: [{ name: "access_token", label: "Access token", placeholder: "Token TikTok Business", secret: true }, { name: "advertiser_id", label: "Advertiser ID", placeholder: "ID de anunciante" }, { name: "pixel_id", label: "Pixel ID", placeholder: "ID de pixel" }] },
+  "WhatsApp": { key: "whatsapp_cloud", category: "whatsapp", fields: [{ name: "access_token", label: "Access token", placeholder: "Token permanente de Meta", secret: true, required: true }, { name: "phone_number_id", label: "Phone Number ID", placeholder: "ID del número de WhatsApp", required: true }, { name: "business_account_id", label: "Business Account ID", placeholder: "WABA ID" }, { name: "verify_token", label: "Verify token webhook", placeholder: "Token propio para webhook", secret: true }] },
+  "WhatsApp Business": { key: "whatsapp_cloud", category: "whatsapp", fields: [{ name: "access_token", label: "Access token", placeholder: "Token permanente de Meta", secret: true, required: true }, { name: "phone_number_id", label: "Phone Number ID", placeholder: "ID del número de WhatsApp", required: true }, { name: "business_account_id", label: "Business Account ID", placeholder: "WABA ID" }, { name: "verify_token", label: "Verify token webhook", placeholder: "Token propio para webhook", secret: true }] },
+  "Email": { key: "email_smtp", category: "email", fields: [{ name: "smtp_host", label: "SMTP host", placeholder: "smtp.tudominio.com", required: true }, { name: "smtp_port", label: "Puerto", placeholder: "587" }, { name: "smtp_user", label: "Usuario", placeholder: "usuario@dominio.com" }, { name: "smtp_password", label: "Contraseña", placeholder: "Contraseña SMTP", secret: true }, { name: "from_email", label: "Email emisor", placeholder: "hola@dominio.com" }] },
+  "Gmail": { key: "gmail", category: "email", oauth: true, fields: [{ name: "access_token", label: "OAuth access token", placeholder: "Token OAuth Google", secret: true }, { name: "sender_email", label: "Email emisor", placeholder: "cuenta@gmail.com" }] },
+  "Stripe / pagos": { key: "stripe", category: "payments", fields: [{ name: "secret_key", label: "Secret key", placeholder: "sk_live_...", secret: true, required: true }, { name: "webhook_secret", label: "Webhook secret", placeholder: "whsec_...", secret: true }, { name: "price_id", label: "Price ID por defecto", placeholder: "price_..." }] },
+  "Stripe": { key: "stripe", category: "payments", fields: [{ name: "secret_key", label: "Secret key", placeholder: "sk_live_...", secret: true, required: true }, { name: "webhook_secret", label: "Webhook secret", placeholder: "whsec_...", secret: true }, { name: "price_id", label: "Price ID por defecto", placeholder: "price_..." }] },
+  "OpenAI / proveedor IA": { key: "openai", category: "ai", fields: [{ name: "api_key", label: "API key", placeholder: "sk-...", secret: true, required: true }, { name: "model", label: "Modelo", placeholder: "gpt-4o-mini" }, { name: "monthly_limit", label: "Límite mensual", placeholder: "100000" }] },
+  "Web del cliente": { key: "website_tracking", category: "web", fields: [{ name: "website_url", label: "URL web", placeholder: "https://tudominio.com", required: true }, { name: "tracking_id", label: "Tracking ID", placeholder: "GTM / pixel / Flowly ID" }, { name: "webhook_url", label: "Webhook destino", placeholder: "https://..." }] },
+  "Landing / Pixel": { key: "website_tracking", category: "web", fields: [{ name: "website_url", label: "URL landing", placeholder: "https://..." }, { name: "tracking_id", label: "Pixel / GTM", placeholder: "ID de tracking" }, { name: "conversion_event", label: "Evento conversión", placeholder: "Lead, Purchase..." }] },
+  "Centralita / Voice": { key: "voice", category: "voice", fields: [{ name: "provider", label: "Proveedor", placeholder: "Twilio, Vapi, Asterisk..." }, { name: "account_sid", label: "Account SID / ID", placeholder: "ID de cuenta" }, { name: "auth_token", label: "Auth token", placeholder: "Token secreto", secret: true }, { name: "phone_number", label: "Número conectado", placeholder: "+57..." }] },
+  "Permisos CRM": { key: "ai_crm_permissions", category: "ai", fields: [{ name: "allowed_tables", label: "Tablas permitidas", placeholder: "customers, appointments, whatsapp_messages" }, { name: "max_history_days", label: "Días de histórico", placeholder: "90" }] },
+  "Acciones seguras": { key: "ai_safe_actions", category: "ai", fields: [{ name: "require_confirmation", label: "Requiere confirmación", placeholder: "true" }, { name: "allowed_actions", label: "Acciones permitidas", placeholder: "send_whatsapp, create_task" }] },
+  "Base de conocimiento": { key: "ai_knowledge_base", category: "ai", fields: [{ name: "storage_path", label: "Ruta documentos", placeholder: "knowledge/base" }, { name: "tone", label: "Tono", placeholder: "Profesional, cercano..." }] },
+};
+
+function integrationBlueprintFor(item: { name: string; detail: string; status?: string }) {
+  return integrationBlueprints[item.name] || { key: item.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), category: "custom", fields: [{ name: "identifier", label: "Identificador", placeholder: "Usuario, URL, API key o identificador" }, { name: "webhook_url", label: "Webhook/API URL", placeholder: "https://..." }] };
+}
+
+function maskSecret(value: unknown) {
+  const text = String(value || "");
+  if (!text) return "";
+  if (text.length <= 8) return "••••";
+  return `${text.slice(0, 4)}••••${text.slice(-4)}`;
+}
+
+function IntegrationPanel({ items, business, integrations = [], reloadData }: { items: { name: string; status?: string; detail: string }[]; business?: Business | null; integrations?: BusinessIntegration[]; reloadData?: () => Promise<void> }) {
   const [openItem, setOpenItem] = useState<string | null>(null);
-  const [savedItems, setSavedItems] = useState<Record<string, boolean>>({});
+  const [formState, setFormState] = useState<Record<string, Record<string, string>>>({});
+  const [notesState, setNotesState] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
+
+  const getIntegration = (providerKey: string) => integrations.find((item) => item.provider_key === providerKey);
+
+  const saveConnection = async (item: { name: string; detail: string; status?: string }) => {
+    const blueprint = integrationBlueprintFor(item);
+    if (!business) return alert("No se ha cargado el negocio");
+    const current = getIntegration(blueprint.key);
+    const values = formState[blueprint.key] || {};
+    const mergedConfig = { ...((current?.config as Record<string, unknown>) || {}), ...values };
+    const missing = blueprint.fields.filter((field) => field.required && !String(mergedConfig[field.name] || "").trim());
+    if (missing.length) return alert(`Faltan campos obligatorios: ${missing.map((field) => field.label).join(", ")}`);
+
+    setSaving(blueprint.key);
+    const payload = {
+      business_id: business.id,
+      provider_key: blueprint.key,
+      provider_name: item.name,
+      category: blueprint.category,
+      status: "pending",
+      config: mergedConfig,
+      notes: notesState[blueprint.key] ?? current?.notes ?? null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("business_integrations").upsert(payload, { onConflict: "business_id,provider_key" });
+    setSaving(null);
+    if (error) return alert(error.message);
+    await reloadData?.();
+    setOpenItem(null);
+    alert("Configuración guardada. Ahora pulsa Probar conexión para validarla con el proveedor.");
+  };
+
+  const testConnection = async (item: { name: string; detail: string; status?: string }) => {
+    const blueprint = integrationBlueprintFor(item);
+    const current = getIntegration(blueprint.key);
+    if (!current) return alert("Guarda primero la configuración.");
+    setTesting(blueprint.key);
+    const res = await fetch("/api/integrations/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerKey: blueprint.key, config: current.config || {} }),
+    });
+    const result = await res.json().catch(() => ({ ok: false, error: "Respuesta no válida" }));
+    await supabase.from("business_integrations").update({ status: result.ok ? "connected" : "error", last_checked_at: new Date().toISOString(), connected_at: result.ok ? new Date().toISOString() : current.connected_at || null }).eq("business_id", business?.id || "").eq("provider_key", blueprint.key);
+    setTesting(null);
+    await reloadData?.();
+    alert(result.ok ? `Conexión validada: ${result.message || "OK"}` : `No se pudo validar: ${result.error || result.message || "Revisa credenciales"}`);
+  };
+
+  const disconnect = async (providerKey: string) => {
+    if (!business) return;
+    if (!confirm("¿Desconectar esta integración? Se conservará el registro pero quedará desactivado.")) return;
+    const { error } = await supabase.from("business_integrations").update({ status: "disabled", updated_at: new Date().toISOString() }).eq("business_id", business.id).eq("provider_key", providerKey);
+    if (error) return alert(error.message);
+    await reloadData?.();
+  };
+
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => {
+        const blueprint = integrationBlueprintFor(item);
+        const current = getIntegration(blueprint.key);
         const open = openItem === item.name;
-        const saved = savedItems[item.name];
+        const status = current?.status || item.status || "pending";
+        const isConnected = status === "connected";
+        const config = (current?.config || {}) as Record<string, unknown>;
         return (
           <div key={item.name} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5">
             <div className="flex items-start justify-between gap-3">
@@ -2755,14 +2870,36 @@ function IntegrationPanel({ items }: { items: { name: string; status?: string; d
                 <p className="font-semibold">{item.name}</p>
                 <p className="mt-1 text-sm text-white/45">{item.detail}</p>
               </div>
-              <span className={saved ? "rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100" : "rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100"}>{saved ? "Configurado" : item.status || "Preparado"}</span>
+              <span className={isConnected ? "rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100" : status === "error" ? "rounded-full border border-red-300/20 bg-red-400/10 px-3 py-1 text-xs text-red-100" : "rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100"}>{isConnected ? "Conectado" : status === "error" ? "Error" : "Pendiente"}</span>
             </div>
-            <button onClick={() => setOpenItem(open ? null : item.name)} className="mt-4 w-full rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 hover:bg-white/10">{open ? "Cerrar configuración" : "Configurar conexión"}</button>
+            {current?.last_checked_at && <p className="mt-3 text-xs text-white/38">Última validación: {new Date(current.last_checked_at).toLocaleString("es-ES")}</p>}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {blueprint.oauth && business && <a href={`/api/integrations/connect/${blueprint.key}?businessId=${business.id}`} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-950">Conectar OAuth</a>}
+              <button onClick={() => setOpenItem(open ? null : item.name)} className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 hover:bg-white/10">{open ? "Cerrar" : current ? "Editar" : "Configurar"}</button>
+              {current && <button onClick={() => testConnection(item)} disabled={testing === blueprint.key} className="rounded-full border border-cyan-300/20 px-4 py-2 text-sm text-cyan-100 disabled:opacity-50">{testing === blueprint.key ? "Probando..." : "Probar"}</button>}
+            </div>
             {open && (
               <div className="mt-4 grid gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4">
-                <input className="input-dark" placeholder="Usuario, URL, API key o identificador" />
-                <textarea className="input-dark min-h-24" placeholder="Notas de conexión, permisos, proveedor o instrucciones internas" />
-                <button onClick={() => { setSavedItems((current) => ({ ...current, [item.name]: true })); setOpenItem(null); }} className="btn-primary py-2 text-sm"><CheckCircle2 size={16} /> Guardar configuración</button>
+                {blueprint.fields.map((field) => (
+                  <label key={field.name} className="grid gap-1 text-xs font-medium text-white/65">
+                    {field.label}{field.required ? " *" : ""}
+                    <input
+                      className="input-dark"
+                      type={field.secret ? "password" : "text"}
+                      placeholder={field.secret && config[field.name] ? maskSecret(config[field.name]) : field.placeholder}
+                      defaultValue={field.secret ? "" : String(config[field.name] || "")}
+                      onChange={(e) => setFormState((state) => ({ ...state, [blueprint.key]: { ...(state[blueprint.key] || {}), [field.name]: e.target.value } }))}
+                    />
+                  </label>
+                ))}
+                <textarea defaultValue={current?.notes || ""} onChange={(e) => setNotesState((state) => ({ ...state, [blueprint.key]: e.target.value }))} className="input-dark min-h-24" placeholder="Notas internas, permisos, instrucciones del proveedor o uso previsto" />
+                <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-xs leading-5 text-white/52">
+                  Esta integración guarda credenciales por negocio y puede validarse con el proveedor. Para OAuth real añade las variables de entorno indicadas en el README del ZIP.
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => saveConnection(item)} disabled={saving === blueprint.key} className="btn-primary py-2 text-sm disabled:opacity-50"><CheckCircle2 size={16} /> {saving === blueprint.key ? "Guardando..." : "Guardar configuración"}</button>
+                  {current && <button onClick={() => disconnect(blueprint.key)} className="btn-secondary py-2 text-sm">Desconectar</button>}
+                </div>
               </div>
             )}
           </div>
@@ -2772,7 +2909,7 @@ function IntegrationPanel({ items }: { items: { name: string; status?: string; d
   );
 }
 
-function MarketingModule({ records, customers, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+function MarketingModule({ business, integrations, reloadData, records, customers, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Campañas");
 
   useEffect(() => {
@@ -2786,14 +2923,14 @@ function MarketingModule({ records, customers, title, setTitle, notes, setNotes,
       <ModuleHero eyebrow="Growth OS" title="Marketing conectado al negocio" description="Planifica campañas, controla presupuesto, define canales, prepara creatividades y deja listas las conexiones de redes para cada cliente." actions={<ModulePillTabs tabs={["Campañas", "Canales", "Audiencias", "Calendario"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Campañas: "module:marketing:campanas", Canales: "module:marketing:canales", Audiencias: "module:marketing:audiencias", Calendario: "module:marketing:calendario" } as Record<string, ActiveTab>)[next] || "module:marketing:campanas", setTab, next)} />} />
       <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Megaphone />} label="Campañas" value={records.length} helper="Totales" /><Metric icon={<CreditCard />} label="Presupuesto" value={`${budget.toFixed(2)}€`} helper="Planificado" /><Metric icon={<Users />} label="Audiencia CRM" value={customers.length} helper="Clientes" /><Metric icon={<CheckCircle2 />} label="Activas" value={activeCampaigns} helper="En marcha" /></div>
       {tab === "Campañas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva campaña profesional"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="meta">Facebook / Instagram Ads</option><option value="google">Google Ads</option><option value="tiktok">TikTok Ads</option><option value="email">Email Marketing</option><option value="whatsapp">WhatsApp Campaign</option><option value="organic">Contenido orgánico</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaña: Reactivación clientes VIP" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Presupuesto estimado" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Objetivo, público, oferta, fechas, creatividad, KPI principal y responsable" className="input-dark min-h-40" /><button onClick={() => createRecord("marketing", status)} className="btn-primary"><Plus size={17} /> Guardar campaña</button></div></GlassCard><GlassCard title="Pipeline de campañas"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
-      {tab === "Canales" && <GlassCard title="Conexiones del cliente"><IntegrationPanel items={channels.map((name) => ({ name, detail: name.includes("Meta") ? "Página, Instagram, pixel y cuenta publicitaria" : name.includes("Google") ? "Google Business Profile, Ads y Analytics" : name.includes("TikTok") ? "Cuenta publicitaria, pixel y eventos" : name.includes("WhatsApp") ? "Plantillas, listas y campañas desde CRM" : name.includes("Email") ? "Dominio, listas y automatizaciones" : "UTMs, eventos y conversiones" }))} /></GlassCard>}
+      {tab === "Canales" && <GlassCard title="Conexiones del cliente"><IntegrationPanel business={business} integrations={integrations} reloadData={reloadData} items={channels.map((name) => ({ name, detail: name.includes("Meta") ? "Página, Instagram, pixel y cuenta publicitaria" : name.includes("Google") ? "Google Business Profile, Ads y Analytics" : name.includes("TikTok") ? "Cuenta publicitaria, pixel y eventos" : name.includes("WhatsApp") ? "Plantillas, listas y campañas desde CRM" : name.includes("Email") ? "Dominio, listas y automatizaciones" : "UTMs, eventos y conversiones" }))} /></GlassCard>}
       {tab === "Audiencias" && <GlassCard title="Audiencias inteligentes"><div className="grid gap-3 md:grid-cols-3">{["Clientes nuevos", "Clientes sin cita 60 días", "VIP / mayor ticket", "Cumpleaños", "No asistieron", "Leads sin convertir"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Segmento preparado desde CRM para campañas y WhatsApp.</p></div>)}</div></GlassCard>}
       {tab === "Calendario" && <GlassCard title="Calendario editorial"><div className="grid gap-3 md:grid-cols-4">{["Lunes: oferta", "Miércoles: contenido", "Viernes: remarketing", "Domingo: reporte"].map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Bloque operativo listo para automatizar.</p></div>)}</div></GlassCard>}
     </section>
   );
 }
 
-function AiModule({ records, customers, appointments, revenue, title, setTitle, notes, setNotes, createRecord, deleteRecord, businessAvatar, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+function AiModule({ business, integrations, reloadData, records, customers, appointments, revenue, title, setTitle, notes, setNotes, createRecord, deleteRecord, businessAvatar, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Copiloto");
 
   useEffect(() => {
@@ -2814,7 +2951,7 @@ function AiModule({ records, customers, appointments, revenue, title, setTitle, 
       {tab === "Copiloto" && <GlassCard title="Insights ejecutivos"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{["Resumen diario del negocio", "Huecos libres a cubrir", "Clientes con riesgo de fuga", "Servicios con más demanda", "Campaña recomendada", "Seguimiento de llamadas", "Caja prevista", "Tareas para el equipo"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Tarjeta preparada para respuesta IA real.</p></div>)}</div></GlassCard>}
       {tab === "Automatizaciones" && <GlassCard title="Automatizaciones IA listas"><div className="grid gap-3 md:grid-cols-3">{["Responder leads", "Crear recordatorios", "Reactivar clientes", "Sugerir campañas", "Clasificar llamadas", "Resumen semanal"].map((x) => <div key={x} className="rounded-3xl border border-violet-300/20 bg-violet-500/10 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Estado: preparado para conectar API y reglas.</p></div>)}</div></GlassCard>}
       {tab === "Prompts" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva instrucción IA"><div className="grid gap-3"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Resumen semanal de dirección" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Define objetivo, datos que debe mirar, formato de respuesta y acciones que debe recomendar" className="input-dark min-h-40" /><button onClick={() => createRecord("ai", "prompt")} className="btn-primary"><Bot size={17} /> Guardar instrucción IA</button></div></GlassCard><GlassCard title="Biblioteca de prompts"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
-      {tab === "Conectores" && <GlassCard title="Proveedor IA y permisos"><IntegrationPanel items={[{ name: "OpenAI / proveedor IA", detail: "API key, modelo y límites por negocio" }, { name: "Permisos CRM", detail: "Datos que la IA puede leer y resumir" }, { name: "Acciones seguras", detail: "Confirmación antes de enviar mensajes o modificar datos" }, { name: "Base de conocimiento", detail: "Documentos, FAQs y tono del negocio" }]} /></GlassCard>}
+      {tab === "Conectores" && <GlassCard title="Proveedor IA y permisos"><IntegrationPanel business={business} integrations={integrations} reloadData={reloadData} items={[{ name: "OpenAI / proveedor IA", detail: "API key, modelo y límites por negocio" }, { name: "Permisos CRM", detail: "Datos que la IA puede leer y resumir" }, { name: "Acciones seguras", detail: "Confirmación antes de enviar mensajes o modificar datos" }, { name: "Base de conocimiento", detail: "Documentos, FAQs y tono del negocio" }]} /></GlassCard>}
     </section>
   );
 }
@@ -2842,7 +2979,7 @@ function AnalyticsModule({ records, customers, appointments, services, revenue, 
 }
 
 
-function AgendaProModule({ appointments, customers, employees, services, settings, selectedCrmCustomerId, setSelectedCrmCustomerId, createAppointmentForCustomer, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0] & { settings?: BookingSettings | null }) {
+function AgendaProModule({ business, integrations, reloadData, appointments, customers, employees, services, settings, selectedCrmCustomerId, setSelectedCrmCustomerId, createAppointmentForCustomer, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0] & { settings?: BookingSettings | null }) {
   const [view, setView] = useState("Calendario");
   const [newCustomerId, setNewCustomerId] = useState(selectedCrmCustomerId || "");
   const [newEmployeeId, setNewEmployeeId] = useState("");
@@ -2906,7 +3043,7 @@ function AgendaProModule({ appointments, customers, employees, services, setting
       {view === "Calendario" && <GlassCard title="Calendario semanal por huecos"><div className="overflow-x-auto"><div className="grid min-w-[880px] grid-cols-[90px_repeat(7,1fr)] gap-2">{calendarCells}</div></div></GlassCard>}
       {view === "Huecos libres" && <GlassCard title="Próximos huecos libres"><div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">{weekDays.flatMap((day) => hours.map((hour) => ({ day, hour }))).filter(({ day, hour }) => !appointmentForSlot(day, hour)).slice(0, 24).map(({ day, hour }) => <button key={`${day.toISOString()}-${hour}`} onClick={() => { const iso = new Date(day); iso.setHours(hour, 0, 0, 0); setNewDate(iso.toISOString().slice(0, 16)); setView("Crear cita"); setActiveTab("module:agenda-pro:nueva"); }} className="rounded-3xl border border-emerald-300/20 bg-emerald-400/10 p-4 text-left hover:bg-emerald-400/15"><p className="font-semibold">{day.toLocaleDateString("es-ES", { weekday: "long", day: "2-digit", month: "short" })}</p><p className="mt-1 text-sm text-emerald-100/70">{String(hour).padStart(2, "0")}:00 disponible</p></button>)}</div></GlassCard>}
       {view === "Crear cita" && <section className="grid gap-6 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Crear cita rápida"><div className="grid gap-3"><select value={newCustomerId} onChange={(e) => setNewCustomerId(e.target.value)} className="input-dark"><option value="">Cliente</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customerName(customer)}</option>)}</select><select value={newEmployeeId} onChange={(e) => setNewEmployeeId(e.target.value)} className="input-dark"><option value="">Empleado</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select><select value={newServiceId} onChange={(e) => setNewServiceId(e.target.value)} className="input-dark"><option value="">Servicio</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {Number(service.price || 0).toFixed(2)}€</option>)}</select><input type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input-dark" /><button onClick={createFromAgenda} className="btn-primary"><Plus size={17} /> Crear cita</button></div></GlassCard><GlassCard title="Próximas citas"><div className="grid gap-3">{futureAppointments.slice(0, 8).map((item) => <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4"><p className="font-semibold">{customerName(item.customers)}</p><p className="mt-1 text-sm text-white/45">{new Date(appointmentDate(item)).toLocaleString("es-ES")} · {firstRelation(item.services)?.name || "Servicio"}</p></div>)}{!futureAppointments.length && <Empty text="No hay próximas citas." />}</div></GlassCard></section>}
-      {view === "Configuración" && <GlassCard title="Configuración de agenda"><IntegrationPanel items={[{ name: "Horario del negocio", detail: "Usa los ajustes generales de agenda para generar huecos libres." }, { name: "Google Calendar", detail: "Preparado para sincronización bidireccional." }, { name: "Recordatorios automáticos", detail: "Conecta WhatsApp y CRM para avisos previos a citas." }]} /></GlassCard>}
+      {view === "Configuración" && <GlassCard title="Configuración de agenda"><IntegrationPanel business={business} integrations={integrations} reloadData={reloadData} items={[{ name: "Google Calendar", detail: "Sincronización real de citas con calendario externo" }, { name: "WhatsApp", detail: "Recordatorios automáticos previos a citas" }, { name: "Web del cliente", detail: "Widget público de reservas y tracking" }]} /></GlassCard>}
     </section>
   );
 }
@@ -2943,7 +3080,7 @@ function TimeTrackingModule({ records, employees, title, setTitle, notes, setNot
   </section>;
 }
 
-function BookingPremiumModule({ records, employees, services, appointments, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+function BookingPremiumModule({ business, integrations, reloadData, records, employees, services, appointments, title, setTitle, notes, setNotes, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Reglas");
 
   useEffect(() => {
@@ -2957,7 +3094,7 @@ function BookingPremiumModule({ records, employees, services, appointments, titl
       {tab === "Reglas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva regla premium"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="active">Activa</option><option value="draft">Borrador</option><option value="inactive">Inactiva</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Antelación mínima 24h" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe condición, horarios, servicios afectados, penalización o mensaje visible al cliente" className="input-dark min-h-40" /><button onClick={() => createRecord("booking_premium", status)} className="btn-primary"><Plus size={17} /> Guardar regla</button></div></GlassCard><GlassCard title="Reglas existentes"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
       {tab === "Bloqueos" && <GlassCard title="Bloqueos y disponibilidad"><div className="grid gap-3 md:grid-cols-3">{["Vacaciones", "Mantenimiento", "Formación interna", "Festivos", "Sobrecupo controlado", "Lista de espera"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Configuración preparada para calendario avanzado.</p></div>)}</div></GlassCard>}
       {tab === "Experiencia" && <GlassCard title="Portal de reserva del cliente"><div className="grid gap-3 md:grid-cols-2">{["Campos personalizados", "Política de cancelación", "Mensaje post-reserva", "Confirmación WhatsApp", "Pago o señal", "Servicios destacados"].map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Listo para personalizar por negocio.</p></div>)}</div></GlassCard>}
-      {tab === "Conexiones" && <GlassCard title="Canales de reserva"><IntegrationPanel items={[{ name: "Google Business Profile", detail: "Enlace de reservas público" }, { name: "Instagram", detail: "Botón reservar y link en bio" }, { name: "WhatsApp", detail: "Confirmaciones y recordatorios" }, { name: "Web del cliente", detail: "Widget embebible" }, { name: "Calendario externo", detail: "Sincronización futura" }, { name: "Pagos", detail: "Señales y reservas premium" }]} /></GlassCard>}
+      {tab === "Conexiones" && <GlassCard title="Canales de reserva"><IntegrationPanel business={business} integrations={integrations} reloadData={reloadData} items={[{ name: "Google Business Profile", detail: "Enlace de reservas público y reseñas" }, { name: "Instagram / Facebook", detail: "Botón reservar y link en bio" }, { name: "WhatsApp", detail: "Confirmaciones y recordatorios" }, { name: "Web del cliente", detail: "Widget embebible" }, { name: "Google Calendar", detail: "Sincronización externa de agenda" }, { name: "Stripe / pagos", detail: "Señales y reservas premium" }]} /></GlassCard>}
     </section>
   );
 }
