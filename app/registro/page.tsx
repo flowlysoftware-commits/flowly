@@ -26,10 +26,6 @@ function RegistroContent() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [primaryGoal, setPrimaryGoal] = useState("reservas");
-  const [createAvatar, setCreateAvatar] = useState(true);
-  const [avatarName, setAvatarName] = useState("Nia");
-  const [avatarStyle, setAvatarStyle] = useState("robot-premium");
-  const [avatarPersonality, setAvatarPersonality] = useState("cercana, estratégica y orientada a ventas");
   const [loading, setLoading] = useState(false);
 
   const createAccount = async () => {
@@ -66,7 +62,7 @@ function RegistroContent() {
     const res = await fetch("/api/onboarding", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, businessName, businessType, password, logoUrl, logoBase64, logoFileName: logoFile?.name || null, logoMimeType: logoFile?.type || null, termsAccepted, termsVersion: "flowly-ia-v1", theme, primaryGoal, createAvatar, avatarName, avatarStyle, avatarPersonality }),
+      body: JSON.stringify({ sessionId, businessName, businessType, password, logoUrl, logoBase64, logoFileName: logoFile?.name || null, logoMimeType: logoFile?.type || null, termsAccepted, termsVersion: "flowly-ia-v1", theme, primaryGoal }),
     });
 
     const data = await res.json();
@@ -88,12 +84,12 @@ function RegistroContent() {
           <Image src="/logo.png" alt="Flowly IA" width={170} height={48} className="h-auto w-40 object-contain" priority />
           <h1 className="mt-10 text-5xl font-semibold tracking-tight md:text-6xl">Personaliza tu panel desde el primer día.</h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-white/60">
-            Tu suscripción ya está activa. Configura el nombre, sector, tema visual, logo y mascota IA para que el panel parezca realmente tuyo.
+            Tu suscripción ya está activa. Configura el nombre, sector, tema visual y logo para que el panel parezca realmente tuyo.
           </p>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <MiniStat title="Paso 1" text="Identidad" />
             <MiniStat title="Paso 2" text="Tema" />
-            <MiniStat title="Paso 3" text="Mascota IA" />
+            <MiniStat title="Paso 3" text="Logo y tema" />
           </div>
         </section>
 

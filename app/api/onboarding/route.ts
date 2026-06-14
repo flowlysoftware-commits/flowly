@@ -3,7 +3,6 @@ import { Buffer } from "node:buffer";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildCommissionLines } from "@/lib/salesCommissions";
-import { generateAndStoreBrandAvatar } from "@/lib/brandAvatar";
 import { buildMarketingContentCalendar, buildMarketingTasks, getMarketingPlan } from "@/lib/marketingPlans";
 
 export const runtime = "nodejs";
@@ -24,7 +23,7 @@ const premiumModules = [
 
 export async function POST(request: Request) {
   try {
-    const { sessionId, password, businessName, businessType, logoUrl, logoBase64, logoFileName, logoMimeType, termsAccepted, termsVersion, theme, primaryGoal, createAvatar, avatarName, avatarStyle, avatarPersonality } = await request.json();
+    const { sessionId, password, businessName, businessType, logoUrl, logoBase64, logoFileName, logoMimeType, termsAccepted, termsVersion, theme, primaryGoal } = await request.json();
 
     if (!termsAccepted) {
       return NextResponse.json({ error: "Debes aceptar las condiciones de contratación de Flowly IA" }, { status: 400 });
