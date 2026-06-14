@@ -475,7 +475,7 @@ export default function DashboardPage() {
       supabase.from("customers").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("appointments").select("*, customers(name, full_name), employees(name), services(name, price)").eq("business_id", businessId).order("appointment_date", { ascending: true }),
       supabase.from("booking_settings").select("*").eq("business_id", businessId).maybeSingle(),
-      supabase.from("business_modules").select("*").eq("business_id", businessId).eq("status", "active"),
+      supabase.from("business_modules").select("*").eq("business_id", businessId),
       supabase.from("module_records").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("business_integrations").select("*").eq("business_id", businessId).order("provider_name", { ascending: true }),
       supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -616,8 +616,9 @@ export default function DashboardPage() {
   }, [crmReminders, dismissedReminderIds]);
 
   const activeModuleKeys = useMemo(() => {
-    if (business?.plan === "premium") return moduleCatalog.map((item) => item.key);
-    return modules.map((item) => item.module_key);
+    const cancelledKeys = new Set(modules.filter((item) => item.status === "cancelled").map((item) => item.module_key));
+    if (business?.plan === "premium") return moduleCatalog.map((item) => item.key).filter((key) => !cancelledKeys.has(key));
+    return modules.filter((item) => item.status === "active").map((item) => item.module_key);
   }, [business?.plan, modules]);
 
   const activeModules = moduleCatalog.filter((item) => activeModuleKeys.includes(item.key));
@@ -1338,6 +1339,7 @@ export default function DashboardPage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) return alert(data.error || "No se pudo generar la mascota IA");
+      if (typeof window !== "undefined") window.localStorage.removeItem("flowly-assistant-3d-hidden");
       setBusinessAvatar(data.avatar as BusinessAvatar);
       alert("Mascota IA generada y guardada en el panel.");
     } catch (error) {
@@ -1346,6 +1348,40 @@ export default function DashboardPage() {
     } finally {
       setAvatarGenerating(false);
     }
+  };
+
+  const removeBusinessAvatar = async () => {
+    if (!business?.id) return;
+    const ok = window.confirm("¿Quieres quitar la mascota IA de este panel? Podrás crear una nueva cuando quieras.");
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("business_avatars")
+      .delete()
+      .eq("business_id", business.id);
+
+    if (error) return alert(error.message);
+    if (typeof window !== "undefined") window.localStorage.setItem("flowly-assistant-3d-hidden", "1");
+    setBusinessAvatar(null);
+    alert("Mascota IA quitada del panel.");
+  };
+
+  const deactivateModule = async (moduleKey: string) => {
+    if (!business?.id) return;
+    const module = moduleCatalog.find((item) => item.key === moduleKey);
+    const ok = window.confirm(`¿Quieres eliminar el módulo ${module?.name || moduleKey} de tu panel? Dejará de aparecer en el menú y podrás volver a añadirlo más adelante.`);
+    if (!ok) return;
+
+    const existing = modules.find((item) => item.module_key === moduleKey);
+    const payload = { business_id: business.id, module_key: moduleKey, status: "cancelled" };
+    const result = existing?.id
+      ? await supabase.from("business_modules").update({ status: "cancelled" }).eq("id", existing.id).eq("business_id", business.id)
+      : await supabase.from("business_modules").upsert(payload, { onConflict: "business_id,module_key" });
+
+    if (result.error) return alert(result.error.message);
+    if (activeTab.startsWith(`module:${module?.slug || ""}`)) setActiveTab("area");
+    await loadData();
+    alert("Módulo eliminado del panel.");
   };
 
   const deleteVoiceCall = async (id: string) => {
@@ -1636,12 +1672,17 @@ export default function DashboardPage() {
             setAvatarPersonality={setAvatarPersonality}
             avatarGenerating={avatarGenerating}
             generateBusinessAvatar={generateBusinessAvatar}
+            removeBusinessAvatar={removeBusinessAvatar}
+            activeModules={activeModules}
+            inactiveModules={inactiveModules}
+            activateModule={activateModule}
+            deactivateModule={deactivateModule}
           />}
           {activeModule && <ModuleSection business={business} integrations={businessIntegrations} reloadData={loadData} module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} whatsappBotRules={whatsappBotRules} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
 
           <DashboardFooter />
 
-          <FloatingAvatarAssistant
+          {businessAvatar && <FloatingAvatarAssistant
             businessAvatar={businessAvatar}
             businessName={business.name}
             open={assistantOpen}
@@ -1659,7 +1700,7 @@ export default function DashboardPage() {
             restartTour={restartAssistantTour}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
-          />
+          />}
         </section>
       </div>
     </Shell>
@@ -4461,6 +4502,11 @@ function SettingsSection({
   setAvatarPersonality,
   avatarGenerating,
   generateBusinessAvatar,
+  removeBusinessAvatar,
+  activeModules,
+  inactiveModules,
+  activateModule,
+  deactivateModule,
 }: {
   business: Business;
   settings: BookingSettings;
@@ -4499,6 +4545,11 @@ function SettingsSection({
   setAvatarPersonality: (v: string) => void;
   avatarGenerating: boolean;
   generateBusinessAvatar: () => void;
+  removeBusinessAvatar: () => void;
+  activeModules: ModuleItem[];
+  inactiveModules: ModuleItem[];
+  activateModule: (moduleKey: string) => void;
+  deactivateModule: (moduleKey: string) => void;
 }) {
   return (
     <section className="grid gap-6">
@@ -4578,7 +4629,43 @@ function SettingsSection({
               <option value="cyberpunk-elegante">Cyberpunk elegante</option>
             </select>
             <textarea value={avatarPersonality} onChange={(e) => setAvatarPersonality(e.target.value)} placeholder="Personalidad: cercana, profesional, comercial..." className="input-dark min-h-24" />
-            <button onClick={generateBusinessAvatar} disabled={avatarGenerating} className="btn-primary disabled:opacity-60"><Bot size={17} /> {avatarGenerating ? "Generando mascota IA..." : businessAvatar?.avatar_url ? "Regenerar mascota IA" : "Crear mi mascota IA"}</button>
+            <div className="grid gap-2 md:grid-cols-2">
+              <button onClick={generateBusinessAvatar} disabled={avatarGenerating} className="btn-primary disabled:opacity-60"><Bot size={17} /> {avatarGenerating ? "Generando mascota IA..." : businessAvatar?.avatar_url ? "Regenerar mascota IA" : "Crear mi mascota IA"}</button>
+              <button onClick={removeBusinessAvatar} disabled={!businessAvatar || avatarGenerating} className="rounded-full border border-red-300/25 px-5 py-3 text-sm font-medium text-red-100 disabled:cursor-not-allowed disabled:opacity-40"><XCircle size={17} className="inline" /> Quitar mascota</button>
+            </div>
+            <p className="text-xs leading-5 text-white/35">Si la quitas, desaparecerá del panel de este cliente. Podrás volver a crearla desde aquí cuando quieras.</p>
+          </div>
+        </GlassCard>
+
+        <GlassCard title="Módulos contratados">
+          <div className="grid gap-4">
+            <p className="text-sm leading-6 text-white/55">Gestiona los módulos visibles en tu panel. Al eliminar uno se oculta del menú y queda desactivado para este negocio, sin borrar el histórico ya registrado.</p>
+            <div className="grid gap-3">
+              {activeModules.map((module) => {
+                const Icon = module.Icon;
+                return (
+                  <div key={module.key} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.055] p-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-100"><Icon size={19} /></div>
+                      <div>
+                        <p className="font-semibold">{module.name}</p>
+                        <p className="mt-1 text-xs leading-5 text-white/45">{module.description}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => deactivateModule(module.key)} className="rounded-full border border-red-300/25 px-4 py-2 text-xs font-medium text-red-100">Eliminar módulo</button>
+                  </div>
+                );
+              })}
+              {!activeModules.length && <Empty text="No hay módulos activos en este panel." />}
+            </div>
+            {inactiveModules.length > 0 && (
+              <details className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Ver módulos disponibles para volver a añadir</summary>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {inactiveModules.map((module) => <ModuleAccessCard key={module.key} module={module} onActivate={() => activateModule(module.key)} />)}
+                </div>
+              </details>
+            )}
           </div>
         </GlassCard>
 
