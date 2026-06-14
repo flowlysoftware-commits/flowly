@@ -603,26 +603,42 @@ export default function AdminPage() {
     }
     const token = await getAdminToken();
     if (!token) return "";
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("folder", folder);
+
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 90000);
     try {
-      const res = await fetch("/api/admin/sales-upload", {
+      const signedRes = await fetch("/api/admin/sales-upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ folder, fileName: file.name, contentType: file.type, size: file.size }),
         signal: controller.signal,
       });
-      const result = await res.json();
-      if (!res.ok) {
-        alert(result.error || "No se pudo subir el archivo");
+      const signedText = await signedRes.text();
+      const signedResult = signedText ? JSON.parse(signedText) : {};
+      if (!signedRes.ok) {
+        alert(signedResult.error || "No se pudo preparar la subida del archivo");
         return "";
       }
-      return result.publicUrl as string;
+
+      const { error: uploadError } = await supabase.storage
+        .from(signedResult.bucket || "sales-documents")
+        .uploadToSignedUrl(signedResult.path, signedResult.token, file, {
+          contentType: file.type || "application/octet-stream",
+        });
+
+      if (uploadError) {
+        alert(uploadError.message || "No se pudo subir el archivo a Storage");
+        return "";
+      }
+
+      return signedResult.publicUrl as string;
     } catch (error: any) {
-      alert(error?.name === "AbortError" ? "La subida tardó demasiado. Prueba con un archivo más ligero." : "No se pudo completar la subida.");
+      const message = error?.name === "AbortError"
+        ? "La subida tardó demasiado. Prueba con un archivo más ligero."
+        : error?.message?.includes("JSON")
+          ? "No se pudo completar la subida. La respuesta del servidor no fue válida."
+          : "No se pudo completar la subida.";
+      alert(message);
       return "";
     } finally {
       window.clearTimeout(timeout);
