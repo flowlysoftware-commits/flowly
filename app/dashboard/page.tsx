@@ -1367,6 +1367,7 @@ export default function DashboardPage() {
 
   return (
     <Shell theme={business.panel_theme || "dark"}>
+      <SectorDecorations businessType={business.business_type} />
       <div className="mx-auto flex max-w-[1540px] flex-col gap-6 px-5 py-6 lg:flex-row">
         <aside className="flowly-app-panel h-fit rounded-[2rem] p-4 lg:sticky lg:top-6 lg:w-80">
           <div className="mb-5 rounded-[1.5rem] bg-neutral-950/70 p-5">
@@ -1519,6 +1520,7 @@ export default function DashboardPage() {
                 {business.logo_url ? <img src={business.logo_url} alt={business.name} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-white/15" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/20 text-xl font-semibold text-violet-100">{business.name.slice(0, 1)}</div>}
                 <div>
                   <p className="text-sm font-medium text-violet-300">{business.business_type || "Negocio"} · Plan {business.plan || "basic"}</p>
+                  <span className="mt-2 inline-flex rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">Panel tematizado · {sectorVisuals(business.business_type).label}</span>
                   <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">{business.name}</h1>
                   <p className="mt-3 max-w-2xl text-white/60">Centro operativo de reservas, clientes, servicios, módulos y suscripción.</p>
                 </div>
@@ -1626,6 +1628,8 @@ export default function DashboardPage() {
           />}
           {activeModule && <ModuleSection business={business} integrations={businessIntegrations} reloadData={loadData} module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} whatsappBotRules={whatsappBotRules} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
 
+          <DashboardFooter />
+
           <FloatingAvatarAssistant
             businessAvatar={businessAvatar}
             businessName={business.name}
@@ -1648,6 +1652,59 @@ export default function DashboardPage() {
         </section>
       </div>
     </Shell>
+  );
+}
+
+
+function normalizeBusinessType(value?: string | null) {
+  return (value || "otros").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_");
+}
+
+function sectorVisuals(value?: string | null) {
+  const type = normalizeBusinessType(value);
+  if (/(pelu|hair|barber|barberia|estetica|spa|beauty)/.test(type)) return { label: "Beauty", icons: ["✂️", "💇", "💅", "🧴"], className: "sector-beauty" };
+  if (/(clinic|clinica|dental|salud|fisio|medic|veterinaria)/.test(type)) return { label: "Health", icons: ["✚", "🩺", "💙", "🧬"], className: "sector-health" };
+  if (/(restaurante|restaurant|cafe|bar|food|hostel|hotel)/.test(type)) return { label: "Food", icons: ["🍽️", "☕", "⭐", "🧾"], className: "sector-food" };
+  if (/(taller|auto|mecan|instal|reforma|limpieza|servicio)/.test(type)) return { label: "Services", icons: ["⚙️", "🔧", "📍", "✅"], className: "sector-services" };
+  if (/(gim|fitness|deporte|academia|school|autoescuela)/.test(type)) return { label: "Training", icons: ["🏆", "📚", "⚡", "🎯"], className: "sector-training" };
+  if (/(tienda|retail|comercio|ecommerce|ropa|tech|pos)/.test(type)) return { label: "Retail", icons: ["🛍️", "📦", "💳", "✨"], className: "sector-retail" };
+  return { label: "Business", icons: ["✦", "⚡", "◈", "✺"], className: "sector-default" };
+}
+
+function SectorDecorations({ businessType }: { businessType?: string | null }) {
+  const sector = sectorVisuals(businessType);
+  return (
+    <div className={`flowly-sector-decor ${sector.className}`} aria-hidden="true">
+      <span className="sector-symbol sector-symbol-a">{sector.icons[0]}</span>
+      <span className="sector-symbol sector-symbol-b">{sector.icons[1]}</span>
+      <span className="sector-symbol sector-symbol-c">{sector.icons[2]}</span>
+      <span className="sector-symbol sector-symbol-d">{sector.icons[3]}</span>
+      <span className="sector-orb sector-orb-a" />
+      <span className="sector-orb sector-orb-b" />
+    </div>
+  );
+}
+
+function DashboardFooter() {
+  return (
+    <footer className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 text-sm text-white/55 shadow-2xl shadow-black/20 backdrop-blur-xl">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-base font-semibold text-white">Flowly IA</p>
+          <p className="mt-1 max-w-2xl">Sistema operativo modular para negocios modernos: clientes, agenda, WhatsApp, automatizaciones, marketing y operaciones en un solo panel.</p>
+        </div>
+        <div className="flex flex-wrap gap-3 text-white/65">
+          <Link href="/" className="hover:text-white">Quiénes somos</Link>
+          <Link href="/privacy" className="hover:text-white">Política de privacidad</Link>
+          <Link href="/legal/condiciones" className="hover:text-white">Condiciones</Link>
+          <Link href="/contacto" className="hover:text-white">Soporte</Link>
+        </div>
+      </div>
+      <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
+        <span>Protección de datos, confidencialidad empresarial y aislamiento por negocio.</span>
+        <span className="sm:text-right">Copyright 2026 Flowly · Versión 2.0</span>
+      </div>
+    </footer>
   );
 }
 
@@ -1709,8 +1766,10 @@ function FloatingAvatarAssistant({
     { x: 54, y: 74, facing: "right" as const, label: "centro del panel", phrase: "Puedo explicarte cualquier módulo del negocio." },
     { x: 38, y: 74, facing: "right" as const, label: "módulos", phrase: "A la izquierda tienes CRM, WhatsApp, TPV y más." },
   ];
+  const entrancePosition = { x: -12, y: 74, facing: "right" as const, label: "entrada", phrase: "Hola. Bienvenido de nuevo a tu panel de control." };
+  const entrancePositionIndex = 99;
 
-  const currentPosition = characterPositions[positionIndex % characterPositions.length];
+  const currentPosition = positionIndex === entrancePositionIndex ? entrancePosition : characterPositions[positionIndex % characterPositions.length];
   const modelUrl = "/avatars/flowly-grandma.glb";
   const assistantFacing = isWalking ? travelFacing : currentPosition.facing;
   const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : tourOpen ? "point" : thinking ? "thinking" : "idle";
@@ -1735,7 +1794,7 @@ function FloatingAvatarAssistant({
 
   const walkTo = (index: number, after?: () => void) => {
     const next = index % characterPositions.length;
-    const origin = characterPositions[positionIndex % characterPositions.length];
+    const origin = positionIndex === entrancePositionIndex ? entrancePosition : characterPositions[positionIndex % characterPositions.length];
     const destination = characterPositions[next];
     setTravelFacing(destination.x >= origin.x ? "right" : "left");
     setIsWalking(true);
@@ -1747,6 +1806,24 @@ function FloatingAvatarAssistant({
       setBubbleText(destination.phrase);
       after?.();
     }, 3200);
+  };
+
+  const runPanelWelcome = () => {
+    setIsHidden(false);
+    setOpen(false);
+    setTravelFacing("right");
+    setPositionIndex(entrancePositionIndex);
+    setBubbleText("Voy entrando a tu panel...");
+    setIsWalking(true);
+    window.setTimeout(() => setPositionIndex(2), 220);
+    window.setTimeout(() => {
+      const greeting = "Hola. Bienvenido de nuevo a tu panel de control.";
+      setIsWalking(false);
+      setIsGreeting(true);
+      setBubbleText(greeting);
+      speak(greeting);
+      window.setTimeout(() => setIsGreeting(false), 2600);
+    }, 3300);
   };
 
   useEffect(() => {
@@ -1768,8 +1845,9 @@ function FloatingAvatarAssistant({
     autonomousTimerRef.current = window.setInterval(() => {
       if (document.hidden) return;
       setPositionIndex((current) => {
-        const next = (current + 1) % characterPositions.length;
-        const origin = characterPositions[current % characterPositions.length];
+        const currentVisible = current === entrancePositionIndex ? 1 : current % characterPositions.length;
+        const next = (currentVisible + 1) % characterPositions.length;
+        const origin = characterPositions[currentVisible];
         const destination = characterPositions[next];
         setTravelFacing(destination.x >= origin.x ? "right" : "left");
         setIsWalking(true);
@@ -1794,7 +1872,10 @@ function FloatingAvatarAssistant({
 
   useEffect(() => {
     if (hasGreeted || isHidden) return;
-    const helloTimer = window.setTimeout(() => openAndGreet(), 900);
+    const helloTimer = window.setTimeout(() => {
+      setHasGreeted(true);
+      runPanelWelcome();
+    }, 900);
     return () => {
       window.clearTimeout(helloTimer);
     };
@@ -1819,15 +1900,20 @@ function FloatingAvatarAssistant({
     setIsHidden(false);
     if (typeof window !== "undefined") window.localStorage.removeItem("flowly-assistant-3d-hidden");
     setOpen(true);
-    setIsWalking(false);
-    setPositionIndex(0);
-    setBubbleText(`Hola, soy ${avatarName}.`);
-    setIsGreeting(true);
-    window.setTimeout(() => setIsGreeting(false), 2200);
-    if (!hasGreeted) {
-      setHasGreeted(true);
-      window.setTimeout(() => speak(`Hola, soy ${avatarName}. Estoy aquí para explicarte los módulos y responder dudas de ${businessName}.`), 220);
-    }
+    setTravelFacing("right");
+    setPositionIndex(entrancePositionIndex);
+    setIsWalking(true);
+    setBubbleText("Voy al centro del panel...");
+    window.setTimeout(() => setPositionIndex(2), 180);
+    window.setTimeout(() => {
+      const greeting = `Hola. Bienvenido de nuevo a tu panel de control. Soy ${avatarName}.`;
+      setIsWalking(false);
+      setIsGreeting(true);
+      setBubbleText(greeting);
+      speak(greeting);
+      window.setTimeout(() => setIsGreeting(false), 2600);
+    }, 3200);
+    if (!hasGreeted) setHasGreeted(true);
   };
 
   const hideAssistant = () => {
@@ -4511,7 +4597,7 @@ function SettingsSection({
 
 function RecordsCard({ title, records, deleteRecord }: { title: string; records: ModuleRecord[]; deleteRecord: (id: string) => void }) { return <GlassCard title={title}><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard>; }
 function RecordsList({ records, deleteRecord }: { records: ModuleRecord[]; deleteRecord: (id: string) => void }) { return <div className="space-y-3">{records.map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{record.title}</p>{record.notes && <p className="mt-2 text-sm leading-6 text-white/55">{record.notes}</p>}<p className="mt-2 text-xs text-white/35">{record.status} · {new Date(record.created_at).toLocaleString("es-ES")}</p></div>{record.amount !== null && <p className="rounded-full bg-violet-500/20 px-3 py-1 text-sm text-violet-100">{Number(record.amount).toFixed(2)}€</p>}</div><button onClick={() => deleteRecord(record.id)} className="mt-3 text-xs text-red-200/80">Eliminar</button></div>)}{!records.length && <Empty text="Aún no hay registros." />}</div>; }
-function Shell({ children }: { children: React.ReactNode; theme?: string }) { return <main className="flowly-app-shell text-white"><div className="flowly-app-content">{children}</div></main>; }
+function Shell({ children }: { children: React.ReactNode; theme?: string }) { return <main className="flowly-app-shell relative overflow-hidden text-white"><div className="flowly-app-content relative z-10">{children}</div></main>; }
 function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: string | number; helper: string }) { return <div className="flowly-app-metric rounded-[1.7rem] p-5"><div className="flowly-app-icon mb-4 flex h-11 w-11 items-center justify-center rounded-2xl">{icon}</div><p className="text-sm text-white/50">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-cyan-100/60">{helper}</p></div>; }
 function MetricCard({ label, value }: { label: string; value: string | number }) { return <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/50">{label}</p><p className="mt-3 text-2xl font-semibold text-white">{value}</p></div>; }
 function GlassCard({ title, children }: { title?: string; children: React.ReactNode }) { return <div className="rounded-[2rem] border border-white/10 bg-white/[0.07] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">{title && <h2 className="mb-5 text-2xl font-semibold">{title}</h2>}{children}</div>; }

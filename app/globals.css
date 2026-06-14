@@ -1177,3 +1177,63 @@ input[type="date"].input-dark { color-scheme: dark; }
   .flowly-3d-close-button { top: .7rem; right: .65rem; }
 }
 
+
+/* Flowly sector personalization for client panels */
+.flowly-sector-decor {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sector-symbol {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.025));
+  box-shadow: 0 20px 70px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.12);
+  color: rgba(255,255,255,.42);
+  font-size: 28px;
+  backdrop-filter: blur(18px);
+  animation: sectorFloat 10s ease-in-out infinite alternate;
+}
+.sector-symbol-a { left: 2.5rem; top: 9rem; transform: rotate(-12deg); }
+.sector-symbol-b { right: 4rem; top: 11rem; animation-delay: -2s; transform: rotate(10deg); }
+.sector-symbol-c { left: 7vw; bottom: 9rem; animation-delay: -4s; transform: rotate(8deg); }
+.sector-symbol-d { right: 8vw; bottom: 7rem; animation-delay: -6s; transform: rotate(-10deg); }
+.sector-orb {
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 999px;
+  filter: blur(58px);
+  opacity: .18;
+}
+.sector-orb-a { left: -120px; top: 18%; background: #22d3ee; }
+.sector-orb-b { right: -140px; bottom: 14%; background: #a855f7; }
+.sector-beauty .sector-orb-a { background: #f472b6; }
+.sector-beauty .sector-orb-b { background: #a78bfa; }
+.sector-health .sector-orb-a { background: #22d3ee; }
+.sector-health .sector-orb-b { background: #34d399; }
+.sector-food .sector-orb-a { background: #fb923c; }
+.sector-food .sector-orb-b { background: #facc15; }
+.sector-services .sector-orb-a { background: #60a5fa; }
+.sector-services .sector-orb-b { background: #94a3b8; }
+.sector-training .sector-orb-a { background: #22c55e; }
+.sector-training .sector-orb-b { background: #f59e0b; }
+.sector-retail .sector-orb-a { background: #38bdf8; }
+.sector-retail .sector-orb-b { background: #ec4899; }
+@keyframes sectorFloat {
+  from { translate: 0 0; opacity: .28; }
+  to { translate: 14px -18px; opacity: .48; }
+}
+@media (max-width: 900px) {
+  .sector-symbol { width: 54px; height: 54px; border-radius: 20px; font-size: 22px; opacity: .52; }
+  .sector-symbol-a { left: .8rem; top: 7rem; }
+  .sector-symbol-b { right: .8rem; top: 9rem; }
+  .sector-symbol-c, .sector-symbol-d { display: none; }
+}
