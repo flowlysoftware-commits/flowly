@@ -1662,12 +1662,21 @@ function normalizeBusinessType(value?: string | null) {
 
 function sectorVisuals(value?: string | null) {
   const type = normalizeBusinessType(value);
-  if (/(pelu|hair|barber|barberia|estetica|spa|beauty)/.test(type)) return { label: "Beauty", icons: ["✂️", "💇", "💅", "🧴"], className: "sector-beauty" };
-  if (/(clinic|clinica|dental|salud|fisio|medic|veterinaria)/.test(type)) return { label: "Health", icons: ["✚", "🩺", "💙", "🧬"], className: "sector-health" };
-  if (/(restaurante|restaurant|cafe|bar|food|hostel|hotel)/.test(type)) return { label: "Food", icons: ["🍽️", "☕", "⭐", "🧾"], className: "sector-food" };
-  if (/(taller|auto|mecan|instal|reforma|limpieza|servicio)/.test(type)) return { label: "Services", icons: ["⚙️", "🔧", "📍", "✅"], className: "sector-services" };
-  if (/(gim|fitness|deporte|academia|school|autoescuela)/.test(type)) return { label: "Training", icons: ["🏆", "📚", "⚡", "🎯"], className: "sector-training" };
+  if (/(barber|barberia)/.test(type)) return { label: "Barbería", icons: ["💈", "✂️", "🪒", "🧴"], className: "sector-beauty" };
+  if (/(pelu|hair)/.test(type)) return { label: "Peluquería", icons: ["✂️", "💇", "🪮", "🧴"], className: "sector-beauty" };
+  if (/(estetica|spa|beauty|unas|nails)/.test(type)) return { label: "Estética", icons: ["💅", "✨", "🧴", "🌸"], className: "sector-beauty" };
+  if (/(dental|odont)/.test(type)) return { label: "Dental", icons: ["🦷", "✚", "🩺", "💙"], className: "sector-health" };
+  if (/(veterinaria|veterinario|vet)/.test(type)) return { label: "Veterinaria", icons: ["🐾", "🩺", "💙", "✚"], className: "sector-health" };
+  if (/(clinic|clinica|salud|fisio|medic)/.test(type)) return { label: "Salud", icons: ["✚", "🩺", "💙", "🧬"], className: "sector-health" };
+  if (/(restaurante|restaurant|food)/.test(type)) return { label: "Restaurante", icons: ["🍽️", "👨‍🍳", "🧾", "⭐"], className: "sector-food" };
+  if (/(cafe|cafeteria|bar)/.test(type)) return { label: "Cafetería", icons: ["☕", "🥐", "🧾", "⭐"], className: "sector-food" };
+  if (/(hotel|hostel|alojamiento)/.test(type)) return { label: "Hotel", icons: ["🏨", "🛎️", "🗓️", "⭐"], className: "sector-food" };
+  if (/(taller|auto|mecan)/.test(type)) return { label: "Taller", icons: ["🔧", "⚙️", "🚗", "✅"], className: "sector-services" };
+  if (/(instal|reforma|limpieza|servicio)/.test(type)) return { label: "Servicios", icons: ["⚙️", "🧰", "📍", "✅"], className: "sector-services" };
+  if (/(gim|fitness|deporte)/.test(type)) return { label: "Fitness", icons: ["🏋️", "🏆", "⚡", "🎯"], className: "sector-training" };
+  if (/(academia|school|autoescuela|formacion)/.test(type)) return { label: "Academia", icons: ["📚", "🎓", "⚡", "🎯"], className: "sector-training" };
   if (/(tienda|retail|comercio|ecommerce|ropa|tech|pos)/.test(type)) return { label: "Retail", icons: ["🛍️", "📦", "💳", "✨"], className: "sector-retail" };
+  if (/(legal|abogado|asesoria|inmobiliaria)/.test(type)) return { label: "Profesional", icons: ["💼", "📄", "✍️", "✅"], className: "sector-services" };
   return { label: "Business", icons: ["✦", "⚡", "◈", "✺"], className: "sector-default" };
 }
 
@@ -1702,7 +1711,7 @@ function DashboardFooter() {
       </div>
       <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
         <span>Protección de datos, confidencialidad empresarial y aislamiento por negocio.</span>
-        <span className="sm:text-right">Copyright 2026 Flowly · Versión 2.0</span>
+        <span className="sm:text-right">© Copyright 2026 Flowly · Versión 2.0</span>
       </div>
     </footer>
   );
