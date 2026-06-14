@@ -183,6 +183,8 @@ export default function PreciosPage() {
         <nav className="mb-16 flex items-center justify-between flowly-glass rounded-full px-5 py-3">
           <Link href="/" className="flex items-center gap-3"><Image src="/logo.png" alt="Flowly IA" width={140} height={40} className="h-auto w-32 object-contain" /></Link>
           <div className="hidden items-center gap-6 text-sm text-white/65 md:flex">
+            <Link href="/precios" className="text-cyan-200">Software</Link>
+            <Link href="/marketing">Marketing</Link>
             <Link href="/demo/login">Demos</Link>
             <Link href="/login">Área cliente</Link>
             <Link href="/contacto">Contacto</Link>

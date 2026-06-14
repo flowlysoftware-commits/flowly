@@ -81,10 +81,10 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
         <Image src="/logo.png" alt="Flowly IA" width={150} height={42} className="h-auto w-28 object-contain drop-shadow-[0_0_24px_rgba(34,211,238,.25)] sm:w-36" priority />
       </Link>
       <div className="hidden items-center gap-6 text-sm text-white/68 lg:flex">
+        <Link href={pricesHref} className="transition hover:text-white">Software</Link>
+        <Link href="/marketing" className="transition hover:text-white">Marketing</Link>
         <a href="#producto" className="transition hover:text-white">Producto</a>
-        <a href="#flujo" className="transition hover:text-white">IA en acción</a>
         <a href="#demos" className="transition hover:text-white">Demos</a>
-        <Link href={pricesHref} className="transition hover:text-white">Precios</Link>
         <Link href="/contacto" className="transition hover:text-white">Contacto</Link>
         <Link href="/login" className="transition hover:text-white">Área cliente</Link>
       </div>
@@ -182,14 +182,15 @@ export default function Home() {
       <section className="relative z-10 mx-auto max-w-7xl px-6 pb-20 pt-16 text-center sm:pt-20">
         <div className="flowly-chip mx-auto mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> {market.headline}</div>
         <h1 className="mx-auto max-w-6xl text-5xl font-semibold tracking-tight md:text-7xl lg:text-8xl">
-          Tu negocio funcionando con <span className="flowly-gradient-text">IA, CRM y automatización</span> en un solo panel.
+          Software, marketing e IA para que tu negocio <span className="flowly-gradient-text">venda más y trabaje mejor</span>.
         </h1>
         <p className="mx-auto mt-7 max-w-3xl text-lg leading-8 text-white/68">
-          Flowly conecta agenda, clientes, llamadas, WhatsApp, pagos y métricas para que cada equipo trabaje más rápido, venda mejor y parezca más profesional desde el primer día.
+          Flowly une el software que gestiona tu negocio con campañas de marketing asistidas por IA: CRM, agenda, WhatsApp, llamadas, métricas, contenido y captación conectados en una sola plataforma.
         </p>
         <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
           <Link href="/demo/login" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold transition"><Play size={18} /> Probar demo</Link>
-          <Link href={pricesHref} className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">Ver planes <ArrowRight size={18} /></Link>
+          <Link href={pricesHref} className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">Software <ArrowRight size={18} /></Link>
+          <Link href="/marketing" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">Marketing IA <Sparkles size={18} /></Link>
         </div>
         <div className="mt-8 grid gap-3 text-sm text-white/65 sm:grid-cols-3">
           {["Implementación rápida", "Diseño premium", "Escalable por módulos"].map((item) => <div key={item} className="flowly-chip rounded-2xl px-4 py-3"><CheckCircle2 className="mr-2 inline text-cyan-200" size={16} />{item}</div>)}
@@ -225,6 +226,32 @@ export default function Home() {
                     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{event.title}</h3><span className="text-sm text-cyan-200/80">{event.time}</span></div>
                     <p className="mt-1 text-sm text-white/55">{event.detail}</p>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="marketing" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+        <div className="flowly-glass overflow-hidden rounded-[2.5rem] p-8 md:p-10">
+          <div className="grid gap-10 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Software + Marketing</p>
+              <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-6xl">Campañas mejores porque nacen desde los datos reales del negocio.</h2>
+              <p className="mt-5 text-lg leading-8 text-white/62">Flowly no solo organiza clientes: también te ayuda a crear publicaciones, campañas y seguimientos usando CRM, WhatsApp, agenda e IA para convertir más oportunidades.</p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Link href="/marketing" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Ver planes de marketing <ArrowRight size={18} /></Link>
+                <Link href={pricesHref} className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Ver software</Link>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {["Contenido semanal para redes", "IA para ideas y copies", "Calendario editorial", "Campañas conectadas al CRM"].map((item, index) => (
+                <div key={item} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-fuchsia-300/15 text-fuchsia-200">{index + 1}</div>
+                  <p className="font-semibold">{item}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/50">Pensado para negocios que quieren vender más sin contratar un equipo interno de marketing.</p>
                 </div>
               ))}
             </div>

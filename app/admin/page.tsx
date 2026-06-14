@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 type SalesRole = "director" | "jefe" | "senior" | "asociado";
-type AdminTab = "resumen" | "presupuestos" | "comerciales" | "metodos_pago" | "documentos" | "formaciones" | "leads" | "comisiones" | "clientes";
+type AdminTab = "resumen" | "presupuestos" | "comerciales" | "metodos_pago" | "documentos" | "formaciones" | "leads" | "comisiones" | "clientes" | "marketing";
 
 type SalesUser = {
   id: string;
@@ -119,6 +119,27 @@ type TrainingFolder = { id: string; name: string; description: string | null; so
 type TrainingItem = { id: string; folder_id: string | null; title: string; description: string | null; content: string | null; url: string | null; item_type: string | null; sort_order: number | null; is_active: boolean | null; requires_completion?: boolean | null; estimated_minutes?: number | null };
 type TrainingProgress = { id: string; sales_user_id: string; training_item_id: string; status: string | null; watched_seconds: number | null; duration_seconds: number | null; progress_percent: number | null; completed_at: string | null; updated_at?: string | null };
 
+type MarketingOrder = {
+  id: string;
+  plan_id: string;
+  plan_name: string;
+  status: string | null;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  business_name: string | null;
+  sector: string | null;
+  instagram_url: string | null;
+  facebook_url: string | null;
+  website_url: string | null;
+  objectives: string | null;
+  brand_tone: string | null;
+  target_customer: string | null;
+  offers: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
 type PlanOption = { key: string; name: string; price: number; description: string };
 type ModuleOption = { key: string; name: string; price: number };
 
@@ -195,6 +216,7 @@ export default function AdminPage() {
   const [trainingFolders, setTrainingFolders] = useState<TrainingFolder[]>([]);
   const [trainingItems, setTrainingItems] = useState<TrainingItem[]>([]);
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([]);
+  const [marketingOrders, setMarketingOrders] = useState<MarketingOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -277,7 +299,7 @@ export default function AdminPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
-    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes, documentsRes, signaturesRes, foldersRes, trainingItemsRes, trainingProgressRes] = await Promise.all([
+    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes, documentsRes, signaturesRes, foldersRes, trainingItemsRes, trainingProgressRes, marketingOrdersRes] = await Promise.all([
       supabase.from("sales_users").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_leads").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").order("created_at", { ascending: false }),
@@ -291,6 +313,7 @@ export default function AdminPage() {
       supabase.from("sales_training_folders").select("*").order("sort_order", { ascending: true }),
       supabase.from("sales_training_items").select("*").order("sort_order", { ascending: true }),
       supabase.from("sales_training_progress").select("*").order("updated_at", { ascending: false }),
+      supabase.from("marketing_orders").select("*").order("created_at", { ascending: false }),
     ]);
 
     setSalesUsers((salesUsersRes.data || []) as SalesUser[]);
@@ -304,6 +327,7 @@ export default function AdminPage() {
     setTrainingFolders((foldersRes.data || []) as TrainingFolder[]);
     setTrainingItems((trainingItemsRes.data || []) as TrainingItem[]);
     setTrainingProgress((trainingProgressRes.data || []) as TrainingProgress[]);
+    setMarketingOrders(((marketingOrdersRes as any).data || []) as MarketingOrder[]);
     setLoading(false);
   };
 
@@ -714,6 +738,26 @@ export default function AdminPage() {
     await load();
   };
 
+
+  const updateMarketingOrderStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from("marketing_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const marketingStatusLabel = (status?: string | null) => {
+    const labels: Record<string, string> = {
+      briefing_pending: "Briefing recibido",
+      in_review: "En revisión",
+      in_production: "En producción",
+      scheduled: "Programado",
+      active: "Activo",
+      paused: "Pausado",
+      cancelled: "Cancelado",
+    };
+    return labels[status || ""] || status || "Sin estado";
+  };
+
   const seller = (id?: string | null) => salesUsers.find((user) => user.id === id);
 
   const logout = async () => { await supabase.auth.signOut(); router.push("/"); };
@@ -748,6 +792,7 @@ export default function AdminPage() {
           <TabButton label="Leads" active={tab === "leads"} onClick={() => setTab("leads")} />
           <TabButton label="Comisiones" active={tab === "comisiones"} onClick={() => setTab("comisiones")} />
           <TabButton label="Clientes SaaS" active={tab === "clientes"} onClick={() => setTab("clientes")} />
+          <TabButton label="Marketing" active={tab === "marketing"} onClick={() => setTab("marketing")} />
         </section>
 
         <section className="mb-8 grid gap-4 md:grid-cols-5">
@@ -915,6 +960,59 @@ export default function AdminPage() {
         {tab === "leads" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Nuevo lead admin"><div className="grid gap-3"><input value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} placeholder="Empresa / negocio" className="input-dark" /><div className="grid gap-3 md:grid-cols-2"><input value={leadContact} onChange={(e) => setLeadContact(e.target.value)} placeholder="Persona de contacto" className="input-dark" /><select value={leadSector} onChange={(e) => setLeadSector(e.target.value)} className="input-dark"><option>Peluquería</option><option>Barbería</option><option>Estética</option><option>Clínica</option><option>Academia</option><option>Restaurante</option><option>Otros</option></select></div><div className="grid gap-3 md:grid-cols-2"><input value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} placeholder="Email" className="input-dark" /></div><select value={leadAssigned} onChange={(e) => setLeadAssigned(e.target.value)} className="input-dark"><option value="">Sin asignar</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><textarea value={leadNotes} onChange={(e) => setLeadNotes(e.target.value)} placeholder="Notas comerciales" className="input-dark min-h-24" /><button onClick={createLead} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white"><Plus size={18} className="inline" /> Crear lead</button></div></Panel><Panel title="Todos los leads"><LeadList leads={leads} salesUsers={salesUsers} onStatus={updateLead} /></Panel></section>}
 
         {tab === "comisiones" && <section className="grid gap-6 lg:grid-cols-2"><Panel title="Comisiones"><div className="space-y-3">{commissions.map((commission) => <div key={commission.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div className="min-w-0"><p className="font-medium capitalize break-words">{commission.type}</p><p className="text-xs text-white/45 break-words">{sellerName(commission.sales_user_id, salesUsers)} · {commission.status}</p>{commission.description && <p className="mt-1 text-xs text-white/35 break-words">{commission.description}</p>}<p className="mt-1 text-[11px] text-violet-200">{commission.percentage ? `${commission.percentage}%` : ""}{commission.hierarchy_level != null ? ` · Nivel ${commission.hierarchy_level}` : ""}</p></div><div className="shrink-0 text-left md:text-right"><p className="text-lg font-semibold text-violet-200">{money(Number(commission.amount || 0))}</p><div className="mt-3 flex flex-wrap gap-2 md:justify-end"><button onClick={() => updateCommissionAmount(commission)} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Cambiar importe</button><button onClick={() => deleteCommission(commission)} className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">Borrar</button></div></div></div></div>)}{!commissions.length && <Empty text="No hay comisiones registradas." />}</div></Panel><Panel title="Solicitudes de cobro"><div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-medium">{sellerName(payout.sales_user_id, salesUsers)}</p><p className="text-xs text-white/45">Estado: {payout.status}</p></div><p className="text-lg font-semibold text-violet-200">{money(Number(payout.amount || 0))}</p></div><div className="mt-3 flex gap-2"><button onClick={() => updatePayout(payout.id, "paid")} className="rounded-full bg-white px-3 py-2 text-xs font-medium text-neutral-950">Marcar pagado</button><button onClick={() => updatePayout(payout.id, "rejected")} className="rounded-full border border-white/10 px-3 py-2 text-xs text-white/70">Rechazar</button></div></div>)}{!payouts.length && <Empty text="No hay solicitudes de cobro." />}</div></Panel></section>}
+
+
+
+        {tab === "marketing" && <section className="grid gap-6 lg:grid-cols-[.7fr_1.3fr]">
+          <Panel title="Resumen marketing">
+            <div className="grid gap-4">
+              <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+                <p className="text-sm text-cyan-100">Pedidos activos</p>
+                <p className="mt-2 text-4xl font-semibold">{marketingOrders.filter((order) => !["cancelled", "paused"].includes(order.status || "")).length}</p>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                <p className="text-sm text-white/55">Pendientes de revisar</p>
+                <p className="mt-2 text-3xl font-semibold text-amber-200">{marketingOrders.filter((order) => (order.status || "briefing_pending") === "briefing_pending").length}</p>
+              </div>
+              <p className="text-sm leading-6 text-white/55">Aquí llegan las contrataciones de Marketing Flowly. Revisa briefing, redes, objetivos y mueve cada pedido por el flujo interno.</p>
+            </div>
+          </Panel>
+          <Panel title="Pedidos de marketing">
+            <div className="space-y-4">
+              {marketingOrders.map((order) => <div key={order.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold break-words">{order.business_name || order.contact_name || "Nuevo cliente marketing"}</p>
+                    <p className="mt-1 text-sm text-cyan-200 break-words">{order.plan_name} · {marketingStatusLabel(order.status)}</p>
+                    <p className="mt-1 text-xs text-white/45 break-words">{order.contact_name} · {order.email} · {order.phone}</p>
+                    <p className="mt-3 text-sm text-white/70 break-words"><strong>Objetivo:</strong> {order.objectives || "Sin objetivo indicado"}</p>
+                    <div className="mt-3 grid gap-2 text-xs text-white/50 md:grid-cols-2">
+                      <p><strong>Sector:</strong> {order.sector || "-"}</p>
+                      <p><strong>Tono:</strong> {order.brand_tone || "-"}</p>
+                      <p className="break-all"><strong>Instagram:</strong> {order.instagram_url || "-"}</p>
+                      <p className="break-all"><strong>Facebook:</strong> {order.facebook_url || "-"}</p>
+                      <p className="break-all"><strong>Web:</strong> {order.website_url || "-"}</p>
+                      <p><strong>Creado:</strong> {order.created_at ? new Date(order.created_at).toLocaleDateString("es-ES") : "-"}</p>
+                    </div>
+                    {order.target_customer && <p className="mt-3 text-xs text-white/45 break-words"><strong>Cliente ideal:</strong> {order.target_customer}</p>}
+                    {order.offers && <p className="mt-2 text-xs text-white/45 break-words"><strong>Servicios/ofertas:</strong> {order.offers}</p>}
+                    {order.notes && <p className="mt-2 text-xs text-white/45 break-words"><strong>Notas:</strong> {order.notes}</p>}
+                  </div>
+                  <select value={order.status || "briefing_pending"} onChange={(e) => updateMarketingOrderStatus(order.id, e.target.value)} className="input-dark w-full md:max-w-56">
+                    <option value="briefing_pending">Briefing recibido</option>
+                    <option value="in_review">En revisión</option>
+                    <option value="in_production">En producción</option>
+                    <option value="scheduled">Programado</option>
+                    <option value="active">Activo</option>
+                    <option value="paused">Pausado</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
+                </div>
+              </div>)}
+              {!marketingOrders.length && <Empty text="Aún no hay pedidos de marketing." />}
+            </div>
+          </Panel>
+        </section>}
 
         {tab === "clientes" && <section className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]"><Panel title="Registrar venta / pago cliente"><div className="grid gap-3"><p className="text-sm text-white/55">Para paneles ya entregados: primero vincula cliente y comercial. Puedes registrar una venta manual ya pagada o generar un enlace de pago Stripe para que el cliente pague y quede marcado como pagado automáticamente.</p><select value={manualSale.businessId} onChange={(e) => setManualSale({ ...manualSale, businessId: e.target.value })} className="input-dark"><option value="">Seleccionar cliente SaaS</option>{businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}</select><select value={manualSale.salesUserId} onChange={(e) => setManualSale({ ...manualSale, salesUserId: e.target.value })} className="input-dark"><option value="">Seleccionar comercial</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><div className="grid gap-3 md:grid-cols-3"><select value={manualSale.plan} onChange={(e) => setManualSale({ ...manualSale, plan: e.target.value })} className="input-dark"><option value="basic">Basic</option><option value="premium">Premium</option><option value="modular">Modular</option><option value="clinic">Clinic</option><option value="enterprise">Enterprise</option></select><input value={manualSale.monthlyAmount} onChange={(e) => setManualSale({ ...manualSale, monthlyAmount: e.target.value })} type="number" step="0.01" placeholder="Mensualidad" className="input-dark" /><input value={manualSale.setupAmount} onChange={(e) => setManualSale({ ...manualSale, setupAmount: e.target.value })} type="number" step="0.01" placeholder="Instalación" className="input-dark" /></div><textarea value={manualSale.notes} onChange={(e) => setManualSale({ ...manualSale, notes: e.target.value })} placeholder="Notas internas de la venta" className="input-dark min-h-24" /><div className="rounded-2xl bg-white/10 p-4 text-sm text-white/70">Comisión estimada red: <strong className="text-violet-200">{money(estimateManualCommissions(manualSale, salesUsers))}</strong></div><div className="grid gap-2 md:grid-cols-2"><button onClick={registerManualSale} className="rounded-full bg-violet-500 px-5 py-3 font-medium text-white">Registrar venta ya pagada</button><button onClick={createCustomerPaymentLink} className="rounded-full bg-white px-5 py-3 font-medium text-neutral-950">Generar enlace de pago</button></div>{manualSale.businessId && paymentLinks[manualSale.businessId] && <a href={paymentLinks[manualSale.businessId]} target="_blank" rel="noreferrer" className="break-all rounded-2xl border border-violet-300/30 bg-violet-500/10 p-3 text-xs text-violet-100">{paymentLinks[manualSale.businessId]}</a>}</div></Panel><Panel title="Clientes SaaS"><div className="space-y-3">{businesses.map((business) => <div key={business.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div className="min-w-0"><p className="text-lg font-semibold break-words">{business.name}</p><p className="text-sm text-white/45 break-words">Plan {business.plan || "sin plan"} · Estado <span className={businessStatusValue(business.subscription_status) === "paid" || businessStatusValue(business.subscription_status) === "active" ? "text-emerald-300" : "text-amber-200"}>{businessStatusLabel(business.subscription_status)}</span></p><p className="mt-1 text-xs text-violet-200 break-words">Comercial actual: {sellerName(business.sales_user_id || null, salesUsers)}</p><p className="mt-1 text-[11px] text-white/35 break-words">Stripe: {business.stripe_customer_id ? "Cliente creado" : "Sin pago Stripe"}</p></div><div className="grid w-full gap-2 md:max-w-72"><select value={business.sales_user_id || ""} onChange={(e) => assignBusinessToSalesUser(business.id, e.target.value)} className="input-dark"><option value="">Sin comercial</option>{activeSalesUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select><select value={businessStatusValue(business.subscription_status)} onChange={(e) => updateBusinessSubscriptionStatus(business.id, e.target.value)} className="input-dark">{businessStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div></div></div>)}{!businesses.length && <Empty text="Aún no hay clientes SaaS." />}</div></Panel></section>}
       </div>
