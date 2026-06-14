@@ -119,26 +119,6 @@ function RegistroContent() {
               <option value="ventas">Quiero controlar ventas y caja</option>
               <option value="automatizar">Quiero automatizar tareas</option>
             </select>
-            <div className="rounded-3xl border border-cyan-300/20 bg-cyan-400/10 p-4">
-              <label className="flex items-center justify-between gap-4 text-sm font-semibold text-cyan-50">
-                Crear tu mascota IA
-                <input type="checkbox" checked={createAvatar} onChange={(e) => setCreateAvatar(e.target.checked)} className="h-5 w-5" />
-              </label>
-              <p className="mt-2 text-xs leading-5 text-white/55">Flowly generará un avatar de marca para el header, el dashboard y el módulo IA. Usará el logo y el estilo del negocio como inspiración.</p>
-              {createAvatar && (
-                <div className="mt-4 grid gap-3">
-                  <input value={avatarName} onChange={(e) => setAvatarName(e.target.value)} placeholder="Nombre de la mascota. Ej: Nia" className="flowly-input-light rounded-2xl px-4 py-3" />
-                  <select value={avatarStyle} onChange={(e) => setAvatarStyle(e.target.value)} className="flowly-input-light rounded-2xl px-4 py-3">
-                    <option value="robot-premium">Robot premium SaaS</option>
-                    <option value="humanoide-corporativo">Asistente humanoide corporativo</option>
-                    <option value="animal-futurista">Mascota animal futurista</option>
-                    <option value="minimalista-branding">Minimalista de marca</option>
-                    <option value="cyberpunk-elegante">Cyberpunk elegante</option>
-                  </select>
-                  <textarea value={avatarPersonality} onChange={(e) => setAvatarPersonality(e.target.value)} placeholder="Personalidad de la mascota" className="flowly-input-light min-h-24 rounded-2xl px-4 py-3" />
-                </div>
-              )}
-            </div>
             <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Crear contraseña" className="flowly-input-light rounded-2xl px-4 py-3" />
             <label className="flex items-start gap-3 rounded-2xl border border-violet-300/20 bg-violet-400/10 p-4 text-sm text-white/75">
               <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
