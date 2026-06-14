@@ -311,7 +311,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+      <section id="quienes-somos" className="relative z-10 mx-auto max-w-7xl px-6 py-24">
         <div className="flowly-glass rounded-[2.5rem] px-8 py-16 text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><ShieldCheck /></div>
           <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">Haz que tu negocio parezca más grande, más rápido y más tecnológico.</h2>
@@ -322,6 +322,19 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <footer className="relative z-10 mx-auto max-w-7xl border-t border-white/10 px-6 py-8 text-sm text-white/55">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-5">
+            <Link href="/#quienes-somos" className="hover:text-cyan-200">Quiénes somos</Link>
+            <Link href="/contacto" className="hover:text-cyan-200">Contacto</Link>
+            <Link href="/privacy" className="hover:text-cyan-200">Política de privacidad</Link>
+            <Link href="/legal/condiciones" className="hover:text-cyan-200">Términos</Link>
+          </div>
+          <div className="text-white/45">Copyright 2026 Flowly IA · Version 2.0</div>
+        </div>
+      </footer>
+
     </main>
   );
 }

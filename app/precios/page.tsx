@@ -142,6 +142,7 @@ export default function PreciosPage() {
   const [businessType, setBusinessType] = useState<BusinessTypeId>("other");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState("");
+  const [showModuleBuilder, setShowModuleBuilder] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -252,26 +253,14 @@ export default function PreciosPage() {
           <div id="modular" className="flowly-card rounded-[2rem] p-7">
             <p className="text-sm font-medium text-cyan-200">Configurable</p>
             <h2 className="mt-3 text-3xl font-semibold">Flowly Modular</h2>
-              <div className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-left">
-                <label className="text-sm font-semibold text-cyan-100">Tipo de negocio</label>
-                <select value={businessType} onChange={(e) => chooseBusinessType(e.target.value as BusinessTypeId)} className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none">
-                  {businessTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                </select>
-                <p className="mt-2 text-xs text-white/55">Selecciona el sector y Flowly marcará automáticamente los módulos recomendados. Puedes cambiar la selección manualmente.</p>
-              </div>
-            <p className="mt-3 text-white/60">Empieza desde una base ligera y añade solo los módulos que necesitas.</p>
+            <p className="mt-3 text-white/60">Elige la base modular ahora y configura los módulos en el siguiente paso, sin hacer la página interminable.</p>
             <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(modularTotal, country)}</span><span className="text-white/50"> / mes</span></div>
             <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm text-cyan-100">Base incluida: dashboard, clientes, reservas, calendario y servicios.</div>
-            <div className="mt-6 grid gap-3">
-              {modules.map((module) => {
-                const Icon = module.Icon;
-                const active = selectedModules.includes(module.id);
-                return <button key={module.id} onClick={() => toggleModule(module.id)} className={active ? "rounded-2xl border border-cyan-300/35 bg-cyan-300/10 p-4 text-left text-white" : "rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-left text-white hover:bg-white/[0.1]"}>
-                  <div className="flex items-start gap-3"><Icon className="mt-0.5 text-cyan-200" size={21} /><div className="flex-1"><div className="flex justify-between gap-3"><p className="font-medium">{module.name}{module.id === "marketing" && active ? ` · ${marketingModuleName(marketingPlanId)}` : ""}</p><p className="text-sm text-white/50">+{formatMoney(module.id === "marketing" ? marketingModulePrice(marketingPlanId) : module.price, country)}</p></div><p className="mt-1 text-sm text-white/50">{module.description}</p>{module.id === "marketing" && active && (<div className="mt-3 rounded-2xl border border-fuchsia-300/20 bg-fuchsia-400/10 p-3" onClick={(e) => e.stopPropagation()}><label className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-100/70">Plan de marketing</label><select value={marketingPlanId} onChange={(e) => setMarketingPlanId(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/90 px-3 py-2 text-sm text-white outline-none">{marketingPlanOptions.map((plan) => <option key={plan.id} value={plan.id}>{plan.name.replace("Flowly Marketing ", "")} · {formatMoney(plan.price, country)} / mes</option>)}</select><p className="mt-2 text-xs text-white/45">Este precio sustituye al precio base del módulo Marketing y activa su panel operativo.</p></div>)}</div></div>
-                </button>;
-              })}
+            <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.05] p-4 text-sm text-white/65">
+              <p><span className="font-semibold text-white">{selectedModules.length}</span> módulos seleccionados</p>
+              <p className="mt-1">Sector: {businessTypes.find((item) => item.id === businessType)?.label}</p>
             </div>
-            <button onClick={() => startCheckout("modular", selectedModules)} disabled={loadingPlan === "modular"} className="mt-7 w-full flowly-primary rounded-full px-5 py-4 font-medium">{loadingPlan === "modular" ? "Abriendo..." : "Contratar Modular"}</button>
+            <button onClick={() => setShowModuleBuilder(true)} className="mt-7 w-full flowly-primary rounded-full px-5 py-4 font-medium">Configurar módulos</button>
           </div>
 
           <div className="flowly-glass rounded-[2rem] border border-cyan-300/20 p-7 shadow-2xl shadow-cyan-950/20">
@@ -285,6 +274,73 @@ export default function PreciosPage() {
             <Link href="/contacto?tipo=Informacion%20comercial&mensaje=Quiero%20informacion%20comercial%20sobre%20Flowly%20Enterprise" className="mt-7 inline-flex w-full justify-center rounded-full bg-white px-5 py-4 font-semibold text-slate-950">Más información</Link>
           </div>
         </section>
+
+        {showModuleBuilder && (
+          <section className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/92 px-6 py-8 backdrop-blur-xl">
+            <div className="mx-auto max-w-6xl">
+              <div className="mb-6 flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.3em] text-cyan-200/80">Paso 2 · Flowly Modular</p>
+                  <h2 className="mt-3 text-3xl font-semibold md:text-5xl">Configura los módulos de tu panel</h2>
+                  <p className="mt-3 max-w-2xl text-white/60">Selecciona tu sector para partir de una recomendación inteligente y ajusta después cada módulo según lo que necesite el negocio.</p>
+                </div>
+                <button onClick={() => setShowModuleBuilder(false)} className="rounded-full border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15">Volver a packs</button>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+                <aside className="flowly-card h-fit rounded-[2rem] p-6">
+                  <label className="text-sm font-semibold text-cyan-100">Tipo de negocio</label>
+                  <select value={businessType} onChange={(e) => chooseBusinessType(e.target.value as BusinessTypeId)} className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none">
+                    {businessTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                  </select>
+                  <p className="mt-3 text-sm leading-6 text-white/55">Flowly marcará automáticamente los módulos recomendados para ese sector. Puedes cambiar la selección manualmente.</p>
+
+                  <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+                    <p className="text-sm text-cyan-100">Total mensual</p>
+                    <div className="mt-2"><span className="text-4xl font-semibold">{formatMoney(modularTotal, country)}</span><span className="text-white/50"> / mes</span></div>
+                    <p className="mt-2 text-xs text-white/50">Base modular incluida + {selectedModules.length} módulos seleccionados.</p>
+                  </div>
+
+                  <div className="mt-6 flex flex-col gap-3">
+                    <button onClick={() => startCheckout("modular", selectedModules)} disabled={loadingPlan === "modular"} className="flowly-primary rounded-full px-5 py-4 font-medium">{loadingPlan === "modular" ? "Abriendo..." : "Contratar Modular"}</button>
+                    <button onClick={() => setShowModuleBuilder(false)} className="flowly-secondary rounded-full px-5 py-4 font-medium">Seguir viendo planes</button>
+                  </div>
+                </aside>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {modules.map((module) => {
+                    const Icon = module.Icon;
+                    const active = selectedModules.includes(module.id);
+                    return <button key={module.id} onClick={() => toggleModule(module.id)} className={active ? "rounded-3xl border border-cyan-300/35 bg-cyan-300/10 p-5 text-left text-white shadow-xl shadow-cyan-950/15" : "rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-left text-white hover:bg-white/[0.1]"}>
+                      <div className="flex items-start gap-4">
+                        <div className={active ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-300/20 text-cyan-100" : "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-cyan-200"}><Icon size={21} /></div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex justify-between gap-3"><p className="font-semibold">{module.name}{module.id === "marketing" && active ? ` · ${marketingModuleName(marketingPlanId)}` : ""}</p><p className="text-sm text-white/50">+{formatMoney(module.id === "marketing" ? marketingModulePrice(marketingPlanId) : module.price, country)}</p></div>
+                          <p className="mt-2 text-sm leading-6 text-white/52">{module.description}</p>
+                          <div className="mt-4 inline-flex rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">{active ? "Seleccionado" : "Añadir módulo"}</div>
+                          {module.id === "marketing" && active && (<div className="mt-4 rounded-2xl border border-fuchsia-300/20 bg-fuchsia-400/10 p-3" onClick={(e) => e.stopPropagation()}><label className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-100/70">Plan de marketing</label><select value={marketingPlanId} onChange={(e) => setMarketingPlanId(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/90 px-3 py-2 text-sm text-white outline-none">{marketingPlanOptions.map((plan) => <option key={plan.id} value={plan.id}>{plan.name.replace("Flowly Marketing ", "")} · {formatMoney(plan.price, country)} / mes</option>)}</select><p className="mt-2 text-xs text-white/45">Este precio sustituye al precio base del módulo Marketing y activa su panel operativo.</p></div>)}
+                        </div>
+                      </div>
+                    </button>;
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <footer className="mt-20 border-t border-white/10 py-8 text-sm text-white/55">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap gap-5">
+              <Link href="/#quienes-somos" className="hover:text-cyan-200">Quiénes somos</Link>
+              <Link href="/contacto" className="hover:text-cyan-200">Contacto</Link>
+              <Link href="/privacy" className="hover:text-cyan-200">Política de privacidad</Link>
+              <Link href="/legal/condiciones" className="hover:text-cyan-200">Términos</Link>
+            </div>
+            <div className="text-white/45">Copyright 2026 Flowly IA · Version 2.0</div>
+          </div>
+        </footer>
+
       </div>
     </main>
   );
