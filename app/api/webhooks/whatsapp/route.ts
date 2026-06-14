@@ -54,23 +54,90 @@ type WhatsAppIntegration = {
   config: Record<string, unknown> | null;
 };
 
-async function findIntegrationByPhoneNumberId(phoneNumberId?: string): Promise<WhatsAppIntegration | null> {
-  if (!phoneNumberId) return null;
+function asObjectConfig(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 
-  const { data, error } = await supabaseAdmin
+function getConfiguredPhoneNumberIds(config: Record<string, unknown>) {
+  return [
+    config.phone_number_id,
+    config.phoneNumberId,
+    config.phone_id,
+    config.phoneId,
+    config.whatsapp_phone_number_id,
+    config.whatsappPhoneNumberId,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+async function findIntegrationByPhoneNumberId(phoneNumberId?: string): Promise<WhatsAppIntegration | null> {
+  const normalizedPhoneNumberId = String(phoneNumberId || "").trim();
+  if (!normalizedPhoneNumberId) return null;
+
+  // First try a direct JSONB lookup. This is fast when PostgREST supports the JSON path filter.
+  const { data: directMatch, error: directError } = await supabaseAdmin
     .from("business_integrations")
     .select("business_id, config")
     .eq("provider_key", "whatsapp_cloud")
-    .in("status", ["connected", "pending"]);
+    .filter("config->>phone_number_id", "eq", normalizedPhoneNumberId)
+    .maybeSingle();
 
-  if (error || !data) return null;
+  if (!directError && directMatch?.business_id) {
+    return {
+      business_id: directMatch.business_id as string,
+      config: asObjectConfig(directMatch.config),
+    };
+  }
 
-  const match = data.find((row) => {
-    const config = (row.config || {}) as Record<string, unknown>;
-    return String(config.phone_number_id || config.phoneNumberId || "") === String(phoneNumberId);
+  // Fallback: load connected WhatsApp integrations and match in JS. This avoids issues with JSONB filters,
+  // cached schemas, text-vs-json shapes, or legacy camelCase config names.
+  const { data, error } = await supabaseAdmin
+    .from("business_integrations")
+    .select("business_id, status, config")
+    .eq("provider_key", "whatsapp_cloud");
+
+  if (error || !data) {
+    console.error("WHATSAPP WEBHOOK INTEGRATION LOOKUP ERROR", error?.message || "no_data");
+    return null;
+  }
+
+  const activeRows = data.filter((row) => ["connected", "pending", "active"].includes(String(row.status || "connected")));
+  const match = activeRows.find((row) => {
+    const config = asObjectConfig(row.config);
+    return getConfiguredPhoneNumberIds(config).includes(normalizedPhoneNumberId);
   });
 
-  return match ? { business_id: match.business_id as string, config: (match.config || {}) as Record<string, unknown> } : null;
+  if (match?.business_id) {
+    return {
+      business_id: match.business_id as string,
+      config: asObjectConfig(match.config),
+    };
+  }
+
+  console.warn("WHATSAPP WEBHOOK MATCH CHECK", {
+    phoneNumberId: normalizedPhoneNumberId,
+    candidates: activeRows.map((row) => {
+      const config = asObjectConfig(row.config);
+      return {
+        business_id: row.business_id,
+        status: row.status,
+        configured_phone_number_ids: getConfiguredPhoneNumberIds(config),
+        has_access_token: Boolean(config.access_token),
+      };
+    }),
+  });
+
+  return null;
 }
 
 async function findCustomerIdByPhone(businessId: string, phone: string) {
