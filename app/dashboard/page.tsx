@@ -469,7 +469,7 @@ export default function DashboardPage() {
       supabase.from("business_integrations").select("*").eq("business_id", businessId).order("provider_name", { ascending: true }),
       supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
-      supabase.from("whatsapp_messages").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      Promise.resolve({ data: [], error: null }),
       supabase.from("whatsapp_templates").select("*").eq("business_id", businessId).eq("is_active", true).order("label", { ascending: true }),
       supabase.from("whatsapp_bot_rules").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("crm_reminders").select("*").eq("business_id", businessId).order("reminder_at", { ascending: true }),
@@ -507,6 +507,24 @@ export default function DashboardPage() {
     setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
     setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (token) {
+        const response = await fetch(`/api/whatsapp/messages?businessId=${businessId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.ok && result?.ok) {
+          setWhatsappMessages((result.messages || []) as WhatsappMessage[]);
+        } else {
+          console.warn("No se pudieron cargar mensajes WhatsApp", result?.error || response.statusText);
+        }
+      }
+    } catch (error) {
+      console.warn("No se pudieron cargar mensajes WhatsApp", error);
+    }
     setWhatsappTemplatesData(((whatsappTemplatesRes.data || []) as WhatsappTemplate[]).map(normalizeWhatsappTemplate));
     setWhatsappBotRules((whatsappBotRulesRes.data || []) as WhatsappBotRule[]);
     if (whatsappBotRulesRes.error) console.warn("No se pudieron cargar bots WhatsApp", whatsappBotRulesRes.error.message);
