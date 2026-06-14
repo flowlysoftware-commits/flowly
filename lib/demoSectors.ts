@@ -1,0 +1,872 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity,
+  Ambulance,
+  BadgeEuro,
+  BarChart3,
+  BedDouble,
+  BriefcaseBusiness,
+  Building2,
+  CalendarDays,
+  Car,
+  ChefHat,
+  ClipboardCheck,
+  Dumbbell,
+  FileSignature,
+  GraduationCap,
+  HeartPulse,
+  Home,
+  Hotel,
+  Megaphone,
+  PackageCheck,
+  PawPrint,
+  Scissors,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Store,
+  Truck,
+  Users,
+  Wrench,
+} from "lucide-react";
+
+export type DemoSectorKey =
+  | "clinic"
+  | "dental"
+  | "physio"
+  | "veterinary"
+  | "hair"
+  | "barber"
+  | "beauty"
+  | "spa"
+  | "restaurant"
+  | "cafe"
+  | "retail"
+  | "gym"
+  | "hotel"
+  | "workshop"
+  | "real-estate"
+  | "legal"
+  | "academy"
+  | "cleaning"
+  | "construction"
+  | "marketing"
+  | "ecommerce"
+  | "logistics"
+  | "other";
+
+export type DemoModule = "CRM" | "Agenda" | "WhatsApp" | "Voice" | "Marketing" | "Inventario" | "RRHH" | "TPV" | "Documentos" | "Portal" | "Encuestas" | "Firma" | "Automatizaciones" | "Fichaje";
+
+export type DemoSector = {
+  key: DemoSectorKey;
+  title: string;
+  shortName: string;
+  subtitle: string;
+  badge: string;
+  href: string;
+  icon: LucideIcon;
+  decor: string[];
+  accent: string;
+  modules: DemoModule[];
+  metrics: { label: string; value: string; trend: string }[];
+  agenda: { time: string; title: string; detail: string; status: string }[];
+  customers: { name: string; meta: string; status: string; value: string }[];
+  operations: { title: string; description: string; state: string }[];
+  automation: string[];
+};
+
+const commonAutomation = ["Lead detectado", "Ficha CRM creada", "WhatsApp automático", "Recordatorio programado"];
+
+export const demoSectors: DemoSector[] = [
+  {
+    key: "clinic",
+    title: "Flowly Clinic",
+    shortName: "Clínica",
+    subtitle: "Pacientes, citas, consentimientos, llamadas y seguimiento postconsulta en un panel clínico moderno.",
+    badge: "Salud integral",
+    href: "/demo/sector/clinic",
+    icon: HeartPulse,
+    decor: ["🩺", "💊", "📋"],
+    accent: "from-cyan-300 to-blue-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "Voice", "Documentos", "Firma", "Encuestas"],
+    metrics: [
+      { label: "Citas hoy", value: "34", trend: "+18%" },
+      { label: "Pacientes activos", value: "1.284", trend: "+96" },
+      { label: "Seguimientos", value: "72", trend: "12 vencen hoy" },
+      { label: "Satisfacción", value: "4.8/5", trend: "+0.3" },
+    ],
+    agenda: [
+      { time: "09:00", title: "Laura Méndez", detail: "Valoración inicial · Dra. Álvarez", status: "Confirmada" },
+      { time: "10:30", title: "Carlos Rivera", detail: "Control tratamiento · Box 2", status: "En sala" },
+      { time: "12:15", title: "María Soler", detail: "Documentación pendiente", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Laura Méndez", meta: "Nueva paciente · WhatsApp abierto", status: "Pendiente documentación", value: "€320" },
+      { name: "Carlos Rivera", meta: "8 sesiones · próxima cita hoy", status: "En tratamiento", value: "€680" },
+      { name: "María Soler", meta: "Llamada recibida desde Voice", status: "Contactada", value: "€120" },
+    ],
+    operations: [
+      { title: "Consentimiento digital", description: "2 documentos pendientes de firma antes de consulta.", state: "Atención" },
+      { title: "Voice + CRM", description: "3 llamadas vinculadas automáticamente a pacientes.", state: "Live" },
+      { title: "Recordatorios", description: "Campaña postconsulta lista para las 18:00.", state: "Automático" },
+    ],
+    automation: commonAutomation,
+  },
+  {
+    key: "dental",
+    title: "Flowly Dental",
+    shortName: "Dental",
+    subtitle: "Presupuestos, tratamientos, revisiones, radiografías y WhatsApp para clínicas dentales.",
+    badge: "Odontología",
+    href: "/demo/sector/dental",
+    icon: ShieldCheck,
+    decor: ["🦷", "✨", "📆"],
+    accent: "from-sky-300 to-cyan-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "Documentos", "Firma", "Marketing", "Encuestas"],
+    metrics: [
+      { label: "Presupuestos abiertos", value: "48", trend: "€18.740" },
+      { label: "Revisiones", value: "26", trend: "Esta semana" },
+      { label: "Tratamientos", value: "112", trend: "+9" },
+      { label: "No asistencias", value: "3%", trend: "-7%" },
+    ],
+    agenda: [
+      { time: "09:20", title: "Implante · Andrés Gil", detail: "Gabinete 1 · Dr. Torres", status: "Confirmada" },
+      { time: "11:00", title: "Limpieza · Paula Díaz", detail: "Higienista · WhatsApp enviado", status: "Confirmada" },
+      { time: "17:30", title: "Ortodoncia · Hugo Martín", detail: "Control mensual", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Andrés Gil", meta: "Presupuesto aceptado", status: "En tratamiento", value: "€2.450" },
+      { name: "Paula Díaz", meta: "Recall semestral", status: "Pendiente cita", value: "€90" },
+      { name: "Hugo Martín", meta: "Ortodoncia · 13 meses", status: "Activo", value: "€1.980" },
+    ],
+    operations: [
+      { title: "Presupuesto PDF", description: "5 presupuestos enviados con firma digital.", state: "Nuevo" },
+      { title: "Campaña Recall", description: "34 pacientes sin revisión en 6 meses.", state: "Lista" },
+      { title: "Radiografías", description: "Adjuntos vinculados por paciente.", state: "Seguro" },
+    ],
+    automation: ["Presupuesto aceptado", "Crear cita", "Enviar instrucciones", "Encuesta postvisita"],
+  },
+  {
+    key: "physio",
+    title: "Flowly Fisio",
+    shortName: "Fisioterapia",
+    subtitle: "Sesiones, bonos, evolución, tareas clínicas y agenda inteligente para centros de salud deportiva.",
+    badge: "Salud deportiva",
+    href: "/demo/sector/physio",
+    icon: Activity,
+    decor: ["🏃", "💪", "🧘"],
+    accent: "from-emerald-300 to-cyan-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "Documentos", "Portal", "Encuestas"],
+    metrics: [
+      { label: "Sesiones vendidas", value: "186", trend: "+22" },
+      { label: "Bonos activos", value: "64", trend: "€7.280" },
+      { label: "Rehabilitaciones", value: "41", trend: "En curso" },
+      { label: "Ocupación", value: "91%", trend: "+6%" },
+    ],
+    agenda: [
+      { time: "08:30", title: "Rodilla · Mateo López", detail: "Sesión 4/10", status: "En curso" },
+      { time: "13:00", title: "Descarga · Lucía Romero", detail: "Bono deportivo", status: "Confirmada" },
+      { time: "19:15", title: "Readaptación · Sergio Cano", detail: "Portal ejercicios", status: "Confirmada" },
+    ],
+    customers: [
+      { name: "Mateo López", meta: "LCA · 4/10 sesiones", status: "En tratamiento", value: "€450" },
+      { name: "Lucía Romero", meta: "Bono 5 sesiones", status: "VIP", value: "€250" },
+      { name: "Sergio Cano", meta: "Alta estimada 21 días", status: "Seguimiento", value: "€540" },
+    ],
+    operations: [
+      { title: "Plan de ejercicios", description: "3 planes enviados al portal cliente.", state: "Activo" },
+      { title: "Bono próximo a terminar", description: "12 clientes con 1 sesión restante.", state: "Upsell" },
+      { title: "Encuestas", description: "NPS 76 en la última semana.", state: "Bien" },
+    ],
+    automation: ["Sesión completada", "Actualizar progreso", "Enviar ejercicios", "Ofrecer bono"],
+  },
+  {
+    key: "veterinary",
+    title: "Flowly Vet",
+    shortName: "Veterinaria",
+    subtitle: "Mascotas, historiales, vacunas, citas, recordatorios y comunicación con propietarios.",
+    badge: "Veterinaria",
+    href: "/demo/sector/veterinary",
+    icon: PawPrint,
+    decor: ["🐾", "🐶", "💉"],
+    accent: "from-lime-300 to-emerald-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "Inventario", "Documentos", "Encuestas"],
+    metrics: [
+      { label: "Mascotas activas", value: "842", trend: "+31" },
+      { label: "Vacunas próximas", value: "58", trend: "7 días" },
+      { label: "Stock crítico", value: "6", trend: "Reponer" },
+      { label: "Urgencias", value: "4", trend: "Hoy" },
+    ],
+    agenda: [
+      { time: "09:45", title: "Luna · Vacuna", detail: "Propietaria: Ana Costa", status: "Confirmada" },
+      { time: "11:20", title: "Toby · Revisión", detail: "Control postoperatorio", status: "En clínica" },
+      { time: "18:10", title: "Milo · Peluquería", detail: "Servicio baño + corte", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Luna", meta: "Border Collie · Vacuna anual", status: "Preventivo", value: "€65" },
+      { name: "Toby", meta: "Postoperatorio · Día 5", status: "Seguimiento", value: "€210" },
+      { name: "Milo", meta: "Peluquería canina", status: "Reservado", value: "€38" },
+    ],
+    operations: [
+      { title: "Recordatorio vacunas", description: "58 WhatsApps programados para esta semana.", state: "Auto" },
+      { title: "Inventario clínico", description: "Antiparasitarios por debajo de mínimo.", state: "Stock" },
+      { title: "Consentimientos", description: "2 cirugías pendientes de firma.", state: "Crítico" },
+    ],
+    automation: ["Vacuna próxima", "WhatsApp propietario", "Crear cita", "Actualizar historial"],
+  },
+  {
+    key: "hair",
+    title: "Flowly Hair",
+    shortName: "Peluquería",
+    subtitle: "Agenda, caja, clientes, campañas, bonos, productos y ocupación diaria para salones.",
+    badge: "Salones",
+    href: "/demo/sector/hair",
+    icon: Scissors,
+    decor: ["💇", "✂️", "🧴"],
+    accent: "from-fuchsia-400 to-violet-500",
+    modules: ["Agenda", "CRM", "WhatsApp", "TPV", "Inventario", "Marketing"],
+    metrics: [
+      { label: "Ocupación", value: "94%", trend: "+11%" },
+      { label: "Caja hoy", value: "€1.284", trend: "+€320" },
+      { label: "Clientes VIP", value: "126", trend: "+8" },
+      { label: "Productos bajos", value: "9", trend: "Stock" },
+    ],
+    agenda: [
+      { time: "10:00", title: "Color · Carla", detail: "Estilista: Nerea", status: "Confirmada" },
+      { time: "12:30", title: "Corte · Iván", detail: "Cliente frecuente", status: "En sillón" },
+      { time: "17:00", title: "Mechas · Sandra", detail: "Ticket estimado €95", status: "Confirmada" },
+    ],
+    customers: [
+      { name: "Carla Núñez", meta: "Color cada 45 días", status: "VIP", value: "€780/año" },
+      { name: "Iván Ramos", meta: "Corte mensual", status: "Recurrente", value: "€240/año" },
+      { name: "Sandra Mora", meta: "Mechas + tratamiento", status: "Alta probabilidad", value: "€120" },
+    ],
+    operations: [
+      { title: "Campaña color", description: "18 clientes sin cita en 60 días.", state: "Lanzar" },
+      { title: "TPV conectado", description: "Caja cuadrada y tickets del día listos.", state: "Live" },
+      { title: "Inventario", description: "Tintes 7.1 y 8.3 por debajo del mínimo.", state: "Reponer" },
+    ],
+    automation: ["Cliente cumple 45 días", "Enviar promo", "Reservar cita", "Ticket en TPV"],
+  },
+  {
+    key: "barber",
+    title: "Flowly Barber",
+    shortName: "Barbería",
+    subtitle: "Reservas rápidas, bonos, clientes recurrentes, caja y campañas para barberías modernas.",
+    badge: "Barber shops",
+    href: "/demo/sector/barber",
+    icon: Scissors,
+    decor: ["💈", "🧔", "✂️"],
+    accent: "from-red-400 to-cyan-400",
+    modules: ["Agenda", "CRM", "WhatsApp", "TPV", "Marketing", "Inventario"],
+    metrics: [
+      { label: "Cortes hoy", value: "47", trend: "+9" },
+      { label: "No-show", value: "2%", trend: "-5%" },
+      { label: "Bonos activos", value: "38", trend: "€1.520" },
+      { label: "Caja", value: "€924", trend: "+14%" },
+    ],
+    agenda: [
+      { time: "09:30", title: "Degradado · Leo", detail: "Barbero: Chris", status: "Confirmada" },
+      { time: "11:45", title: "Barba · Marcos", detail: "Cliente VIP", status: "En silla" },
+      { time: "19:00", title: "Corte + barba · Dani", detail: "Recordatorio enviado", status: "Confirmada" },
+    ],
+    customers: [
+      { name: "Leo Torres", meta: "Cada 21 días", status: "Recurrente", value: "€360/año" },
+      { name: "Marcos Vega", meta: "Bono barba", status: "VIP", value: "€210/año" },
+      { name: "Dani Cruz", meta: "Corte + barba", status: "Confirmado", value: "€35" },
+    ],
+    operations: [
+      { title: "Agenda express", description: "Huecos de 30 min rellenados automáticamente.", state: "Auto" },
+      { title: "Campaña VIP", description: "Promoción para clientes con más de 8 visitas.", state: "Lista" },
+      { title: "Stock", description: "Cera mate al 18% de inventario.", state: "Bajo" },
+    ],
+    automation: ["Hueco libre", "Cliente recurrente", "WhatsApp reserva", "Cobro TPV"],
+  },
+  {
+    key: "beauty",
+    title: "Flowly Beauty",
+    shortName: "Estética",
+    subtitle: "Cabinas, bonos, campañas, consentimientos y agenda para centros de estética y uñas.",
+    badge: "Beauty center",
+    href: "/demo/sector/beauty",
+    icon: Sparkles,
+    decor: ["💅", "✨", "🌸"],
+    accent: "from-pink-400 to-fuchsia-500",
+    modules: ["Agenda", "CRM", "WhatsApp", "TPV", "Marketing", "Documentos", "Firma"],
+    metrics: [
+      { label: "Bonos vendidos", value: "42", trend: "+€3.480" },
+      { label: "Cabinas ocupadas", value: "88%", trend: "+10%" },
+      { label: "Campañas", value: "6", trend: "Activas" },
+      { label: "Consentimientos", value: "12", trend: "Pendientes" },
+    ],
+    agenda: [
+      { time: "10:15", title: "Láser · Andrea", detail: "Cabina 2 · Sesión 3/6", status: "Confirmada" },
+      { time: "13:30", title: "Uñas · Miriam", detail: "Diseño premium", status: "En cabina" },
+      { time: "18:00", title: "Facial · Nuria", detail: "Bono hidratación", status: "Confirmada" },
+    ],
+    customers: [
+      { name: "Andrea Vidal", meta: "Láser 3/6", status: "En tratamiento", value: "€360" },
+      { name: "Miriam Rey", meta: "Uñas cada 3 semanas", status: "VIP", value: "€620/año" },
+      { name: "Nuria Campos", meta: "Bono facial", status: "Activo", value: "€220" },
+    ],
+    operations: [
+      { title: "Consentimiento láser", description: "Firmas pendientes antes de sesión.", state: "Necesario" },
+      { title: "Campaña belleza", description: "Segmento: clientas sin facial en 90 días.", state: "Lista" },
+      { title: "Cabinas", description: "Cabina 1 libre de 16:00 a 17:00.", state: "Hueco" },
+    ],
+    automation: ["Bono cerca de terminar", "WhatsApp renovación", "Cita recomendada", "Pago TPV"],
+  },
+  {
+    key: "spa",
+    title: "Flowly Spa",
+    shortName: "Spa",
+    subtitle: "Reservas premium, packs, experiencias, cabinas, tarjetas regalo y fidelización.",
+    badge: "Wellness",
+    href: "/demo/sector/spa",
+    icon: BedDouble,
+    decor: ["🕯️", "🌿", "🧖"],
+    accent: "from-teal-300 to-violet-400",
+    modules: ["Agenda", "CRM", "WhatsApp", "TPV", "Portal", "Encuestas", "Marketing"],
+    metrics: [
+      { label: "Experiencias", value: "31", trend: "Semana" },
+      { label: "Tarjetas regalo", value: "€2.180", trend: "+24%" },
+      { label: "Ocupación cabinas", value: "84%", trend: "+7%" },
+      { label: "Reviews", value: "4.9", trend: "Excelente" },
+    ],
+    agenda: [
+      { time: "11:00", title: "Ritual relax · Pareja", detail: "Cabina doble", status: "Confirmada" },
+      { time: "15:30", title: "Masaje aromático · Elena", detail: "Pack premium", status: "En cabina" },
+      { time: "19:00", title: "Circuito spa · Grupo", detail: "4 personas", status: "Confirmada" },
+    ],
+    customers: [
+      { name: "Elena Pardo", meta: "Pack premium", status: "VIP", value: "€480/año" },
+      { name: "Reserva pareja", meta: "Experiencia regalo", status: "Confirmada", value: "€160" },
+      { name: "Grupo Sunset", meta: "4 personas", status: "Pendiente pago", value: "€240" },
+    ],
+    operations: [
+      { title: "Experiencias regalo", description: "12 tarjetas regalo activas por canjear.", state: "Activo" },
+      { title: "Encuesta automática", description: "Se enviará 2h tras la visita.", state: "Auto" },
+      { title: "Upsell", description: "Ofrecer pack de 3 masajes a clientes relax.", state: "IA" },
+    ],
+    automation: ["Reserva completada", "Enviar encuesta", "Ofrecer pack", "Campaña wellness"],
+  },
+  {
+    key: "restaurant",
+    title: "Flowly Restaurant",
+    shortName: "Restaurante",
+    subtitle: "Mesas, reservas, comandas, TPV, inventario, turnos y reputación para restauración.",
+    badge: "Restauración",
+    href: "/demo/sector/restaurant",
+    icon: ChefHat,
+    decor: ["🍽️", "🍷", "👨‍🍳"],
+    accent: "from-orange-300 to-red-500",
+    modules: ["TPV", "Agenda", "WhatsApp", "Inventario", "RRHH", "Encuestas"],
+    metrics: [
+      { label: "Mesas ocupadas", value: "18/22", trend: "Servicio" },
+      { label: "Caja hoy", value: "€3.842", trend: "+12%" },
+      { label: "Reservas", value: "64", trend: "Hoy" },
+      { label: "Stock crítico", value: "5", trend: "Cocina" },
+    ],
+    agenda: [
+      { time: "13:30", title: "Mesa 8 · 4 pax", detail: "Menú ejecutivo", status: "Sentados" },
+      { time: "14:15", title: "Reserva Martínez", detail: "Terraza · cumpleaños", status: "Confirmada" },
+      { time: "21:00", title: "Cena empresa", detail: "12 pax · menú cerrado", status: "Preparar" },
+    ],
+    customers: [
+      { name: "Mesa 8", meta: "Ticket abierto", status: "En servicio", value: "€126" },
+      { name: "Familia Martínez", meta: "Cliente recurrente", status: "Reservado", value: "€180" },
+      { name: "Empresa Nova", meta: "Cena grupo", status: "Confirmada", value: "€540" },
+    ],
+    operations: [
+      { title: "Comandas", description: "7 platos en cocina y 3 listos para servir.", state: "Live" },
+      { title: "Inventario", description: "Vino blanco y salmón por debajo del mínimo.", state: "Stock" },
+      { title: "Turnos", description: "2 fichajes pendientes de cerrar.", state: "RRHH" },
+    ],
+    automation: ["Reserva confirmada", "WhatsApp recordatorio", "Mesa asignada", "Encuesta postcena"],
+  },
+  {
+    key: "cafe",
+    title: "Flowly Café",
+    shortName: "Cafetería",
+    subtitle: "TPV rápido, fidelización, combos, inventario y campañas para cafeterías y brunch.",
+    badge: "Cafetería",
+    href: "/demo/sector/cafe",
+    icon: Store,
+    decor: ["☕", "🥐", "🧾"],
+    accent: "from-amber-300 to-orange-500",
+    modules: ["TPV", "Inventario", "CRM", "Marketing", "RRHH", "Encuestas"],
+    metrics: [
+      { label: "Tickets", value: "218", trend: "Hoy" },
+      { label: "Ticket medio", value: "€7.80", trend: "+€1.10" },
+      { label: "Clientes club", value: "934", trend: "+36" },
+      { label: "Productos top", value: "Latte", trend: "42 uds" },
+    ],
+    agenda: [
+      { time: "08:00", title: "Turno mañana", detail: "3 personas fichadas", status: "Activo" },
+      { time: "11:30", title: "Brunch reserva", detail: "Mesa 4 · 2 pax", status: "Confirmada" },
+      { time: "17:00", title: "Reposición", detail: "Leche avena + croissants", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Club Flowly Café", meta: "Fidelización", status: "Activo", value: "934 miembros" },
+      { name: "Mesa 4", meta: "Brunch", status: "Reservado", value: "€32" },
+      { name: "Laura VIP", meta: "10 consumiciones", status: "Premio", value: "Cupón" },
+    ],
+    operations: [
+      { title: "Combo sugerido", description: "Croissant + latte aumenta ticket medio.", state: "IA" },
+      { title: "Stock", description: "Leche de avena al 12%.", state: "Reponer" },
+      { title: "Campaña club", description: "Cupón 2x1 para horas valle.", state: "Lista" },
+    ],
+    automation: ["Hora valle", "Enviar cupón", "Registrar compra", "Actualizar puntos"],
+  },
+  {
+    key: "retail",
+    title: "Flowly Retail",
+    shortName: "Comercio",
+    subtitle: "Ventas, clientes, inventario, promociones, devoluciones y campañas para tiendas físicas.",
+    badge: "Retail",
+    href: "/demo/sector/retail",
+    icon: ShoppingBag,
+    decor: ["🛍️", "🏷️", "📦"],
+    accent: "from-blue-300 to-violet-500",
+    modules: ["TPV", "Inventario", "CRM", "Marketing", "Encuestas", "Automatizaciones"],
+    metrics: [
+      { label: "Ventas hoy", value: "€2.164", trend: "+19%" },
+      { label: "Unidades", value: "146", trend: "+24" },
+      { label: "Stock bajo", value: "18", trend: "Reposición" },
+      { label: "Campañas", value: "4", trend: "Activas" },
+    ],
+    agenda: [
+      { time: "10:00", title: "Apertura caja", detail: "Turno Laura", status: "OK" },
+      { time: "13:00", title: "Recepción mercancía", detail: "Proveedor Textil Norte", status: "Pendiente" },
+      { time: "18:30", title: "Campaña VIP", detail: "WhatsApp segmentado", status: "Programada" },
+    ],
+    customers: [
+      { name: "Marta P.", meta: "Compra frecuente", status: "VIP", value: "€890/año" },
+      { name: "Segmento rebajas", meta: "238 contactos", status: "Campaña", value: "€4.2k potencial" },
+      { name: "Devolución #3821", meta: "Ticket asociado", status: "En proceso", value: "€49" },
+    ],
+    operations: [
+      { title: "Inventario inteligente", description: "Predicción de rotura en 6 referencias.", state: "IA" },
+      { title: "Promoción", description: "Clientes VIP con cupón exclusivo.", state: "Lista" },
+      { title: "Devoluciones", description: "3 tickets pendientes de cierre.", state: "Pendiente" },
+    ],
+    automation: ["Stock bajo", "Crear reposición", "Avisar proveedor", "Actualizar margen"],
+  },
+  {
+    key: "gym",
+    title: "Flowly Gym",
+    shortName: "Gimnasio",
+    subtitle: "Socios, clases, cuotas, entrenadores, fichaje y campañas para centros fitness.",
+    badge: "Fitness",
+    href: "/demo/sector/gym",
+    icon: Dumbbell,
+    decor: ["🏋️", "🥤", "📈"],
+    accent: "from-lime-300 to-cyan-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "RRHH", "Fichaje", "Encuestas", "Marketing"],
+    metrics: [
+      { label: "Socios activos", value: "1.842", trend: "+72" },
+      { label: "Clases hoy", value: "29", trend: "92% ocup." },
+      { label: "Bajas riesgo", value: "38", trend: "Actuar" },
+      { label: "Check-ins", value: "612", trend: "Hoy" },
+    ],
+    agenda: [
+      { time: "07:00", title: "HIIT", detail: "18/20 plazas", status: "Casi lleno" },
+      { time: "18:30", title: "Spinning", detail: "Instructor: Pablo", status: "Lleno" },
+      { time: "20:00", title: "Yoga", detail: "Sala 2", status: "Disponible" },
+    ],
+    customers: [
+      { name: "Socio #1842", meta: "Nuevo alta web", status: "Onboarding", value: "€39/mes" },
+      { name: "Carla Fitness", meta: "Asistencia baja", status: "Riesgo", value: "€468/año" },
+      { name: "Grupo Spinning", meta: "20 inscritos", status: "Completo", value: "Clase" },
+    ],
+    operations: [
+      { title: "Riesgo de baja", description: "38 socios sin venir en 21 días.", state: "IA" },
+      { title: "Clases", description: "Spinning lleno, lista de espera abierta.", state: "Live" },
+      { title: "Fichaje", description: "Turno tarde con 4 entrenadores activos.", state: "OK" },
+    ],
+    automation: ["Socio inactivo", "WhatsApp motivación", "Oferta trainer", "Agendar clase"],
+  },
+  {
+    key: "hotel",
+    title: "Flowly Hotel",
+    shortName: "Hotel",
+    subtitle: "Reservas, huéspedes, limpieza, incidencias, encuestas y upsells para hoteles boutique.",
+    badge: "Hospitality",
+    href: "/demo/sector/hotel",
+    icon: Hotel,
+    decor: ["🏨", "🛎️", "🧳"],
+    accent: "from-indigo-300 to-cyan-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "RRHH", "Encuestas", "Portal", "Automatizaciones"],
+    metrics: [
+      { label: "Ocupación", value: "86%", trend: "+9%" },
+      { label: "Check-ins", value: "24", trend: "Hoy" },
+      { label: "Incidencias", value: "3", trend: "Abiertas" },
+      { label: "Upsells", value: "€740", trend: "+€190" },
+    ],
+    agenda: [
+      { time: "12:00", title: "Habitación 204", detail: "Salida + limpieza", status: "Housekeeping" },
+      { time: "15:00", title: "Check-in · García", detail: "2 noches · desayuno", status: "Confirmado" },
+      { time: "20:30", title: "Cena rooftop", detail: "Reserva huésped 301", status: "Confirmada" },
+    ],
+    customers: [
+      { name: "Familia García", meta: "2 noches", status: "Check-in hoy", value: "€360" },
+      { name: "Huésped 301", meta: "Upsell rooftop", status: "Reservado", value: "€90" },
+      { name: "Habitación 204", meta: "Incidencia minibar", status: "Pendiente", value: "Ticket" },
+    ],
+    operations: [
+      { title: "Housekeeping", description: "8 habitaciones listas, 4 en proceso.", state: "Live" },
+      { title: "Upsell automático", description: "Cena rooftop ofrecida a 12 huéspedes.", state: "IA" },
+      { title: "Encuestas", description: "Se envían tras check-out.", state: "Auto" },
+    ],
+    automation: ["Pre check-in", "WhatsApp bienvenida", "Upsell cena", "Encuesta salida"],
+  },
+  {
+    key: "workshop",
+    title: "Flowly Taller",
+    shortName: "Taller",
+    subtitle: "Órdenes de trabajo, vehículos, presupuestos, piezas, citas y avisos al cliente.",
+    badge: "Automoción",
+    href: "/demo/sector/workshop",
+    icon: Wrench,
+    decor: ["🔧", "🚗", "🛞"],
+    accent: "from-slate-300 to-orange-400",
+    modules: ["CRM", "Agenda", "WhatsApp", "Inventario", "Documentos", "Firma"],
+    metrics: [
+      { label: "Órdenes abiertas", value: "27", trend: "€8.920" },
+      { label: "Vehículos hoy", value: "14", trend: "+3" },
+      { label: "Piezas pendientes", value: "9", trend: "Proveedor" },
+      { label: "Presupuestos", value: "11", trend: "Pendientes" },
+    ],
+    agenda: [
+      { time: "09:00", title: "Seat León · Revisión", detail: "Matrícula 2384-LKM", status: "En taller" },
+      { time: "12:30", title: "BMW X3 · Frenos", detail: "Esperando piezas", status: "Pendiente" },
+      { time: "16:00", title: "Toyota Yaris", detail: "Entrega al cliente", status: "Listo" },
+    ],
+    customers: [
+      { name: "Seat León", meta: "Revisión 90.000 km", status: "En taller", value: "€240" },
+      { name: "BMW X3", meta: "Pastillas + discos", status: "Pieza pendiente", value: "€680" },
+      { name: "Toyota Yaris", meta: "Entrega hoy", status: "Finalizado", value: "€180" },
+    ],
+    operations: [
+      { title: "Presupuesto pendiente", description: "Cliente espera aprobación por WhatsApp.", state: "Enviar" },
+      { title: "Inventario piezas", description: "Filtros aceite por debajo de mínimo.", state: "Stock" },
+      { title: "Entrega", description: "3 vehículos listos para recogida.", state: "Avisar" },
+    ],
+    automation: ["Orden finalizada", "Enviar WhatsApp", "Solicitar aprobación", "Generar factura"],
+  },
+  {
+    key: "real-estate",
+    title: "Flowly Inmobiliaria",
+    shortName: "Inmobiliaria",
+    subtitle: "Leads, visitas, propiedades, documentos, seguimiento y marketing para agencias inmobiliarias.",
+    badge: "Real estate",
+    href: "/demo/sector/real-estate",
+    icon: Home,
+    decor: ["🏠", "🔑", "📍"],
+    accent: "from-emerald-300 to-blue-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "Documentos", "Firma", "Marketing", "Automatizaciones"],
+    metrics: [
+      { label: "Leads activos", value: "132", trend: "+24" },
+      { label: "Visitas", value: "38", trend: "Semana" },
+      { label: "Operaciones", value: "€1.8M", trend: "Pipeline" },
+      { label: "Propiedades", value: "86", trend: "Activas" },
+    ],
+    agenda: [
+      { time: "10:00", title: "Visita ático centro", detail: "Lead: Javier Molina", status: "Confirmada" },
+      { time: "12:00", title: "Firma reserva", detail: "PDF preparado", status: "Pendiente" },
+      { time: "18:30", title: "Tour virtual", detail: "Cliente internacional", status: "Online" },
+    ],
+    customers: [
+      { name: "Javier Molina", meta: "Busca ático 350k", status: "Caliente", value: "€350k" },
+      { name: "Propiedad #A204", meta: "Ático centro", status: "Visitas", value: "€380k" },
+      { name: "Cliente internacional", meta: "Tour virtual", status: "Nuevo", value: "€520k" },
+    ],
+    operations: [
+      { title: "Lead Ads", description: "12 leads nuevos desde Meta esta semana.", state: "Marketing" },
+      { title: "Documentos", description: "Contrato de reserva listo para firma.", state: "Firma" },
+      { title: "Seguimiento", description: "8 leads sin contacto en 48h.", state: "Urgente" },
+    ],
+    automation: ["Nuevo lead", "Asignar agente", "WhatsApp visita", "Crear seguimiento"],
+  },
+  {
+    key: "legal",
+    title: "Flowly Legal",
+    shortName: "Despacho legal",
+    subtitle: "Casos, clientes, documentos, vencimientos, firmas y comunicación segura para despachos.",
+    badge: "Legal",
+    href: "/demo/sector/legal",
+    icon: FileSignature,
+    decor: ["⚖️", "📄", "🔐"],
+    accent: "from-violet-300 to-slate-400",
+    modules: ["CRM", "Agenda", "Documentos", "Firma", "Portal", "WhatsApp", "Automatizaciones"],
+    metrics: [
+      { label: "Expedientes", value: "74", trend: "Activos" },
+      { label: "Vencimientos", value: "11", trend: "7 días" },
+      { label: "Firmas", value: "18", trend: "Pendientes" },
+      { label: "Horas", value: "286", trend: "Mes" },
+    ],
+    agenda: [
+      { time: "09:30", title: "Consulta laboral", detail: "Cliente: Marta Soto", status: "Confirmada" },
+      { time: "11:00", title: "Audiencia", detail: "Exp. CIV-2026-18", status: "Crítico" },
+      { time: "16:30", title: "Firma contrato", detail: "Portal cliente", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Marta Soto", meta: "Laboral", status: "Nuevo caso", value: "€900" },
+      { name: "Exp. CIV-2026-18", meta: "Audiencia hoy", status: "Urgente", value: "Caso" },
+      { name: "Contrato NDA", meta: "Firma digital", status: "Pendiente", value: "Documento" },
+    ],
+    operations: [
+      { title: "Vencimientos", description: "11 fechas críticas en los próximos 7 días.", state: "Alerta" },
+      { title: "Portal seguro", description: "3 documentos compartidos con clientes.", state: "Seguro" },
+      { title: "Firmas", description: "NDA y poderes pendientes.", state: "Firma" },
+    ],
+    automation: ["Vencimiento próximo", "Avisar abogado", "Enviar documento", "Firma completada"],
+  },
+  {
+    key: "academy",
+    title: "Flowly Academy",
+    shortName: "Academia",
+    subtitle: "Alumnos, matrículas, clases, profesores, contenidos, pagos y comunicaciones académicas.",
+    badge: "Educación",
+    href: "/demo/sector/academy",
+    icon: GraduationCap,
+    decor: ["🎓", "📚", "📝"],
+    accent: "from-cyan-300 to-indigo-500",
+    modules: ["CRM", "Agenda", "WhatsApp", "Portal", "Documentos", "Encuestas", "Marketing"],
+    metrics: [
+      { label: "Alumnos", value: "642", trend: "+41" },
+      { label: "Clases hoy", value: "36", trend: "98% asistencia" },
+      { label: "Matrículas", value: "€12.8k", trend: "Mes" },
+      { label: "Bajas riesgo", value: "19", trend: "Seguimiento" },
+    ],
+    agenda: [
+      { time: "10:00", title: "Inglés B2", detail: "Grupo 14 · Aula 3", status: "En clase" },
+      { time: "16:00", title: "Matemáticas ESO", detail: "Profesor: Daniel", status: "Confirmada" },
+      { time: "18:30", title: "Demo curso IA", detail: "Lead marketing", status: "Online" },
+    ],
+    customers: [
+      { name: "Grupo Inglés B2", meta: "14 alumnos", status: "Activo", value: "€1.120/mes" },
+      { name: "Lucía Alumna", meta: "Riesgo baja", status: "Seguimiento", value: "€89/mes" },
+      { name: "Lead curso IA", meta: "Demo hoy", status: "Caliente", value: "€240" },
+    ],
+    operations: [
+      { title: "Asistencia", description: "2 alumnos ausentes detectados automáticamente.", state: "Avisar" },
+      { title: "Portal", description: "3 recursos nuevos publicados para B2.", state: "Publicado" },
+      { title: "Campaña matrícula", description: "Leads interesados en cursos intensivos.", state: "Activa" },
+    ],
+    automation: ["Alumno ausente", "Avisar tutor", "Enviar material", "Encuesta curso"],
+  },
+  {
+    key: "cleaning",
+    title: "Flowly Limpieza",
+    shortName: "Limpieza",
+    subtitle: "Servicios recurrentes, cuadrantes, fichaje, clientes, incidencias y rutas de equipos.",
+    badge: "Servicios",
+    href: "/demo/sector/cleaning",
+    icon: ClipboardCheck,
+    decor: ["🧽", "🧼", "🧹"],
+    accent: "from-sky-300 to-emerald-400",
+    modules: ["CRM", "Agenda", "RRHH", "Fichaje", "WhatsApp", "Documentos", "Automatizaciones"],
+    metrics: [
+      { label: "Servicios hoy", value: "58", trend: "+6" },
+      { label: "Equipos activos", value: "14", trend: "GPS OK" },
+      { label: "Incidencias", value: "5", trend: "2 críticas" },
+      { label: "Contratos", value: "112", trend: "Recurrentes" },
+    ],
+    agenda: [
+      { time: "07:00", title: "Oficinas Nova", detail: "Equipo A · 3 personas", status: "En ruta" },
+      { time: "12:00", title: "Comunidad Sol", detail: "Checklist zonas comunes", status: "Activo" },
+      { time: "18:00", title: "Fin de obra", detail: "Cliente pendiente firma", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Oficinas Nova", meta: "Contrato mensual", status: "Activo", value: "€1.200/mes" },
+      { name: "Comunidad Sol", meta: "2 visitas semana", status: "Activo", value: "€680/mes" },
+      { name: "Fin de obra R23", meta: "Servicio puntual", status: "Pendiente firma", value: "€420" },
+    ],
+    operations: [
+      { title: "Fichaje GPS", description: "14 equipos fichados en ubicación correcta.", state: "OK" },
+      { title: "Checklist", description: "42 tareas completadas, 5 pendientes.", state: "Live" },
+      { title: "Incidencias", description: "Fotos subidas desde móvil del equipo.", state: "Nuevo" },
+    ],
+    automation: ["Servicio completado", "Enviar parte", "Crear factura", "Encuesta cliente"],
+  },
+  {
+    key: "construction",
+    title: "Flowly Reformas",
+    shortName: "Reformas",
+    subtitle: "Obras, presupuestos, equipos, materiales, documentos, firma y seguimiento de clientes.",
+    badge: "Construcción",
+    href: "/demo/sector/construction",
+    icon: Building2,
+    decor: ["🏗️", "🧱", "📐"],
+    accent: "from-yellow-300 to-orange-500",
+    modules: ["CRM", "Agenda", "Inventario", "RRHH", "Documentos", "Firma", "WhatsApp"],
+    metrics: [
+      { label: "Obras activas", value: "16", trend: "€148k" },
+      { label: "Presupuestos", value: "23", trend: "Pendientes" },
+      { label: "Materiales", value: "11", trend: "Bajo stock" },
+      { label: "Equipos", value: "8", trend: "En campo" },
+    ],
+    agenda: [
+      { time: "08:00", title: "Obra Chalet Norte", detail: "Equipo albañilería", status: "En obra" },
+      { time: "11:30", title: "Visita presupuesto", detail: "Reforma baño", status: "Confirmada" },
+      { time: "17:00", title: "Firma contrato", detail: "Cliente: Vega", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Chalet Norte", meta: "Semana 3/8", status: "En ejecución", value: "€38k" },
+      { name: "Reforma baño", meta: "Visita hoy", status: "Lead caliente", value: "€4.8k" },
+      { name: "Cliente Vega", meta: "Contrato pendiente", status: "Firma", value: "€12k" },
+    ],
+    operations: [
+      { title: "Materiales", description: "Azulejo blanco y cemento bajo mínimo.", state: "Stock" },
+      { title: "Partes de obra", description: "Fotos y avances subidos por equipo.", state: "Live" },
+      { title: "Presupuesto", description: "PDF listo para enviar por WhatsApp.", state: "Enviar" },
+    ],
+    automation: ["Visita realizada", "Crear presupuesto", "Enviar firma", "Programar inicio"],
+  },
+  {
+    key: "marketing",
+    title: "Flowly Marketing",
+    shortName: "Agencia",
+    subtitle: "Clientes, campañas, calendario editorial, leads, contenidos y reporting para agencias.",
+    badge: "Marketing",
+    href: "/demo/sector/marketing",
+    icon: Megaphone,
+    decor: ["📣", "📊", "🤖"],
+    accent: "from-violet-400 to-cyan-400",
+    modules: ["CRM", "Marketing", "Agenda", "WhatsApp", "Automatizaciones", "Documentos"],
+    metrics: [
+      { label: "Campañas", value: "42", trend: "Activas" },
+      { label: "Leads generados", value: "1.284", trend: "+31%" },
+      { label: "Posts programados", value: "96", trend: "Mes" },
+      { label: "ROAS medio", value: "3.8x", trend: "+0.6" },
+    ],
+    agenda: [
+      { time: "09:30", title: "Revisión campaña Meta", detail: "Cliente: Clínica Norte", status: "Hoy" },
+      { time: "12:00", title: "Contenido semana", detail: "12 publicaciones listas", status: "Aprobación" },
+      { time: "16:00", title: "Reporte mensual", detail: "Cliente: Barber Pro", status: "Enviar" },
+    ],
+    customers: [
+      { name: "Clínica Norte", meta: "Plan Oro", status: "Activa", value: "€44,90/mes" },
+      { name: "Barber Pro", meta: "Meta Ads + contenidos", status: "Optimizar", value: "€34,90/mes" },
+      { name: "Beauty Lab", meta: "Calendario editorial", status: "Pendiente aprobación", value: "€44,90/mes" },
+    ],
+    operations: [
+      { title: "IA creativa", description: "14 copies generados para campañas de junio.", state: "IA" },
+      { title: "Calendario", description: "96 publicaciones programadas este mes.", state: "Plan" },
+      { title: "Leads", description: "Nuevos leads entran directo al CRM.", state: "Auto" },
+    ],
+    automation: ["Nuevo lead Meta", "Crear contacto", "WhatsApp bienvenida", "Reporte semanal"],
+  },
+  {
+    key: "ecommerce",
+    title: "Flowly Ecommerce",
+    shortName: "Ecommerce",
+    subtitle: "Pedidos, clientes, campañas, inventario, atención y automatizaciones para tiendas online.",
+    badge: "Online store",
+    href: "/demo/sector/ecommerce",
+    icon: PackageCheck,
+    decor: ["📦", "🛒", "🚀"],
+    accent: "from-cyan-300 to-fuchsia-500",
+    modules: ["CRM", "Inventario", "WhatsApp", "Marketing", "Automatizaciones", "Encuestas"],
+    metrics: [
+      { label: "Pedidos", value: "312", trend: "Hoy" },
+      { label: "Carritos abandonados", value: "48", trend: "Recuperar" },
+      { label: "Ingresos", value: "€18.2k", trend: "+22%" },
+      { label: "Tickets soporte", value: "23", trend: "Abiertos" },
+    ],
+    agenda: [
+      { time: "09:00", title: "Campaña carrito", detail: "48 abandonados", status: "Programada" },
+      { time: "13:00", title: "Reposición stock", detail: "SKU TOP-004", status: "Urgente" },
+      { time: "18:00", title: "Reporte ventas", detail: "Informe diario", status: "Auto" },
+    ],
+    customers: [
+      { name: "Carrito #8941", meta: "2 productos", status: "Abandonado", value: "€78" },
+      { name: "Cliente VIP", meta: "12 compras", status: "Recompra", value: "€640/año" },
+      { name: "Pedido #12902", meta: "En reparto", status: "Seguimiento", value: "€112" },
+    ],
+    operations: [
+      { title: "Carritos", description: "WhatsApp automático en 45 minutos.", state: "Auto" },
+      { title: "Inventario", description: "SKU TOP-004 sin stock en 2 días.", state: "Alerta" },
+      { title: "Soporte", description: "23 tickets abiertos por pedido.", state: "Resolver" },
+    ],
+    automation: ["Carrito abandonado", "WhatsApp descuento", "Compra recuperada", "Encuesta postentrega"],
+  },
+  {
+    key: "logistics",
+    title: "Flowly Logística",
+    shortName: "Logística",
+    subtitle: "Rutas, entregas, conductores, incidencias, clientes y seguimiento operativo en tiempo real.",
+    badge: "Transporte",
+    href: "/demo/sector/logistics",
+    icon: Truck,
+    decor: ["🚚", "📍", "⏱️"],
+    accent: "from-blue-300 to-emerald-400",
+    modules: ["CRM", "Agenda", "RRHH", "Fichaje", "WhatsApp", "Portal", "Automatizaciones"],
+    metrics: [
+      { label: "Entregas hoy", value: "428", trend: "91% a tiempo" },
+      { label: "Rutas activas", value: "22", trend: "Live" },
+      { label: "Incidencias", value: "14", trend: "3 críticas" },
+      { label: "Conductores", value: "38", trend: "Activos" },
+    ],
+    agenda: [
+      { time: "07:30", title: "Ruta Norte", detail: "42 entregas · Camión 8", status: "En ruta" },
+      { time: "12:00", title: "Recogida cliente", detail: "Almacén central", status: "Pendiente" },
+      { time: "18:00", title: "Cierre operativo", detail: "Reporte diario", status: "Auto" },
+    ],
+    customers: [
+      { name: "Ruta Norte", meta: "42 entregas", status: "En ruta", value: "91%" },
+      { name: "Cliente Retail", meta: "Recogida 12:00", status: "Pendiente", value: "Contrato" },
+      { name: "Incidencia #702", meta: "Dirección incorrecta", status: "Resolver", value: "Ticket" },
+    ],
+    operations: [
+      { title: "Mapa operativo", description: "22 rutas activas con seguimiento de estados.", state: "Live" },
+      { title: "Incidencias", description: "3 envíos requieren contacto con cliente.", state: "Alerta" },
+      { title: "Fichaje", description: "38 conductores con jornada iniciada.", state: "OK" },
+    ],
+    automation: ["Entrega fallida", "WhatsApp cliente", "Reprogramar ruta", "Avisar operador"],
+  },
+  {
+    key: "other",
+    title: "Flowly Modular",
+    shortName: "Otros negocios",
+    subtitle: "Un panel adaptable con CRM, agenda, WhatsApp, documentos, marketing y automatizaciones para cualquier sector.",
+    badge: "Modular",
+    href: "/demo/sector/other",
+    icon: BriefcaseBusiness,
+    decor: ["⚡", "🧠", "🔗"],
+    accent: "from-violet-400 to-cyan-400",
+    modules: ["CRM", "Agenda", "WhatsApp", "Marketing", "Documentos", "Automatizaciones", "Portal"],
+    metrics: [
+      { label: "Clientes", value: "548", trend: "+44" },
+      { label: "Tareas", value: "82", trend: "12 hoy" },
+      { label: "Automatizaciones", value: "16", trend: "Activas" },
+      { label: "Conversión", value: "31%", trend: "+8%" },
+    ],
+    agenda: [
+      { time: "09:00", title: "Lead nuevo", detail: "CRM + WhatsApp", status: "Automático" },
+      { time: "12:30", title: "Reunión cliente", detail: "Presupuesto enviado", status: "Confirmada" },
+      { time: "17:00", title: "Seguimiento", detail: "Recordatorio inteligente", status: "Pendiente" },
+    ],
+    customers: [
+      { name: "Cliente potencial", meta: "Formulario web", status: "Nuevo", value: "€240" },
+      { name: "Cuenta activa", meta: "Módulos: CRM + Agenda", status: "Activo", value: "€69/mes" },
+      { name: "Seguimiento 7 días", meta: "WhatsApp pendiente", status: "Pendiente", value: "Lead" },
+    ],
+    operations: [
+      { title: "Panel modular", description: "Activa módulos según el negocio.", state: "Flexible" },
+      { title: "IA operativa", description: "Recomienda tareas, campañas y seguimientos.", state: "IA" },
+      { title: "Automatizaciones", description: "Flujos listos para ahorrar tiempo.", state: "Auto" },
+    ],
+    automation: commonAutomation,
+  },
+];
+
+export const demoSectorMap = Object.fromEntries(demoSectors.map((sector) => [sector.key, sector])) as Record<DemoSectorKey, DemoSector>;
+
+export const demoSectorGroups = [
+  { title: "Salud y bienestar", keys: ["clinic", "dental", "physio", "veterinary", "beauty", "spa", "gym"] as DemoSectorKey[] },
+  { title: "Servicios locales", keys: ["hair", "barber", "workshop", "cleaning", "construction", "legal"] as DemoSectorKey[] },
+  { title: "Comercio y hostelería", keys: ["restaurant", "cafe", "retail", "hotel", "ecommerce", "logistics"] as DemoSectorKey[] },
+  { title: "Empresas y formación", keys: ["real-estate", "academy", "marketing", "other"] as DemoSectorKey[] },
+];
