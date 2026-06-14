@@ -132,23 +132,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: businessError.message }, { status: 400 });
     }
 
-    if (business?.id && createAvatar) {
-      try {
-        await generateAndStoreBrandAvatar({
-          businessId: business.id,
-          businessName,
-          businessType,
-          logoUrl: finalLogoUrl,
-          avatarName: avatarName || "Nia",
-          avatarStyle: avatarStyle || "robot-premium",
-          avatarPersonality: avatarPersonality || "cercana, estratégica y orientada a ventas",
-          brandColors: theme === "violet" ? ["#7c3aed", "#06b6d4"] : ["#2563eb", "#7c3aed"],
-        });
-      } catch (avatarError) {
-        console.warn("Avatar generation warning:", avatarError);
-      }
-    }
-
+  
     if (business?.id && modules.length > 0) {
       const rows = modules.map((moduleKey) => ({ business_id: business.id, module_key: moduleKey, status: "active" }));
       const { error: moduleError } = await supabaseAdmin.from("business_modules").upsert(rows, { onConflict: "business_id,module_key" });
