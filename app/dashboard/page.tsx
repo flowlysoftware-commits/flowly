@@ -457,7 +457,18 @@ export default function DashboardPage() {
     const businessId = businessData.id as string;
     setBusiness(businessData as Business);
 
-    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, integrationsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesRes, whatsappTemplatesRes, whatsappBotRulesRes, crmRemindersRes, avatarRes] = await Promise.all([
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const whatsappMessagesRequest = fetch(`/api/whatsapp/messages?businessId=${encodeURIComponent(businessId)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    }).then(async (response) => {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || "No se pudieron cargar los WhatsApps");
+      return result.messages || [];
+    });
+
+    const [companyRes, servicesRes, employeesRes, customersRes, appointmentsRes, settingsRes, modulesRes, recordsRes, integrationsRes, voiceCallsRes, clinicalDocumentsRes, whatsappMessagesData, whatsappTemplatesRes, whatsappBotRulesRes, crmRemindersRes, avatarRes] = await Promise.all([
       supabase.from("company_profiles").select("*").eq("business_id", businessId).maybeSingle(),
       supabase.from("services").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("employees").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
@@ -469,7 +480,7 @@ export default function DashboardPage() {
       supabase.from("business_integrations").select("*").eq("business_id", businessId).order("provider_name", { ascending: true }),
       supabase.from("voice_calls").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("clinical_documents").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
-      Promise.resolve({ data: [], error: null }),
+      whatsappMessagesRequest,
       supabase.from("whatsapp_templates").select("*").eq("business_id", businessId).eq("is_active", true).order("label", { ascending: true }),
       supabase.from("whatsapp_bot_rules").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
       supabase.from("crm_reminders").select("*").eq("business_id", businessId).order("reminder_at", { ascending: true }),
@@ -506,25 +517,7 @@ export default function DashboardPage() {
     if (integrationsRes.error) console.warn("No se pudieron cargar integraciones", integrationsRes.error.message);
     setVoiceCalls((voiceCallsRes.data || []) as VoiceCall[]);
     setClinicalDocuments((clinicalDocumentsRes.data || []) as ClinicalDocument[]);
-    setWhatsappMessages((whatsappMessagesRes.data || []) as WhatsappMessage[]);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (token) {
-        const response = await fetch(`/api/whatsapp/messages?businessId=${businessId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const result = await response.json().catch(() => ({}));
-        if (response.ok && result?.ok) {
-          setWhatsappMessages((result.messages || []) as WhatsappMessage[]);
-        } else {
-          console.warn("No se pudieron cargar mensajes WhatsApp", result?.error || response.statusText);
-        }
-      }
-    } catch (error) {
-      console.warn("No se pudieron cargar mensajes WhatsApp", error);
-    }
+    setWhatsappMessages((whatsappMessagesData || []) as WhatsappMessage[]);
     setWhatsappTemplatesData(((whatsappTemplatesRes.data || []) as WhatsappTemplate[]).map(normalizeWhatsappTemplate));
     setWhatsappBotRules((whatsappBotRulesRes.data || []) as WhatsappBotRule[]);
     if (whatsappBotRulesRes.error) console.warn("No se pudieron cargar bots WhatsApp", whatsappBotRulesRes.error.message);
