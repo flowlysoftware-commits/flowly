@@ -2,8 +2,38 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Bot, CalendarDays, Check, Megaphone, PenTool, Rocket, Sparkles, Target, TrendingUp } from "lucide-react";
+
+
+type Country = "VE" | "ES" | "CO" | "EC" | "PR";
+type Currency = "EUR" | "COP" | "USD";
+
+type MarketConfig = {
+  code: Country;
+  label: string;
+  flag: string;
+  currency: Currency;
+  locale: string;
+  rate: number;
+  badge: string;
+};
+
+const markets: MarketConfig[] = [
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", locale: "es-VE", rate: 1.08, badge: "Marketing para Venezuela · USD" },
+  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", locale: "es-ES", rate: 1, badge: "Marketing para España · EUR" },
+  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", locale: "es-CO", rate: 4300, badge: "Marketing para Colombia · COP" },
+  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", locale: "es-EC", rate: 1.08, badge: "Marketing para Ecuador · USD" },
+  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", locale: "es-PR", rate: 1.08, badge: "Marketing para Puerto Rico · USD" },
+];
+
+function isCountry(value: string | null): value is Country {
+  return markets.some((market) => market.code === value);
+}
+
+function getMarket(country: Country) {
+  return markets.find((market) => market.code === country) ?? markets[1];
+}
 
 type MarketingPlan = {
   id: string;
@@ -70,13 +100,41 @@ const publicationPlans: MarketingPlan[] = [
   { id: "posts_4_week", name: "Pack Publicaciones 4", price: 40, posts: "4 publis / semana", subtitle: "Constancia semanal intensiva.", features: ["4 publicaciones semanales", "Ideas por temporada", "Organización mensual"] },
 ];
 
-function money(value: number) {
-  return `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+function money(value: number, country: Country) {
+  const market = getMarket(country);
+  const converted = value * market.rate;
+
+  if (market.currency === "EUR") {
+    return `${converted.toLocaleString(market.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+  }
+
+  if (market.currency === "COP") {
+    return `$${Math.round(converted).toLocaleString(market.locale)} COP`;
+  }
+
+  return `$${converted.toLocaleString(market.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
 }
 
 export default function MarketingPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [country, setCountry] = useState<Country>("ES");
   const allPlans = useMemo(() => [...strategicPlans, ...publicationPlans], []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const queryCountry = params.get("country");
+    const saved = window.localStorage.getItem("flowly_country");
+    if (isCountry(queryCountry)) setCountry(queryCountry);
+    else if (isCountry(saved)) setCountry(saved);
+  }, []);
+
+  const changeCountry = (value: Country) => {
+    setCountry(value);
+    window.localStorage.setItem("flowly_country", value);
+    window.history.replaceState({}, "", `/marketing?country=${value}`);
+  };
+
+  const market = getMarket(country);
 
   const startCheckout = async (planId: string) => {
     try {
@@ -84,7 +142,7 @@ export default function MarketingPage() {
       const response = await fetch("/api/marketing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, country }),
       });
       const data = await response.json();
       if (data.url) window.location.href = data.url;
@@ -100,17 +158,25 @@ export default function MarketingPage() {
         <nav className="mb-14 flex items-center justify-between rounded-full flowly-glass px-5 py-3">
           <Link href="/" className="flex items-center gap-3"><Image src="/logo.png" alt="Flowly IA" width={140} height={40} className="h-auto w-32 object-contain" /></Link>
           <div className="hidden items-center gap-6 text-sm text-white/65 md:flex">
-            <Link href="/precios" className="hover:text-white">Software</Link>
-            <Link href="/marketing" className="text-cyan-200">Marketing</Link>
+            <Link href={`/precios?country=${country}`} className="hover:text-white">Software</Link>
+            <Link href={`/marketing?country=${country}`} className="text-cyan-200">Marketing</Link>
             <Link href="/contacto" className="hover:text-white">Contacto</Link>
             <Link href="/login" className="hover:text-white">Área cliente</Link>
           </div>
-          <Link href="/precios" className="flowly-secondary rounded-full px-5 py-2.5 text-sm font-semibold">Ver software</Link>
+          <div className="flex items-center gap-2">
+            <label className="flowly-chip hidden items-center gap-2 rounded-full px-3 py-2 md:inline-flex">
+              <span className="text-lg">{market.flag}</span>
+              <select value={country} onChange={(event) => changeCountry(event.target.value as Country)} className="bg-transparent text-xs font-medium outline-none sm:text-sm" aria-label="Seleccionar país">
+                {markets.map((item) => <option key={item.code} value={item.code}>{item.label} · {item.currency}</option>)}
+              </select>
+            </label>
+            <Link href={`/precios?country=${country}`} className="flowly-secondary rounded-full px-5 py-2.5 text-sm font-semibold">Ver software</Link>
+          </div>
         </nav>
 
         <section className="grid gap-10 lg:grid-cols-[1fr_.9fr] lg:items-center">
           <div>
-            <div className="flowly-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> Marketing conectado al software</div>
+            <div className="flowly-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> {market.badge}</div>
             <h1 className="mt-6 text-5xl font-semibold tracking-tight md:text-7xl">Campañas más inteligentes porque nacen desde <span className="flowly-gradient-text">Flowly IA</span>.</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65">El software organiza clientes, citas, WhatsApp y datos. El servicio de marketing convierte esa información en publicaciones, ideas, campañas y seguimiento para vender más.</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -140,7 +206,7 @@ export default function MarketingPage() {
                 <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-cyan-200">{plan.posts}</p>{plan.highlight && <span className="rounded-full bg-cyan-300 px-3 py-1 text-xs font-bold text-slate-950">Recomendado</span>}</div>
                 <h3 className="mt-4 text-3xl font-semibold">{plan.name}</h3>
                 <p className="mt-3 text-white/60">{plan.subtitle}</p>
-                <div className="mt-7"><span className="text-5xl font-semibold">{money(plan.price)}</span><span className="text-white/50"> / mes</span></div>
+                <div className="mt-7"><span className="text-5xl font-semibold">{money(plan.price, country)}</span><span className="text-white/50"> / mes</span></div>
                 <button onClick={() => startCheckout(plan.id)} disabled={loadingPlan === plan.id} className={plan.highlight ? "mt-7 w-full rounded-full bg-white px-5 py-4 font-semibold text-slate-950" : "flowly-primary mt-7 w-full rounded-full px-5 py-4 font-semibold"}>{loadingPlan === plan.id ? "Abriendo..." : "Contratar"}</button>
                 <div className="mt-7 space-y-3 text-sm text-white/78">{plan.features.map((feature) => <div key={feature} className="flex gap-3"><Check size={18} className="shrink-0 text-cyan-200" /><span>{feature}</span></div>)}</div>
               </div>
@@ -160,7 +226,7 @@ export default function MarketingPage() {
                 <h3 className="mt-4 text-2xl font-semibold">{plan.name}</h3>
                 <p className="mt-2 text-cyan-200">{plan.posts}</p>
                 <p className="mt-3 text-sm text-white/55">{plan.subtitle}</p>
-                <div className="mt-6 text-4xl font-semibold">{money(plan.price)}<span className="text-base font-normal text-white/45"> / mes</span></div>
+                <div className="mt-6 text-4xl font-semibold">{money(plan.price, country)}<span className="text-base font-normal text-white/45"> / mes</span></div>
                 <button onClick={() => startCheckout(plan.id)} disabled={loadingPlan === plan.id} className="flowly-secondary mt-6 w-full rounded-full px-5 py-3 font-semibold">{loadingPlan === plan.id ? "Abriendo..." : "Contratar pack"}</button>
               </div>
             ))}
