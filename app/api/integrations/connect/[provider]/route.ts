@@ -46,17 +46,29 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
   if (["meta_ads", "whatsapp_cloud"].includes(provider)) {
     const clientId = process.env.META_APP_ID;
     if (!clientId) return NextResponse.redirect(`${baseUrl}/dashboard?integration_error=missing_meta_app_id`);
+
     const url = new URL("https://www.facebook.com/v19.0/dialog/oauth");
     url.searchParams.set("client_id", clientId);
     url.searchParams.set("redirect_uri", redirectUri);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("state", state);
-   url.searchParams.set(
-  "scope",
-  provider === "whatsapp_cloud"
-    ? "whatsapp_business_management,whatsapp_business_messaging"
-    : "ads_read,ads_management,business_management,pages_show_list,instagram_basic"
-);
+
+    if (provider === "whatsapp_cloud") {
+      const configId = process.env.META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID;
+      if (!configId) return NextResponse.redirect(`${baseUrl}/dashboard?integration_error=missing_meta_whatsapp_embedded_signup_config_id`);
+
+      url.searchParams.set("config_id", configId);
+      url.searchParams.set("override_default_response_type", "true");
+      url.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging,business_management");
+      url.searchParams.set("extras", JSON.stringify({
+        setup: {},
+        featureType: "whatsapp_business_app_onboarding",
+        sessionInfoVersion: "3",
+      }));
+    } else {
+      url.searchParams.set("scope", "ads_read,ads_management,business_management,pages_show_list,instagram_basic");
+    }
+
     return NextResponse.redirect(url);
   }
 
