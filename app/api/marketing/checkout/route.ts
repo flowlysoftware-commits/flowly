@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { marketingPlans } from "@/lib/marketingPlans";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-const plans: Record<string, { name: string; price: number; description: string; postsPerWeek: number; tier: string }> = {
-  marketing_bronze: { name: "Flowly Marketing Bronze", price: 19.9, description: "1 publicación semanal + IA para campañas", postsPerWeek: 1, tier: "bronze" },
-  marketing_plata: { name: "Flowly Marketing Plata", price: 34.9, description: "2 publicaciones semanales + estrategia e IA", postsPerWeek: 2, tier: "plata" },
-  marketing_oro: { name: "Flowly Marketing Oro", price: 44.9, description: "4 publicaciones semanales + estrategia avanzada", postsPerWeek: 4, tier: "oro" },
-  posts_1_week: { name: "Pack publicaciones 1/semana", price: 15, description: "1 publicación semanal", postsPerWeek: 1, tier: "publicaciones" },
-  posts_2_week: { name: "Pack publicaciones 2/semana", price: 25, description: "2 publicaciones semanales", postsPerWeek: 2, tier: "publicaciones" },
-  posts_4_week: { name: "Pack publicaciones 4/semana", price: 40, description: "4 publicaciones semanales", postsPerWeek: 4, tier: "publicaciones" },
-};
+const plans = marketingPlans;
 
 type Country = "VE" | "ES" | "CO" | "EC" | "PR";
 
@@ -62,13 +56,17 @@ export async function POST(request: Request) {
         plan_id: String(planId),
         plan_name: plan.name,
         tier: plan.tier,
+        plan_type: plan.planType,
         posts_per_week: String(plan.postsPerWeek),
+        includes_software_module: String(plan.includesSoftwareModule),
+        features: JSON.stringify(plan.features),
+        deliverables: JSON.stringify(plan.deliverables),
         monthly_amount: pricing.convertedAmount.toFixed(pricing.currency === "cop" ? 0 : 2),
         base_monthly_amount_eur: plan.price.toFixed(2),
         country,
         currency: pricing.currency.toUpperCase(),
       },
-      subscription_data: { metadata: { product_type: "marketing", plan_id: String(planId), plan_name: plan.name } },
+      subscription_data: { metadata: { product_type: "marketing", plan_id: String(planId), plan_name: plan.name, plan_type: plan.planType } },
       success_url: `${siteUrl}/marketing/onboarding?session_id={CHECKOUT_SESSION_ID}&country=${country}`,
       cancel_url: `${siteUrl}/marketing?estado=cancelado&country=${country}`,
     });

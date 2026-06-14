@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Bot, CalendarDays, Check, Megaphone, PenTool, Rocket, Sparkles, Target, TrendingUp } from "lucide-react";
+import { ArrowRight, Bot, CalendarDays, Check, Megaphone, PenTool, Rocket, Sparkles, Target, TrendingUp, Workflow } from "lucide-react";
 
 
 type Country = "VE" | "ES" | "CO" | "EC" | "PR";
@@ -178,9 +178,9 @@ export default function MarketingPage() {
           <div>
             <div className="flowly-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> {market.badge}</div>
             <h1 className="mt-6 text-5xl font-semibold tracking-tight md:text-7xl">Campañas más inteligentes porque nacen desde <span className="flowly-gradient-text">Flowly IA</span>.</h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65">El software organiza clientes, citas, WhatsApp y datos. El servicio de marketing convierte esa información en publicaciones, ideas, campañas y seguimiento para vender más.</p>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65">Flowly puede funcionar como software de gestión y también como servicio de marketing contratado aparte. Si el cliente ya usa el panel, Marketing se activa como módulo interno; si solo quiere marketing, se contrata igual y se gestiona desde el sistema de Flowly.</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {["Contenido constante", "IA aplicada", "Datos del negocio"].map((item) => <div key={item} className="flowly-card rounded-2xl p-4 text-sm text-white/75"><Check className="mb-2 text-cyan-200" size={18} />{item}</div>)}
+              {["Software + marketing", "Marketing solo", "IA operativa"].map((item) => <div key={item} className="flowly-card rounded-2xl p-4 text-sm text-white/75"><Check className="mb-2 text-cyan-200" size={18} />{item}</div>)}
             </div>
           </div>
           <div className="flowly-glass rounded-[2.2rem] p-6">
@@ -190,12 +190,28 @@ export default function MarketingPage() {
               <p className="mt-2 text-white/60">Planificación, publicaciones, IA, campañas y seguimiento desde un mismo flujo comercial.</p>
             </div>
             <div className="mt-4 grid gap-3">
-              {["CRM detecta oportunidades", "IA propone campañas", "Contenido mensual", "WhatsApp y leads conectados"].map((step, i) => <div key={step} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-sm"><span className="mr-3 text-cyan-200">0{i + 1}</span>{step}</div>)}
+              {["Pack contratado crea briefing", "Flowly genera tareas automáticas", "Calendario y publicaciones según plan", "Admin controla producción y estados"].map((step, i) => <div key={step} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-sm"><span className="mr-3 text-cyan-200">0{i + 1}</span>{step}</div>)}
             </div>
           </div>
         </section>
 
-        <section className="mt-18 pt-16">
+
+        <section className="mt-16 grid gap-6 lg:grid-cols-2">
+          <div className="flowly-card rounded-[2rem] p-7">
+            <Workflow className="text-cyan-200" size={30} />
+            <h2 className="mt-4 text-3xl font-semibold">Marketing como módulo del software</h2>
+            <p className="mt-3 text-white/60">Para clientes que ya tienen Flowly: Marketing aparece en el menú del panel, usa los datos del CRM, WhatsApp, agenda y campañas para preparar acciones más inteligentes.</p>
+            <Link href={`/precios?country=${country}`} className="flowly-secondary mt-6 inline-flex rounded-full px-5 py-3 font-semibold">Ver software modular</Link>
+          </div>
+          <div className="flowly-card rounded-[2rem] p-7">
+            <Megaphone className="text-fuchsia-200" size={30} />
+            <h2 className="mt-4 text-3xl font-semibold">Marketing contratado de forma independiente</h2>
+            <p className="mt-3 text-white/60">Para negocios que solo quieren publicaciones y campañas: contratan un pack, completan el briefing y el pedido entra al panel admin con tareas, calendario y entregables generados automáticamente.</p>
+            <a href="#planes-marketing" className="flowly-primary mt-6 inline-flex rounded-full px-5 py-3 font-semibold">Contratar solo marketing</a>
+          </div>
+        </section>
+
+        <section id="planes-marketing" className="mt-18 pt-16">
           <div className="mb-8 text-center">
             <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Planes principales</p>
             <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">Marketing con estrategia, IA y constancia.</h2>
@@ -207,8 +223,8 @@ export default function MarketingPage() {
                 <h3 className="mt-4 text-3xl font-semibold">{plan.name}</h3>
                 <p className="mt-3 text-white/60">{plan.subtitle}</p>
                 <div className="mt-7"><span className="text-5xl font-semibold">{money(plan.price, country)}</span><span className="text-white/50"> / mes</span></div>
-                <button onClick={() => startCheckout(plan.id)} disabled={loadingPlan === plan.id} className={plan.highlight ? "mt-7 w-full rounded-full bg-white px-5 py-4 font-semibold text-slate-950" : "flowly-primary mt-7 w-full rounded-full px-5 py-4 font-semibold"}>{loadingPlan === plan.id ? "Abriendo..." : "Contratar"}</button>
-                <div className="mt-7 space-y-3 text-sm text-white/78">{plan.features.map((feature) => <div key={feature} className="flex gap-3"><Check size={18} className="shrink-0 text-cyan-200" /><span>{feature}</span></div>)}</div>
+                <button onClick={() => startCheckout(plan.id)} disabled={loadingPlan === plan.id} className={plan.highlight ? "mt-7 w-full rounded-full bg-white px-5 py-4 font-semibold text-slate-950" : "flowly-primary mt-7 w-full rounded-full px-5 py-4 font-semibold"}>{loadingPlan === plan.id ? "Abriendo..." : "Contratar pack automatizado"}</button>
+                <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-cyan-300/10 p-3 text-xs text-cyan-100">Al contratarlo se crean automáticamente briefing, tareas internas, calendario editorial y entregables según este pack.</div><div className="mt-7 space-y-3 text-sm text-white/78">{plan.features.map((feature) => <div key={feature} className="flex gap-3"><Check size={18} className="shrink-0 text-cyan-200" /><span>{feature}</span></div>)}</div>
               </div>
             ))}
           </div>
@@ -236,7 +252,7 @@ export default function MarketingPage() {
         <section className="mt-16 rounded-[2.3rem] flowly-glass p-8 text-center md:p-12">
           <Target className="mx-auto text-cyan-200" size={40} />
           <h2 className="mt-4 text-4xl font-semibold">Después del pago te pediremos todo lo necesario.</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-white/60">Formulario de marca, redes sociales, sector, objetivos, tono, promociones y material disponible para que el equipo de Flowly pueda empezar sin llamadas innecesarias.</p>
+          <p className="mx-auto mt-4 max-w-2xl text-white/60">Formulario de marca, redes sociales, sector, objetivos, tono, promociones y material disponible. Al enviarlo, Flowly crea el pedido en admin, genera tareas de producción y construye el calendario de publicaciones según el pack contratado.</p>
         </section>
       </div>
     </main>

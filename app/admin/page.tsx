@@ -123,6 +123,15 @@ type MarketingOrder = {
   id: string;
   plan_id: string;
   plan_name: string;
+  plan_type?: string | null;
+  tier?: string | null;
+  posts_per_week?: number | null;
+  monthly_amount?: number | null;
+  currency?: string | null;
+  includes_software_module?: boolean | null;
+  features?: string[] | null;
+  deliverables?: string[] | null;
+  automation_blueprint?: string[] | null;
   status: string | null;
   contact_name: string | null;
   email: string | null;
@@ -138,6 +147,26 @@ type MarketingOrder = {
   offers: string | null;
   notes: string | null;
   created_at: string;
+};
+
+type MarketingTask = {
+  id: string;
+  marketing_order_id: string;
+  title: string;
+  status: string | null;
+  due_at: string | null;
+  sort_order: number | null;
+};
+
+type MarketingContentItem = {
+  id: string;
+  marketing_order_id: string;
+  title: string;
+  channel: string | null;
+  content_type: string | null;
+  status: string | null;
+  scheduled_for: string | null;
+  sort_order: number | null;
 };
 
 type PlanOption = { key: string; name: string; price: number; description: string };
@@ -217,6 +246,8 @@ export default function AdminPage() {
   const [trainingItems, setTrainingItems] = useState<TrainingItem[]>([]);
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([]);
   const [marketingOrders, setMarketingOrders] = useState<MarketingOrder[]>([]);
+  const [marketingTasks, setMarketingTasks] = useState<MarketingTask[]>([]);
+  const [marketingContentItems, setMarketingContentItems] = useState<MarketingContentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -299,7 +330,7 @@ export default function AdminPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
-    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes, documentsRes, signaturesRes, foldersRes, trainingItemsRes, trainingProgressRes, marketingOrdersRes] = await Promise.all([
+    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes, documentsRes, signaturesRes, foldersRes, trainingItemsRes, trainingProgressRes, marketingOrdersRes, marketingTasksRes, marketingContentRes] = await Promise.all([
       supabase.from("sales_users").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_leads").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").order("created_at", { ascending: false }),
@@ -314,6 +345,8 @@ export default function AdminPage() {
       supabase.from("sales_training_items").select("*").order("sort_order", { ascending: true }),
       supabase.from("sales_training_progress").select("*").order("updated_at", { ascending: false }),
       supabase.from("marketing_orders").select("*").order("created_at", { ascending: false }),
+      supabase.from("marketing_tasks").select("*").order("sort_order", { ascending: true }),
+      supabase.from("marketing_content_calendar").select("*").order("scheduled_for", { ascending: true }),
     ]);
 
     setSalesUsers((salesUsersRes.data || []) as SalesUser[]);
@@ -328,6 +361,8 @@ export default function AdminPage() {
     setTrainingItems((trainingItemsRes.data || []) as TrainingItem[]);
     setTrainingProgress((trainingProgressRes.data || []) as TrainingProgress[]);
     setMarketingOrders(((marketingOrdersRes as any).data || []) as MarketingOrder[]);
+    setMarketingTasks(((marketingTasksRes as any).data || []) as MarketingTask[]);
+    setMarketingContentItems(((marketingContentRes as any).data || []) as MarketingContentItem[]);
     setLoading(false);
   };
 
@@ -745,6 +780,22 @@ export default function AdminPage() {
     await load();
   };
 
+
+  const updateMarketingTaskStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from("marketing_tasks").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const updateMarketingContentStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from("marketing_content_calendar").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) return alert(error.message);
+    await load();
+  };
+
+  const orderTasks = (orderId: string) => marketingTasks.filter((task) => task.marketing_order_id === orderId);
+  const orderContentItems = (orderId: string) => marketingContentItems.filter((item) => item.marketing_order_id === orderId);
+
   const marketingStatusLabel = (status?: string | null) => {
     const labels: Record<string, string> = {
       briefing_pending: "Briefing recibido",
@@ -963,52 +1014,96 @@ export default function AdminPage() {
 
 
 
-        {tab === "marketing" && <section className="grid gap-6 lg:grid-cols-[.7fr_1.3fr]">
-          <Panel title="Resumen marketing">
-            <div className="grid gap-4">
-              <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-                <p className="text-sm text-cyan-100">Pedidos activos</p>
-                <p className="mt-2 text-4xl font-semibold">{marketingOrders.filter((order) => !["cancelled", "paused"].includes(order.status || "")).length}</p>
+        {tab === "marketing" && <section className="grid gap-6 xl:grid-cols-[.75fr_1.25fr]">
+          <div className="space-y-6">
+            <Panel title="Marketing OS">
+              <div className="grid gap-4">
+                <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+                  <p className="text-sm text-cyan-100">Pedidos activos</p>
+                  <p className="mt-2 text-4xl font-semibold">{marketingOrders.filter((order) => !["cancelled", "paused"].includes(order.status || "")).length}</p>
+                  <p className="mt-1 text-xs text-cyan-100/70">Software + servicio de marketing contratables juntos o por separado.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                    <p className="text-sm text-white/55">Pendientes</p>
+                    <p className="mt-2 text-3xl font-semibold text-amber-200">{marketingOrders.filter((order) => (order.status || "briefing_pending") === "briefing_pending").length}</p>
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                    <p className="text-sm text-white/55">Publicaciones/semana</p>
+                    <p className="mt-2 text-3xl font-semibold text-cyan-200">{marketingOrders.reduce((sum, order) => sum + Number(order.posts_per_week || 0), 0)}</p>
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-violet-300/20 bg-violet-500/10 p-5 text-sm leading-6 text-white/65">
+                  Cada contratación crea automáticamente tareas internas, entregables y calendario editorial según el pack. Los packs Bronze/Plata/Oro pueden vivir como módulo dentro del software; los packs de publicaciones funcionan como servicio independiente.
+                </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
-                <p className="text-sm text-white/55">Pendientes de revisar</p>
-                <p className="mt-2 text-3xl font-semibold text-amber-200">{marketingOrders.filter((order) => (order.status || "briefing_pending") === "briefing_pending").length}</p>
+            </Panel>
+            <Panel title="Producción próxima">
+              <div className="space-y-3">
+                {marketingContentItems.slice(0, 8).map((item) => <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
+                  <p className="font-medium">{item.title}</p>
+                  <p className="mt-1 text-xs text-white/45">{item.channel || "Canal"} · {item.content_type || "Contenido"} · {item.scheduled_for ? new Date(item.scheduled_for).toLocaleDateString("es-ES") : "Sin fecha"}</p>
+                  <select value={item.status || "idea"} onChange={(e) => updateMarketingContentStatus(item.id, e.target.value)} className="input-dark mt-3 text-xs">
+                    <option value="idea">Idea</option><option value="draft">Borrador</option><option value="review">Revisión</option><option value="scheduled">Programado</option><option value="published">Publicado</option>
+                  </select>
+                </div>)}
+                {!marketingContentItems.length && <Empty text="Aún no hay calendario generado." />}
               </div>
-              <p className="text-sm leading-6 text-white/55">Aquí llegan las contrataciones de Marketing Flowly. Revisa briefing, redes, objetivos y mueve cada pedido por el flujo interno.</p>
-            </div>
-          </Panel>
+            </Panel>
+          </div>
           <Panel title="Pedidos de marketing">
             <div className="space-y-4">
-              {marketingOrders.map((order) => <div key={order.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
-                <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-                  <div className="min-w-0">
-                    <p className="text-lg font-semibold break-words">{order.business_name || order.contact_name || "Nuevo cliente marketing"}</p>
-                    <p className="mt-1 text-sm text-cyan-200 break-words">{order.plan_name} · {marketingStatusLabel(order.status)}</p>
-                    <p className="mt-1 text-xs text-white/45 break-words">{order.contact_name} · {order.email} · {order.phone}</p>
-                    <p className="mt-3 text-sm text-white/70 break-words"><strong>Objetivo:</strong> {order.objectives || "Sin objetivo indicado"}</p>
-                    <div className="mt-3 grid gap-2 text-xs text-white/50 md:grid-cols-2">
-                      <p><strong>Sector:</strong> {order.sector || "-"}</p>
-                      <p><strong>Tono:</strong> {order.brand_tone || "-"}</p>
-                      <p className="break-all"><strong>Instagram:</strong> {order.instagram_url || "-"}</p>
-                      <p className="break-all"><strong>Facebook:</strong> {order.facebook_url || "-"}</p>
-                      <p className="break-all"><strong>Web:</strong> {order.website_url || "-"}</p>
-                      <p><strong>Creado:</strong> {order.created_at ? new Date(order.created_at).toLocaleDateString("es-ES") : "-"}</p>
+              {marketingOrders.map((order) => {
+                const tasks = orderTasks(order.id);
+                const content = orderContentItems(order.id);
+                const completedTasks = tasks.filter((task) => ["done", "completed"].includes(task.status || "")).length;
+                return <div key={order.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-lg font-semibold break-words">{order.business_name || order.contact_name || "Nuevo cliente marketing"}</p>
+                        <span className="rounded-full bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100">{order.plan_type === "publication" ? "Solo publicaciones" : "Marketing + módulo"}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-cyan-200 break-words">{order.plan_name} · {marketingStatusLabel(order.status)} · {order.posts_per_week || 0} publis/semana</p>
+                      <p className="mt-1 text-xs text-white/45 break-words">{order.contact_name} · {order.email} · {order.phone}</p>
+                      <p className="mt-3 text-sm text-white/70 break-words"><strong>Objetivo:</strong> {order.objectives || "Sin objetivo indicado"}</p>
+                      <div className="mt-3 grid gap-2 text-xs text-white/50 md:grid-cols-2">
+                        <p><strong>Sector:</strong> {order.sector || "-"}</p>
+                        <p><strong>Tono:</strong> {order.brand_tone || "-"}</p>
+                        <p><strong>Precio:</strong> {order.monthly_amount ? `${order.monthly_amount} ${order.currency || "EUR"}` : "-"}</p>
+                        <p><strong>Tareas:</strong> {completedTasks}/{tasks.length}</p>
+                        <p className="break-all"><strong>Instagram:</strong> {order.instagram_url || "-"}</p>
+                        <p className="break-all"><strong>Facebook:</strong> {order.facebook_url || "-"}</p>
+                        <p className="break-all"><strong>Web:</strong> {order.website_url || "-"}</p>
+                        <p><strong>Creado:</strong> {order.created_at ? new Date(order.created_at).toLocaleDateString("es-ES") : "-"}</p>
+                      </div>
+                      {order.deliverables && order.deliverables.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{order.deliverables.map((item) => <span key={item} className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-100">{item}</span>)}</div>}
+                      {order.target_customer && <p className="mt-3 text-xs text-white/45 break-words"><strong>Cliente ideal:</strong> {order.target_customer}</p>}
+                      {order.offers && <p className="mt-2 text-xs text-white/45 break-words"><strong>Servicios/ofertas:</strong> {order.offers}</p>}
+                      {order.notes && <p className="mt-2 text-xs text-white/45 break-words"><strong>Notas:</strong> {order.notes}</p>}
                     </div>
-                    {order.target_customer && <p className="mt-3 text-xs text-white/45 break-words"><strong>Cliente ideal:</strong> {order.target_customer}</p>}
-                    {order.offers && <p className="mt-2 text-xs text-white/45 break-words"><strong>Servicios/ofertas:</strong> {order.offers}</p>}
-                    {order.notes && <p className="mt-2 text-xs text-white/45 break-words"><strong>Notas:</strong> {order.notes}</p>}
+                    <select value={order.status || "briefing_pending"} onChange={(e) => updateMarketingOrderStatus(order.id, e.target.value)} className="input-dark w-full md:max-w-56">
+                      <option value="briefing_pending">Briefing recibido</option>
+                      <option value="in_review">En revisión</option>
+                      <option value="in_production">En producción</option>
+                      <option value="scheduled">Programado</option>
+                      <option value="active">Activo</option>
+                      <option value="paused">Pausado</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
                   </div>
-                  <select value={order.status || "briefing_pending"} onChange={(e) => updateMarketingOrderStatus(order.id, e.target.value)} className="input-dark w-full md:max-w-56">
-                    <option value="briefing_pending">Briefing recibido</option>
-                    <option value="in_review">En revisión</option>
-                    <option value="in_production">En producción</option>
-                    <option value="scheduled">Programado</option>
-                    <option value="active">Activo</option>
-                    <option value="paused">Pausado</option>
-                    <option value="cancelled">Cancelado</option>
-                  </select>
-                </div>
-              </div>)}
+                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="mb-3 text-sm font-semibold text-cyan-100">Automatización del pack</p>
+                      <div className="space-y-2">{tasks.map((task) => <div key={task.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.04] p-3 text-xs"><span>{task.title}</span><select value={task.status || "pending"} onChange={(e) => updateMarketingTaskStatus(task.id, e.target.value)} className="rounded-full bg-neutral-950 px-2 py-1"><option value="pending">Pendiente</option><option value="ready">Listo</option><option value="in_progress">En curso</option><option value="done">Hecho</option></select></div>)}{!tasks.length && <p className="text-xs text-white/35">Sin tareas generadas. Revisa SQL de marketing_tasks.</p>}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="mb-3 text-sm font-semibold text-fuchsia-100">Calendario generado</p>
+                      <div className="space-y-2">{content.slice(0, 6).map((item) => <div key={item.id} className="rounded-xl bg-white/[0.04] p-3 text-xs"><p>{item.title}</p><p className="mt-1 text-white/40">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleDateString("es-ES") : "Sin fecha"} · {item.status || "idea"}</p></div>)}{!content.length && <p className="text-xs text-white/35">Sin calendario generado.</p>}</div>
+                    </div>
+                  </div>
+                </div>;
+              })}
               {!marketingOrders.length && <Empty text="Aún no hay pedidos de marketing." />}
             </div>
           </Panel>
