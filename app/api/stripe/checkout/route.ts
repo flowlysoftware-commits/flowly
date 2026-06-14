@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { convertBasePrice, resolveFlowlyMarket, stripeUnitAmount } from "@/lib/stripePricing";
+import { getMarketingPlan } from "@/lib/marketingPlans";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -11,7 +12,7 @@ const modularModules = [
   { id: "billing", name: "Facturación", price: 9.99 },
   { id: "pos", name: "TPV", price: 14.99 },
   { id: "crm", name: "CRM avanzado", price: 9.99 },
-  { id: "marketing", name: "Marketing", price: 9.99 },
+  { id: "marketing", name: "Marketing", price: 19.9 },
   { id: "ai", name: "IA Assistant", price: 14.99 },
   { id: "analytics", name: "Estadísticas avanzadas", price: 4.99 },
   { id: "booking_premium", name: "Reservas Premium", price: 4.99 },
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const plan = body.plan as "basic" | "premium" | "modular";
     const selectedModuleIds = Array.isArray(body.modules) ? body.modules.map(String) : [];
+    const marketingPlan = selectedModuleIds.includes("marketing") ? getMarketingPlan(body.marketingPlanId || "marketing_bronze") : null;
     const referralCode = body.referralCode ? String(body.referralCode).trim() : "";
     const market = resolveFlowlyMarket(body.country, body.currency);
     let salesUserId = "";
@@ -53,10 +55,13 @@ export async function POST(request: Request) {
 
     if (plan === "modular") {
       const selectedModules = modularModules.filter((item) => selectedModuleIds.includes(item.id));
+      const selectedModulesWithPricing = selectedModules.map((item) =>
+        item.id === "marketing" && marketingPlan ? { ...item, name: `Marketing · ${marketingPlan.name.replace("Flowly Marketing ", "")}`, price: marketingPlan.price } : item
+      );
       const base = 19.99;
-      const total = base + selectedModules.reduce((sum, item) => sum + item.price, 0);
+      const total = base + selectedModulesWithPricing.reduce((sum, item) => sum + item.price, 0);
       const displayTotal = convertBasePrice(total, market);
-      const moduleNames = selectedModules.map((item) => item.name).join(", ") || "Sin módulos extra";
+      const moduleNames = selectedModulesWithPricing.map((item) => item.name).join(", ") || "Sin módulos extra";
       const moduleIds = selectedModules.map((item) => item.id).join(",");
 
       lineItems = [
@@ -71,7 +76,7 @@ export async function POST(request: Request) {
         },
       ];
 
-      metadata = { plan, modules: moduleIds, monthly_amount: displayTotal.toFixed(2), base_amount_eur: total.toFixed(2), referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency, business_type: body.businessType ? String(body.businessType) : "" };
+      metadata = { plan, modules: moduleIds, monthly_amount: displayTotal.toFixed(2), base_amount_eur: total.toFixed(2), referral_code: referralCode, sales_user_id: salesUserId, country: market.country, currency: market.currency, business_type: body.businessType ? String(body.businessType) : "", marketing_plan_id: marketingPlan?.id || "", marketing_plan_name: marketingPlan?.name || "", marketing_plan_price_eur: marketingPlan?.price ? String(marketingPlan.price) : "" };
     } else {
       const basePrice = plan === "basic" ? 29.99 : 59.99;
       const displayPrice = convertBasePrice(basePrice, market);

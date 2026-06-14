@@ -6,6 +6,7 @@ import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { marketingPlans } from "@/lib/marketingPlans";
 import {
   Bot,
   ChevronRight,
@@ -921,6 +922,16 @@ export default function DashboardPage() {
     const existing = modules.find((item) => item.module_key === moduleKey && item.status !== "cancelled");
     if (existing) return alert("Este módulo ya está activo en tu panel.");
 
+    let selectedMarketingPlan = null as null | typeof marketingPlans.marketing_bronze;
+    if (moduleKey === "marketing") {
+      const choice = window.prompt("Elige el plan de marketing para activar en tu panel: bronze, plata u oro", "bronze");
+      const normalized = String(choice || "bronze").toLowerCase().trim();
+      const planId = normalized.includes("oro") ? "marketing_oro" : normalized.includes("plata") ? "marketing_plata" : "marketing_bronze";
+      selectedMarketingPlan = marketingPlans[planId];
+      const ok = window.confirm(`Vas a activar Marketing con el plan ${selectedMarketingPlan.name.replace("Flowly Marketing ", "")} por ${selectedMarketingPlan.price.toFixed(2)}€/mes. ¿Continuar?`);
+      if (!ok) return;
+    }
+
     const { error } = await supabase.from("business_modules").insert({
       business_id: business.id,
       module_key: moduleKey,
@@ -934,8 +945,19 @@ export default function DashboardPage() {
       if (retry.error) return alert(retry.error.message);
     }
 
+    if (moduleKey === "marketing" && selectedMarketingPlan) {
+      await supabase.from("module_records").insert({
+        business_id: business.id,
+        module_key: "marketing",
+        title: `Plan activo · ${selectedMarketingPlan.name.replace("Flowly Marketing ", "")}`,
+        amount: selectedMarketingPlan.price,
+        status: "plan_active",
+        notes: [selectedMarketingPlan.description, "", "Incluye:", ...selectedMarketingPlan.features.map((feature) => `- ${feature}`)].join("\n"),
+      });
+    }
+
     await loadData();
-    alert("Módulo añadido correctamente a tu panel.");
+    alert(moduleKey === "marketing" ? "Marketing añadido con plan operativo." : "Módulo añadido correctamente a tu panel.");
   };
 
   const createVoiceCall = async () => {
@@ -3013,22 +3035,82 @@ function IntegrationPanel({ items, business, integrations = [], reloadData }: { 
 }
 
 function MarketingModule({ business, integrations, reloadData, records, customers, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
-  const [tab, setTab] = useState("Campañas");
+  const [tab, setTab] = useState("Plan");
 
   useEffect(() => {
-    syncModuleSubmenu(activeTab, "module:marketing:", { campanas: "Campañas", canales: "Canales", audiencias: "Audiencias", calendario: "Calendario" }, setTab);
+    syncModuleSubmenu(activeTab, "module:marketing:", { plan: "Plan", campanas: "Campañas", canales: "Canales", audiencias: "Audiencias", calendario: "Calendario" }, setTab);
   }, [activeTab]);
-  const budget = records.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const activeCampaigns = records.filter((r) => !["done", "paused"].includes(r.status)).length;
+
+  const planRecord = records.find((r) => r.status === "plan_active");
+  const selectedPlan = planRecord?.title?.toLowerCase().includes("oro")
+    ? marketingPlans.marketing_oro
+    : planRecord?.title?.toLowerCase().includes("plata")
+      ? marketingPlans.marketing_plata
+      : marketingPlans.marketing_bronze;
+  const campaignRecords = records.filter((r) => r.status !== "plan_active");
+  const contentItems = campaignRecords.filter((r) => ["idea", "draft", "scheduled", "published", "organic"].includes(String(r.status || "")));
+  const budget = campaignRecords.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const activeCampaigns = campaignRecords.filter((r) => !["done", "paused", "published"].includes(String(r.status))).length;
+  const monthlyPosts = selectedPlan.postsPerWeek * 4;
   const channels = ["Meta Ads", "Google Ads", "TikTok Ads", "WhatsApp", "Email", "Landing / Pixel"];
+  const calendarTemplate = Array.from({ length: monthlyPosts }, (_, index) => {
+    const day = new Date();
+    day.setDate(day.getDate() + index * Math.max(1, Math.floor(28 / Math.max(monthlyPosts, 1))));
+    return `${day.toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}: Publicación ${index + 1}`;
+  });
+
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow="Growth OS" title="Marketing conectado al negocio" description="Planifica campañas, controla presupuesto, define canales, prepara creatividades y deja listas las conexiones de redes para cada cliente." actions={<ModulePillTabs tabs={["Campañas", "Canales", "Audiencias", "Calendario"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Campañas: "module:marketing:campanas", Canales: "module:marketing:canales", Audiencias: "module:marketing:audiencias", Calendario: "module:marketing:calendario" } as Record<string, ActiveTab>)[next] || "module:marketing:campanas", setTab, next)} />} />
-      <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Megaphone />} label="Campañas" value={records.length} helper="Totales" /><Metric icon={<CreditCard />} label="Presupuesto" value={`${budget.toFixed(2)}€`} helper="Planificado" /><Metric icon={<Users />} label="Audiencia CRM" value={customers.length} helper="Clientes" /><Metric icon={<CheckCircle2 />} label="Activas" value={activeCampaigns} helper="En marcha" /></div>
-      {tab === "Campañas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title="Nueva campaña profesional"><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="meta">Facebook / Instagram Ads</option><option value="google">Google Ads</option><option value="tiktok">TikTok Ads</option><option value="email">Email Marketing</option><option value="whatsapp">WhatsApp Campaign</option><option value="organic">Contenido orgánico</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaña: Reactivación clientes VIP" className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Presupuesto estimado" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Objetivo, público, oferta, fechas, creatividad, KPI principal y responsable" className="input-dark min-h-40" /><button onClick={() => createRecord("marketing", status)} className="btn-primary"><Plus size={17} /> Guardar campaña</button></div></GlassCard><GlassCard title="Pipeline de campañas"><RecordsList records={records} deleteRecord={deleteRecord} /></GlassCard></section>}
+      <ModuleHero eyebrow="Flowly Growth OS" title="Marketing operativo con plan contratado" description="El módulo Marketing ya no es solo una nota: muestra el plan contratado, campañas, calendario editorial, audiencias CRM y conexiones necesarias para ejecutar acciones reales." actions={<ModulePillTabs tabs={["Plan", "Campañas", "Canales", "Audiencias", "Calendario"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Plan: "module:marketing:plan", Campañas: "module:marketing:campanas", Canales: "module:marketing:canales", Audiencias: "module:marketing:audiencias", Calendario: "module:marketing:calendario" } as Record<string, ActiveTab>)[next] || "module:marketing:plan", setTab, next)} />} />
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric icon={<Megaphone />} label="Plan" value={selectedPlan.name.replace("Flowly Marketing ", "")} helper={planRecord ? "Contratado" : "Predeterminado"} />
+        <Metric icon={<CalendarDays />} label="Publicaciones" value={`${selectedPlan.postsPerWeek}/sem`} helper={`${monthlyPosts} al mes`} />
+        <Metric icon={<CreditCard />} label="Cuota" value={`${Number(planRecord?.amount || selectedPlan.price).toFixed(2)}€`} helper="Marketing mensual" />
+        <Metric icon={<Users />} label="Audiencia CRM" value={customers.length} helper="Clientes disponibles" />
+      </div>
+
+      {tab === "Plan" && <section className="grid gap-6 xl:grid-cols-[.9fr_1.1fr]">
+        <GlassCard title="Plan de marketing contratado">
+          <div className="rounded-[2rem] border border-fuchsia-300/20 bg-gradient-to-br from-fuchsia-500/15 via-violet-500/10 to-black/30 p-6">
+            <p className="text-sm uppercase tracking-[0.18em] text-fuchsia-100/70">{selectedPlan.tier}</p>
+            <h3 className="mt-2 text-3xl font-semibold">{selectedPlan.name}</h3>
+            <p className="mt-3 text-sm leading-6 text-white/60">{selectedPlan.description}</p>
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <InfoBox label="Publicaciones" value={`${selectedPlan.postsPerWeek}/semana`} />
+              <InfoBox label="Entrega mensual" value={`${monthlyPosts} piezas`} />
+              <InfoBox label="Precio" value={`${Number(planRecord?.amount || selectedPlan.price).toFixed(2)}€`} />
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {selectedPlan.features.map((feature) => <div key={feature} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-sm text-white/72"><CheckCircle2 className="mb-2 text-cyan-200" size={18} />{feature}</div>)}
+          </div>
+        </GlassCard>
+        <GlassCard title="Sistema automatizado del plan">
+          <div className="grid gap-3">
+            {selectedPlan.automationSteps.map((step, index) => <div key={step} className="flex items-start gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-300/20 text-xs font-bold text-cyan-100">{index + 1}</span><div><p className="font-semibold">{step}</p><p className="mt-1 text-xs text-white/45">Se convierte en tarea operativa para el equipo de marketing.</p></div></div>)}
+          </div>
+        </GlassCard>
+      </section>}
+
+      {tab === "Campañas" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+        <GlassCard title="Nueva campaña profesional">
+          <div className="grid gap-3">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="meta">Facebook / Instagram Ads</option><option value="google">Google Ads</option><option value="tiktok">TikTok Ads</option><option value="email">Email Marketing</option><option value="whatsapp">WhatsApp Campaign</option><option value="organic">Contenido orgánico</option></select>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaña: Reactivación clientes VIP" className="input-dark" />
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Presupuesto estimado" type="number" className="input-dark" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Objetivo, público, oferta, fechas, creatividad, KPI principal y responsable" className="input-dark min-h-40" />
+            <button onClick={() => createRecord("marketing", status)} className="btn-primary"><Plus size={17} /> Guardar campaña</button>
+          </div>
+        </GlassCard>
+        <GlassCard title="Pipeline de campañas">
+          <div className="mb-4 grid gap-3 md:grid-cols-3"><InfoBox label="Campañas" value={campaignRecords.length} /><InfoBox label="Activas" value={activeCampaigns} /><InfoBox label="Presupuesto" value={`${budget.toFixed(2)}€`} /></div>
+          <RecordsList records={campaignRecords} deleteRecord={deleteRecord} />
+        </GlassCard>
+      </section>}
+
       {tab === "Canales" && <GlassCard title="Conexiones del cliente"><IntegrationPanel business={business} integrations={integrations} reloadData={reloadData} items={channels.map((name) => ({ name, detail: name.includes("Meta") ? "Página, Instagram, pixel y cuenta publicitaria" : name.includes("Google") ? "Google Business Profile, Ads y Analytics" : name.includes("TikTok") ? "Cuenta publicitaria, pixel y eventos" : name.includes("WhatsApp") ? "Plantillas, listas y campañas desde CRM" : name.includes("Email") ? "Dominio, listas y automatizaciones" : "UTMs, eventos y conversiones" }))} /></GlassCard>}
       {tab === "Audiencias" && <GlassCard title="Audiencias inteligentes"><div className="grid gap-3 md:grid-cols-3">{["Clientes nuevos", "Clientes sin cita 60 días", "VIP / mayor ticket", "Cumpleaños", "No asistieron", "Leads sin convertir"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Segmento preparado desde CRM para campañas y WhatsApp.</p></div>)}</div></GlassCard>}
-      {tab === "Calendario" && <GlassCard title="Calendario editorial"><div className="grid gap-3 md:grid-cols-4">{["Lunes: oferta", "Miércoles: contenido", "Viernes: remarketing", "Domingo: reporte"].map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Bloque operativo listo para automatizar.</p></div>)}</div></GlassCard>}
+      {tab === "Calendario" && <GlassCard title="Calendario editorial del plan"><div className="grid gap-3 md:grid-cols-4">{(contentItems.length ? contentItems.map((r) => r.title) : calendarTemplate).map((x) => <div key={x} className="rounded-3xl border border-white/10 bg-white/[0.05] p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Bloque operativo del plan {selectedPlan.name.replace("Flowly Marketing ", "")}.</p></div>)}</div></GlassCard>}
     </section>
   );
 }

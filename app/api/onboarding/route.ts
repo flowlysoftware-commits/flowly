@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildCommissionLines } from "@/lib/salesCommissions";
 import { generateAndStoreBrandAvatar } from "@/lib/brandAvatar";
+import { buildMarketingContentCalendar, buildMarketingTasks, getMarketingPlan } from "@/lib/marketingPlans";
 
 export const runtime = "nodejs";
 
@@ -153,6 +154,62 @@ export async function POST(request: Request) {
       const rows = modules.map((moduleKey) => ({ business_id: business.id, module_key: moduleKey, status: "active" }));
       const { error: moduleError } = await supabaseAdmin.from("business_modules").upsert(rows, { onConflict: "business_id,module_key" });
       if (moduleError) console.warn("Module insert warning:", moduleError.message);
+    }
+
+    const marketingPlan = modules.includes("marketing") ? getMarketingPlan(session.metadata?.marketing_plan_id || "marketing_bronze") : null;
+    if (business?.id && marketingPlan) {
+      const now = new Date().toISOString();
+      await supabaseAdmin.from("module_records").insert({
+        business_id: business.id,
+        module_key: "marketing",
+        title: `Plan activo · ${marketingPlan.name.replace("Flowly Marketing ", "")}`,
+        amount: marketingPlan.price,
+        status: "plan_active",
+        notes: [
+          marketingPlan.description,
+          "",
+          "Incluye:",
+          ...marketingPlan.features.map((feature) => `- ${feature}`),
+        ].join("\n"),
+        created_at: now,
+      });
+
+      const { data: order } = await supabaseAdmin
+        .from("marketing_orders")
+        .insert({
+          business_id: business.id,
+          plan_id: marketingPlan.id,
+          plan_name: marketingPlan.name,
+          plan_type: marketingPlan.planType,
+          tier: marketingPlan.tier,
+          posts_per_week: marketingPlan.postsPerWeek,
+          monthly_amount: Number(session.metadata?.marketing_plan_price_eur || marketingPlan.price),
+          base_monthly_amount_eur: marketingPlan.price,
+          currency: session.metadata?.currency || "EUR",
+          country: session.metadata?.country || "ES",
+          includes_software_module: true,
+          features: marketingPlan.features,
+          deliverables: marketingPlan.deliverables,
+          automation_blueprint: marketingPlan.automationSteps,
+          status: "briefing_pending",
+          contact_name: businessName,
+          email,
+          business_name: businessName,
+          sector: businessType || session.metadata?.business_type || "",
+          objectives: primaryGoal || "",
+          briefing: { source: "flowly_modular", session_id: session.id },
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (order?.id) {
+        const tasks = buildMarketingTasks(marketingPlan).map((task) => ({ ...task, marketing_order_id: order.id, created_at: now, updated_at: now }));
+        if (tasks.length) await supabaseAdmin.from("marketing_tasks").insert(tasks);
+        const contentItems = buildMarketingContentCalendar(marketingPlan).map((item) => ({ ...item, marketing_order_id: order.id, created_at: now, updated_at: now }));
+        if (contentItems.length) await supabaseAdmin.from("marketing_content_calendar").insert(contentItems);
+      }
     }
 
     if (business?.id && monthlyAmount) {

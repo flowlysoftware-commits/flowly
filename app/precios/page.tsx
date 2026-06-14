@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { marketingPlans } from "@/lib/marketingPlans";
 import {
   Bot,
   CalendarDays,
@@ -37,7 +38,7 @@ type MarketConfig = {
   badge: string;
 };
 type ModuleId = "agenda" | "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice" | "time_tracking" | "inventory" | "client_portal" | "surveys" | "hr" | "automations" | "digital_signature";
-type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }> };
+type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }>; requiresPlan?: boolean };
 
 type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[] };
 
@@ -90,7 +91,7 @@ const modules: Module[] = [
   { id: "billing", name: "Facturación", price: 9.99, description: "Facturas, presupuestos, gastos e ingresos.", Icon: Receipt },
   { id: "pos", name: "TPV", price: 14.99, description: "Cobros, caja, tickets y ventas presenciales.", Icon: Store },
   { id: "crm", name: "CRM avanzado", price: 9.99, description: "Segmentación, seguimiento y clientes inactivos.", Icon: CreditCard },
-  { id: "marketing", name: "Marketing", price: 9.99, description: "Campañas, promociones y recuperación de clientes.", Icon: Megaphone },
+  { id: "marketing", name: "Marketing", price: 19.9, description: "Campañas, calendario, publicaciones e IA según el plan elegido.", Icon: Megaphone, requiresPlan: true },
   { id: "ai", name: "IA Assistant", price: 14.99, description: "Resúmenes, sugerencias y automatizaciones inteligentes.", Icon: Bot },
   { id: "analytics", name: "Estadísticas avanzadas", price: 4.99, description: "KPIs, evolución, previsión y rendimiento.", Icon: TrendingUp },
   { id: "booking_premium", name: "Reservas Premium", price: 4.99, description: "Página de reservas más avanzada y personalizable.", Icon: SlidersHorizontal },
@@ -103,6 +104,21 @@ const modules: Module[] = [
   { id: "digital_signature", name: "Firma digital", price: 12.99, description: "Contratos, presupuestos y consentimientos firmables.", Icon: FileSignature },
   { id: "time_tracking", name: "Módulo Fichaje", price: 11.99, description: "Registro de entrada, salida, pausas y control horario del equipo.", Icon: Clock },
 ];
+
+
+const marketingPlanOptions = [
+  marketingPlans.marketing_bronze,
+  marketingPlans.marketing_plata,
+  marketingPlans.marketing_oro,
+];
+
+function marketingModulePrice(planId: string) {
+  return marketingPlans[planId]?.price ?? marketingPlans.marketing_bronze.price;
+}
+
+function marketingModuleName(planId: string) {
+  return marketingPlans[planId]?.name.replace("Flowly Marketing ", "") ?? "Bronze";
+}
 
 function formatMoney(value: number, country: Country) {
   const market = getMarket(country);
@@ -122,6 +138,7 @@ function formatMoney(value: number, country: Country) {
 export default function PreciosPage() {
   const [country, setCountry] = useState<Country>("ES");
   const [selectedModules, setSelectedModules] = useState<ModuleId[]>(["whatsapp", "analytics"]);
+  const [marketingPlanId, setMarketingPlanId] = useState("marketing_bronze");
   const [businessType, setBusinessType] = useState<BusinessTypeId>("other");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState("");
@@ -147,17 +164,24 @@ export default function PreciosPage() {
 
   const modularTotal = useMemo(() => {
     const base = 19.99;
-    return base + modules.filter((item) => selectedModules.includes(item.id)).reduce((sum, item) => sum + item.price, 0);
-  }, [selectedModules]);
+    return base + modules.filter((item) => selectedModules.includes(item.id)).reduce((sum, item) => sum + (item.id === "marketing" ? marketingModulePrice(marketingPlanId) : item.price), 0);
+  }, [selectedModules, marketingPlanId]);
 
   const chooseBusinessType = (id: BusinessTypeId) => {
     setBusinessType(id);
     const found = businessTypes.find((item) => item.id === id);
-    if (found) setSelectedModules(found.recommended);
+    if (found) {
+      setSelectedModules(found.recommended);
+      if (found.recommended.includes("marketing")) setMarketingPlanId("marketing_bronze");
+    }
   };
 
   const toggleModule = (id: ModuleId) => {
-    setSelectedModules((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setSelectedModules((current) => {
+      if (current.includes(id)) return current.filter((item) => item !== id);
+      if (id === "marketing" && !marketingPlanId) setMarketingPlanId("marketing_bronze");
+      return [...current, id];
+    });
   };
 
   const startCheckout = async (plan: string, moduleIds: ModuleId[] = []) => {
@@ -166,7 +190,7 @@ export default function PreciosPage() {
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, modules: moduleIds, country, currency: getMarket(country).currency, referralCode, businessType }),
+        body: JSON.stringify({ plan, modules: moduleIds, country, currency: getMarket(country).currency, referralCode, businessType, marketingPlanId: moduleIds.includes("marketing") ? marketingPlanId : null }),
       });
       const data = await response.json();
       if (data.url) window.location.href = data.url;
@@ -243,7 +267,7 @@ export default function PreciosPage() {
                 const Icon = module.Icon;
                 const active = selectedModules.includes(module.id);
                 return <button key={module.id} onClick={() => toggleModule(module.id)} className={active ? "rounded-2xl border border-cyan-300/35 bg-cyan-300/10 p-4 text-left text-white" : "rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-left text-white hover:bg-white/[0.1]"}>
-                  <div className="flex items-start gap-3"><Icon className="mt-0.5 text-cyan-200" size={21} /><div className="flex-1"><div className="flex justify-between gap-3"><p className="font-medium">{module.name}</p><p className="text-sm text-white/50">+{formatMoney(module.price, country)}</p></div><p className="mt-1 text-sm text-white/50">{module.description}</p></div></div>
+                  <div className="flex items-start gap-3"><Icon className="mt-0.5 text-cyan-200" size={21} /><div className="flex-1"><div className="flex justify-between gap-3"><p className="font-medium">{module.name}{module.id === "marketing" && active ? ` · ${marketingModuleName(marketingPlanId)}` : ""}</p><p className="text-sm text-white/50">+{formatMoney(module.id === "marketing" ? marketingModulePrice(marketingPlanId) : module.price, country)}</p></div><p className="mt-1 text-sm text-white/50">{module.description}</p>{module.id === "marketing" && active && (<div className="mt-3 rounded-2xl border border-fuchsia-300/20 bg-fuchsia-400/10 p-3" onClick={(e) => e.stopPropagation()}><label className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-100/70">Plan de marketing</label><select value={marketingPlanId} onChange={(e) => setMarketingPlanId(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/90 px-3 py-2 text-sm text-white outline-none">{marketingPlanOptions.map((plan) => <option key={plan.id} value={plan.id}>{plan.name.replace("Flowly Marketing ", "")} · {formatMoney(plan.price, country)} / mes</option>)}</select><p className="mt-2 text-xs text-white/45">Este precio sustituye al precio base del módulo Marketing y activa su panel operativo.</p></div>)}</div></div>
                 </button>;
               })}
             </div>
