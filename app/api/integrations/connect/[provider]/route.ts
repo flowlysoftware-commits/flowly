@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
 
       url.searchParams.set("config_id", configId);
       url.searchParams.set("override_default_response_type", "true");
-      url.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging,business_management");
+      url.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging");
       url.searchParams.set("extras", JSON.stringify({
         setup: {},
         featureType: "whatsapp_business_app_onboarding",
