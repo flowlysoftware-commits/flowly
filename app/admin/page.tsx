@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 type SalesRole = "director" | "jefe" | "senior" | "asociado";
-type AdminTab = "resumen" | "presupuestos" | "comerciales" | "metodos_pago" | "documentos" | "formaciones" | "leads" | "comisiones" | "clientes" | "marketing";
+type AdminTab = "resumen" | "presupuestos" | "comerciales" | "fichajes" | "metodos_pago" | "documentos" | "formaciones" | "leads" | "comisiones" | "clientes" | "marketing";
 
 type SalesUser = {
   id: string;
@@ -44,6 +44,16 @@ type SalesUser = {
   payment_notes?: string | null;
   payment_methods_updated_at?: string | null;
   terminated_at?: string | null;
+  created_at?: string;
+};
+
+type SalesTimeLog = {
+  id: string;
+  sales_user_id: string;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  status: "online" | "offline";
+  notes?: string | null;
   created_at?: string;
 };
 
@@ -248,6 +258,7 @@ export default function AdminPage() {
   const [marketingOrders, setMarketingOrders] = useState<MarketingOrder[]>([]);
   const [marketingTasks, setMarketingTasks] = useState<MarketingTask[]>([]);
   const [marketingContentItems, setMarketingContentItems] = useState<MarketingContentItem[]>([]);
+  const [timeLogs, setTimeLogs] = useState<SalesTimeLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -330,7 +341,7 @@ export default function AdminPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
-    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes, documentsRes, signaturesRes, foldersRes, trainingItemsRes, trainingProgressRes, marketingOrdersRes, marketingTasksRes, marketingContentRes] = await Promise.all([
+    const [salesUsersRes, leadsRes, budgetsRes, commissionsRes, payoutsRes, businessesRes, documentsRes, signaturesRes, foldersRes, trainingItemsRes, trainingProgressRes, marketingOrdersRes, marketingTasksRes, marketingContentRes, timeLogsRes] = await Promise.all([
       supabase.from("sales_users").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_leads").select("*").order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").order("created_at", { ascending: false }),
@@ -347,6 +358,7 @@ export default function AdminPage() {
       supabase.from("marketing_orders").select("*").order("created_at", { ascending: false }),
       supabase.from("marketing_tasks").select("*").order("sort_order", { ascending: true }),
       supabase.from("marketing_content_calendar").select("*").order("scheduled_for", { ascending: true }),
+      supabase.from("sales_time_logs").select("*").order("clock_in_at", { ascending: false }).limit(300),
     ]);
 
     setSalesUsers((salesUsersRes.data || []) as SalesUser[]);
@@ -363,6 +375,7 @@ export default function AdminPage() {
     setMarketingOrders(((marketingOrdersRes as any).data || []) as MarketingOrder[]);
     setMarketingTasks(((marketingTasksRes as any).data || []) as MarketingTask[]);
     setMarketingContentItems(((marketingContentRes as any).data || []) as MarketingContentItem[]);
+    setTimeLogs(((timeLogsRes as any).data || []) as SalesTimeLog[]);
     setLoading(false);
   };
 
@@ -378,6 +391,18 @@ export default function AdminPage() {
   const acceptedBudgets = budgets.filter((budget) => budget.status === "aceptado").length;
   const activeSalesUsers = salesUsers.filter((user) => user.status !== "terminated");
   const terminatedSalesUsers = salesUsers.filter((user) => user.status === "terminated");
+  const onlineSalesUserIds = new Set(timeLogs.filter((log) => log.status === "online" && !log.clock_out_at).map((log) => log.sales_user_id));
+  const onlineSalesUsers = activeSalesUsers.filter((user) => onlineSalesUserIds.has(user.id));
+  const offlineSalesUsers = activeSalesUsers.filter((user) => !onlineSalesUserIds.has(user.id));
+  const latestLogBySalesUser = (salesUserId: string) => timeLogs.find((log) => log.sales_user_id === salesUserId);
+  const formatDuration = (start?: string | null, end?: string | null) => {
+    if (!start) return "-";
+    const diff = Math.max(0, new Date(end || new Date()).getTime() - new Date(start).getTime());
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return hours ? `${hours}h ${rest}m` : `${rest}m`;
+  };
 
   const ranking = useMemo(() => activeSalesUsers.map((user) => {
     const userBudgets = budgets.filter((budget) => budget.sales_user_id === user.id);
@@ -853,6 +878,7 @@ export default function AdminPage() {
           <TabButton label="Resumen" active={tab === "resumen"} onClick={() => setTab("resumen")} />
           <TabButton label="Presupuestos" active={tab === "presupuestos"} onClick={() => setTab("presupuestos")} />
           <TabButton label="Comerciales" active={tab === "comerciales"} onClick={() => setTab("comerciales")} />
+          <TabButton label="Fichajes" active={tab === "fichajes"} onClick={() => setTab("fichajes" as AdminTab)} />
           <TabButton label="Métodos de pago" active={tab === "metodos_pago"} onClick={() => setTab("metodos_pago")} />
           <TabButton label="Documentos" active={tab === "documentos"} onClick={() => setTab("documentos")} />
           <TabButton label="Formaciones" active={tab === "formaciones"} onClick={() => setTab("formaciones")} />
@@ -917,6 +943,55 @@ export default function AdminPage() {
             <Panel title="Gestión de equipo comercial"><div className="space-y-3">{activeSalesUsers.map((user) => { const code = user.referral_code || createReferralCode(user.full_name); const link = user.payment_link || buildPaymentLink(code); return <div key={user.id} className="rounded-3xl border border-white/10 bg-white/[0.06] p-4"><div className="grid gap-3 md:grid-cols-[1.1fr_0.7fr_0.75fr_0.65fr_0.75fr] md:items-center"><div><p className="font-semibold">{user.full_name}</p><p className="text-xs text-white/45">{user.email}</p><p className="mt-1 text-xs text-violet-200">Código: {code}</p><p className="mt-1 text-[11px] text-white/35">{user.user_id ? "Acceso creado" : "Sin acceso Auth todavía"}</p></div><select value={user.role} onChange={(e) => updateSalesUser(user.id, "role", e.target.value)} className="input-dark">{roles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select><select value={user.manager_id || ""} onChange={(e) => updateSalesUser(user.id, "manager_id", e.target.value || null)} className="input-dark"><option value="">Sin manager</option>{activeSalesUsers.filter((manager) => manager.id !== user.id && canManageTeam(manager.role)).map((manager) => <option key={manager.id} value={manager.id}>{manager.full_name}</option>)}</select><select value={user.status || "active"} onChange={(e) => updateSalesUser(user.id, "status", e.target.value)} className="input-dark"><option value="active">Activo</option><option value="paused">Pausado</option><option value="inactive">Inactivo</option></select><button onClick={() => resetSalesPassword(user)} className="rounded-full border border-violet-300/30 bg-violet-500/15 px-4 py-3 text-xs font-medium text-violet-100 hover:bg-violet-500/25">Cambiar contraseña</button><button onClick={() => terminateSalesUser(user)} className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-3 text-xs font-medium text-red-100 hover:bg-red-500/20">Dar de baja</button></div><div className="mt-3 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-3"><p className="text-xs text-white/45">Enlace de pago del comercial</p><div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center"><input readOnly value={link} className="input-dark flex-1 text-xs" /><button onClick={() => navigator.clipboard?.writeText(link)} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-neutral-950">Copiar enlace</button><Link href={link.replace(typeof window !== "undefined" ? window.location.origin : "", "")} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/75">Abrir</Link></div></div></div>; })}</div></Panel>
           </section>
         )}
+
+        {tab === "fichajes" && (
+          <section className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
+            <Panel title="Comerciales en línea ahora">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-3xl border border-emerald-300/20 bg-emerald-400/10 p-5">
+                  <p className="text-sm text-emerald-100/80">En línea</p>
+                  <p className="mt-2 text-4xl font-semibold">{onlineSalesUsers.length}</p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                  <p className="text-sm text-white/55">Desconectados</p>
+                  <p className="mt-2 text-4xl font-semibold">{offlineSalesUsers.length}</p>
+                </div>
+              </div>
+              <div className="mt-5 space-y-3">
+                {activeSalesUsers.map((user) => {
+                  const latestLog = latestLogBySalesUser(user.id);
+                  const onlineLog = timeLogs.find((log) => log.sales_user_id === user.id && log.status === "online" && !log.clock_out_at);
+                  return <div key={user.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{user.full_name}</p>
+                        <p className="text-xs text-white/45">{user.email} · {roleLabels[user.role]}</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs ${onlineLog ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-white/55"}`}>{onlineLog ? "En línea" : "Desconectado"}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-white/45">{onlineLog ? `Entrada: ${new Date(onlineLog.clock_in_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · ${formatDuration(onlineLog.clock_in_at)}` : latestLog ? `Último fichaje: ${new Date(latestLog.clock_in_at).toLocaleDateString("es-ES")}` : "Sin fichajes"}</p>
+                  </div>;
+                })}
+                {!activeSalesUsers.length && <Empty text="No hay comerciales activos." />}
+              </div>
+            </Panel>
+            <Panel title="Historial de fichajes">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="text-xs uppercase tracking-[0.2em] text-white/35"><tr><th className="py-3">Comercial</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Total</th><th>Estado</th></tr></thead>
+                  <tbody className="divide-y divide-white/10">
+                    {timeLogs.map((log) => {
+                      const user = seller(log.sales_user_id);
+                      return <tr key={log.id} className="text-white/70"><td className="py-3 font-medium text-white">{user?.full_name || "Comercial"}</td><td>{new Date(log.clock_in_at).toLocaleDateString("es-ES")}</td><td>{new Date(log.clock_in_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</td><td>{log.clock_out_at ? new Date(log.clock_out_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "En curso"}</td><td>{formatDuration(log.clock_in_at, log.clock_out_at)}</td><td><span className={`rounded-full px-3 py-1 text-xs ${log.status === "online" && !log.clock_out_at ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-white/55"}`}>{log.status === "online" && !log.clock_out_at ? "En línea" : "Cerrado"}</span></td></tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {!timeLogs.length && <Empty text="Todavía no hay fichajes registrados." />}
+            </Panel>
+          </section>
+        )}
+
 
         {tab === "metodos_pago" && (
           <section className="grid gap-6 lg:grid-cols-[1fr]">

@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   Clock,
   Euro,
+  PlayCircle,
+  StopCircle,
   FileText,
   LogOut,
   PenLine,
@@ -94,6 +96,16 @@ type TrainingFolder = { id: string; name: string; description: string | null; so
 type TrainingItem = { id: string; folder_id: string | null; title: string; description: string | null; content: string | null; url: string | null; item_type: string | null; sort_order: number | null; is_active: boolean | null; requires_completion?: boolean | null; estimated_minutes?: number | null };
 type TrainingProgress = { id: string; sales_user_id: string; training_item_id: string; status: string | null; watched_seconds: number | null; duration_seconds: number | null; progress_percent: number | null; completed_at: string | null; updated_at?: string | null };
 
+type SalesTimeLog = {
+  id: string;
+  sales_user_id: string;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  status: "online" | "offline";
+  notes?: string | null;
+  created_at?: string;
+};
+
 type SalesBudget = {
   id: string;
   sales_user_id: string | null;
@@ -169,6 +181,9 @@ export default function ComercialPage() {
   const [trainingFolders, setTrainingFolders] = useState<TrainingFolder[]>([]);
   const [trainingItems, setTrainingItems] = useState<TrainingItem[]>([]);
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([]);
+  const [timeLogs, setTimeLogs] = useState<SalesTimeLog[]>([]);
+  const [currentTimeLog, setCurrentTimeLog] = useState<SalesTimeLog | null>(null);
+  const [clockLoading, setClockLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("resumen");
   const [paymentBankName, setPaymentBankName] = useState("");
@@ -239,6 +254,7 @@ export default function ComercialPage() {
       { data: foldersData },
       { data: itemsData },
       { data: progressData },
+      { data: timeLogsData },
     ] = await Promise.all([
       supabase.from("sales_leads").select("*").in("assigned_to", visibleIds).order("created_at", { ascending: false }),
       supabase.from("sales_budgets").select("*").in("sales_user_id", visibleIds).order("created_at", { ascending: false }),
@@ -248,6 +264,7 @@ export default function ComercialPage() {
       supabase.from("sales_training_folders").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
       supabase.from("sales_training_items").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
       supabase.from("sales_training_progress").select("*").eq("sales_user_id", current.id),
+      supabase.from("sales_time_logs").select("*").eq("sales_user_id", current.id).order("clock_in_at", { ascending: false }).limit(50),
     ]);
 
     setLeads((leadsData || []) as SalesLead[]);
@@ -258,6 +275,9 @@ export default function ComercialPage() {
     setTrainingFolders((foldersData || []) as TrainingFolder[]);
     setTrainingItems((itemsData || []) as TrainingItem[]);
     setTrainingProgress((progressData || []) as TrainingProgress[]);
+    const loadedTimeLogs = (timeLogsData || []) as SalesTimeLog[];
+    setTimeLogs(loadedTimeLogs);
+    setCurrentTimeLog(loadedTimeLogs.find((log) => log.status === "online" && !log.clock_out_at) || null);
     setLoading(false);
   };
 
@@ -510,6 +530,41 @@ export default function ComercialPage() {
   };
 
 
+
+  const clockIn = async () => {
+    if (!me || currentTimeLog || clockLoading) return;
+    setClockLoading(true);
+    const { error } = await supabase.from("sales_time_logs").insert({
+      sales_user_id: me.id,
+      clock_in_at: new Date().toISOString(),
+      status: "online",
+    });
+    setClockLoading(false);
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
+  const clockOut = async () => {
+    if (!currentTimeLog || clockLoading) return;
+    setClockLoading(true);
+    const { error } = await supabase
+      .from("sales_time_logs")
+      .update({ clock_out_at: new Date().toISOString(), status: "offline" })
+      .eq("id", currentTimeLog.id);
+    setClockLoading(false);
+    if (error) return alert(error.message);
+    await loadData();
+  };
+
+  const formatDuration = (start?: string | null, end?: string | null) => {
+    if (!start) return "-";
+    const diff = Math.max(0, new Date(end || new Date()).getTime() - new Date(start).getTime());
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return hours ? `${hours}h ${rest}m` : `${rest}m`;
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     router.push("/");
@@ -560,6 +615,17 @@ export default function ComercialPage() {
                 <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">Live</span>
               </div>
               <p className="text-4xl font-semibold tracking-tight text-white">{money(pendingBalance)}</p>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-white/60">Fichaje</span>
+                  <span className={`rounded-full px-3 py-1 text-xs ${currentTimeLog ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-white/55"}`}>{currentTimeLog ? "En línea" : "Desconectado"}</span>
+                </div>
+                {currentTimeLog && <p className="mt-2 text-xs text-cyan-100">Entrada: {new Date(currentTimeLog.clock_in_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {formatDuration(currentTimeLog.clock_in_at)}</p>}
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button onClick={clockIn} disabled={!!currentTimeLog || clockLoading} className="rounded-full bg-emerald-300 px-3 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"><PlayCircle size={14} className="inline" /> Entrada</button>
+                  <button onClick={clockOut} disabled={!currentTimeLog || clockLoading} className="rounded-full bg-rose-300 px-3 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"><StopCircle size={14} className="inline" /> Salida</button>
+                </div>
+              </div>
               <div className="flex flex-wrap gap-3">
                 {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <Link href="/comercial/equipo" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/20">Ver equipo <ArrowRight size={16} /></Link>}
                 <button onClick={logout} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white transition hover:bg-white/15"><LogOut size={16} /> Salir</button>
@@ -595,6 +661,18 @@ export default function ComercialPage() {
             </Panel>
             <Panel title="Mi plan de comisión">
               <CommissionPlan role={me.role} />
+            </Panel>
+            <Panel title="Mis últimos fichajes">
+              <div className="space-y-3">
+                {timeLogs.slice(0, 5).map((log) => <div key={log.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-sm">
+                  <div>
+                    <p className="font-medium">{new Date(log.clock_in_at).toLocaleDateString("es-ES")}</p>
+                    <p className="text-xs text-white/45">Entrada {new Date(log.clock_in_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · Salida {log.clock_out_at ? new Date(log.clock_out_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "en curso"}</p>
+                  </div>
+                  <span className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">{formatDuration(log.clock_in_at, log.clock_out_at)}</span>
+                </div>)}
+                {timeLogs.length === 0 && <Empty text="Todavía no tienes fichajes." />}
+              </div>
             </Panel>
             <Panel title="Últimos presupuestos">
               <BudgetList budgets={budgets.slice(0, 5)} onSend={sendBudget} onStatus={updateBudgetStatus} />
