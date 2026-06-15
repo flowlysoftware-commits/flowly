@@ -52,9 +52,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     url.searchParams.set("response_type", "code");
 
     if (provider === "whatsapp_cloud") {
-      const configId = process.env.META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID;
-      const forceClassicOAuth = request.nextUrl.searchParams.get("mode") === "classic" || request.nextUrl.searchParams.get("fallback") === "classic";
-      const useEmbeddedSignup = Boolean(configId) && !forceClassicOAuth;
+      const configId = process.env.META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim();
+      const mode = request.nextUrl.searchParams.get("mode") || "classic";
+      const useEmbeddedSignup = Boolean(configId) && mode === "embedded";
 
       url.searchParams.set("state", makeState(provider, businessId, { mode: useEmbeddedSignup ? "embedded" : "classic" }));
       url.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging");

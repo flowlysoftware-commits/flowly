@@ -3863,7 +3863,7 @@ function WhatsappModule({
                 {whatsappConnection ? `Conectado${displayPhone ? ` · ${displayPhone}` : ""}` : "No conectado"}
               </span>
               {business && (
-                <Link href={`/api/integrations/connect/whatsapp_cloud?businessId=${business.id}`} className="rounded-full border border-cyan-300/25 bg-cyan-400/10 px-4 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/20">
+                <Link href={`/api/integrations/connect/whatsapp_cloud?businessId=${business.id}&mode=classic&source=neuronas`} className="rounded-full border border-cyan-300/25 bg-cyan-400/10 px-4 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/20">
                   {whatsappConnection ? "Reconectar WhatsApp" : "Conectar WhatsApp"}
                 </Link>
               )}
