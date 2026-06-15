@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import {
   ArrowRight,
   BarChart3,
@@ -11,6 +12,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  Send,
   HeartPulse,
   MessageCircle,
   PhoneCall,
@@ -85,6 +87,7 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
         <Link href="/marketing" className="transition hover:text-white">Marketing</Link>
         <a href="#producto" className="transition hover:text-white">Producto</a>
         <a href="#demos" className="transition hover:text-white">Demos</a>
+        <a href="#trabaja-con-nosotros" className="transition hover:text-white">Trabaja con nosotros</a>
         <Link href="/contacto" className="transition hover:text-white">Contacto</Link>
         <Link href="/login" className="transition hover:text-white">Área cliente</Link>
       </div>
@@ -154,6 +157,14 @@ function ProductMockup({ country }: { country: Country }) {
 
 export default function Home() {
   const [country, setCountry] = useState<Country>("ES");
+  const [ambassadorLoading, setAmbassadorLoading] = useState(false);
+  const [ambassadorSent, setAmbassadorSent] = useState(false);
+  const [ambassadorName, setAmbassadorName] = useState("");
+  const [ambassadorEmail, setAmbassadorEmail] = useState("");
+  const [ambassadorPhone, setAmbassadorPhone] = useState("");
+  const [ambassadorCity, setAmbassadorCity] = useState("");
+  const [ambassadorExperience, setAmbassadorExperience] = useState("");
+
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -171,6 +182,44 @@ export default function Home() {
   const market = getMarket(country);
   const pricesHref = useMemo(() => `/precios?country=${country}`, [country]);
   const sectors = sectorsBase.map((sector) => ({ ...sector, stats: sector.stats[country] }));
+
+  const submitAmbassador = async () => {
+    if (!ambassadorName || !ambassadorEmail || !ambassadorPhone) {
+      alert("Rellena nombre, email y teléfono");
+      return;
+    }
+
+    setAmbassadorLoading(true);
+
+    const message = [
+      "Solicitud para trabajar como Embajador de Flowly",
+      `Ciudad / zona: ${ambassadorCity || "No indicado"}`,
+      `Experiencia: ${ambassadorExperience || "No indicado"}`,
+    ].join("\n\n");
+
+    const { error } = await supabase.from("contacts").insert({
+      name: ambassadorName,
+      email: ambassadorEmail,
+      phone: ambassadorPhone,
+      company: ambassadorCity,
+      type: "Trabaja con nosotros",
+      message,
+      status: "Nuevo",
+    });
+
+    if (error) {
+      alert(`Error enviando solicitud: ${error.message}`);
+    } else {
+      setAmbassadorSent(true);
+      setAmbassadorName("");
+      setAmbassadorEmail("");
+      setAmbassadorPhone("");
+      setAmbassadorCity("");
+      setAmbassadorExperience("");
+    }
+
+    setAmbassadorLoading(false);
+  };
 
   return (
     <main className="flowly-public min-h-screen">
@@ -311,6 +360,60 @@ export default function Home() {
         </div>
       </section>
 
+      <section id="trabaja-con-nosotros" className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+        <div className="flowly-glass overflow-hidden rounded-[2.7rem] p-8 md:p-12">
+          <div className="grid gap-10 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
+            <div>
+              <div className="flowly-chip mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> Trabaja con nosotros</div>
+              <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">Conviértete en <span className="flowly-gradient-text">Embajador de Flowly</span> y crece con la revolución IA.</h2>
+              <p className="mt-6 text-lg leading-8 text-white/65">Buscamos comerciales con hambre, actitud y visión para llevar Flowly a clínicas, peluquerías, restaurantes y negocios que quieren vender más, automatizarse y parecer más grandes desde el primer día.</p>
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                {[
+                  ["Comisiones atractivas", "Gana por cada cliente que incorpores a Flowly."],
+                  ["Producto fácil de vender", "Software, marketing e IA en una propuesta muy potente."],
+                  ["Material comercial", "Demos, argumentos y soporte para ayudarte a cerrar."],
+                ].map(([title, text]) => (
+                  <div key={title} className="flowly-card rounded-3xl p-5">
+                    <CheckCircle2 className="mb-3 text-cyan-200" size={22} />
+                    <h3 className="font-semibold">{title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-white/55">{text}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5 text-sm leading-7 text-cyan-50/80">
+                Ideal para personas con experiencia comercial, agencias, freelancers, consultores digitales o profesionales con contactos en negocios locales. Tú abres puertas, Flowly pone la tecnología.
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-cyan-950/20">
+              {ambassadorSent ? (
+                <div className="py-12 text-center">
+                  <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-300 text-slate-950"><CheckCircle2 /></div>
+                  <h3 className="text-2xl font-semibold">Solicitud enviada</h3>
+                  <p className="mt-3 text-white/60">Hemos recibido tu candidatura como embajador de Flowly.</p>
+                  <button onClick={() => setAmbassadorSent(false)} className="flowly-primary mt-8 rounded-full px-6 py-3 font-semibold">Enviar otra solicitud</button>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-2xl font-semibold">Quiero ser embajador</h3>
+                  <p className="mt-2 text-sm text-white/55">Déjanos tus datos y el equipo de Flowly revisará tu perfil.</p>
+                  <div className="mt-6 grid gap-4">
+                    <input value={ambassadorName} onChange={(e) => setAmbassadorName(e.target.value)} placeholder="Nombre completo" className="flowly-input-light rounded-2xl px-4 py-3" />
+                    <input value={ambassadorEmail} onChange={(e) => setAmbassadorEmail(e.target.value)} placeholder="Email" type="email" className="flowly-input-light rounded-2xl px-4 py-3" />
+                    <input value={ambassadorPhone} onChange={(e) => setAmbassadorPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="flowly-input-light rounded-2xl px-4 py-3" />
+                    <input value={ambassadorCity} onChange={(e) => setAmbassadorCity(e.target.value)} placeholder="Ciudad o zona donde venderías" className="flowly-input-light rounded-2xl px-4 py-3" />
+                    <textarea value={ambassadorExperience} onChange={(e) => setAmbassadorExperience(e.target.value)} placeholder="Cuéntanos tu experiencia comercial, contactos o por qué quieres representar Flowly" className="flowly-input-light min-h-32 rounded-2xl px-4 py-3" />
+                  </div>
+                  <button onClick={submitAmbassador} disabled={ambassadorLoading} className="flowly-primary mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
+                    <Send size={16} /> {ambassadorLoading ? "Enviando..." : "Enviar candidatura"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="quienes-somos" className="relative z-10 mx-auto max-w-7xl px-6 py-24">
         <div className="flowly-glass rounded-[2.5rem] px-8 py-16 text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><ShieldCheck /></div>
@@ -327,6 +430,7 @@ export default function Home() {
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-5">
             <Link href="/#quienes-somos" className="hover:text-cyan-200">Quiénes somos</Link>
+            <Link href="/#trabaja-con-nosotros" className="hover:text-cyan-200">Trabaja con nosotros</Link>
             <Link href="/contacto" className="hover:text-cyan-200">Contacto</Link>
             <Link href="/privacy" className="hover:text-cyan-200">Política de privacidad</Link>
             <Link href="/legal/condiciones" className="hover:text-cyan-200">Términos</Link>
