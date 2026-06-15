@@ -212,7 +212,6 @@ const modules: ModuleOption[] = [
   { key: "ai", name: "IA Assistant", price: 14.99 },
   { key: "analytics", name: "Estadísticas avanzadas", price: 4.99 },
   { key: "booking_premium", name: "Reservas Premium", price: 4.99 },
-  { key: "voice", name: "Flowly Voice", price: 29.99 },
 ];
 
 function money(value: number, currency = "EUR") {

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 
 type SalesRole = "director" | "jefe" | "senior" | "asociado";
-type Tab = "resumen" | "presupuestos" | "leads" | "saldo" | "metodos_pago" | "documentos" | "formaciones" | "equipo";
+type Tab = "resumen" | "presupuestos" | "leads" | "saldo" | "metodos_pago" | "documentos" | "formaciones" | "herramientas" | "marketplace" | "equipo";
 
 type SalesUser = {
   id: string;
@@ -42,6 +42,8 @@ type SalesUser = {
   payment_account_holder?: string | null;
   payment_account_address?: string | null;
   payment_notes?: string | null;
+  referral_code?: string | null;
+  payment_link?: string | null;
 };
 
 type SalesLead = {
@@ -159,7 +161,6 @@ const modules: ModuleOption[] = [
   { key: "ai", name: "IA Assistant", price: 14.99 },
   { key: "analytics", name: "Estadísticas avanzadas", price: 4.99 },
   { key: "booking_premium", name: "Reservas Premium", price: 4.99 },
-  { key: "voice", name: "Flowly Voice", price: 29.99 },
 ];
 
 function money(value: number, currency = "EUR") {
@@ -208,6 +209,9 @@ export default function ComercialPage() {
   const [setupAmount, setSetupAmount] = useState("0");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [budgetNotes, setBudgetNotes] = useState("");
+  const [coachInput, setCoachInput] = useState("");
+  const [simulatorInput, setSimulatorInput] = useState("Es caro, me lo tengo que pensar.");
+  const [aiBudgetInput, setAiBudgetInput] = useState("Restaurante con 8 empleados. Quiere WhatsApp, reservas y marketing.");
 
   const loadData = async () => {
     setLoading(true);
@@ -572,6 +576,36 @@ export default function ComercialPage() {
 
   const pipeline = useMemo(() => leadStatuses.map((status) => ({ status, count: leads.filter((lead) => lead.status === status).length })), [leads]);
 
+  const referralLink = useMemo(() => {
+    const code = me?.referral_code || "";
+    if (!code) return "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://flowlyia.com";
+    return me?.payment_link || `${origin}/precios?ref=${encodeURIComponent(code)}`;
+  }, [me?.referral_code, me?.payment_link]);
+
+  const coachAnswer = useMemo(() => {
+    const text = coachInput.trim();
+    if (!text) return "Pega aquí el mensaje del cliente y te preparo una respuesta comercial clara, cercana y orientada al cierre.";
+    const lower = text.toLowerCase();
+    if (lower.includes("caro") || lower.includes("precio")) return "Respuesta sugerida: Totalmente normal mirar el precio. Lo importante es compararlo con el tiempo que Flowly te ahorra cada semana y las reservas/clientes que evita perder. ¿Te preparo una demo rápida con tu caso real para que veas si te compensa antes de decidir?";
+    if (lower.includes("pensar")) return "Respuesta sugerida: Claro, tómate tu tiempo. Para que lo valores mejor, te propongo dejarte por escrito lo que incluiría tu panel y el ahorro estimado. ¿Te va bien que te lo mande y mañana lo comentamos en 5 minutos?";
+    if (lower.includes("ya tengo") || lower.includes("competencia")) return "Respuesta sugerida: Perfecto, entonces ya tienes claro el valor de digitalizar. La diferencia de Flowly es que juntamos panel, automatizaciones, WhatsApp, IA y módulos en un sistema simple. ¿Qué es lo que ahora mismo echas en falta en tu herramienta actual?";
+    return "Respuesta sugerida: Gracias por contármelo. Por lo que me dices, lo mejor sería enseñarte Flowly con un ejemplo de tu negocio y centrarnos solo en lo que te puede generar más ahorro o más ventas. ¿Agendamos una demo corta?";
+  }, [coachInput]);
+
+  const simulatorAnswer = useMemo(() => {
+    const objection = simulatorInput.trim() || "No tengo claro si Flowly es para mí.";
+    return `Cliente simulado: "${objection}"\n\nTu objetivo: valida la objeción, haz una pregunta de diagnóstico y propón una demo o presupuesto concreto. Ejemplo: "Lo entiendo. Para no venderte algo que no necesitas, ¿qué proceso te quita más tiempo ahora mismo: reservas, WhatsApp, clientes, facturas o redes? Con eso te digo si Flowly te encaja o no."`;
+  }, [simulatorInput]);
+
+  const aiBudgetSuggestion = useMemo(() => {
+    const text = aiBudgetInput.toLowerCase();
+    const picks = modules.filter((m) => text.includes(m.key) || text.includes(m.name.toLowerCase().split(" ")[0]) || (m.key === "whatsapp" && text.includes("whatsapp")) || (m.key === "marketing" && text.includes("marketing")) || (m.key === "crm" && text.includes("cliente")) || (m.key === "agenda" && (text.includes("reserva") || text.includes("agenda"))));
+    const base = text.includes("enterprise") || text.includes("personalizado") ? plans[3] : text.includes("basic") ? plans[0] : text.includes("modular") ? plans[2] : plans[1];
+    const total = base.price + picks.reduce((sum, item) => sum + item.price, 0);
+    return { base, picks, total };
+  }, [aiBudgetInput]);
+
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#070711] text-white">Cargando panel comercial...</main>;
 
   if (!me) {
@@ -650,6 +684,8 @@ export default function ComercialPage() {
           <TabButton label="Métodos de pago" active={tab === "metodos_pago"} onClick={() => setTab("metodos_pago")} />
           <TabButton label="Documentos" active={tab === "documentos"} onClick={() => setTab("documentos")} />
           <TabButton label="Formaciones" active={tab === "formaciones"} onClick={() => setTab("formaciones")} />
+          <TabButton label="IA ventas" active={tab === "herramientas"} onClick={() => setTab("herramientas")} />
+          <TabButton label="Flowly Store" active={tab === "marketplace"} onClick={() => setTab("marketplace")} />
           {(me.role === "senior" || me.role === "jefe" || me.role === "director") && <TabButton label="Equipo y rama" active={tab === "equipo"} onClick={() => setTab("equipo")} />}
         </nav>
 
@@ -826,6 +862,62 @@ export default function ComercialPage() {
                   const items = trainingItems.filter((item) => item.folder_id === folder.id);
                   return <div key={folder.id} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"><div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between"><div><h3 className="text-lg font-semibold">{folder.name}</h3><p className="text-sm text-white/45">{folder.description || "Contenido formativo"}</p></div><span className="text-xs text-violet-200">{items.filter((item) => progressFor(item.id)?.completed_at).length}/{items.length} completados</span></div><div className="mt-4 grid gap-4">{items.map((item) => <TrainingCard key={item.id} item={item} progress={progressFor(item.id)} onProgress={(updates) => saveTrainingProgress(item, updates)} onComplete={(watched, duration) => completeTrainingItem(item, watched, duration)} />)}{!items.length && <Empty text="Esta carpeta todavía no tiene contenido." />}</div></div>;
                 })}
+              </div>
+            </Panel>
+          </section>
+        )}
+
+
+        {tab === "herramientas" && (
+          <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <Panel title="Coach de ventas IA">
+              <div className="space-y-4">
+                <p className="text-sm text-white/55">Pega una objeción real del cliente y Flowly te propone una respuesta preparada para WhatsApp, llamada o email.</p>
+                <textarea value={coachInput} onChange={(e) => setCoachInput(e.target.value)} placeholder="Ej: Me parece caro / ya tengo otra herramienta / me lo pienso..." className="input-dark min-h-28" />
+                <div className="rounded-3xl border border-cyan-300/20 bg-cyan-400/10 p-5 text-sm leading-6 text-cyan-50 whitespace-pre-wrap">{coachAnswer}</div>
+              </div>
+            </Panel>
+            <Panel title="Simulador de cierres">
+              <div className="space-y-4">
+                <p className="text-sm text-white/55">Entrena conversaciones difíciles antes de hablar con el cliente. Escribe la objeción y practica el cierre.</p>
+                <input value={simulatorInput} onChange={(e) => setSimulatorInput(e.target.value)} className="input-dark" />
+                <div className="rounded-3xl border border-violet-300/20 bg-violet-500/10 p-5 text-sm leading-6 text-violet-50 whitespace-pre-wrap">{simulatorAnswer}</div>
+              </div>
+            </Panel>
+            <Panel title="Generador de presupuesto IA">
+              <div className="space-y-4">
+                <p className="text-sm text-white/55">Describe el negocio y Flowly te recomienda plan, módulos y precio mensual aproximado.</p>
+                <textarea value={aiBudgetInput} onChange={(e) => setAiBudgetInput(e.target.value)} className="input-dark min-h-28" />
+                <div className="rounded-3xl border border-emerald-300/20 bg-emerald-500/10 p-5">
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/60">Recomendación</p>
+                  <h3 className="mt-2 text-2xl font-semibold">{aiBudgetSuggestion.base.name}</h3>
+                  <p className="mt-2 text-sm text-white/55">{aiBudgetSuggestion.base.description}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">{aiBudgetSuggestion.picks.length ? aiBudgetSuggestion.picks.map((item) => <span key={item.key} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">{item.name} · {money(item.price)}</span>) : <span className="text-sm text-white/45">Sin módulos extra detectados.</span>}</div>
+                  <p className="mt-5 text-3xl font-semibold text-emerald-100">{money(aiBudgetSuggestion.total)} / mes</p>
+                </div>
+              </div>
+            </Panel>
+            <Panel title="Mi enlace de embajador">
+              <div className="space-y-4">
+                <p className="text-sm text-white/55">Comparte este enlace para que las ventas queden vinculadas a tu código de embajador.</p>
+                <input readOnly value={referralLink || "Pendiente de asignar código"} className="input-dark text-xs" />
+                {referralLink && <button onClick={() => navigator.clipboard?.writeText(referralLink)} className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-950">Copiar enlace</button>}
+              </div>
+            </Panel>
+          </section>
+        )}
+
+        {tab === "marketplace" && (
+          <section className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
+            <Panel title="Flowly Store">
+              <p className="text-sm text-white/55">Marketplace interno para vender módulos sin centralita. Úsalo como catálogo comercial y para preparar upgrades.</p>
+              <div className="mt-5 grid gap-3">{modules.map((module) => <div key={module.key} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div><p className="font-semibold">{module.name}</p><p className="text-xs text-white/45">Activación rápida · ideal para upsell</p></div><span className="rounded-full bg-cyan-300/10 px-3 py-1 text-sm text-cyan-100">{money(module.price)}/mes</span></div>)}</div>
+            </Panel>
+            <Panel title="Upgrade automático recomendado">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-3xl border border-amber-300/20 bg-amber-500/10 p-5"><p className="text-xs text-amber-100/60">Señal</p><h3 className="mt-2 font-semibold">Muchos contactos</h3><p className="mt-2 text-sm text-white/55">Recomienda CRM avanzado + automatizaciones.</p></div>
+                <div className="rounded-3xl border border-cyan-300/20 bg-cyan-500/10 p-5"><p className="text-xs text-cyan-100/60">Señal</p><h3 className="mt-2 font-semibold">Muchas reservas</h3><p className="mt-2 text-sm text-white/55">Recomienda Agenda PRO + Reservas Premium.</p></div>
+                <div className="rounded-3xl border border-violet-300/20 bg-violet-500/10 p-5"><p className="text-xs text-violet-100/60">Señal</p><h3 className="mt-2 font-semibold">Poca captación</h3><p className="mt-2 text-sm text-white/55">Recomienda Marketing + IA Assistant.</p></div>
               </div>
             </Panel>
           </section>

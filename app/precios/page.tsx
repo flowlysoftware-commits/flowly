@@ -11,7 +11,6 @@ import {
   CreditCard,
   Megaphone,
   MessageCircle,
-  PhoneCall,
   Receipt,
   SlidersHorizontal,
   Clock,
@@ -37,7 +36,7 @@ type MarketConfig = {
   rate: number;
   badge: string;
 };
-type ModuleId = "agenda" | "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "voice" | "time_tracking" | "inventory" | "client_portal" | "surveys" | "hr" | "automations" | "digital_signature";
+type ModuleId = "agenda" | "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "time_tracking" | "inventory" | "client_portal" | "surveys" | "hr" | "automations" | "digital_signature";
 type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }>; requiresPlan?: boolean };
 
 type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[] };
@@ -66,8 +65,8 @@ const fixedPlans: Plan[] = [
 type BusinessTypeId = "clinic" | "dental" | "physio" | "beauty" | "hair" | "barber" | "restaurant" | "cafe" | "retail" | "gym" | "academy" | "real_estate" | "legal" | "auto" | "services" | "hotel" | "other";
 
 const businessTypes: { id: BusinessTypeId; label: string; recommended: ModuleId[] }[] = [
-  { id: "clinic", label: "Clínica / Centro médico", recommended: ["crm", "whatsapp", "voice", "booking_premium", "digital_signature", "surveys"] },
-  { id: "dental", label: "Clínica dental", recommended: ["crm", "whatsapp", "voice", "booking_premium", "digital_signature", "surveys"] },
+  { id: "clinic", label: "Clínica / Centro médico", recommended: ["crm", "whatsapp", "booking_premium", "digital_signature", "surveys"] },
+  { id: "dental", label: "Clínica dental", recommended: ["crm", "whatsapp", "booking_premium", "digital_signature", "surveys"] },
   { id: "physio", label: "Fisioterapia / Salud deportiva", recommended: ["crm", "whatsapp", "booking_premium", "digital_signature", "surveys"] },
   { id: "beauty", label: "Estética / Spa", recommended: ["agenda", "crm", "whatsapp", "pos", "inventory", "surveys", "marketing"] },
   { id: "hair", label: "Peluquería", recommended: ["agenda", "crm", "whatsapp", "pos", "inventory", "booking_premium"] },
@@ -77,7 +76,7 @@ const businessTypes: { id: BusinessTypeId; label: string; recommended: ModuleId[
   { id: "retail", label: "Comercio / Tienda", recommended: ["pos", "inventory", "crm", "marketing", "surveys"] },
   { id: "gym", label: "Gimnasio / Centro deportivo", recommended: ["crm", "whatsapp", "client_portal", "billing", "time_tracking"] },
   { id: "academy", label: "Academia / Formación", recommended: ["crm", "whatsapp", "client_portal", "digital_signature", "billing"] },
-  { id: "real_estate", label: "Inmobiliaria", recommended: ["crm", "whatsapp", "voice", "digital_signature", "automations"] },
+  { id: "real_estate", label: "Inmobiliaria", recommended: ["crm", "whatsapp", "digital_signature", "automations"] },
   { id: "legal", label: "Despacho legal / Asesoría", recommended: ["crm", "client_portal", "digital_signature", "billing", "automations"] },
   { id: "auto", label: "Taller mecánico / Automoción", recommended: ["crm", "whatsapp", "inventory", "billing", "surveys"] },
   { id: "services", label: "Empresa de servicios", recommended: ["crm", "whatsapp", "time_tracking", "hr", "billing", "automations"] },
@@ -95,7 +94,6 @@ const modules: Module[] = [
   { id: "ai", name: "IA Assistant", price: 14.99, description: "Resúmenes, sugerencias y automatizaciones inteligentes.", Icon: Bot },
   { id: "analytics", name: "Estadísticas avanzadas", price: 4.99, description: "KPIs, evolución, previsión y rendimiento.", Icon: TrendingUp },
   { id: "booking_premium", name: "Reservas Premium", price: 4.99, description: "Página de reservas más avanzada y personalizable.", Icon: SlidersHorizontal },
-  { id: "voice", name: "Flowly Voice", price: 29.99, description: "Centralita, recepción y agendado por voz con IA.", Icon: PhoneCall },
   { id: "inventory", name: "Inventario", price: 14.99, description: "Stock, productos, entradas, salidas y alertas de reposición.", Icon: Package },
   { id: "client_portal", name: "Portal Cliente", price: 19.99, description: "Área privada para citas, documentos, pagos y solicitudes.", Icon: ShieldCheck },
   { id: "surveys", name: "Encuestas", price: 7.99, description: "NPS, valoraciones y experiencia del cliente.", Icon: Star },
