@@ -6,8 +6,8 @@ function sign(payload: string) {
   return crypto.createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-function makeState(provider: string, businessId: string) {
-  const payload = Buffer.from(JSON.stringify({ provider, businessId, ts: Date.now() })).toString("base64url");
+function makeState(provider: string, businessId: string, extra: Record<string, string> = {}) {
+  const payload = Buffer.from(JSON.stringify({ provider, businessId, ts: Date.now(), ...extra })).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
@@ -18,7 +18,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
   const redirectUri = `${baseUrl}/api/integrations/callback/${provider}`;
-  const state = makeState(provider, businessId);
 
   if (["google_ads", "google_business", "google_calendar", "gmail"].includes(provider)) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -39,7 +38,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     url.searchParams.set("access_type", "offline");
     url.searchParams.set("prompt", "consent");
     url.searchParams.set("scope", scopes);
-    url.searchParams.set("state", state);
+    url.searchParams.set("state", makeState(provider, businessId));
     return NextResponse.redirect(url);
   }
 
@@ -51,21 +50,26 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     url.searchParams.set("client_id", clientId);
     url.searchParams.set("redirect_uri", redirectUri);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("state", state);
 
     if (provider === "whatsapp_cloud") {
       const configId = process.env.META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID;
-      if (!configId) return NextResponse.redirect(`${baseUrl}/dashboard?integration_error=missing_meta_whatsapp_embedded_signup_config_id`);
+      const forceClassicOAuth = request.nextUrl.searchParams.get("mode") === "classic" || request.nextUrl.searchParams.get("fallback") === "classic";
+      const useEmbeddedSignup = Boolean(configId) && !forceClassicOAuth;
 
-      url.searchParams.set("config_id", configId);
-      url.searchParams.set("override_default_response_type", "true");
+      url.searchParams.set("state", makeState(provider, businessId, { mode: useEmbeddedSignup ? "embedded" : "classic" }));
       url.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging");
-      url.searchParams.set("extras", JSON.stringify({
-        setup: {},
-        featureType: "whatsapp_business_app_onboarding",
-        sessionInfoVersion: "3",
-      }));
+
+      if (useEmbeddedSignup) {
+        url.searchParams.set("config_id", configId as string);
+        url.searchParams.set("override_default_response_type", "true");
+        url.searchParams.set("extras", JSON.stringify({
+          setup: {},
+          featureType: "whatsapp_business_app_onboarding",
+          sessionInfoVersion: "3",
+        }));
+      }
     } else {
+      url.searchParams.set("state", makeState(provider, businessId));
       url.searchParams.set("scope", "ads_read,ads_management,business_management,pages_show_list,instagram_basic");
     }
 

@@ -12,7 +12,7 @@ function readState(state: string) {
   if (!payload || !signature || sign(payload) !== signature) throw new Error("Estado OAuth no válido");
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   if (Date.now() - Number(parsed.ts || 0) > 15 * 60 * 1000) throw new Error("Estado OAuth caducado");
-  return parsed as { provider: string; businessId: string; ts: number };
+  return parsed as { provider: string; businessId: string; ts: number; mode?: string };
 }
 
 async function exchangeGoogle(code: string, redirectUri: string) {
@@ -145,14 +145,32 @@ async function exchangeMeta(code: string, redirectUri: string) {
   return data;
 }
 
+function classicWhatsappConnectUrl(baseUrl: string, businessId: string, reason: string) {
+  const url = new URL(`${baseUrl}/api/integrations/connect/whatsapp_cloud`);
+  url.searchParams.set("businessId", businessId);
+  url.searchParams.set("mode", "classic");
+  url.searchParams.set("fallback_reason", reason);
+  return url.toString();
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ provider: string }> }) {
   const { provider } = await context.params;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+  let stateData: { provider: string; businessId: string; ts: number; mode?: string } | null = null;
+
   try {
     const code = request.nextUrl.searchParams.get("code") || "";
     const state = request.nextUrl.searchParams.get("state") || "";
-    if (!code || !state) throw new Error("Faltan parámetros OAuth");
-    const { businessId } = readState(state);
+    const oauthError = request.nextUrl.searchParams.get("error") || request.nextUrl.searchParams.get("error_message") || request.nextUrl.searchParams.get("error_description") || "";
+    if (!state) throw new Error("Faltan parámetros OAuth");
+    stateData = readState(state);
+
+    if (provider === "whatsapp_cloud" && stateData.mode === "embedded" && (!code || oauthError)) {
+      return NextResponse.redirect(classicWhatsappConnectUrl(baseUrl, stateData.businessId, oauthError || "embedded_signup_cancelled_or_failed"));
+    }
+
+    if (!code) throw new Error(oauthError || "Faltan parámetros OAuth");
+    const { businessId } = stateData;
     const redirectUri = `${baseUrl}/api/integrations/callback/${provider}`;
 
     const tokenData = ["google_ads", "google_business", "google_calendar", "gmail"].includes(provider)
@@ -186,6 +204,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     if (error) throw new Error(error.message);
     return NextResponse.redirect(`${baseUrl}/dashboard?integration_connected=${encodeURIComponent(provider)}`);
   } catch (error) {
+    if (provider === "whatsapp_cloud" && stateData?.mode === "embedded" && stateData.businessId) {
+      const reason = error instanceof Error ? error.message : "embedded_signup_error";
+      return NextResponse.redirect(classicWhatsappConnectUrl(baseUrl, stateData.businessId, reason));
+    }
+
     return NextResponse.redirect(`${baseUrl}/dashboard?integration_error=${encodeURIComponent(error instanceof Error ? error.message : "oauth_error")}`);
   }
 }
