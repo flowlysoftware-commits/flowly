@@ -389,7 +389,7 @@ async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue
 
   const payload = {
     business_id: businessId,
-    customer_id: customerId,
+    contact_id: contactId,
     phone,
     template_key: null,
     message: text,
@@ -605,68 +605,57 @@ async function findLatestNeuronasFlowState(businessId: string, phone: string) {
   return state ? { row: match, state } : null;
 }
 
-async function updateNeuronasCustomerFicha(businessId: string, phone: string, detailsText: string, state: NeuronasFlowState) {
+async function createNeuronasContactFicha(businessId: string, phone: string, detailsText: string, state: NeuronasFlowState) {
   const normalized = normalizePhone(phone);
   const parsed = parseNeuronasDetails(detailsText);
-  const customerId = await findCustomerIdByPhone(businessId, phone);
   const name = parsed.patient_name || `Paciente WhatsApp +${normalized}`;
-  const noteBlock = [
-    "[WhatsApp · Agendamiento Neuronas IPS]",
-    `Estado: Pendiente de confirmar cita`,
-    state.eps ? `EPS: ${state.eps}` : "",
-    state.document_type ? `Tipo de documento: ${state.document_type}` : "",
-    parsed.document_number ? `Número de documento: ${parsed.document_number}` : "",
-    parsed.patient_name ? `Nombre completo del paciente: ${parsed.patient_name}` : "",
-    parsed.regimen ? `Régimen: ${parsed.regimen}` : "",
-    parsed.contact_phone ? `Teléfono de contacto: ${parsed.contact_phone}` : "",
-    parsed.specialty ? `Especialidad médica que requiere: ${parsed.specialty}` : "",
+  const contactPhone = parsed.contact_phone ? `+${normalizePhone(parsed.contact_phone)}` : `+${normalized}`;
+  const message = [
+    "Solicitud de agendamiento recibida desde WhatsApp · Neuronas IPS",
     "",
-    "Mensaje original:",
+    "Estado: Pendiente de confirmar cita",
+    state.eps ? `EPS: ${state.eps}` : "EPS: No indicada",
+    state.document_type ? `Tipo de documento: ${state.document_type}` : "Tipo de documento: No indicado",
+    parsed.document_number ? `Número de documento: ${parsed.document_number}` : "Número de documento: No indicado",
+    parsed.patient_name ? `Nombre completo del paciente: ${parsed.patient_name}` : "Nombre completo del paciente: No indicado",
+    parsed.regimen ? `Régimen: ${parsed.regimen}` : "Régimen: No indicado",
+    parsed.contact_phone ? `Teléfono de contacto: ${parsed.contact_phone}` : `Teléfono de contacto: +${normalized}`,
+    parsed.specialty ? `Especialidad médica que requiere: ${parsed.specialty}` : "Especialidad médica que requiere: No indicada",
+    "",
+    "Mensaje original enviado por WhatsApp:",
     detailsText,
+    "",
+    `Business ID: ${businessId}`,
+    `WhatsApp origen: +${normalized}`,
     `Registrado: ${new Date().toLocaleString("es-ES")}`,
   ].filter(Boolean).join("\n");
 
-  if (customerId) {
-    const { data: currentCustomer } = await supabaseAdmin
-      .from("customers")
-      .select("notes")
-      .eq("id", customerId)
-      .eq("business_id", businessId)
-      .maybeSingle();
-
-    await supabaseAdmin
-      .from("customers")
-      .update({
-        name,
-        full_name: name,
-        phone: parsed.contact_phone ? `+${normalizePhone(parsed.contact_phone)}` : `+${normalized}`,
-        crm_status: "pendiente",
-        notes: `${String(currentCustomer?.notes || "").trim()}\n\n${noteBlock}`.trim(),
-        last_contact_at: new Date().toISOString(),
-      })
-      .eq("id", customerId)
-      .eq("business_id", businessId);
-    return customerId;
-  }
+  const payload = {
+    name,
+    email: `whatsapp-${normalized || Date.now()}@flowly.local`,
+    phone: contactPhone,
+    company: state.eps || "WhatsApp · Neuronas IPS",
+    type: "Paciente WhatsApp · Neuronas IPS",
+    message,
+    status: "Nuevo",
+  };
 
   const { data, error } = await supabaseAdmin
-    .from("customers")
-    .insert({
-      business_id: businessId,
-      name,
-      full_name: name,
-      phone: parsed.contact_phone ? `+${normalizePhone(parsed.contact_phone)}` : `+${normalized}`,
-      crm_status: "pendiente",
-      notes: noteBlock,
-      last_contact_at: new Date().toISOString(),
-    })
+    .from("contacts")
+    .insert(payload)
     .select("id")
     .maybeSingle();
 
   if (error) {
-    console.error("WHATSAPP NEURONAS CRM CREATE ERROR", { businessId, error: error.message });
+    console.error("WHATSAPP NEURONAS CONTACT CREATE ERROR", { businessId, error: error.message, payload });
     return null;
   }
+
+  console.info("WHATSAPP NEURONAS CONTACT CREATED", {
+    business_id: businessId,
+    phone: normalized,
+    contactId: data?.id || null,
+  });
 
   return data?.id || null;
 }
@@ -730,7 +719,7 @@ async function handleNeuronasAppointmentFlow(integration: WhatsAppIntegration, p
   }
 
   if (pending.state.step === "details") {
-    const customerId = await updateNeuronasCustomerFicha(integration.business_id, phone, incomingText, pending.state);
+    const contactId = await createNeuronasContactFicha(integration.business_id, phone, incomingText, pending.state);
     await sendAutoReply(
       integration,
       phoneNumberId,
@@ -742,7 +731,7 @@ async function handleNeuronasAppointmentFlow(integration: WhatsAppIntegration, p
           step: "completed",
           eps: pending.state.eps,
           document_type: pending.state.document_type,
-          customer_id: customerId,
+          contact_id: contactId,
           completed_at: new Date().toISOString(),
         },
       },
@@ -750,7 +739,7 @@ async function handleNeuronasAppointmentFlow(integration: WhatsAppIntegration, p
     console.info("WHATSAPP NEURONAS CRM FICHA CREATED", {
       business_id: integration.business_id,
       phone: normalizePhone(phone),
-      customerId,
+      contactId,
     });
     return true;
   }
