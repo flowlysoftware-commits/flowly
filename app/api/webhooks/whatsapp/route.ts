@@ -71,6 +71,117 @@ type WhatsAppIntegration = {
   config: Record<string, unknown> | null;
 };
 
+
+type NeuronasFlowState = {
+  step: "eps" | "document_type" | "details" | "completed";
+  eps?: string;
+  document_type?: string;
+  started_at?: string;
+};
+
+const NEURONAS_EPS_OPTIONS: Record<string, string> = {
+  "1": "Nueva EPS",
+  "2": "Salud Total",
+  "3": "Fomag",
+  "4": "Sura",
+  "5": "Colsanitas",
+  "6": "Coomeva Prepagada",
+  "7": "Axa Colpatria",
+  "8": "Particular",
+  "9": "Otra",
+};
+
+const NEURONAS_DOCUMENT_OPTIONS: Record<string, string> = {
+  "1": "Registro Civil",
+  "2": "Tarjeta de Identidad",
+  "3": "Cédula de Ciudadanía",
+  "4": "P.T.",
+};
+
+function buildNeuronasEpsPrompt() {
+  return [
+    "Hola! Bienvenido a Neuronas Ips. Para ayudarte a agendar tu cita, por favor selecciona tu EPS respondiendo solo con el número:",
+    "1 Nueva EPS",
+    "2 Salud Total",
+    "3 Fomag",
+    "4 Sura",
+    "5 Colsanitas",
+    "6 Coomeva Prepagada",
+    "7 Axa Colpatria",
+    "8 Particular",
+    "9 Otra",
+  ].join("\n");
+}
+
+function buildNeuronasDocumentPrompt() {
+  return [
+    "Perfecto. Ahora selecciona el tipo de documento de identidad del paciente enviando el número de la opción:",
+    "1 Registro Civil",
+    "2 Tarjeta de Identidad",
+    "3 Cédula de Ciudadanía",
+    "4 P.T.",
+  ].join("\n");
+}
+
+function buildNeuronasDetailsPrompt() {
+  return [
+    "Gracias. Para finalizar el agendamiento, por favor envíanos en un solo mensaje los siguientes datos:",
+    "",
+    ". Número de documento:",
+    ". Nombre completo del paciente:",
+    ". Régimen",
+    ". Teléfono de contacto:",
+    ". Especialidad médica que requiere:",
+    "",
+    "Un asesor confirmará la fecha y hora en breve",
+  ].join("\n");
+}
+
+function getLineValue(text: string, labels: string[]) {
+  const normalizeLabel = (value: string) => normalizeText(value).replace(/[^a-z0-9ñ]+/g, " ").trim();
+  const normalizedLabels = labels.map(normalizeLabel);
+
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const clean = line.replace(/^\s*[.:-]\s*/, "").trim();
+    const normalizedLine = normalizeLabel(clean);
+
+    for (let index = 0; index < normalizedLabels.length; index += 1) {
+      const label = normalizedLabels[index];
+      if (!label) continue;
+      if (normalizedLine === label) continue;
+      if (normalizedLine.startsWith(`${label} `) || normalizedLine.startsWith(`${label}:`)) {
+        const originalLabel = labels[index];
+        return clean.slice(originalLabel.length).replace(/^\s*:?\s*/, "").trim();
+      }
+    }
+  }
+
+  return "";
+}
+
+function parseNeuronasDetails(text: string) {
+  return {
+    document_number: getLineValue(text, ["Número de documento", "Numero de documento", "Documento"]),
+    patient_name: getLineValue(text, ["Nombre completo del paciente", "Nombre completo", "Paciente", "Nombre"]),
+    regimen: getLineValue(text, ["Régimen", "Regimen"]),
+    contact_phone: getLineValue(text, ["Teléfono de contacto", "Telefono de contacto", "Teléfono", "Telefono"]),
+    specialty: getLineValue(text, ["Especialidad médica que requiere", "Especialidad medica que requiere", "Especialidad"]),
+  };
+}
+
+function getNeuronasFlowPayload(raw: unknown): NeuronasFlowState | null {
+  const object = asObjectConfig(raw);
+  const flow = asObjectConfig(object.neuronas_flow);
+  const step = String(flow.step || "").trim();
+  if (!["eps", "document_type", "details", "completed"].includes(step)) return null;
+  return {
+    step: step as NeuronasFlowState["step"],
+    eps: String(flow.eps || "").trim() || undefined,
+    document_type: String(flow.document_type || "").trim() || undefined,
+    started_at: String(flow.started_at || "").trim() || undefined,
+  };
+}
+
 function asObjectConfig(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === "string") {
@@ -465,6 +576,188 @@ async function handleMenuSelection(integration: WhatsAppIntegration, phoneNumber
   return true;
 }
 
+
+async function findLatestNeuronasFlowState(businessId: string, phone: string) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("id, phone, raw_payload, created_at")
+    .eq("business_id", businessId)
+    .eq("direction", "outbound")
+    .like("template_key", "%neuronas_flow:%")
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) {
+    console.error("WHATSAPP NEURONAS FLOW LOOKUP ERROR", { businessId, error: error.message });
+    return null;
+  }
+
+  const match = (data || []).find((row) => normalizePhone(row.phone) === normalized);
+  if (!match) return null;
+
+  const createdAt = new Date(match.created_at || 0).getTime();
+  if (Number.isFinite(createdAt) && Date.now() - createdAt > 1000 * 60 * 60 * 24 * 7) return null;
+
+  const state = getNeuronasFlowPayload(match.raw_payload);
+  return state ? { row: match, state } : null;
+}
+
+async function updateNeuronasCustomerFicha(businessId: string, phone: string, detailsText: string, state: NeuronasFlowState) {
+  const normalized = normalizePhone(phone);
+  const parsed = parseNeuronasDetails(detailsText);
+  const customerId = await findCustomerIdByPhone(businessId, phone);
+  const name = parsed.patient_name || `Paciente WhatsApp +${normalized}`;
+  const noteBlock = [
+    "[WhatsApp · Agendamiento Neuronas IPS]",
+    `Estado: Pendiente de confirmar cita`,
+    state.eps ? `EPS: ${state.eps}` : "",
+    state.document_type ? `Tipo de documento: ${state.document_type}` : "",
+    parsed.document_number ? `Número de documento: ${parsed.document_number}` : "",
+    parsed.patient_name ? `Nombre completo del paciente: ${parsed.patient_name}` : "",
+    parsed.regimen ? `Régimen: ${parsed.regimen}` : "",
+    parsed.contact_phone ? `Teléfono de contacto: ${parsed.contact_phone}` : "",
+    parsed.specialty ? `Especialidad médica que requiere: ${parsed.specialty}` : "",
+    "",
+    "Mensaje original:",
+    detailsText,
+    `Registrado: ${new Date().toLocaleString("es-ES")}`,
+  ].filter(Boolean).join("\n");
+
+  if (customerId) {
+    const { data: currentCustomer } = await supabaseAdmin
+      .from("customers")
+      .select("notes")
+      .eq("id", customerId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    await supabaseAdmin
+      .from("customers")
+      .update({
+        name,
+        full_name: name,
+        phone: parsed.contact_phone ? `+${normalizePhone(parsed.contact_phone)}` : `+${normalized}`,
+        crm_status: "pendiente",
+        notes: `${String(currentCustomer?.notes || "").trim()}\n\n${noteBlock}`.trim(),
+        last_contact_at: new Date().toISOString(),
+      })
+      .eq("id", customerId)
+      .eq("business_id", businessId);
+    return customerId;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("customers")
+    .insert({
+      business_id: businessId,
+      name,
+      full_name: name,
+      phone: parsed.contact_phone ? `+${normalizePhone(parsed.contact_phone)}` : `+${normalized}`,
+      crm_status: "pendiente",
+      notes: noteBlock,
+      last_contact_at: new Date().toISOString(),
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("WHATSAPP NEURONAS CRM CREATE ERROR", { businessId, error: error.message });
+    return null;
+  }
+
+  return data?.id || null;
+}
+
+async function handleNeuronasAppointmentFlow(integration: WhatsAppIntegration, phoneNumberId: string | undefined, message: WhatsAppMessage) {
+  const incomingText = getMessageText(message).trim();
+  const normalizedIncoming = normalizeText(incomingText);
+  const phone = message.from || "";
+  if (!incomingText || !phone) return false;
+
+  const isStart = /\bhola\b/.test(normalizedIncoming) || ["inicio", "cita", "agendar", "agendamiento"].includes(normalizedIncoming);
+  const pending = await findLatestNeuronasFlowState(integration.business_id, phone);
+
+  if (isStart) {
+    await sendAutoReply(
+      integration,
+      phoneNumberId,
+      phone,
+      buildNeuronasEpsPrompt(),
+      "neuronas_flow:eps",
+      { neuronas_flow: { step: "eps", started_at: new Date().toISOString() } },
+    );
+    return true;
+  }
+
+  if (!pending?.state || pending.state.step === "completed") return false;
+
+  const digit = normalizeMenuDigit(incomingText);
+
+  if (pending.state.step === "eps") {
+    const eps = NEURONAS_EPS_OPTIONS[digit] || `Opción ${digit || incomingText}`;
+    await sendAutoReply(
+      integration,
+      phoneNumberId,
+      phone,
+      buildNeuronasDocumentPrompt(),
+      "neuronas_flow:document_type",
+      { neuronas_flow: { step: "document_type", eps, started_at: pending.state.started_at || new Date().toISOString() } },
+    );
+    return true;
+  }
+
+  if (pending.state.step === "document_type") {
+    const documentType = NEURONAS_DOCUMENT_OPTIONS[digit] || `Opción ${digit || incomingText}`;
+    await sendAutoReply(
+      integration,
+      phoneNumberId,
+      phone,
+      buildNeuronasDetailsPrompt(),
+      "neuronas_flow:details",
+      {
+        neuronas_flow: {
+          step: "details",
+          eps: pending.state.eps,
+          document_type: documentType,
+          started_at: pending.state.started_at || new Date().toISOString(),
+        },
+      },
+    );
+    return true;
+  }
+
+  if (pending.state.step === "details") {
+    const customerId = await updateNeuronasCustomerFicha(integration.business_id, phone, incomingText, pending.state);
+    await sendAutoReply(
+      integration,
+      phoneNumberId,
+      phone,
+      "Gracias. Hemos registrado tus datos correctamente. Un asesor revisará tu solicitud y confirmará la fecha y hora de la cita en breve.",
+      "neuronas_flow:completed",
+      {
+        neuronas_flow: {
+          step: "completed",
+          eps: pending.state.eps,
+          document_type: pending.state.document_type,
+          customer_id: customerId,
+          completed_at: new Date().toISOString(),
+        },
+      },
+    );
+    console.info("WHATSAPP NEURONAS CRM FICHA CREATED", {
+      business_id: integration.business_id,
+      phone: normalizePhone(phone),
+      customerId,
+    });
+    return true;
+  }
+
+  return false;
+}
+
 async function runBotRules(integration: WhatsAppIntegration, phoneNumberId: string | undefined, message: WhatsAppMessage) {
   const incomingText = getMessageText(message).trim();
   const phone = message.from || "";
@@ -584,6 +877,8 @@ export async function POST(request: NextRequest) {
 
         for (const message of value.messages || []) {
           await saveInboundMessage(integration.business_id, value, message);
+          const handledByNeuronasFlow = await handleNeuronasAppointmentFlow(integration, phoneNumberId, message);
+          if (handledByNeuronasFlow) continue;
           const handledByMenu = await handleMenuSelection(integration, phoneNumberId, message);
           if (!handledByMenu) await runBotRules(integration, phoneNumberId, message);
         }
