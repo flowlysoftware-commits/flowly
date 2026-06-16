@@ -3720,6 +3720,7 @@ function WhatsappModule({
   const [lastInboxSync, setLastInboxSync] = useState<Date | null>(null);
   const [sending, setSending] = useState(false);
   const [selectedConversationPhone, setSelectedConversationPhone] = useState("");
+  const [closedConversationPhones, setClosedConversationPhones] = useState<string[]>([]);
   const [replyMessage, setReplyMessage] = useState("");
   const [botName, setBotName] = useState("");
   const [botTrigger, setBotTrigger] = useState("");
@@ -3790,11 +3791,29 @@ function WhatsappModule({
     return Array.from(map.values()).sort((a, b) => new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime());
   }, [liveWhatsappMessages, customers]);
 
-  useEffect(() => {
-    if (!selectedConversationPhone && conversationGroups[0]?.phone) setSelectedConversationPhone(conversationGroups[0].phone);
-  }, [conversationGroups, selectedConversationPhone]);
+  const visibleConversationGroups = useMemo(() => {
+    const closed = new Set(closedConversationPhones.map((phone) => normalizePhone(phone)));
+    return conversationGroups.filter((conversation) => !closed.has(normalizePhone(conversation.phone)));
+  }, [conversationGroups, closedConversationPhones]);
 
-  const selectedConversation = conversationGroups.find((item) => item.phone === selectedConversationPhone) || conversationGroups[0] || null;
+  useEffect(() => {
+    if (!selectedConversationPhone && visibleConversationGroups[0]?.phone) setSelectedConversationPhone(visibleConversationGroups[0].phone);
+    if (selectedConversationPhone && !visibleConversationGroups.some((conversation) => conversation.phone === selectedConversationPhone)) {
+      setSelectedConversationPhone(visibleConversationGroups[0]?.phone || "");
+    }
+  }, [visibleConversationGroups, selectedConversationPhone]);
+
+  const selectedConversation = visibleConversationGroups.find((item) => item.phone === selectedConversationPhone) || visibleConversationGroups[0] || null;
+
+  const closeConversation = (phone: string) => {
+    const normalized = normalizePhone(phone);
+    if (!normalized) return;
+    setClosedConversationPhones((current) => current.includes(normalized) ? current : [...current, normalized]);
+    if (normalizePhone(selectedConversationPhone) === normalized) {
+      const nextConversation = visibleConversationGroups.find((conversation) => normalizePhone(conversation.phone) !== normalized);
+      setSelectedConversationPhone(nextConversation?.phone || "");
+    }
+  };
 
   useEffect(() => {
     whatsappChatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -4151,8 +4170,8 @@ function WhatsappModule({
       )}
 
       {currentView === "bandeja" ? (
-        <section className="grid h-[calc(100vh-18rem)] min-h-[34rem] max-h-[48rem] overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 xl:grid-cols-[22rem_1fr]">
-          <aside className="border-b border-white/10 bg-white/[0.035] xl:border-b-0 xl:border-r">
+        <section className="grid h-[min(72vh,48rem)] min-h-[38rem] max-w-full min-w-0 overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 shadow-2xl shadow-black/20 xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
+          <aside className="min-w-0 overflow-hidden border-b border-white/10 bg-white/[0.035] xl:border-b-0 xl:border-r">
             <div className="flex items-center justify-between gap-3 border-b border-white/10 p-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Bandeja en vivo</p>
@@ -4164,26 +4183,31 @@ function WhatsappModule({
             </div>
             {whatsappInboxError && <div className="m-4 rounded-2xl border border-rose-300/20 bg-rose-400/10 p-3 text-xs text-rose-100">{whatsappInboxError}</div>}
             <div className="h-[calc(100%-4.5rem)] overflow-y-auto p-3">
-              {conversationGroups.length ? conversationGroups.map((conversation) => (
-                <button key={conversation.phone} onClick={() => setSelectedConversationPhone(conversation.phone)} className={selectedConversation?.phone === conversation.phone ? "mb-2 w-full rounded-[1.5rem] border border-emerald-300/35 bg-emerald-400/10 p-4 text-left shadow-[0_18px_50px_rgba(16,185,129,0.08)]" : "mb-2 w-full rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 text-left hover:bg-white/[0.08]"}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{conversation.contactName || conversation.phone}</p>
-                      <p className="mt-1 truncate text-xs text-white/45">+{conversation.phone}</p>
+              {visibleConversationGroups.length ? visibleConversationGroups.map((conversation) => (
+                <div key={conversation.phone} className="relative mb-2">
+                  <button type="button" onClick={() => setSelectedConversationPhone(conversation.phone)} className={selectedConversation?.phone === conversation.phone ? "w-full rounded-[1.5rem] border border-emerald-300/35 bg-emerald-400/10 p-4 pr-10 text-left shadow-[0_18px_50px_rgba(16,185,129,0.08)]" : "w-full rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 pr-10 text-left hover:bg-white/[0.08]"}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{conversation.contactName || conversation.phone}</p>
+                        <p className="mt-1 truncate text-xs text-white/45">+{conversation.phone}</p>
+                      </div>
+                      {conversation.unread > 0 && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[11px] font-bold text-neutral-950">{conversation.unread}</span>}
                     </div>
-                    {conversation.unread > 0 && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[11px] font-bold text-neutral-950">{conversation.unread}</span>}
-                  </div>
-                  <p className="mt-3 line-clamp-2 text-sm text-white/65">{conversation.lastMessage.direction === "outbound" ? "Tú: " : ""}{conversation.lastMessage.message}</p>
-                  <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/30">{new Date(conversation.lastMessage.created_at).toLocaleString()}</p>
-                </button>
-              )) : <Empty text="Aún no hay conversaciones. Cuando alguien escriba a tu WhatsApp conectado aparecerá aquí automáticamente." />}
+                    <p className="mt-3 line-clamp-2 break-words text-sm text-white/65">{conversation.lastMessage.direction === "outbound" ? "Tú: " : ""}{conversation.lastMessage.message}</p>
+                    <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/30">{new Date(conversation.lastMessage.created_at).toLocaleString()}</p>
+                  </button>
+                  <button type="button" onClick={(event) => { event.stopPropagation(); closeConversation(conversation.phone); }} title="Cerrar chat" aria-label="Cerrar chat" className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/35 text-sm text-white/45 hover:border-rose-300/30 hover:bg-rose-500/15 hover:text-rose-100">
+                    ×
+                  </button>
+                </div>
+              )) : <Empty text={conversationGroups.length ? "Has cerrado todos los chats de esta vista. Actualiza o espera nuevos mensajes para volver a ver conversaciones." : "Aún no hay conversaciones. Cuando alguien escriba a tu WhatsApp conectado aparecerá aquí automáticamente."} />}
             </div>
           </aside>
 
-          <main className="grid min-h-0 overflow-hidden grid-rows-[auto_minmax(0,1fr)_auto]">
+          <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] p-4">
-              <div>
-                <p className="text-base font-semibold">{selectedConversation ? selectedConversation.contactName || `+${selectedConversation.phone}` : "Selecciona una conversación"}</p>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold">{selectedConversation ? selectedConversation.contactName || `+${selectedConversation.phone}` : "Selecciona una conversación"}</p>
                 <p className="mt-1 text-xs text-white/45">{selectedConversation ? `+${selectedConversation.phone} · ${selectedConversation.messages.length} mensajes · ${selectedConversation.customer ? "vinculado al CRM" : "lead sin ficha"}` : "Bandeja estilo WhatsApp conectada a Cloud API"}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -4198,12 +4222,12 @@ function WhatsappModule({
               </div>
             </div>
 
-            <div className="min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.1),transparent_35%)] p-4">
+            <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.1),transparent_35%)] p-4">
               {selectedConversation ? (
-                <div className="grid gap-3">
+                <div className="mx-auto grid w-full max-w-5xl gap-3">
                   {selectedConversation.messages.map((message) => (
-                    <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[75%] min-w-0 overflow-hidden break-words rounded-[1.15rem] rounded-bl-sm border border-white/10 bg-white/[0.08] px-4 py-3 shadow-lg shadow-black/10" : "ml-auto max-w-[75%] min-w-0 overflow-hidden break-words rounded-[1.15rem] rounded-br-sm border border-emerald-300/20 bg-emerald-400/15 px-4 py-3 shadow-lg shadow-emerald-950/10"}>
-                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-white/90">{message.message || "Mensaje sin texto"}</p>
+                    <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[min(75%,42rem)] min-w-0 overflow-hidden rounded-[1.15rem] rounded-bl-sm border border-white/10 bg-white/[0.08] px-4 py-3 shadow-lg shadow-black/10" : "ml-auto max-w-[min(75%,42rem)] min-w-0 overflow-hidden rounded-[1.15rem] rounded-br-sm border border-emerald-300/20 bg-emerald-400/15 px-4 py-3 shadow-lg shadow-emerald-950/10"}>
+                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-white/90 [overflow-wrap:anywhere]">{message.message || "Mensaje sin texto"}</p>
                       <div className="mt-2 flex items-center justify-end gap-2 text-[10px] uppercase tracking-[0.14em] text-white/35">
                         <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                         <span>{message.direction === "inbound" ? "Recibido" : message.status || "Enviado"}</span>
@@ -4219,9 +4243,9 @@ function WhatsappModule({
               )}
             </div>
 
-            <div className="shrink-0 border-t border-white/10 bg-black/35 p-4">
-              <form onSubmit={(event) => { event.preventDefault(); sendConversationReply(); }} className="flex flex-col gap-3 md:flex-row md:items-end">
-                <textarea value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder={selectedConversation ? "Escribe un mensaje..." : "Selecciona una conversación"} className="input-dark min-h-14 max-h-28 flex-1 resize-none" />
+            <div className="shrink-0 border-t border-white/10 bg-black/50 p-4 backdrop-blur-xl">
+              <form onSubmit={(event) => { event.preventDefault(); sendConversationReply(); }} className="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-end">
+                <textarea value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder={selectedConversation ? "Escribe un mensaje..." : "Selecciona una conversación"} className="input-dark min-h-14 max-h-28 min-w-0 flex-1 resize-none" />
                 <button type="submit" disabled={sending || !whatsappConnection || !selectedConversation} className="btn-primary h-12 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"><Send size={16} /> {sending ? "Enviando..." : "Enviar"}</button>
               </form>
               <p className="mt-2 text-xs text-white/40">La bandeja se actualiza automáticamente cada 4 segundos mediante el webhook y la API interna de Flowly.</p>
