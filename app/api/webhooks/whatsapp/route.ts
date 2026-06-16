@@ -389,7 +389,7 @@ async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue
 
   const payload = {
     business_id: businessId,
-    contact_id: contactId,
+    contact_id: customerId,
     phone,
     template_key: null,
     message: text,
@@ -731,7 +731,7 @@ async function handleNeuronasAppointmentFlow(integration: WhatsAppIntegration, p
           step: "completed",
           eps: pending.state.eps,
           document_type: pending.state.document_type,
-          contact_id: contactId,
+          contact_id: customerId,
           completed_at: new Date().toISOString(),
         },
       },
