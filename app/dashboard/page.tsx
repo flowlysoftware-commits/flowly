@@ -2917,12 +2917,12 @@ function CrmModule({
 }
 
 const crmStatusOptions = [
+  { value: "nuevo_whatsapp", label: "Nuevo WhatsApp" },
   { value: "nuevo", label: "Nuevo" },
   { value: "contactado", label: "Contactado" },
   { value: "pendiente_documentacion", label: "Pendiente documentación" },
   { value: "pendiente_cita", label: "Pendiente cita" },
   { value: "en_tratamiento", label: "En tratamiento" },
-  { value: "alta", label: "Alta" },
   { value: "perdido", label: "Perdido" },
   { value: "en_llamada", label: "En llamada" },
 ];
@@ -3733,6 +3733,7 @@ function WhatsappModule({
     { digit: "3", label: "Necesito soporte", crm_status: "soporte", response: "Hemos registrado tu solicitud de soporte. Nuestro equipo la revisará." },
   ]);
   const [localBotRules, setLocalBotRules] = useState<WhatsappBotRule[]>([]);
+  const whatsappChatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setLocalBotRules(whatsappBotRules || []);
@@ -3795,6 +3796,10 @@ function WhatsappModule({
 
   const selectedConversation = conversationGroups.find((item) => item.phone === selectedConversationPhone) || conversationGroups[0] || null;
 
+  useEffect(() => {
+    whatsappChatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [selectedConversation?.phone, selectedConversation?.messages.length]);
+
   const markConversationAsOpened = useCallback(async (phone: string) => {
     if (!business?.id || !phone) return;
     setLiveWhatsappMessages((current) => current.map((message) => (normalizePhone(message.phone) === normalizePhone(phone) && message.direction === "inbound" && message.status === "received" ? { ...message, status: "opened" } : message)));
@@ -3833,7 +3838,7 @@ function WhatsappModule({
           full_name: name,
           phone: `+${normalizedPhone}`,
           notes: `Creado desde la bandeja WhatsApp de Flowly.\nÚltimo mensaje: ${selectedConversation.lastMessage?.message || ""}`,
-          crm_status: "nuevo",
+          crm_status: "nuevo_whatsapp",
           last_contact_at: new Date().toISOString(),
         })
         .select("id")
@@ -4146,7 +4151,7 @@ function WhatsappModule({
       )}
 
       {currentView === "bandeja" ? (
-        <section className="grid min-h-[38rem] overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 xl:grid-cols-[22rem_1fr]">
+        <section className="grid h-[min(76vh,48rem)] min-h-[38rem] overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 xl:grid-cols-[22rem_1fr]">
           <aside className="border-b border-white/10 bg-white/[0.035] xl:border-b-0 xl:border-r">
             <div className="flex items-center justify-between gap-3 border-b border-white/10 p-4">
               <div>
@@ -4158,7 +4163,7 @@ function WhatsappModule({
               </button>
             </div>
             {whatsappInboxError && <div className="m-4 rounded-2xl border border-rose-300/20 bg-rose-400/10 p-3 text-xs text-rose-100">{whatsappInboxError}</div>}
-            <div className="max-h-[34rem] overflow-y-auto p-3">
+            <div className="h-[calc(100%-4.5rem)] overflow-y-auto p-3">
               {conversationGroups.length ? conversationGroups.map((conversation) => (
                 <button key={conversation.phone} onClick={() => setSelectedConversationPhone(conversation.phone)} className={selectedConversation?.phone === conversation.phone ? "mb-2 w-full rounded-[1.5rem] border border-emerald-300/35 bg-emerald-400/10 p-4 text-left shadow-[0_18px_50px_rgba(16,185,129,0.08)]" : "mb-2 w-full rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 text-left hover:bg-white/[0.08]"}>
                   <div className="flex items-start justify-between gap-3">
@@ -4175,7 +4180,7 @@ function WhatsappModule({
             </div>
           </aside>
 
-          <main className="grid min-h-[38rem] grid-rows-[auto_1fr_auto]">
+          <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] p-4">
               <div>
                 <p className="text-base font-semibold">{selectedConversation ? selectedConversation.contactName || `+${selectedConversation.phone}` : "Selecciona una conversación"}</p>
@@ -4193,11 +4198,11 @@ function WhatsappModule({
               </div>
             </div>
 
-            <div className="overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.1),transparent_35%)] p-4">
+            <div className="min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.1),transparent_35%)] p-4">
               {selectedConversation ? (
                 <div className="grid gap-3">
                   {selectedConversation.messages.map((message) => (
-                    <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[78%] rounded-[1.15rem] rounded-bl-sm border border-white/10 bg-white/[0.08] px-4 py-3" : "ml-auto max-w-[78%] rounded-[1.15rem] rounded-br-sm border border-emerald-300/20 bg-emerald-400/15 px-4 py-3"}>
+                    <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[78%] rounded-[1.15rem] rounded-bl-sm border border-white/10 bg-white/[0.08] px-4 py-3 shadow-lg shadow-black/10" : "ml-auto max-w-[78%] rounded-[1.15rem] rounded-br-sm border border-emerald-300/20 bg-emerald-400/15 px-4 py-3 shadow-lg shadow-emerald-950/10"}>
                       <p className="whitespace-pre-wrap text-sm leading-6 text-white/90">{message.message || "Mensaje sin texto"}</p>
                       <div className="mt-2 flex items-center justify-end gap-2 text-[10px] uppercase tracking-[0.14em] text-white/35">
                         <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
@@ -4205,6 +4210,7 @@ function WhatsappModule({
                       </div>
                     </div>
                   ))}
+                  <div ref={whatsappChatEndRef} />
                 </div>
               ) : (
                 <div className="flex h-full items-center justify-center">

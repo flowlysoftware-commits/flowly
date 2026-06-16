@@ -347,7 +347,7 @@ async function findOrCreateCustomerFromWhatsapp(businessId: string, phone: strin
   if (existingId) {
     await supabaseAdmin
       .from("customers")
-      .update({ last_contact_at: new Date().toISOString() })
+      .update({ crm_status: "nuevo_whatsapp", last_contact_at: new Date().toISOString() })
       .eq("id", existingId)
       .eq("business_id", businessId);
     return existingId;
@@ -367,7 +367,7 @@ async function findOrCreateCustomerFromWhatsapp(businessId: string, phone: strin
       full_name: name,
       phone: `+${normalized}`,
       notes,
-      crm_status: "nuevo",
+      crm_status: "nuevo_whatsapp",
       last_contact_at: new Date().toISOString(),
     })
     .select("id")
@@ -389,7 +389,7 @@ async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue
 
   const payload = {
     business_id: businessId,
-    contact_id: customerId,
+    customer_id: customerId,
     phone,
     template_key: null,
     message: text,
@@ -610,9 +610,10 @@ async function createNeuronasContactFicha(businessId: string, phone: string, det
   const parsed = parseNeuronasDetails(detailsText);
   const name = parsed.patient_name || `Paciente WhatsApp +${normalized}`;
   const contactPhone = parsed.contact_phone ? `+${normalizePhone(parsed.contact_phone)}` : `+${normalized}`;
-  const message = [
-    "Solicitud de agendamiento recibida desde WhatsApp · Neuronas IPS",
-    "",
+  const now = new Date().toISOString();
+  const notes = [
+    "[WhatsApp - Agendamiento Neuronas IPS]",
+    "Etiqueta: Nuevo WhatsApp",
     "Estado: Pendiente de confirmar cita",
     state.eps ? `EPS: ${state.eps}` : "EPS: No indicada",
     state.document_type ? `Tipo de documento: ${state.document_type}` : "Tipo de documento: No indicado",
@@ -625,36 +626,63 @@ async function createNeuronasContactFicha(businessId: string, phone: string, det
     "Mensaje original enviado por WhatsApp:",
     detailsText,
     "",
-    `Business ID: ${businessId}`,
     `WhatsApp origen: +${normalized}`,
     `Registrado: ${new Date().toLocaleString("es-ES")}`,
   ].filter(Boolean).join("\n");
 
+  const existingId = await findCustomerIdByPhone(businessId, phone);
   const payload = {
+    business_id: businessId,
     name,
-    email: `whatsapp-${normalized || Date.now()}@flowly.local`,
+    full_name: name,
     phone: contactPhone,
-    company: state.eps || "WhatsApp · Neuronas IPS",
-    type: "Paciente WhatsApp · Neuronas IPS",
-    message,
-    status: "Nuevo",
+    notes,
+    crm_status: "nuevo_whatsapp",
+    eps: state.eps || null,
+    document_type: state.document_type || null,
+    document_number: parsed.document_number || null,
+    last_contact_at: now,
   };
 
+  if (existingId) {
+    const { data: currentCustomer } = await supabaseAdmin
+      .from("customers")
+      .select("notes")
+      .eq("id", existingId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    const mergedNotes = [String(currentCustomer?.notes || "").trim(), notes].filter(Boolean).join("\n\n---\n\n");
+    const { error } = await supabaseAdmin
+      .from("customers")
+      .update({ ...payload, notes: mergedNotes })
+      .eq("id", existingId)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error("WHATSAPP NEURONAS CUSTOMER UPDATE ERROR", { businessId, error: error.message, payload });
+      return null;
+    }
+
+    console.info("WHATSAPP NEURONAS CUSTOMER UPDATED", { business_id: businessId, phone: normalized, customerId: existingId });
+    return existingId;
+  }
+
   const { data, error } = await supabaseAdmin
-    .from("contacts")
+    .from("customers")
     .insert(payload)
     .select("id")
     .maybeSingle();
 
   if (error) {
-    console.error("WHATSAPP NEURONAS CONTACT CREATE ERROR", { businessId, error: error.message, payload });
+    console.error("WHATSAPP NEURONAS CUSTOMER CREATE ERROR", { businessId, error: error.message, payload });
     return null;
   }
 
-  console.info("WHATSAPP NEURONAS CONTACT CREATED", {
+  console.info("WHATSAPP NEURONAS CUSTOMER CREATED", {
     business_id: businessId,
     phone: normalized,
-    contactId: data?.id || null,
+    customerId: data?.id || null,
   });
 
   return data?.id || null;
