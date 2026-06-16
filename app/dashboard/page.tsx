@@ -3650,6 +3650,28 @@ function openWhatsappForCustomer(customer: Customer, template: string) {
   if (!openWhatsapp(customer.phone, message)) return alert("Este paciente no tiene teléfono para WhatsApp");
 }
 
+
+type FlowlyMenuOption = { digit: string; label: string; crm_status?: string; response?: string };
+type FlowlyMenuPayload = { type: "flowly_menu_v1"; intro: string; options: FlowlyMenuOption[] };
+
+function encodeFlowlyMenu(menu: FlowlyMenuPayload) {
+  return `FLOWLY_MENU_V1:${JSON.stringify(menu)}`;
+}
+
+function parseFlowlyMenuMessage(value?: string | null): FlowlyMenuPayload | null {
+  const text = String(value || "").trim();
+  if (!text.startsWith("FLOWLY_MENU_V1:")) return null;
+  try {
+    const parsed = JSON.parse(text.slice("FLOWLY_MENU_V1:".length));
+    if (parsed?.type === "flowly_menu_v1" && Array.isArray(parsed.options)) return parsed as FlowlyMenuPayload;
+  } catch {}
+  return null;
+}
+
+function previewFlowlyMenu(menu: FlowlyMenuPayload) {
+  return [menu.intro || "Elige una opción:", ...menu.options.filter((item) => item.digit && item.label).map((item) => `${item.digit}. ${item.label}`)].join("\n");
+}
+
 function WhatsappModule({
   business,
   integrations,
@@ -3703,6 +3725,13 @@ function WhatsappModule({
   const [botTrigger, setBotTrigger] = useState("");
   const [botResponse, setBotResponse] = useState("");
   const [botMatchMode, setBotMatchMode] = useState("contains");
+  const [botType, setBotType] = useState<"reply" | "menu">("reply");
+  const [menuIntro, setMenuIntro] = useState("Gracias por escribir. Marca una opción para poder ayudarte:");
+  const [menuOptions, setMenuOptions] = useState<FlowlyMenuOption[]>([
+    { digit: "1", label: "Quiero información", crm_status: "interesado", response: "Perfecto, hemos registrado que quieres información. Un asesor te contactará." },
+    { digit: "2", label: "Quiero agendar una cita", crm_status: "cita_solicitada", response: "Genial, hemos registrado tu solicitud de cita. Te escribiremos para confirmar disponibilidad." },
+    { digit: "3", label: "Necesito soporte", crm_status: "soporte", response: "Hemos registrado tu solicitud de soporte. Nuestro equipo la revisará." },
+  ]);
   const [localBotRules, setLocalBotRules] = useState<WhatsappBotRule[]>([]);
 
   useEffect(() => {
@@ -3951,12 +3980,26 @@ function WhatsappModule({
 
   const createBotRule = async () => {
     if (!business) return alert("No se ha cargado el negocio");
-    if (!botName.trim() || !botTrigger.trim() || !botResponse.trim()) return alert("Completa nombre, palabra clave y respuesta del bot");
+    const cleanOptions = menuOptions
+      .map((option) => ({
+        digit: option.digit.replace(/\D/g, ""),
+        label: option.label.trim(),
+        crm_status: option.crm_status?.trim() || "interesado",
+        response: option.response?.trim() || "Perfecto, hemos registrado tu selección. Un asesor revisará tu ficha.",
+      }))
+      .filter((option) => option.digit && option.label);
+    const responseMessage = botType === "menu"
+      ? encodeFlowlyMenu({ type: "flowly_menu_v1", intro: menuIntro.trim() || "Elige una opción:", options: cleanOptions })
+      : botResponse.trim();
+
+    if (!botName.trim() || !botTrigger.trim() || !responseMessage.trim()) return alert("Completa nombre, palabra clave y respuesta del bot");
+    if (botType === "menu" && !cleanOptions.length) return alert("Añade al menos una opción numerada para el menú");
+
     const payload = {
       business_id: business.id,
       name: botName.trim(),
       trigger_text: botTrigger.trim().toLowerCase(),
-      response_message: botResponse.trim(),
+      response_message: responseMessage,
       match_mode: botMatchMode,
       is_active: true,
       updated_at: new Date().toISOString(),
@@ -4294,15 +4337,54 @@ function WhatsappModule({
       ) : (
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <GlassCard title="Crear bot automático real">
-            <p className="mb-4 text-sm leading-6 text-white/55">Estas reglas se ejecutan desde el webhook cuando entra un mensaje. Si coincide la palabra clave, Flowly responde automáticamente con el WhatsApp Cloud API conectado.</p>
+            <p className="mb-4 text-sm leading-6 text-white/55">Crea respuestas simples o menús numerados tipo centralita: “marca 1 para citas, 2 para información…”. Flowly recuerda el último menú enviado a ese número, interpreta la respuesta numérica y crea/actualiza la ficha CRM automáticamente.</p>
             <div className="grid gap-3">
-              <input value={botName} onChange={(e) => setBotName(e.target.value)} placeholder="Nombre de la regla: Precios, Citas, Horario..." className="input-dark" />
+              <input value={botName} onChange={(e) => setBotName(e.target.value)} placeholder="Nombre de la regla: Menú inicial, Citas, Horario..." className="input-dark" />
+              <select value={botType} onChange={(e) => setBotType(e.target.value as "reply" | "menu")} className="input-dark">
+                <option value="reply">Respuesta automática simple</option>
+                <option value="menu">Marcaje de números + CRM</option>
+              </select>
               <select value={botMatchMode} onChange={(e) => setBotMatchMode(e.target.value)} className="input-dark">
                 <option value="contains">Si el mensaje contiene</option>
                 <option value="exact">Si el mensaje es exactamente</option>
               </select>
-              <input value={botTrigger} onChange={(e) => setBotTrigger(e.target.value)} placeholder="Palabra clave: precio, cita, horario..." className="input-dark" />
-              <textarea value={botResponse} onChange={(e) => setBotResponse(e.target.value)} placeholder="Respuesta automática que enviará Flowly" className="input-dark min-h-40" />
+              <input value={botTrigger} onChange={(e) => setBotTrigger(e.target.value)} placeholder="Palabra clave que inicia el bot: hola, cita, información..." className="input-dark" />
+
+              {botType === "menu" ? (
+                <div className="grid gap-3 rounded-[1.5rem] border border-cyan-300/15 bg-cyan-400/10 p-4">
+                  <textarea value={menuIntro} onChange={(e) => setMenuIntro(e.target.value)} placeholder="Texto inicial del menú" className="input-dark min-h-24" />
+                  <div className="grid gap-3">
+                    {menuOptions.map((option, index) => (
+                      <div key={`${option.digit}-${index}`} className="grid gap-2 rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <div className="grid gap-2 md:grid-cols-[5rem_1fr]">
+                          <input value={option.digit} onChange={(e) => setMenuOptions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, digit: e.target.value.replace(/\D/g, "").slice(0, 2) } : item))} placeholder="1" className="input-dark" />
+                          <input value={option.label} onChange={(e) => setMenuOptions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: e.target.value } : item))} placeholder="Quiero agendar una cita" className="input-dark" />
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-[0.8fr_1.2fr]">
+                          <select value={option.crm_status || "interesado"} onChange={(e) => setMenuOptions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, crm_status: e.target.value } : item))} className="input-dark">
+                            <option value="nuevo">CRM: Nuevo lead</option>
+                            <option value="interesado">CRM: Interesado</option>
+                            <option value="cita_solicitada">CRM: Cita solicitada</option>
+                            <option value="contactar">CRM: Contactar</option>
+                            <option value="soporte">CRM: Soporte</option>
+                            <option value="descartado">CRM: Descartado</option>
+                          </select>
+                          <input value={option.response || ""} onChange={(e) => setMenuOptions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, response: e.target.value } : item))} placeholder="Respuesta al elegir esta opción" className="input-dark" />
+                        </div>
+                        <button type="button" onClick={() => setMenuOptions((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="w-fit rounded-full border border-red-300/20 px-3 py-1.5 text-xs text-red-100/80 hover:bg-red-500/10">Eliminar opción</button>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => setMenuOptions((current) => [...current, { digit: String(current.length + 1), label: "Nueva opción", crm_status: "interesado", response: "Hemos registrado tu selección." }])} className="btn-secondary justify-center"><Plus size={16} /> Añadir opción</button>
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100/70">Vista previa WhatsApp</p>
+                    <pre className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/75">{previewFlowlyMenu({ type: "flowly_menu_v1", intro: menuIntro, options: menuOptions })}</pre>
+                  </div>
+                </div>
+              ) : (
+                <textarea value={botResponse} onChange={(e) => setBotResponse(e.target.value)} placeholder="Respuesta automática que enviará Flowly" className="input-dark min-h-40" />
+              )}
+
               <button onClick={createBotRule} className="btn-primary justify-center"><Bot size={17} /> Crear bot</button>
             </div>
           </GlassCard>
@@ -4317,7 +4399,24 @@ function WhatsappModule({
                         <span className={rule.is_active ? "rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-100" : "rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/45"}>{rule.is_active ? "Activo" : "Pausado"}</span>
                       </div>
                       <p className="mt-2 text-xs text-white/45">{rule.match_mode === "exact" ? "Coincide exactamente" : "Contiene"}: <span className="text-cyan-100">{rule.trigger_text}</span></p>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{rule.response_message}</p>
+                      {(() => {
+                        const menu = parseFlowlyMenuMessage(rule.response_message);
+                        if (!menu) return <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{rule.response_message}</p>;
+                        return (
+                          <div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100/70">Menú numerado conectado al CRM</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">{previewFlowlyMenu(menu)}</p>
+                            <div className="mt-3 grid gap-2">
+                              {menu.options.map((option) => (
+                                <div key={`${option.digit}-${option.label}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2 text-xs text-white/60">
+                                  <span>{option.digit}. {option.label}</span>
+                                  <span className="rounded-full bg-white/10 px-2 py-1 text-white/50">CRM: {option.crm_status || "interesado"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <button onClick={() => toggleBotRule(rule)} className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/75 hover:bg-white/10">{rule.is_active ? "Pausar" : "Activar"}</button>

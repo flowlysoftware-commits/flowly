@@ -84,6 +84,66 @@ function asObjectConfig(value: unknown): Record<string, unknown> {
   return typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+
+
+type FlowlyMenuOption = {
+  digit: string;
+  label: string;
+  crm_status?: string;
+  response?: string;
+};
+
+type FlowlyMenuPayload = {
+  type: "flowly_menu_v1";
+  intro: string;
+  options: FlowlyMenuOption[];
+};
+
+function parseFlowlyMenu(value: unknown): FlowlyMenuPayload | null {
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const candidate = value as Record<string, unknown>;
+    if (candidate.type === "flowly_menu_v1" && Array.isArray(candidate.options)) {
+      return {
+        type: "flowly_menu_v1",
+        intro: String(candidate.intro || "Elige una opción:"),
+        options: candidate.options
+          .map((option) => {
+            const item = option as Record<string, unknown>;
+            return {
+              digit: String(item.digit || "").replace(/\D/g, ""),
+              label: String(item.label || "").trim(),
+              crm_status: String(item.crm_status || "").trim() || undefined,
+              response: String(item.response || "").trim() || undefined,
+            };
+          })
+          .filter((option) => option.digit && option.label),
+      };
+    }
+  }
+
+  const text = String(value || "").trim();
+  if (!text.startsWith("FLOWLY_MENU_V1:")) return null;
+  try {
+    return parseFlowlyMenu(JSON.parse(text.slice("FLOWLY_MENU_V1:".length))) as FlowlyMenuPayload | null;
+  } catch {
+    return null;
+  }
+}
+
+function buildMenuText(menu: FlowlyMenuPayload) {
+  const lines = [menu.intro || "Elige una opción:"];
+  for (const option of menu.options) {
+    lines.push(`${option.digit}. ${option.label}`);
+  }
+  return lines.join("\n");
+}
+
+function normalizeMenuDigit(text: string) {
+  const match = String(text || "").trim().match(/^\s*(\d{1,2})\s*$/);
+  return match?.[1] || "";
+}
+
 function getConfiguredPhoneNumberIds(config: Record<string, unknown>) {
   return [
     config.phone_number_id,
@@ -234,7 +294,7 @@ async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue
   if (error) console.error("WHATSAPP WEBHOOK INSERT ERROR", error.message);
 }
 
-async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: string | undefined, to: string, text: string, trigger: string) {
+async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: string | undefined, to: string, text: string, trigger: string, rawPayload?: Record<string, unknown>) {
   const config = integration.config || {};
   const accessToken = getConfigString(config, ["access_token", "accessToken", "token"]);
   const phoneId = getConfigString(config, ["phone_number_id", "phoneNumberId", "phone_id", "phoneId", "whatsapp_phone_number_id"]) || String(phoneNumberId || "").trim();
@@ -277,12 +337,12 @@ async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: st
       business_id: integration.business_id,
       customer_id: await findCustomerIdByPhone(integration.business_id, phone),
       phone,
-      template_key: `bot:${trigger}`,
+      template_key: trigger.startsWith("menu:") ? `bot_menu:${trigger.slice(5)}` : `bot:${trigger}`,
       message: text,
       direction: "outbound",
       status: "failed",
       provider_message_id: providerMessageId,
-      raw_payload: result,
+      raw_payload: rawPayload || result,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
@@ -293,12 +353,12 @@ async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: st
     business_id: integration.business_id,
     customer_id: await findCustomerIdByPhone(integration.business_id, phone),
     phone,
-    template_key: `bot:${trigger}`,
+    template_key: trigger.startsWith("menu:") ? `bot_menu:${trigger.slice(5)}` : `bot:${trigger}`,
     message: text,
     direction: "outbound",
     status: "sent",
     provider_message_id: providerMessageId,
-    raw_payload: result,
+    raw_payload: rawPayload || result,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
@@ -309,6 +369,100 @@ async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: st
     to: phone,
     providerMessageId,
   });
+}
+
+
+async function findLatestPendingMenu(businessId: string, phone: string) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("id, phone, message, raw_payload, created_at")
+    .eq("business_id", businessId)
+    .eq("direction", "outbound")
+    .like("template_key", "bot_menu:%")
+    .order("created_at", { ascending: false })
+    .limit(25);
+
+  if (error) {
+    console.error("WHATSAPP MENU LOOKUP ERROR", { businessId, error: error.message });
+    return null;
+  }
+
+  const match = (data || []).find((row) => normalizePhone(row.phone) === normalized);
+  if (!match) return null;
+
+  const createdAt = new Date(match.created_at || 0).getTime();
+  if (Number.isFinite(createdAt) && Date.now() - createdAt > 1000 * 60 * 60 * 48) return null;
+
+  const raw = asObjectConfig(match.raw_payload);
+  const menu = parseFlowlyMenu(raw.flowly_menu || raw.menu || match.message);
+  return menu ? { row: match, menu } : null;
+}
+
+async function handleMenuSelection(integration: WhatsAppIntegration, phoneNumberId: string | undefined, message: WhatsAppMessage) {
+  const incomingText = getMessageText(message).trim();
+  const digit = normalizeMenuDigit(incomingText);
+  const phone = message.from || "";
+  if (!digit || !phone) return false;
+
+  const pending = await findLatestPendingMenu(integration.business_id, phone);
+  if (!pending?.menu?.options?.length) return false;
+
+  const option = pending.menu.options.find((item) => item.digit === digit);
+  if (!option) {
+    await sendAutoReply(
+      integration,
+      phoneNumberId,
+      phone,
+      `No hemos encontrado la opción ${digit}.\n\n${buildMenuText(pending.menu)}`,
+      "menu_invalid_option",
+      { flowly_menu_retry: pending.menu, invalid_option: digit },
+    );
+    return true;
+  }
+
+  const customerId = await findCustomerIdByPhone(integration.business_id, phone);
+  if (customerId) {
+    const crmStatus = option.crm_status || "interesado";
+    const note = `\n\n[WhatsApp · Marcaje ${digit}] ${option.label}\n${new Date().toLocaleString("es-ES")}`;
+    const { data: currentCustomer } = await supabaseAdmin
+      .from("customers")
+      .select("notes")
+      .eq("id", customerId)
+      .eq("business_id", integration.business_id)
+      .maybeSingle();
+
+    await supabaseAdmin
+      .from("customers")
+      .update({
+        crm_status: crmStatus,
+        notes: `${String(currentCustomer?.notes || "").trim()}${note}`.trim(),
+        last_contact_at: new Date().toISOString(),
+      })
+      .eq("id", customerId)
+      .eq("business_id", integration.business_id);
+  }
+
+  await sendAutoReply(
+    integration,
+    phoneNumberId,
+    phone,
+    option.response || `Perfecto, hemos registrado tu selección: ${option.label}. Un asesor revisará tu ficha.`,
+    `menu_option_${digit}`,
+    { flowly_menu_selection: { digit, option, source_menu_id: pending.row.id } },
+  );
+
+  console.info("WHATSAPP MENU OPTION PROCESSED", {
+    business_id: integration.business_id,
+    phone: normalizePhone(phone),
+    digit,
+    label: option.label,
+    customerId,
+  });
+
+  return true;
 }
 
 async function runBotRules(integration: WhatsAppIntegration, phoneNumberId: string | undefined, message: WhatsAppMessage) {
@@ -354,6 +508,19 @@ async function runBotRules(integration: WhatsAppIntegration, phoneNumberId: stri
   const responseMessage = String(matchedRule.response_message || matchedRule.reply_message || matchedRule.message || "").trim();
   if (!responseMessage) {
     console.warn("WHATSAPP BOT MATCH WITHOUT RESPONSE", { business_id: integration.business_id, rule_id: matchedRule.id });
+    return;
+  }
+
+  const menu = parseFlowlyMenu(responseMessage);
+  if (menu?.options?.length) {
+    await sendAutoReply(
+      integration,
+      phoneNumberId,
+      phone,
+      buildMenuText(menu),
+      `menu:${matchedRule.id || matchedRule.trigger_text || "bot"}`,
+      { flowly_menu: menu, bot_rule_id: matchedRule.id || null },
+    );
     return;
   }
 
@@ -417,7 +584,8 @@ export async function POST(request: NextRequest) {
 
         for (const message of value.messages || []) {
           await saveInboundMessage(integration.business_id, value, message);
-          await runBotRules(integration, phoneNumberId, message);
+          const handledByMenu = await handleMenuSelection(integration, phoneNumberId, message);
+          if (!handledByMenu) await runBotRules(integration, phoneNumberId, message);
         }
 
         for (const status of value.statuses || []) {
