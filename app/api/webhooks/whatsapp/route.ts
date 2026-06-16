@@ -49,6 +49,23 @@ function normalizePhone(value: string | null | undefined) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function normalizeText(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getConfigString(config: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = config[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
 type WhatsAppIntegration = {
   business_id: string;
   config: Record<string, unknown> | null;
@@ -219,10 +236,20 @@ async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue
 
 async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: string | undefined, to: string, text: string, trigger: string) {
   const config = integration.config || {};
-  const accessToken = String(config.access_token || "");
-  const phoneId = String(config.phone_number_id || config.phoneNumberId || phoneNumberId || "");
+  const accessToken = getConfigString(config, ["access_token", "accessToken", "token"]);
+  const phoneId = getConfigString(config, ["phone_number_id", "phoneNumberId", "phone_id", "phoneId", "whatsapp_phone_number_id"]) || String(phoneNumberId || "").trim();
   const phone = normalizePhone(to);
-  if (!accessToken || !phoneId || !phone || !text.trim()) return;
+
+  if (!accessToken || !phoneId || !phone || !text.trim()) {
+    console.warn("WHATSAPP BOT SKIPPED MISSING CONFIG", {
+      business_id: integration.business_id,
+      has_access_token: Boolean(accessToken),
+      phoneId,
+      to: phone,
+      has_text: Boolean(text.trim()),
+    });
+    return;
+  }
 
   const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
     method: "POST",
@@ -236,8 +263,29 @@ async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: st
     }),
   });
   const result = await response.json().catch(() => ({}));
+  const providerMessageId = result?.messages?.[0]?.id || null;
+
   if (!response.ok) {
-    console.error("WHATSAPP BOT SEND ERROR", result?.error?.message || result);
+    console.error("WHATSAPP BOT SEND ERROR", {
+      business_id: integration.business_id,
+      status: response.status,
+      phoneId,
+      to: phone,
+      error: result?.error?.message || result,
+    });
+    await supabaseAdmin.from("whatsapp_messages").insert({
+      business_id: integration.business_id,
+      customer_id: await findCustomerIdByPhone(integration.business_id, phone),
+      phone,
+      template_key: `bot:${trigger}`,
+      message: text,
+      direction: "outbound",
+      status: "failed",
+      provider_message_id: providerMessageId,
+      raw_payload: result,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
     return;
   }
 
@@ -249,10 +297,17 @@ async function sendAutoReply(integration: WhatsAppIntegration, phoneNumberId: st
     message: text,
     direction: "outbound",
     status: "sent",
-    provider_message_id: result?.messages?.[0]?.id || null,
+    provider_message_id: providerMessageId,
     raw_payload: result,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+  });
+
+  console.info("WHATSAPP BOT AUTO REPLY SENT", {
+    business_id: integration.business_id,
+    trigger,
+    to: phone,
+    providerMessageId,
   });
 }
 
@@ -263,22 +318,52 @@ async function runBotRules(integration: WhatsAppIntegration, phoneNumberId: stri
 
   const { data, error } = await supabaseAdmin
     .from("whatsapp_bot_rules")
-    .select("trigger_text, response_message, match_mode, is_active")
+    .select("*")
     .eq("business_id", integration.business_id)
-    .eq("is_active", true)
     .order("created_at", { ascending: true });
 
-  if (error || !data?.length) return;
-  const normalizedText = incomingText.toLowerCase();
-  const matchedRule = data.find((rule) => {
-    const trigger = String(rule.trigger_text || "").toLowerCase().trim();
+  if (error) {
+    console.error("WHATSAPP BOT RULES LOAD ERROR", { business_id: integration.business_id, error: error.message });
+    return;
+  }
+
+  const activeRules = (data || []).filter((rule) => rule.is_active !== false);
+  if (!activeRules.length) {
+    console.info("WHATSAPP BOT NO ACTIVE RULES", { business_id: integration.business_id, incomingText });
+    return;
+  }
+
+  const normalizedText = normalizeText(incomingText);
+  const matchedRule = activeRules.find((rule) => {
+    const rawTrigger = String(rule.trigger_text || rule.keyword || rule.trigger || "").trim();
+    const trigger = normalizeText(rawTrigger);
     if (!trigger) return false;
-    return rule.match_mode === "exact" ? normalizedText === trigger : normalizedText.includes(trigger);
+    const mode = String(rule.match_mode || "contains").toLowerCase();
+    return mode === "exact" ? normalizedText === trigger : normalizedText.includes(trigger);
   });
 
-  if (matchedRule?.response_message) {
-    await sendAutoReply(integration, phoneNumberId, phone, String(matchedRule.response_message), String(matchedRule.trigger_text || "bot"));
+  if (!matchedRule) {
+    console.info("WHATSAPP BOT NO MATCH", {
+      business_id: integration.business_id,
+      incomingText,
+      availableTriggers: activeRules.map((rule) => rule.trigger_text || rule.keyword || rule.trigger).filter(Boolean),
+    });
+    return;
   }
+
+  const responseMessage = String(matchedRule.response_message || matchedRule.reply_message || matchedRule.message || "").trim();
+  if (!responseMessage) {
+    console.warn("WHATSAPP BOT MATCH WITHOUT RESPONSE", { business_id: integration.business_id, rule_id: matchedRule.id });
+    return;
+  }
+
+  await sendAutoReply(
+    integration,
+    phoneNumberId,
+    phone,
+    responseMessage,
+    String(matchedRule.trigger_text || matchedRule.keyword || matchedRule.trigger || "bot"),
+  );
 }
 
 async function updateMessageStatus(businessId: string, status: WhatsAppStatus) {
