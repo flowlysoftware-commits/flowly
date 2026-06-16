@@ -3673,6 +3673,11 @@ function WhatsappModule({
   const [editingTemplateLabel, setEditingTemplateLabel] = useState("");
   const [editingTemplateMessage, setEditingTemplateMessage] = useState("");
   const [localTemplates, setLocalTemplates] = useState<WhatsappTemplate[]>([]);
+  const [manualAccessToken, setManualAccessToken] = useState("");
+  const [manualPhoneNumberId, setManualPhoneNumberId] = useState("");
+  const [manualWabaId, setManualWabaId] = useState("");
+  const [manualDisplayPhone, setManualDisplayPhone] = useState("");
+  const [savingManualConnection, setSavingManualConnection] = useState(false);
 
   useEffect(() => {
     setLocalTemplates(whatsappTemplatesEffective);
@@ -3728,6 +3733,42 @@ function WhatsappModule({
     setSelectedTemplateKey(key);
     const template = templates.find((item) => item.key === key);
     if (template) setCustomMessage(selectedCustomer ? whatsappMessageForCustomer(template.message, selectedCustomer) : template.message);
+  };
+
+  const saveManualWhatsappConnection = async () => {
+    if (!business) return alert("No se ha cargado el negocio");
+    if (!manualAccessToken.trim() || !manualPhoneNumberId.trim()) return alert("Añade el Access Token y el Phone Number ID de WhatsApp Cloud API");
+    setSavingManualConnection(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch("/api/neuronas/whatsapp/manual", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          accessToken: manualAccessToken.trim(),
+          phoneNumberId: manualPhoneNumberId.trim(),
+          wabaId: manualWabaId.trim(),
+          displayPhoneNumber: manualDisplayPhone.trim(),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo guardar WhatsApp");
+      setManualAccessToken("");
+      setManualPhoneNumberId("");
+      setManualWabaId("");
+      setManualDisplayPhone("");
+      await reloadData();
+      alert("WhatsApp conectado manualmente para Neuronas.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Error conectando WhatsApp");
+    } finally {
+      setSavingManualConnection(false);
+    }
   };
 
   const sendMessage = async () => {
@@ -3932,6 +3973,35 @@ function WhatsappModule({
           </div>
         </div>
       </GlassCard>
+
+      {!whatsappConnection && (
+        <GlassCard title="Conexión manual WhatsApp Cloud API">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <label className="text-sm font-semibold text-white/70">
+              Access Token permanente
+              <input type="password" value={manualAccessToken} onChange={(event) => setManualAccessToken(event.target.value)} placeholder="EAAB..." className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/50" />
+            </label>
+            <label className="text-sm font-semibold text-white/70">
+              Phone Number ID
+              <input value={manualPhoneNumberId} onChange={(event) => setManualPhoneNumberId(event.target.value)} placeholder="1200..." className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/50" />
+            </label>
+            <label className="text-sm font-semibold text-white/70">
+              WABA ID / Business Account ID
+              <input value={manualWabaId} onChange={(event) => setManualWabaId(event.target.value)} placeholder="1310..." className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/50" />
+            </label>
+            <label className="text-sm font-semibold text-white/70">
+              Número visible
+              <input value={manualDisplayPhone} onChange={(event) => setManualDisplayPhone(event.target.value)} placeholder="+34 600 000 000" className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/50" />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 p-4 text-sm text-amber-50/80">
+            <p>Mientras Meta no desbloquee el Embedded Signup, conecta Neuronas con los datos manuales de WhatsApp Cloud API. Este número debe estar migrado a Cloud API, por lo que dejará de usarse en la app móvil normal.</p>
+            <button type="button" onClick={saveManualWhatsappConnection} disabled={savingManualConnection} className="w-fit rounded-full bg-white px-5 py-2 text-xs font-semibold text-neutral-950 disabled:opacity-60">
+              {savingManualConnection ? "Guardando..." : "Guardar conexión manual"}
+            </button>
+          </div>
+        </GlassCard>
+      )}
 
       {currentView === "bandeja" ? (
         <section className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
