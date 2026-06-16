@@ -3288,7 +3288,7 @@ function AiModule({ business, integrations, reloadData, records, customers, appo
   );
 }
 
-function AnalyticsModule({ records, customers, appointments, services, revenue, expenses, manualIncome, deleteRecord, activeTab, setActiveTab, voiceCalls, whatsappMessages }: Parameters<typeof ModuleSection>[0]) {
+function AnalyticsModule({ business, records, customers, appointments, services, revenue, expenses, manualIncome, deleteRecord, activeTab, setActiveTab, voiceCalls, whatsappMessages }: Parameters<typeof ModuleSection>[0]) {
   const [tab, setTab] = useState("Dirección");
 
   useEffect(() => {
@@ -3297,6 +3297,9 @@ function AnalyticsModule({ records, customers, appointments, services, revenue, 
 
   const total = revenue + manualIncome;
   const profit = total - expenses;
+  const isNeuronasPanel = [business?.name, business?.business_type, business?.panel_theme]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes("neuronas"));
   const normalizeStatus = (value?: string | null) => String(value || "").trim().toLowerCase();
   const voiceHandledStatuses = ["atendida", "atendido", "contactado", "cita_creada", "completed", "completed_call", "answered", "resuelta", "resolved"];
   const voiceLostStatuses = ["perdida", "perdido", "missed", "no_atendida", "no_atendido", "sin_respuesta", "no_answer", "failed", "descartada", "cancelled", "canceled"];
@@ -3328,29 +3331,31 @@ function AnalyticsModule({ records, customers, appointments, services, revenue, 
       <ModuleHero eyebrow="Business Analytics" title="Panel de métricas sincronizado" description="KPIs del panel principal, agenda, CRM, facturación, TPV, llamadas y WhatsApp en una capa ejecutiva para dirección." actions={<ModulePillTabs tabs={["Dirección", "Agenda", "Finanzas", "Servicios"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Dirección: "module:estadisticas:direccion", Agenda: "module:estadisticas:agenda", Finanzas: "module:estadisticas:finanzas", Servicios: "module:estadisticas:servicios" } as Record<string, ActiveTab>)[next] || "module:estadisticas:direccion", setTab, next)} />} />
       <div className="grid gap-4 md:grid-cols-4"><Metric icon={<TrendingUp />} label="Ingresos" value={`${total.toFixed(2)}€`} helper="Reservas + manual" /><Metric icon={<CreditCard />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /><Metric icon={<Users />} label="Conversión a cita" value={`${conversion}%`} helper={`${customersTransformedToAppointment} clientes`} /><Metric icon={<FileText />} label="Registros" value={records.length} helper="Análisis guardados" /></div>
 
-      <GlassCard title="Estadísticas operativas Neuronas">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Metric icon={<PhoneCall />} label="Llamadas entrantes" value={callsIncoming} helper="Total recibidas" />
-          <Metric icon={<CheckCircle2 />} label="Llamadas atendidas" value={callsHandled} helper="Contactadas o convertidas" />
-          <Metric icon={<XCircle />} label="Llamadas perdidas" value={callsLost} helper="Sin respuesta o descartadas" />
-          <Metric icon={<MessageCircle />} label="WhatsApp entrantes" value={whatsappIncoming} helper="Mensajes recibidos" />
-          <Metric icon={<CheckCircle2 />} label="WhatsApp atendidos" value={whatsappHandled} helper="Con respuesta enviada" />
-          <Metric icon={<XCircle />} label="WhatsApp perdidos" value={whatsappLost} helper="Pendientes sin respuesta" />
-        </div>
-        <div className="mt-4 rounded-[1.75rem] border border-cyan-300/20 bg-cyan-400/10 p-5">
-          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/65">Resultado comercial</p>
-              <h3 className="mt-1 text-2xl font-semibold">Clientes transformados en cita</h3>
-              <p className="mt-1 text-sm text-white/50">Pacientes o leads que han terminado con cita creada desde llamadas, WhatsApp o agenda.</p>
-            </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-black/25 px-6 py-4 text-right">
-              <p className="text-4xl font-semibold text-cyan-100">{customersTransformedToAppointment}</p>
-              <p className="text-xs uppercase tracking-[0.18em] text-white/40">citas generadas</p>
+      {isNeuronasPanel && (
+        <GlassCard title="Estadísticas operativas Neuronas">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Metric icon={<PhoneCall />} label="Llamadas entrantes" value={callsIncoming} helper="Total recibidas" />
+            <Metric icon={<CheckCircle2 />} label="Llamadas atendidas" value={callsHandled} helper="Contactadas o convertidas" />
+            <Metric icon={<XCircle />} label="Llamadas perdidas" value={callsLost} helper="Sin respuesta o descartadas" />
+            <Metric icon={<MessageCircle />} label="WhatsApp entrantes" value={whatsappIncoming} helper="Mensajes recibidos" />
+            <Metric icon={<CheckCircle2 />} label="WhatsApp atendidos" value={whatsappHandled} helper="Con respuesta enviada" />
+            <Metric icon={<XCircle />} label="WhatsApp perdidos" value={whatsappLost} helper="Pendientes sin respuesta" />
+          </div>
+          <div className="mt-4 rounded-[1.75rem] border border-cyan-300/20 bg-cyan-400/10 p-5">
+            <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/65">Resultado comercial</p>
+                <h3 className="mt-1 text-2xl font-semibold">Clientes transformados en cita</h3>
+                <p className="mt-1 text-sm text-white/50">Pacientes o leads que han terminado con cita creada desde llamadas, WhatsApp o agenda.</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-white/10 bg-black/25 px-6 py-4 text-right">
+                <p className="text-4xl font-semibold text-cyan-100">{customersTransformedToAppointment}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-white/40">citas generadas</p>
+              </div>
             </div>
           </div>
-        </div>
-      </GlassCard>
+        </GlassCard>
+      )}
 
       {tab === "Dirección" && <GlassCard title="Scorecard ejecutivo"><div className="grid gap-3 md:grid-cols-3">{["Crecimiento mensual", "Clientes activos", "Ocupación estimada", "Ticket medio", "Retención", "Alertas operativas"].map((x) => <div key={x} className="rounded-3xl bg-black/25 p-5"><p className="font-semibold">{x}</p><p className="mt-2 text-sm text-white/45">Indicador preparado para histórico avanzado.</p></div>)}</div></GlassCard>}
       {tab === "Agenda" && <GlassCard title="Embudo de citas"><div className="grid gap-3 md:grid-cols-4">{byStatus.map((item) => <InfoBox key={item.status} label={translateStatus(item.status)} value={item.count} />)}</div></GlassCard>}
