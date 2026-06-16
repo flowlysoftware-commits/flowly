@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { marketingPlans } from "@/lib/marketingPlans";
@@ -3691,7 +3691,10 @@ function WhatsappModule({
   const whatsappConnection = integrations.find((integration) => integration.provider_key === "whatsapp_cloud" && integration.status === "connected");
   const whatsappConfig = (whatsappConnection?.config || {}) as Record<string, unknown>;
   const displayPhone = String(whatsappConfig.display_phone_number || whatsappConfig.verified_name || whatsappConfig.phone_number_id || "");
-  const conversations = whatsappMessages.slice(0, 12);
+  const [liveWhatsappMessages, setLiveWhatsappMessages] = useState<WhatsappMessage[]>(whatsappMessages || []);
+  const [whatsappInboxLoading, setWhatsappInboxLoading] = useState(false);
+  const [whatsappInboxError, setWhatsappInboxError] = useState("");
+  const [lastInboxSync, setLastInboxSync] = useState<Date | null>(null);
   const [sending, setSending] = useState(false);
   const [selectedConversationPhone, setSelectedConversationPhone] = useState("");
   const [replyMessage, setReplyMessage] = useState("");
@@ -3705,9 +3708,42 @@ function WhatsappModule({
     setLocalBotRules(whatsappBotRules || []);
   }, [whatsappBotRules]);
 
+  useEffect(() => {
+    setLiveWhatsappMessages(whatsappMessages || []);
+  }, [whatsappMessages]);
+
+  const fetchWhatsappInbox = useCallback(async (silent = true) => {
+    if (!business?.id) return;
+    if (!silent) setWhatsappInboxLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch(`/api/whatsapp/messages?businessId=${encodeURIComponent(business.id)}`, {
+        cache: "no-store",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo sincronizar la bandeja");
+      setLiveWhatsappMessages((result.messages || []) as WhatsappMessage[]);
+      setWhatsappInboxError("");
+      setLastInboxSync(new Date());
+    } catch (error) {
+      setWhatsappInboxError(error instanceof Error ? error.message : "No se pudo sincronizar la bandeja");
+    } finally {
+      if (!silent) setWhatsappInboxLoading(false);
+    }
+  }, [business?.id]);
+
+  useEffect(() => {
+    if (!business?.id || currentView !== "bandeja") return;
+    fetchWhatsappInbox(true);
+    const interval = window.setInterval(() => fetchWhatsappInbox(true), 4000);
+    return () => window.clearInterval(interval);
+  }, [business?.id, currentView, fetchWhatsappInbox]);
+
   const conversationGroups = useMemo(() => {
     const map = new Map<string, { phone: string; customer: Customer | null; contactName: string; lastMessage: WhatsappMessage; messages: WhatsappMessage[]; unread: number }>();
-    const sorted = [...whatsappMessages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const sorted = [...liveWhatsappMessages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     for (const message of sorted) {
       const phoneKey = normalizePhone(message.phone);
       if (!phoneKey) continue;
@@ -3721,7 +3757,7 @@ function WhatsappModule({
       map.set(phoneKey, current);
     }
     return Array.from(map.values()).sort((a, b) => new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime());
-  }, [whatsappMessages, customers]);
+  }, [liveWhatsappMessages, customers]);
 
   useEffect(() => {
     if (!selectedConversationPhone && conversationGroups[0]?.phone) setSelectedConversationPhone(conversationGroups[0].phone);
@@ -3806,6 +3842,7 @@ function WhatsappModule({
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo enviar el WhatsApp");
       setCustomMessage("");
+      await fetchWhatsappInbox(false);
       await reloadData();
       alert("WhatsApp enviado desde Flowly");
     } catch (error) {
@@ -3842,6 +3879,7 @@ function WhatsappModule({
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo enviar la respuesta");
       setReplyMessage("");
+      await fetchWhatsappInbox(false);
       await reloadData();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Error respondiendo WhatsApp");
@@ -4004,11 +4042,21 @@ function WhatsappModule({
       )}
 
       {currentView === "bandeja" ? (
-        <section className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
-          <GlassCard title="Bandeja de conversaciones">
-            <div className="grid gap-3">
+        <section className="grid min-h-[38rem] overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 xl:grid-cols-[22rem_1fr]">
+          <aside className="border-b border-white/10 bg-white/[0.035] xl:border-b-0 xl:border-r">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Bandeja en vivo</p>
+                <p className="mt-1 text-xs text-white/45">{lastInboxSync ? `Actualizado ${lastInboxSync.toLocaleTimeString()}` : "Sincronizando..."}</p>
+              </div>
+              <button type="button" onClick={() => fetchWhatsappInbox(false)} disabled={whatsappInboxLoading} className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.1] disabled:opacity-50">
+                {whatsappInboxLoading ? "..." : "Actualizar"}
+              </button>
+            </div>
+            {whatsappInboxError && <div className="m-4 rounded-2xl border border-rose-300/20 bg-rose-400/10 p-3 text-xs text-rose-100">{whatsappInboxError}</div>}
+            <div className="max-h-[34rem] overflow-y-auto p-3">
               {conversationGroups.length ? conversationGroups.map((conversation) => (
-                <button key={conversation.phone} onClick={() => setSelectedConversationPhone(conversation.phone)} className={selectedConversation?.phone === conversation.phone ? "rounded-[1.5rem] border border-cyan-300/35 bg-cyan-400/10 p-4 text-left" : "rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 text-left hover:bg-white/[0.08]"}>
+                <button key={conversation.phone} onClick={() => setSelectedConversationPhone(conversation.phone)} className={selectedConversation?.phone === conversation.phone ? "mb-2 w-full rounded-[1.5rem] border border-emerald-300/35 bg-emerald-400/10 p-4 text-left shadow-[0_18px_50px_rgba(16,185,129,0.08)]" : "mb-2 w-full rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 text-left hover:bg-white/[0.08]"}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{conversation.contactName || conversation.phone}</p>
@@ -4016,34 +4064,52 @@ function WhatsappModule({
                     </div>
                     {conversation.unread > 0 && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[11px] font-bold text-neutral-950">{conversation.unread}</span>}
                   </div>
-                  <p className="mt-3 line-clamp-2 text-sm text-white/65">{conversation.lastMessage.message}</p>
+                  <p className="mt-3 line-clamp-2 text-sm text-white/65">{conversation.lastMessage.direction === "outbound" ? "Tú: " : ""}{conversation.lastMessage.message}</p>
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/30">{new Date(conversation.lastMessage.created_at).toLocaleString()}</p>
                 </button>
-              )) : <Empty text="Aún no hay conversaciones. Cuando alguien escriba a tu WhatsApp conectado aparecerá aquí." />}
+              )) : <Empty text="Aún no hay conversaciones. Cuando alguien escriba a tu WhatsApp conectado aparecerá aquí automáticamente." />}
             </div>
-          </GlassCard>
-          <GlassCard title={selectedConversation ? `Chat · ${selectedConversation.contactName || selectedConversation.phone}` : "Chat"}>
-            {selectedConversation ? (
-              <div className="grid gap-4">
-                <div className="max-h-[32rem] overflow-y-auto rounded-[2rem] border border-white/10 bg-black/25 p-4">
-                  <div className="grid gap-3">
-                    {selectedConversation.messages.map((message) => (
-                      <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[82%] rounded-[1.35rem] rounded-bl-md border border-white/10 bg-white/[0.07] p-3" : "ml-auto max-w-[82%] rounded-[1.35rem] rounded-br-md border border-cyan-300/20 bg-cyan-400/15 p-3"}>
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-white/85">{message.message}</p>
-                        <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/35">{message.direction === "inbound" ? "Cliente" : message.status || "Enviado"} · {new Date(message.created_at).toLocaleString()}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid gap-3 rounded-[2rem] border border-white/10 bg-white/[0.045] p-4">
-                  <textarea value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder="Responder desde Flowly..." className="input-dark min-h-28" />
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs text-white/45">Respondes usando la cuenta WhatsApp Cloud conectada.</span>
-                    <button onClick={sendConversationReply} disabled={sending || !whatsappConnection} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"><Send size={16} /> {sending ? "Enviando..." : "Responder"}</button>
-                  </div>
-                </div>
+          </aside>
+
+          <main className="grid min-h-[38rem] grid-rows-[auto_1fr_auto]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] p-4">
+              <div>
+                <p className="text-base font-semibold">{selectedConversation ? selectedConversation.contactName || `+${selectedConversation.phone}` : "Selecciona una conversación"}</p>
+                <p className="mt-1 text-xs text-white/45">{selectedConversation ? `+${selectedConversation.phone} · ${selectedConversation.messages.length} mensajes` : "Bandeja estilo WhatsApp conectada a Cloud API"}</p>
               </div>
-            ) : <Empty text="Selecciona una conversación." />}
-          </GlassCard>
+              <span className={whatsappConnection ? "rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100" : "rounded-full bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-100"}>
+                {whatsappConnection ? "Cloud API conectado" : "Sin conexión"}
+              </span>
+            </div>
+
+            <div className="overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.1),transparent_35%)] p-4">
+              {selectedConversation ? (
+                <div className="grid gap-3">
+                  {selectedConversation.messages.map((message) => (
+                    <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[78%] rounded-[1.15rem] rounded-bl-sm border border-white/10 bg-white/[0.08] px-4 py-3" : "ml-auto max-w-[78%] rounded-[1.15rem] rounded-br-sm border border-emerald-300/20 bg-emerald-400/15 px-4 py-3"}>
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-white/90">{message.message || "Mensaje sin texto"}</p>
+                      <div className="mt-2 flex items-center justify-end gap-2 text-[10px] uppercase tracking-[0.14em] text-white/35">
+                        <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span>{message.direction === "inbound" ? "Recibido" : message.status || "Enviado"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <Empty text="Selecciona un chat de la izquierda para responder como en WhatsApp." />
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-white/10 bg-black/35 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                <textarea value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder={selectedConversation ? "Escribe un mensaje..." : "Selecciona una conversación"} className="input-dark min-h-24 flex-1 resize-none" />
+                <button onClick={sendConversationReply} disabled={sending || !whatsappConnection || !selectedConversation} className="btn-primary h-12 disabled:cursor-not-allowed disabled:opacity-50"><Send size={16} /> {sending ? "Enviando..." : "Enviar"}</button>
+              </div>
+              <p className="mt-2 text-xs text-white/40">La bandeja se actualiza automáticamente cada 4 segundos mediante el webhook y la API interna de Flowly.</p>
+            </div>
+          </main>
         </section>
       ) : currentView === "enviar" ? (
         <GlassCard title="Enviar WhatsApp">
@@ -4095,7 +4161,7 @@ function WhatsappModule({
             <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
               <p className="text-sm font-semibold">Últimas conversaciones</p>
               <div className="mt-3 grid gap-2">
-                {conversations.length ? conversations.map((message) => (
+                {liveWhatsappMessages.slice(0, 12).length ? liveWhatsappMessages.slice(0, 12).map((message) => (
                   <div key={message.id} className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-3">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold text-white/65">{message.contact_name || message.phone || "WhatsApp"}</p>
