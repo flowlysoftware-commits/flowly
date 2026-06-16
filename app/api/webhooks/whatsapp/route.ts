@@ -389,7 +389,7 @@ async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue
 
   const payload = {
     business_id: businessId,
-    contact_id: contactId,
+    contact_id: customerId,
     phone,
     template_key: null,
     message: text,
