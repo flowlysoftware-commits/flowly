@@ -4151,7 +4151,7 @@ function WhatsappModule({
       )}
 
       {currentView === "bandeja" ? (
-        <section className="grid h-[min(76vh,48rem)] min-h-[38rem] overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 xl:grid-cols-[22rem_1fr]">
+        <section className="grid h-[calc(100vh-18rem)] min-h-[34rem] max-h-[48rem] overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 xl:grid-cols-[22rem_1fr]">
           <aside className="border-b border-white/10 bg-white/[0.035] xl:border-b-0 xl:border-r">
             <div className="flex items-center justify-between gap-3 border-b border-white/10 p-4">
               <div>
@@ -4180,7 +4180,7 @@ function WhatsappModule({
             </div>
           </aside>
 
-          <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
+          <main className="grid min-h-0 overflow-hidden grid-rows-[auto_minmax(0,1fr)_auto]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] p-4">
               <div>
                 <p className="text-base font-semibold">{selectedConversation ? selectedConversation.contactName || `+${selectedConversation.phone}` : "Selecciona una conversación"}</p>
@@ -4202,8 +4202,8 @@ function WhatsappModule({
               {selectedConversation ? (
                 <div className="grid gap-3">
                   {selectedConversation.messages.map((message) => (
-                    <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[78%] rounded-[1.15rem] rounded-bl-sm border border-white/10 bg-white/[0.08] px-4 py-3 shadow-lg shadow-black/10" : "ml-auto max-w-[78%] rounded-[1.15rem] rounded-br-sm border border-emerald-300/20 bg-emerald-400/15 px-4 py-3 shadow-lg shadow-emerald-950/10"}>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-white/90">{message.message || "Mensaje sin texto"}</p>
+                    <div key={message.id} className={message.direction === "inbound" ? "mr-auto max-w-[75%] min-w-0 overflow-hidden break-words rounded-[1.15rem] rounded-bl-sm border border-white/10 bg-white/[0.08] px-4 py-3 shadow-lg shadow-black/10" : "ml-auto max-w-[75%] min-w-0 overflow-hidden break-words rounded-[1.15rem] rounded-br-sm border border-emerald-300/20 bg-emerald-400/15 px-4 py-3 shadow-lg shadow-emerald-950/10"}>
+                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-white/90">{message.message || "Mensaje sin texto"}</p>
                       <div className="mt-2 flex items-center justify-end gap-2 text-[10px] uppercase tracking-[0.14em] text-white/35">
                         <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                         <span>{message.direction === "inbound" ? "Recibido" : message.status || "Enviado"}</span>
@@ -4219,11 +4219,11 @@ function WhatsappModule({
               )}
             </div>
 
-            <div className="border-t border-white/10 bg-black/35 p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                <textarea value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder={selectedConversation ? "Escribe un mensaje..." : "Selecciona una conversación"} className="input-dark min-h-24 flex-1 resize-none" />
-                <button onClick={sendConversationReply} disabled={sending || !whatsappConnection || !selectedConversation} className="btn-primary h-12 disabled:cursor-not-allowed disabled:opacity-50"><Send size={16} /> {sending ? "Enviando..." : "Enviar"}</button>
-              </div>
+            <div className="shrink-0 border-t border-white/10 bg-black/35 p-4">
+              <form onSubmit={(event) => { event.preventDefault(); sendConversationReply(); }} className="flex flex-col gap-3 md:flex-row md:items-end">
+                <textarea value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder={selectedConversation ? "Escribe un mensaje..." : "Selecciona una conversación"} className="input-dark min-h-14 max-h-28 flex-1 resize-none" />
+                <button type="submit" disabled={sending || !whatsappConnection || !selectedConversation} className="btn-primary h-12 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"><Send size={16} /> {sending ? "Enviando..." : "Enviar"}</button>
+              </form>
               <p className="mt-2 text-xs text-white/40">La bandeja se actualiza automáticamente cada 4 segundos mediante el webhook y la API interna de Flowly.</p>
             </div>
           </main>
