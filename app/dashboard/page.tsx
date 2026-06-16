@@ -3663,6 +3663,7 @@ function WhatsappModule({
   saveWhatsappMessage,
   activeTab,
   setActiveTab,
+  setSelectedCrmCustomerId,
 }: Parameters<typeof ModuleSection>[0]) {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [selectedTemplateKey, setSelectedTemplateKey] = useState("");
@@ -3764,6 +3765,66 @@ function WhatsappModule({
   }, [conversationGroups, selectedConversationPhone]);
 
   const selectedConversation = conversationGroups.find((item) => item.phone === selectedConversationPhone) || conversationGroups[0] || null;
+
+  const markConversationAsOpened = useCallback(async (phone: string) => {
+    if (!business?.id || !phone) return;
+    setLiveWhatsappMessages((current) => current.map((message) => (normalizePhone(message.phone) === normalizePhone(phone) && message.direction === "inbound" && message.status === "received" ? { ...message, status: "opened" } : message)));
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      await fetch("/api/whatsapp/read", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ businessId: business.id, phone }),
+      });
+    } catch (error) {
+      console.warn("No se pudo marcar la conversación como leída", error);
+    }
+  }, [business?.id]);
+
+  useEffect(() => {
+    if (selectedConversation?.phone) markConversationAsOpened(selectedConversation.phone);
+  }, [selectedConversation?.phone, markConversationAsOpened]);
+
+  const openConversationCrm = async () => {
+    if (!business || !selectedConversation) return;
+    let customerId = selectedConversation.customer?.id || selectedConversation.messages.find((message) => message.customer_id)?.customer_id || null;
+
+    if (!customerId) {
+      const normalizedPhone = normalizePhone(selectedConversation.phone);
+      const name = selectedConversation.contactName && selectedConversation.contactName !== selectedConversation.phone ? selectedConversation.contactName : `WhatsApp +${normalizedPhone}`;
+      const { data, error } = await supabase
+        .from("customers")
+        .insert({
+          business_id: business.id,
+          name,
+          full_name: name,
+          phone: `+${normalizedPhone}`,
+          notes: `Creado desde la bandeja WhatsApp de Flowly.\nÚltimo mensaje: ${selectedConversation.lastMessage?.message || ""}`,
+          crm_status: "nuevo",
+          last_contact_at: new Date().toISOString(),
+        })
+        .select("id")
+        .maybeSingle();
+      if (error) return alert(error.message);
+      customerId = data?.id || null;
+      if (customerId) {
+        await supabase
+          .from("whatsapp_messages")
+          .update({ customer_id: customerId, updated_at: new Date().toISOString() })
+          .eq("business_id", business.id)
+          .eq("phone", selectedConversation.phone);
+      }
+      await reloadData();
+    }
+
+    if (!customerId) return alert("No se pudo abrir o crear la ficha CRM");
+    setSelectedCrmCustomerId(customerId);
+    setActiveTab("module:crm:ficha");
+  };
 
   const handleSelectTemplate = (key: string) => {
     setSelectedTemplateKey(key);
@@ -3988,9 +4049,9 @@ function WhatsappModule({
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">WhatsApp Cloud API oficial</p>
-            <h2 className="mt-2 text-3xl font-semibold">Conversaciones, plantillas y envío real</h2>
+            <h2 className="mt-2 text-3xl font-semibold">WhatsApp operativo conectado al CRM</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
-              Envía WhatsApps desde Flowly usando la cuenta conectada del negocio. Los mensajes entrantes llegan por webhook y quedan guardados en el CRM.
+              Gestiona la bandeja como WhatsApp Web: conversaciones en vivo, respuestas desde Cloud API, leads vinculados al CRM y bots automáticos por palabra clave.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className={whatsappConnection ? "rounded-full border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-100" : "rounded-full border border-amber-300/25 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-100"}>
@@ -4075,11 +4136,18 @@ function WhatsappModule({
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] p-4">
               <div>
                 <p className="text-base font-semibold">{selectedConversation ? selectedConversation.contactName || `+${selectedConversation.phone}` : "Selecciona una conversación"}</p>
-                <p className="mt-1 text-xs text-white/45">{selectedConversation ? `+${selectedConversation.phone} · ${selectedConversation.messages.length} mensajes` : "Bandeja estilo WhatsApp conectada a Cloud API"}</p>
+                <p className="mt-1 text-xs text-white/45">{selectedConversation ? `+${selectedConversation.phone} · ${selectedConversation.messages.length} mensajes · ${selectedConversation.customer ? "vinculado al CRM" : "lead sin ficha"}` : "Bandeja estilo WhatsApp conectada a Cloud API"}</p>
               </div>
-              <span className={whatsappConnection ? "rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100" : "rounded-full bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-100"}>
-                {whatsappConnection ? "Cloud API conectado" : "Sin conexión"}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedConversation && (
+                  <button type="button" onClick={openConversationCrm} className="rounded-full border border-cyan-300/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/20">
+                    {selectedConversation.customer ? "Abrir ficha CRM" : "Crear ficha CRM"}
+                  </button>
+                )}
+                <span className={whatsappConnection ? "rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100" : "rounded-full bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-100"}>
+                  {whatsappConnection ? "Cloud API conectado" : "Sin conexión"}
+                </span>
+              </div>
             </div>
 
             <div className="overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.1),transparent_35%)] p-4">
@@ -4225,7 +4293,8 @@ function WhatsappModule({
         </GlassCard>
       ) : (
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <GlassCard title="Crear bot de respuesta">
+          <GlassCard title="Crear bot automático real">
+            <p className="mb-4 text-sm leading-6 text-white/55">Estas reglas se ejecutan desde el webhook cuando entra un mensaje. Si coincide la palabra clave, Flowly responde automáticamente con el WhatsApp Cloud API conectado.</p>
             <div className="grid gap-3">
               <input value={botName} onChange={(e) => setBotName(e.target.value)} placeholder="Nombre de la regla: Precios, Citas, Horario..." className="input-dark" />
               <select value={botMatchMode} onChange={(e) => setBotMatchMode(e.target.value)} className="input-dark">
@@ -4237,7 +4306,7 @@ function WhatsappModule({
               <button onClick={createBotRule} className="btn-primary justify-center"><Bot size={17} /> Crear bot</button>
             </div>
           </GlassCard>
-          <GlassCard title="Bots activos">
+          <GlassCard title="Bots activos en el webhook">
             <div className="grid gap-3">
               {localBotRules.length ? localBotRules.map((rule) => (
                 <div key={rule.id || rule.trigger_text} className="rounded-[1.5rem] border border-white/10 bg-white/[0.05] p-5">

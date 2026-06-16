@@ -143,22 +143,68 @@ async function findIntegrationByPhoneNumberId(phoneNumberId?: string): Promise<W
 async function findCustomerIdByPhone(businessId: string, phone: string) {
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
-  const { data } = await supabaseAdmin.from("customers").select("id, phone").eq("business_id", businessId).limit(200);
-  const match = (data || []).find((customer) => normalizePhone(customer.phone) === normalized);
+  const { data } = await supabaseAdmin.from("customers").select("id, phone").eq("business_id", businessId).limit(500);
+  const match = (data || []).find((customer) => {
+    const candidate = normalizePhone(customer.phone);
+    return candidate === normalized || (!!candidate && candidate.endsWith(normalized.slice(-9))) || normalized.endsWith(candidate.slice(-9));
+  });
   return match?.id || null;
+}
+
+async function findOrCreateCustomerFromWhatsapp(businessId: string, phone: string, contactName: string | null, firstMessage: string) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+
+  const existingId = await findCustomerIdByPhone(businessId, phone);
+  if (existingId) {
+    await supabaseAdmin
+      .from("customers")
+      .update({ last_contact_at: new Date().toISOString() })
+      .eq("id", existingId)
+      .eq("business_id", businessId);
+    return existingId;
+  }
+
+  const name = contactName?.trim() || `WhatsApp +${normalized}`;
+  const notes = [
+    "Lead creado automáticamente desde WhatsApp Cloud API.",
+    firstMessage ? `Primer mensaje: ${firstMessage}` : "",
+  ].filter(Boolean).join("\n");
+
+  const { data, error } = await supabaseAdmin
+    .from("customers")
+    .insert({
+      business_id: businessId,
+      name,
+      full_name: name,
+      phone: `+${normalized}`,
+      notes,
+      crm_status: "nuevo",
+      last_contact_at: new Date().toISOString(),
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("WHATSAPP CRM CUSTOMER CREATE ERROR", error.message);
+    return null;
+  }
+
+  return data?.id || null;
 }
 
 async function saveInboundMessage(businessId: string, value: WhatsAppChangeValue, message: WhatsAppMessage) {
   const phone = message.from || value.contacts?.[0]?.wa_id || "";
   const customerName = value.contacts?.find((contact) => contact.wa_id === phone)?.profile?.name || value.contacts?.[0]?.profile?.name || null;
-  const customerId = await findCustomerIdByPhone(businessId, phone);
+  const text = getMessageText(message);
+  const customerId = await findOrCreateCustomerFromWhatsapp(businessId, phone, customerName, text);
 
   const payload = {
     business_id: businessId,
     customer_id: customerId,
     phone,
     template_key: null,
-    message: getMessageText(message),
+    message: text,
     direction: "inbound",
     status: "received",
     provider_message_id: message.id || null,
