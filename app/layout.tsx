@@ -19,10 +19,21 @@ fbq('init', '1494265335773412');
 fbq('track', 'PageView');
 `;
 
+const googleAnalyticsId = "G-LEVMGKR303";
+
+const googleTagCode = `
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${googleAnalyticsId}');
+`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es">
       <head>
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} />
+        <script dangerouslySetInnerHTML={{ __html: googleTagCode }} />
         <script dangerouslySetInnerHTML={{ __html: metaPixelCode }} />
       </head>
       <body>
