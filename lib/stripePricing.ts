@@ -29,7 +29,7 @@ export function resolveFlowlyMarket(country?: unknown, currency?: unknown): Flow
 
 export function convertBasePrice(amountInEur: number, market: FlowlyMarket) {
   const converted = amountInEur * market.rate;
-  const venezuelaDiscount = market.country === "VE" ? 5 : 0;
+  const venezuelaDiscount = market.country === "VE" ? 7 : 0;
   return Number(Math.max(0, converted - venezuelaDiscount).toFixed(2));
 }
 

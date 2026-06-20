@@ -42,7 +42,7 @@ type Module = { id: ModuleId; name: string; price: number; description: string; 
 type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[]; footerNote?: string };
 
 const markets: MarketConfig[] = [
-  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", locale: "es-VE", rate: 1.08, badge: "Planes para Venezuela · USD · -5 USD" },
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", locale: "es-VE", rate: 1.08, badge: "Planes para Venezuela · USD · -7 USD" },
   { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", locale: "es-ES", rate: 1, badge: "30 días gratis · Sin permanencia" },
   { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", locale: "es-CO", rate: 4300, badge: "Planes para Colombia · COP" },
   { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", locale: "es-EC", rate: 1.08, badge: "Planes para Ecuador · USD" },
@@ -74,7 +74,6 @@ const fixedPlans: Plan[] = [
       "Dashboard básico de facturación",
       "Soporte por email",
     ],
-    footerNote: "Incluye facturación sencilla no fiscal/SENIAT para organizar clientes, presupuestos, facturas y cobros.",
   },
   {
     id: "premium",
@@ -154,7 +153,7 @@ function marketingModuleName(planId: string) {
 function displayPrice(value: number, country: Country) {
   const market = getMarket(country);
   const converted = value * market.rate;
-  if (country === "VE") return Math.max(0, converted - 5);
+  if (country === "VE") return Math.max(0, converted - 7);
   return converted;
 }
 
@@ -273,7 +272,7 @@ export default function PreciosPage() {
         <section className="text-center">
           <div className="mx-auto inline-flex items-center gap-2 flowly-chip px-4 py-2 text-sm">{referralCode ? `Enlace comercial ${referralCode}` : market.badge}</div>
           <h1 className="mx-auto mt-6 max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl flowly-gradient-text">Planes para lanzar y escalar tu negocio</h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/68">Elige un pack cerrado o crea tu propio Flowly con módulos. En Venezuela los precios se muestran en USD con una reducción especial de 5 USD.</p>
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/68">Elige un pack cerrado o crea tu propio Flowly con módulos. En Venezuela los precios se muestran en USD con una reducción especial de 7 USD.</p>
         </section>
 
         <section className="mt-16 grid gap-6 lg:grid-cols-4">
