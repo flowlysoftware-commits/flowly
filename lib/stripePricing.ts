@@ -28,7 +28,9 @@ export function resolveFlowlyMarket(country?: unknown, currency?: unknown): Flow
 }
 
 export function convertBasePrice(amountInEur: number, market: FlowlyMarket) {
-  return Number((amountInEur * market.rate).toFixed(2));
+  const converted = amountInEur * market.rate;
+  const venezuelaDiscount = market.country === "VE" ? 5 : 0;
+  return Number(Math.max(0, converted - venezuelaDiscount).toFixed(2));
 }
 
 export function stripeUnitAmount(amountInDisplayCurrency: number, market: FlowlyMarket) {

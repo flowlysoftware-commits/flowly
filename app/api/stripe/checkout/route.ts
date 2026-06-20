@@ -9,7 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const modularModules = [
   { id: "agenda", name: "Agenda PRO", price: 9.99 },
   { id: "whatsapp", name: "WhatsApp automático", price: 9.99 },
-  { id: "billing", name: "Facturación", price: 9.99 },
+  { id: "billing", name: "Facturación PRO", price: 9.99 },
   { id: "pos", name: "TPV", price: 14.99 },
   { id: "crm", name: "CRM avanzado", price: 9.99 },
   { id: "marketing", name: "Marketing", price: 19.9 },
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
               currency: market.stripeCurrency,
               unit_amount: stripeUnitAmount(displayPrice, market),
               recurring: { interval: "month" },
-              product_data: { name: `Flowly ${plan === "basic" ? "Basic" : "Premium"}`, description: `Suscripción mensual Flowly · ${market.country}` },
+              product_data: { name: `Flowly ${plan === "basic" ? "Basic" : "Premium"}`, description: plan === "basic" ? `Agenda + CRM + facturación básica · ${market.country}` : `Suscripción mensual Flowly · ${market.country}` },
             },
             quantity: 1,
           },

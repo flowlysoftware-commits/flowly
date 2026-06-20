@@ -39,10 +39,10 @@ type MarketConfig = {
 type ModuleId = "agenda" | "whatsapp" | "billing" | "pos" | "crm" | "marketing" | "ai" | "analytics" | "booking_premium" | "time_tracking" | "inventory" | "client_portal" | "surveys" | "hr" | "automations" | "digital_signature";
 type Module = { id: ModuleId; name: string; price: number; description: string; Icon: React.ComponentType<{ size?: number; className?: string }>; requiresPlan?: boolean };
 
-type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[] };
+type Plan = { id: string; name: string; price: number; description: string; highlighted: boolean; features: string[]; footerNote?: string };
 
 const markets: MarketConfig[] = [
-  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", locale: "es-VE", rate: 1.08, badge: "Planes para Venezuela · USD" },
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", locale: "es-VE", rate: 1.08, badge: "Planes para Venezuela · USD · -5 USD" },
   { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", locale: "es-ES", rate: 1, badge: "30 días gratis · Sin permanencia" },
   { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", locale: "es-CO", rate: 4300, badge: "Planes para Colombia · COP" },
   { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", locale: "es-EC", rate: 1.08, badge: "Planes para Ecuador · USD" },
@@ -57,8 +57,41 @@ function getMarket(country: Country) {
   return markets.find((market) => market.code === country) ?? markets[1];
 }
 const fixedPlans: Plan[] = [
-  { id: "basic", name: "Basic", price: 29.99, description: "Para negocios pequeños o que están empezando.", highlighted: false, features: ["Agenda y reservas online", "CRM de clientes", "Gestión de servicios", "Historial de citas", "Dashboard básico", "Recordatorios automáticos", "Acceso desde móvil y ordenador", "Soporte por email"] },
-  { id: "premium", name: "Premium", price: 59.99, description: "Para negocios que quieren crecer y automatizar.", highlighted: true, features: ["Todo lo incluido en Basic", "Módulo de contabilidad", "Control de ingresos y gastos", "Informes avanzados", "WhatsApp automático", "Automatizaciones inteligentes", "Clientes inactivos", "Gestión de bonos y membresías", "Soporte prioritario"] },
+  {
+    id: "basic",
+    name: "Basic",
+    price: 29.99,
+    description: "Agenda, CRM y facturación básica para gestionar el día a día.",
+    highlighted: false,
+    features: [
+      "Agenda y reservas online",
+      "CRM de clientes integrado",
+      "Cotizaciones y presupuestos básicos",
+      "Facturas PDF con logo",
+      "Conversión Cotización → Factura",
+      "Registro de cobros: efectivo, transferencia, pago móvil, tarjeta y divisas",
+      "Envío de cotizaciones y facturas por WhatsApp y email",
+      "Dashboard básico de facturación",
+      "Soporte por email",
+    ],
+    footerNote: "Incluye facturación sencilla no fiscal/SENIAT para organizar clientes, presupuestos, facturas y cobros.",
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    price: 59.99,
+    description: "Para negocios que quieren crecer y automatizar.",
+    highlighted: true,
+    features: [
+      "Todo lo incluido en Basic",
+      "WhatsApp automático",
+      "Automatizaciones inteligentes",
+      "Clientes inactivos",
+      "Gestión de bonos y membresías",
+      "Informes avanzados",
+      "Soporte prioritario",
+    ],
+  },
 ];
 
 
@@ -87,7 +120,7 @@ const businessTypes: { id: BusinessTypeId; label: string; recommended: ModuleId[
 const modules: Module[] = [
   { id: "agenda", name: "Agenda PRO", price: 9.99, description: "Calendario visual, huecos libres y creación rápida de citas.", Icon: CalendarDays },
   { id: "whatsapp", name: "WhatsApp automático", price: 9.99, description: "Confirmaciones, recordatorios y avisos automáticos.", Icon: MessageCircle },
-  { id: "billing", name: "Facturación", price: 9.99, description: "Facturas, presupuestos, gastos e ingresos.", Icon: Receipt },
+  { id: "billing", name: "Facturación PRO", price: 9.99, description: "Productos, servicios, gastos, recurrentes, portal cliente, firma, pagos online e informes avanzados.", Icon: Receipt },
   { id: "pos", name: "TPV", price: 14.99, description: "Cobros, caja, tickets y ventas presenciales.", Icon: Store },
   { id: "crm", name: "CRM avanzado", price: 9.99, description: "Segmentación, seguimiento y clientes inactivos.", Icon: CreditCard },
   { id: "marketing", name: "Marketing", price: 19.9, description: "Campañas, calendario, publicaciones e IA según el plan elegido.", Icon: Megaphone, requiresPlan: true },
@@ -118,9 +151,16 @@ function marketingModuleName(planId: string) {
   return marketingPlans[planId]?.name.replace("Flowly Marketing ", "") ?? "Bronze";
 }
 
-function formatMoney(value: number, country: Country) {
+function displayPrice(value: number, country: Country) {
   const market = getMarket(country);
   const converted = value * market.rate;
+  if (country === "VE") return Math.max(0, converted - 5);
+  return converted;
+}
+
+function formatMoney(value: number, country: Country) {
+  const market = getMarket(country);
+  const converted = displayPrice(value, country);
 
   if (market.currency === "EUR") {
     return `${converted.toLocaleString(market.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
@@ -233,7 +273,7 @@ export default function PreciosPage() {
         <section className="text-center">
           <div className="mx-auto inline-flex items-center gap-2 flowly-chip px-4 py-2 text-sm">{referralCode ? `Enlace comercial ${referralCode}` : market.badge}</div>
           <h1 className="mx-auto mt-6 max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl flowly-gradient-text">Planes para lanzar y escalar tu negocio</h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/68">Elige un pack cerrado o crea tu propio Flowly con módulos. Los precios cambian automáticamente según el mercado seleccionado.</p>
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/68">Elige un pack cerrado o crea tu propio Flowly con módulos. En Venezuela los precios se muestran en USD con una reducción especial de 5 USD.</p>
         </section>
 
         <section className="mt-16 grid gap-6 lg:grid-cols-4">
@@ -245,6 +285,7 @@ export default function PreciosPage() {
               <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(plan.price, country)}</span><span className={plan.highlighted ? "text-white/45" : "text-white/50"}> / mes</span></div>
               <button onClick={() => startCheckout(plan.id)} disabled={loadingPlan === plan.id} className={plan.highlighted ? "mt-7 w-full rounded-full bg-white px-5 py-4 font-medium text-neutral-950" : "mt-7 w-full flowly-primary rounded-full px-5 py-4 font-medium"}>{loadingPlan === plan.id ? "Abriendo..." : "Empezar 30 días gratis"}</button>
               <div className="mt-7 space-y-3">{plan.features.map((feature) => <div key={feature} className="flex gap-3 text-sm"><Check size={18} className={plan.highlighted ? "text-violet-200" : "text-cyan-200"} /><span>{feature}</span></div>)}</div>
+              {plan.footerNote && <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-xs leading-5 text-cyan-100">{plan.footerNote}</div>}
             </div>
           ))}
 
@@ -253,7 +294,7 @@ export default function PreciosPage() {
             <h2 className="mt-3 text-3xl font-semibold">Flowly Modular</h2>
             <p className="mt-3 text-white/60">Elige la base modular ahora y configura los módulos en el siguiente paso, sin hacer la página interminable.</p>
             <div className="mt-7"><span className="text-5xl font-semibold">{formatMoney(modularTotal, country)}</span><span className="text-white/50"> / mes</span></div>
-            <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm text-cyan-100">Base incluida: dashboard, clientes, reservas, calendario y servicios.</div>
+            <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm text-cyan-100">Base incluida: dashboard, clientes, reservas, calendario, servicios y facturación básica.</div>
             <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.05] p-4 text-sm text-white/65">
               <p><span className="font-semibold text-white">{selectedModules.length}</span> módulos seleccionados</p>
               <p className="mt-1">Sector: {businessTypes.find((item) => item.id === businessType)?.label}</p>
@@ -272,6 +313,30 @@ export default function PreciosPage() {
             <Link href="/contacto?tipo=Informacion%20comercial&mensaje=Quiero%20informacion%20comercial%20sobre%20Flowly%20Enterprise" className="mt-7 inline-flex w-full justify-center rounded-full bg-white px-5 py-4 font-semibold text-slate-950">Más información</Link>
           </div>
         </section>
+
+        {country === "VE" && (
+          <section className="mt-10 grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <div className="flowly-card rounded-[2rem] p-7">
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200/80">🇻🇪 Flowly Facturación Venezuela</p>
+              <h2 className="mt-4 text-3xl font-semibold">Facturación básica incluida en Flowly Basic</h2>
+              <p className="mt-4 text-white/60">Una solución sencilla integrada con CRM, Agenda y WhatsApp para autónomos, profesionales y empresas que necesitan gestionar clientes, cotizaciones, facturas y cobros desde una única plataforma, sin complicaciones y sin conocimientos contables.</p>
+              <div className="mt-6 grid gap-3 text-sm text-white/78 sm:grid-cols-2">
+                {["Clientes integrados con CRM", "Cotizaciones y presupuestos", "Facturas PDF profesionales", "Cotización → Factura", "Cobros: efectivo, transferencia, pago móvil, tarjeta y divisas", "Dashboard: facturado, pendientes, vencidas y clientes activos", "Envío por WhatsApp y correo", "Recordatorios básicos de pago"].map((item) => <div key={item} className="flex gap-3"><Check size={18} className="text-cyan-200" /><span>{item}</span></div>)}
+              </div>
+              <p className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-300/10 p-4 text-xs leading-5 text-amber-50">Esta facturación está pensada como gestión interna y comercial. No incluye conexión directa con SENIAT.</p>
+            </div>
+
+            <div className="flowly-glass rounded-[2rem] p-7">
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-violet-200/80">Módulo adicional</p>
+              <h2 className="mt-4 text-3xl font-semibold">Facturación PRO</h2>
+              <p className="mt-4 text-white/60">Para empresas que quieren automatizar procesos y tener mayor control financiero sin salir de Flowly.</p>
+              <div className="mt-6 grid gap-3 text-sm text-white/82 sm:grid-cols-2">
+                {["Catálogo de productos y servicios", "Facturas recurrentes", "Control de gastos y proveedores", "Análisis de rentabilidad", "Firma digital de presupuestos", "Portal del cliente", "Pagos online", "Automatizaciones e informes avanzados"].map((item) => <div key={item} className="flex gap-3"><Check size={18} className="text-violet-200" /><span>{item}</span></div>)}
+              </div>
+              <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-sm text-white/72">WhatsApp → CRM → Agenda → Cotización → Factura → Cobro. Todo conectado en una sola plataforma.</div>
+            </div>
+          </section>
+        )}
 
         {showModuleBuilder && (
           <section className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/92 px-6 py-8 backdrop-blur-xl">
