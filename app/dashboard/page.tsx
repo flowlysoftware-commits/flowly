@@ -5090,7 +5090,7 @@ function CustomersSection({ customers, customerFormName, setCustomerFormName, cu
   const withPhone = customers.filter((customer: Customer) => customer.phone).length;
   const whatsappLeads = customers.filter((customer: Customer) => (customer.crm_status || "").includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp")).length;
   const needsFollowUp = customers.filter((customer: Customer) => !customer.next_follow_up_at && !["cerrado", "perdido", "alta"].includes(customer.crm_status || "nuevo")).length;
-  const statuses = Array.from(new Set(customers.map((customer: Customer) => translateCrmStatus(customer.crm_status || "nuevo")))).slice(0, 4);
+  const statuses: string[] = Array.from(new Set<string>(customers.map((customer: Customer) => translateCrmStatus(customer.crm_status || "nuevo")))).slice(0, 4);
 
   return (
     <section className="grid gap-6">
@@ -5124,7 +5124,7 @@ function CustomersSection({ customers, customerFormName, setCustomerFormName, cu
 
           <GlassCard title="Segmentos visibles">
             <div className="grid gap-3">
-              {["Nuevo WhatsApp", ...statuses, whatsappLeads ? "Origen WhatsApp" : "Captación manual"].slice(0, 5).map((tag) => (
+              {(["Nuevo WhatsApp", ...statuses, whatsappLeads ? "Origen WhatsApp" : "Captación manual"] as string[]).slice(0, 5).map((tag) => (
                 <div key={tag} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3">
                   <span className="text-sm font-medium">{tag}</span>
                   <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/55">CRM</span>
