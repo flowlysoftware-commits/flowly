@@ -2250,6 +2250,82 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
     setStatus(nextStatus);
   }, [tab]);
   const Icon = module.Icon;
+  if (module.key === "client_portal") {
+    const portalFeatures = [
+      { title: "Citas y reservas", body: "El cliente ve sus próximas citas, horarios y confirmaciones sin llamar al negocio.", Icon: CalendarDays },
+      { title: "Documentos", body: "Presupuestos, facturas, consentimientos o archivos importantes en un espacio privado.", Icon: FileText },
+      { title: "Pagos y cobros", body: "Estado de facturas, importes pendientes y acceso directo a métodos de pago.", Icon: CreditCard },
+      { title: "Solicitudes", body: "Formulario ordenado para pedir cambios, soporte, citas o información adicional.", Icon: MessageCircle },
+    ];
+    const portalSteps = ["Invitación por WhatsApp o email", "Acceso privado del cliente", "Consulta de citas/documentos", "Solicitud o pago enviado"];
+    return (
+      <section className="grid gap-6">
+        <div className="overflow-hidden rounded-[2.4rem] border border-white/10 bg-[radial-gradient(circle_at_12%_20%,rgba(34,211,238,.24),transparent_30%),radial-gradient(circle_at_88%_10%,rgba(167,139,250,.22),transparent_32%),linear-gradient(135deg,rgba(2,6,23,.98),rgba(15,23,42,.94))] p-6 shadow-2xl shadow-black/30 md:p-8">
+          <div className="grid gap-8 xl:grid-cols-[1fr_.8fr] xl:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100"><ShieldCheck size={15} /> Área Cliente PRO</div>
+              <h2 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight md:text-5xl">Un portal privado que hace que el negocio parezca más grande, más serio y más fácil de comprar.</h2>
+              <p className="mt-5 max-w-2xl text-sm leading-7 text-white/60">Centraliza citas, documentos, facturas, solicitudes y pagos en una experiencia limpia para el cliente final. No es una lista de registros: es una zona premium para aumentar confianza y reducir mensajes repetidos.</p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button onClick={() => selectModuleSubmenu(setActiveTab, "module:portal-cliente:inicio" as ActiveTab, setTab, "Inicio")} className="btn-primary"><Sparkles size={17} /> Diseñar portal</button>
+                <button onClick={() => selectModuleSubmenu(setActiveTab, "module:portal-cliente:accesos" as ActiveTab, setTab, "Accesos")} className="btn-secondary"><ShieldCheck size={17} /> Gestionar accesos</button>
+              </div>
+            </div>
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.07] p-5 shadow-xl shadow-black/20">
+              <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/65 p-4">
+                <div className="flex items-center justify-between"><p className="font-semibold">Vista del cliente</p><span className="rounded-full bg-green-400/15 px-3 py-1 text-xs text-green-100">Activo</span></div>
+                <div className="mt-5 grid gap-3">
+                  {["Próxima cita confirmada", "Factura pendiente", "Documento listo para descargar", "Solicitud enviada"].map((item) => <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4"><p className="text-sm font-semibold">{item}</p><p className="mt-1 text-xs text-white/42">Visible en el portal privado</p></div>)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <MetricCard label="Clientes" value={customers.length} />
+          <MetricCard label="Solicitudes" value={records.filter((record) => record.status === "request").length} />
+          <MetricCard label="Accesos" value={records.filter((record) => record.status === "access").length} />
+          <MetricCard label="Estado" value="Premium" />
+        </div>
+
+        <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
+          <GlassCard title="Qué verá tu cliente">
+            <div className="grid gap-4 md:grid-cols-2">
+              {portalFeatures.map(({ title: featureTitle, body, Icon: FeatureIcon }) => (
+                <div key={featureTitle} className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 transition hover:border-cyan-300/25 hover:bg-white/[0.08]">
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-100"><FeatureIcon size={19} /></div>
+                  <p className="font-semibold">{featureTitle}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/50">{body}</p>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+
+          <GlassCard title="Configurar acceso">
+            <div className="mb-5 space-y-3">
+              {portalSteps.map((step, index) => <div key={step} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-950">{index + 1}</span><p className="text-sm leading-6 text-white/65">{step}</p></div>)}
+            </div>
+            <div className="grid gap-3">
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre del acceso, página o solicitud" className="input-dark" />
+              <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark">
+                {cfg.statuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Descripción, URL privada, instrucciones de acceso o mensaje para el cliente" className="input-dark min-h-28" />
+              <button onClick={() => createRecord(module.key, status || "published")} className="btn-primary"><Plus size={17} /> Crear elemento del portal</button>
+            </div>
+          </GlassCard>
+        </section>
+
+        <GlassCard title="Elementos del Área Cliente">
+          <div className="grid gap-3 md:grid-cols-3">
+            {records.slice(0, 9).map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-white/45">{record.status} · {new Date(record.created_at).toLocaleDateString("es-ES")}</p>{record.notes && <p className="mt-3 line-clamp-3 text-sm leading-6 text-white/48">{record.notes}</p>}</div>)}
+            {!records.length && <div className="md:col-span-3"><Empty text="Crea el primer acceso, solicitud o contenido del portal." /></div>}
+          </div>
+        </GlassCard>
+      </section>
+    );
+  }
   return (
     <section className="grid gap-6">
       <ModuleHero eyebrow={module.badge} title={module.name} description={module.description} actions={<ModulePillTabs tabs={cfg.tabs} active={tab} setActive={(next) => { const key = next.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"); selectModuleSubmenu(setActiveTab, `${cfg.prefix}${key}` as ActiveTab, setTab, next); }} />} />
@@ -5006,45 +5082,105 @@ function ServicesSection({ services, serviceName, setServiceName, serviceDuratio
 function EmployeesSection({ employees, employeeName, setEmployeeName, employeePhone, setEmployeePhone, createEmployee }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo empleado"><div className="grid gap-3"><input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createEmployee} className="btn-primary"><Plus size={17} /> Crear empleado</button></div></GlassCard><GlassCard title="Equipo"><div className="space-y-3">{employees.map((employee: Employee) => <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{employee.name}</p><p className="text-sm text-white/45">{employee.phone || "Sin teléfono"}</p></div>)}{!employees.length && <Empty text="Añade al primer profesional del negocio." />}</div></GlassCard></section>; }
 function CustomersSection({ customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) {
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<"grid" | "list">("grid");
   const filteredCustomers = customers.filter((customer: Customer) => {
     const text = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""} ${customer.crm_status || ""}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
+  const withPhone = customers.filter((customer: Customer) => customer.phone).length;
+  const whatsappLeads = customers.filter((customer: Customer) => (customer.crm_status || "").includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp")).length;
+  const needsFollowUp = customers.filter((customer: Customer) => !customer.next_follow_up_at && !["cerrado", "perdido", "alta"].includes(customer.crm_status || "nuevo")).length;
+  const statuses = Array.from(new Set(customers.map((customer: Customer) => translateCrmStatus(customer.crm_status || "nuevo")))).slice(0, 4);
 
   return (
-    <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
-      <GlassCard title="Nuevo paciente / cliente">
-        <div className="grid gap-3">
-          <input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre" className="input-dark" />
-          <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="input-dark" />
-          <button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear paciente</button>
-        </div>
-      </GlassCard>
-
-      <GlassCard title="Clientes / pacientes">
-        <div className="relative mb-4">
-          <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, identificación, EPS o estado" className="input-dark pl-11" />
-        </div>
-        <div className="space-y-3">
-          {filteredCustomers.map((customer: Customer) => (
-            <div key={customer.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-              <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-                <div>
-                  <p className="font-semibold">{customerName(customer)}</p>
-                  <p className="text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p>
-                  <p className="mt-2 text-xs text-violet-200">
-                    {translateCrmStatus(customer.crm_status || "nuevo")} · {translateIntent(customer.eps || "informacion")}
-                    {customer.document_number ? ` · ID ${customer.document_number}` : ""}
-                  </p>
-                </div>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">Gestionar en CRM</span>
-              </div>
+    <section className="grid gap-6">
+      <div className="overflow-hidden rounded-[2.25rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,.20),transparent_34%),linear-gradient(135deg,rgba(15,23,42,.96),rgba(30,27,75,.90))] p-6 shadow-2xl shadow-black/30 md:p-8">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
+              <Users size={15} /> Centro de clientes
             </div>
-          ))}
-          {!filteredCustomers.length && <Empty text="No hay pacientes que coincidan con la búsqueda." />}
+            <h2 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl">Clientes ordenados, seguimiento claro y una experiencia mucho más profesional.</h2>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/58">Gestiona contactos, origen, estado, próximas acciones y datos clave desde una vista simple pero sofisticada. Pensado para vender más y no perder clientes entre notas sueltas.</p>
+          </div>
+          <div className="grid min-w-[300px] gap-3 sm:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs text-white/45">Clientes</p><p className="mt-1 text-2xl font-semibold">{customers.length}</p></div>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs text-white/45">Con teléfono</p><p className="mt-1 text-2xl font-semibold">{withPhone}</p></div>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs text-white/45">Sin seguimiento</p><p className="mt-1 text-2xl font-semibold">{needsFollowUp}</p></div>
+          </div>
         </div>
-      </GlassCard>
+      </div>
+
+      <section className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
+        <div className="grid gap-6">
+          <GlassCard title="Crear cliente rápido">
+            <p className="mb-5 text-sm leading-6 text-white/50">Alta rápida para llamadas, WhatsApp o recepción. Después puedes completarlo desde CRM/Ficha 360.</p>
+            <div className="grid gap-3">
+              <input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre del cliente" className="input-dark" />
+              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="input-dark" />
+              <button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear cliente</button>
+            </div>
+          </GlassCard>
+
+          <GlassCard title="Segmentos visibles">
+            <div className="grid gap-3">
+              {["Nuevo WhatsApp", ...statuses, whatsappLeads ? "Origen WhatsApp" : "Captación manual"].slice(0, 5).map((tag) => (
+                <div key={tag} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3">
+                  <span className="text-sm font-medium">{tag}</span>
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/55">CRM</span>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+        </div>
+
+        <GlassCard title="Base de clientes">
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, documento, EPS, estado u origen" className="input-dark pl-11" />
+            </div>
+            <div className="flex rounded-2xl border border-white/10 bg-black/20 p-1">
+              {(["grid", "list"] as const).map((item) => <button key={item} onClick={() => setView(item)} className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${view === item ? "bg-white text-slate-950" : "text-white/55 hover:text-white"}`}>{item === "grid" ? "Cards" : "Lista"}</button>)}
+            </div>
+          </div>
+
+          <div className={view === "grid" ? "grid gap-4 md:grid-cols-2" : "space-y-3"}>
+            {filteredCustomers.map((customer: Customer) => {
+              const initials = customerName(customer).split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "CL";
+              const status = translateCrmStatus(customer.crm_status || "nuevo");
+              const origin = (customer.crm_status || "").includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp") ? "WhatsApp" : "CRM";
+              return (
+                <div key={customer.id} className="group rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-white/[0.085] hover:shadow-xl hover:shadow-cyan-950/15">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300/25 to-violet-300/25 text-sm font-bold text-white ring-1 ring-white/10">{initials}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-semibold text-white">{customerName(customer)}</p>
+                          <p className="mt-1 truncate text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p>
+                        </div>
+                        <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold text-cyan-100">{origin}</span>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/68">{status}</span>
+                        {customer.document_number && <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/55">ID {customer.document_number}</span>}
+                        {customer.eps && <span className="rounded-full bg-violet-300/10 px-3 py-1 text-[11px] text-violet-100">{translateIntent(customer.eps || "informacion")}</span>}
+                      </div>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                        <button className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10"><MessageCircle size={14} className="mr-1 inline" /> WhatsApp</button>
+                        <button className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10"><CalendarDays size={14} className="mr-1 inline" /> Agendar</button>
+                        <button className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10"><Receipt size={14} className="mr-1 inline" /> Facturar</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {!filteredCustomers.length && <Empty text="No hay clientes que coincidan con la búsqueda." />}
+          </div>
+        </GlassCard>
+      </section>
     </section>
   );
 }
