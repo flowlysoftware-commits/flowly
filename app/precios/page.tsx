@@ -318,9 +318,9 @@ export default function PreciosPage() {
             <div className="flowly-card rounded-[2rem] p-7">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200/80">🇻🇪 Flowly Facturación Venezuela</p>
               <h2 className="mt-4 text-3xl font-semibold">Facturación básica incluida en Flowly Basic</h2>
-              <p className="mt-4 text-white/60">Una solución sencilla integrada con CRM, Agenda y WhatsApp para autónomos, profesionales y empresas que necesitan gestionar clientes, cotizaciones, facturas y cobros desde una única plataforma, sin complicaciones y sin conocimientos contables.</p>
+              <p className="mt-4 text-white/60">Una solución sencilla integrada con CRM, Agenda y WhatsApp para autónomos, profesionales y empresas que necesitan gestionar clientes, cotizaciones, facturas, cobros y citas desde una única plataforma, sin complicaciones y sin conocimientos contables.</p>
               <div className="mt-6 grid gap-3 text-sm text-white/78 sm:grid-cols-2">
-                {["Clientes integrados con CRM", "Cotizaciones y presupuestos", "Facturas PDF profesionales", "Cotización → Factura", "Cobros: efectivo, transferencia, pago móvil, tarjeta y divisas", "Dashboard: facturado, pendientes, vencidas y clientes activos", "Envío por WhatsApp y correo", "Recordatorios básicos de pago"].map((item) => <div key={item} className="flex gap-3"><Check size={18} className="text-cyan-200" /><span>{item}</span></div>)}
+                {["Clientes integrados con CRM", "Cotizaciones y presupuestos", "Facturas PDF profesionales", "Configuración de logo, datos y numeración", "Conexión con Agenda para facturar citas", "Cotización → Factura", "Cobros: efectivo, transferencia, pago móvil, tarjeta y divisas", "Dashboard: facturado, pendientes, vencidas y clientes activos", "Envío por WhatsApp y correo", "Recordatorios básicos de pago"].map((item) => <div key={item} className="flex gap-3"><Check size={18} className="text-cyan-200" /><span>{item}</span></div>)}
               </div>
               <p className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-300/10 p-4 text-xs leading-5 text-amber-50">Esta facturación está pensada como gestión interna y comercial. No incluye conexión directa con SENIAT.</p>
             </div>

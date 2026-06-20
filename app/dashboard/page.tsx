@@ -278,7 +278,7 @@ const moduleCatalog: ModuleItem[] = [
   { key: "agenda", slug: "agenda-pro", name: "Agenda PRO", short: "Agenda PRO", price: "+9,99€", badge: "Calendario", description: "Calendario visual por cuadrados con citas, huecos libres, agenda diaria/semanal y creación rápida de citas.", Icon: CalendarDays, proFeatures: ["Calendario visual", "Huecos libres", "Crear citas rápidas"] },
   { key: "crm", slug: "crm", name: "CRM avanzado", short: "CRM", price: "+9,99€", badge: "Producto estrella", description: "Pipeline, filtros, notas, segmentos, historial y acciones comerciales por cliente.", Icon: UserCog, proFeatures: ["Ficha 360º de cliente", "Filtros por estado y contacto", "Notas y próximos pasos"] },
   { key: "whatsapp", slug: "whatsapp", name: "WhatsApp automático", short: "WhatsApp", price: "+9,99€", badge: "Automatización", description: "Conecta tu número, crea plantillas y prepara bots de confirmación, recordatorio y recuperación.", Icon: MessageCircle, proFeatures: ["Plantillas con variables", "Bot de recordatorio", "Conexión preparada para proveedor"] },
-  { key: "billing", slug: "facturacion", name: "Facturación Básica", short: "Facturación", price: "Incluido", badge: "Incluido en Basic", description: "Cotizaciones, facturas PDF, cobros y control básico conectado con clientes, agenda y WhatsApp.", Icon: Receipt, amountEnabled: true, proFeatures: ["Cotizaciones y presupuestos", "Facturas PDF", "Registro de cobros"] },
+  { key: "billing", slug: "facturacion", name: "Facturación Básica", short: "Facturación", price: "Incluido", badge: "Incluido en Basic", description: "Cotizaciones, facturas PDF, cobros, configuración de logo/datos y conexión con clientes, agenda y WhatsApp.", Icon: Receipt, amountEnabled: true, proFeatures: ["Cotizaciones y presupuestos", "Facturas PDF", "Registro de cobros", "Configuración de logo y datos", "Conexión con Agenda"] },
   { key: "pos", slug: "tpv", name: "TPV", short: "TPV", price: "+14,99€", badge: "Caja", description: "TPV operativo para tickets, métodos de pago, caja diaria, artículos rápidos y ventas presenciales.", Icon: Store, amountEnabled: true, proFeatures: ["Tickets rápidos", "Métodos de pago", "Resumen de caja"] },
   { key: "marketing", slug: "marketing", name: "Marketing", short: "Marketing", price: "+9,99€", badge: "Crecimiento", description: "Campañas, presupuestos, canales publicitarios y preparación para Meta Ads, Google Ads y TikTok Ads.", Icon: Megaphone, amountEnabled: true, proFeatures: ["Meta / Google / TikTok", "Calendario de campañas", "Presupuesto y objetivo"] },
   { key: "ai", slug: "ia", name: "IA Assistant", short: "IA", price: "+14,99€", badge: "IA", description: "Convierte el panel en un centro inteligente con insights, prompts, acciones recomendadas y análisis del negocio.", Icon: Bot, proFeatures: ["Resumen del negocio", "Recomendaciones IA", "Panel asistido"] },
@@ -1465,6 +1465,8 @@ export default function DashboardPage() {
                       { label: "Gastos", tab: "module:facturacion:gastos" as ActiveTab },
                       { label: "Proveedores", tab: "module:facturacion:proveedores" as ActiveTab },
                       { label: "Presupuestos", tab: "module:facturacion:presupuestos" as ActiveTab },
+                      { label: "Agenda", tab: "module:facturacion:agenda" as ActiveTab },
+                      { label: "Configuración", tab: "module:facturacion:configuracion" as ActiveTab },
                     ],
                     pos: [
                       { label: "Nuevo ticket", tab: "module:tpv:ticket" as ActiveTab },
@@ -2278,20 +2280,138 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
   );
 }
 
-function BillingModule({ records, appointments, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+function BillingModule({ business, reloadData, records, appointments, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [view, setView] = useState("Ingresos");
+  const configRecord = records.find((record) => record.status === "billing_config");
+  const config = useMemo(() => {
+    try {
+      return configRecord?.notes ? JSON.parse(configRecord.notes) as Record<string, string> : {};
+    } catch {
+      return {} as Record<string, string>;
+    }
+  }, [configRecord?.notes]);
+  const [invoiceCompanyName, setInvoiceCompanyName] = useState(config.companyName || business?.name || "");
+  const [invoiceTaxId, setInvoiceTaxId] = useState(config.taxId || "");
+  const [invoiceAddress, setInvoiceAddress] = useState(config.address || "");
+  const [invoiceEmail, setInvoiceEmail] = useState(config.email || "");
+  const [invoicePhone, setInvoicePhone] = useState(config.phone || "");
+  const [invoiceLogoUrl, setInvoiceLogoUrl] = useState(config.logoUrl || business?.logo_url || "");
+  const [invoicePrefix, setInvoicePrefix] = useState(config.invoicePrefix || "F-2026-");
+  const [quotePrefix, setQuotePrefix] = useState(config.quotePrefix || "COT-2026-");
+  const [defaultTax, setDefaultTax] = useState(config.defaultTax || "16");
+  const [paymentMethods, setPaymentMethods] = useState(config.paymentMethods || "Efectivo, transferencia, pago móvil, tarjeta y divisas");
+  const [agendaMode, setAgendaMode] = useState(config.agendaMode || "Crear factura desde cita completada");
+
   useEffect(() => {
-    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", proveedores: "Proveedores", presupuestos: "Presupuestos" }, setView);
+    setInvoiceCompanyName(config.companyName || business?.name || "");
+    setInvoiceTaxId(config.taxId || "");
+    setInvoiceAddress(config.address || "");
+    setInvoiceEmail(config.email || "");
+    setInvoicePhone(config.phone || "");
+    setInvoiceLogoUrl(config.logoUrl || business?.logo_url || "");
+    setInvoicePrefix(config.invoicePrefix || "F-2026-");
+    setQuotePrefix(config.quotePrefix || "COT-2026-");
+    setDefaultTax(config.defaultTax || "16");
+    setPaymentMethods(config.paymentMethods || "Efectivo, transferencia, pago móvil, tarjeta y divisas");
+    setAgendaMode(config.agendaMode || "Crear factura desde cita completada");
+  }, [config, business?.name, business?.logo_url]);
+
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", proveedores: "Proveedores", presupuestos: "Presupuestos", configuracion: "Configuración", agenda: "Agenda" }, setView);
   }, [activeTab]);
   useEffect(() => {
-    const nextStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : "income";
+    const nextStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : "income";
     setStatus(nextStatus);
   }, [view, setStatus]);
+
+  const saveBillingConfig = async () => {
+    if (!business) return alert("No se ha encontrado el negocio.");
+    const payload = {
+      companyName: invoiceCompanyName,
+      taxId: invoiceTaxId,
+      address: invoiceAddress,
+      email: invoiceEmail,
+      phone: invoicePhone,
+      logoUrl: invoiceLogoUrl,
+      invoicePrefix,
+      quotePrefix,
+      defaultTax,
+      paymentMethods,
+      agendaMode,
+    };
+    const row = { business_id: business.id, module_key: "billing", title: "Configuración de facturación básica", amount: null, status: "billing_config", notes: JSON.stringify(payload, null, 2) };
+    const result = configRecord?.id
+      ? await supabase.from("module_records").update(row).eq("id", configRecord.id).eq("business_id", business.id)
+      : await supabase.from("module_records").insert(row);
+    if (result.error) return alert(result.error.message);
+    await reloadData();
+    alert("Configuración de facturación guardada.");
+  };
+
+  const relationOne = <T,>(value: Relation<T>) => Array.isArray(value) ? value[0] : value;
+  const prepareInvoiceFromAppointment = (appointment: Appointment) => {
+    const customer = relationOne(appointment.customers);
+    const service = relationOne(appointment.services);
+    const customerName = customer?.name || customer?.full_name || "Cliente";
+    const serviceName = service?.name || "Servicio de agenda";
+    const price = Number(service?.price || 0);
+    setView("Ingresos");
+    setActiveTab("module:facturacion:ingresos");
+    setStatus("income");
+    setTitle(`Factura · ${customerName} · ${serviceName}`);
+    setAmount(price ? String(price) : "");
+    setNotes([
+      `Origen: Agenda`,
+      `Cliente: ${customerName}`,
+      `Servicio: ${serviceName}`,
+      `Fecha de cita: ${appointment.appointment_date || appointment.starts_at || "Sin fecha"}`,
+      `Métodos de pago: ${paymentMethods}`,
+      `IVA/Impuesto por defecto: ${defaultTax}%`,
+    ].join("\n"));
+  };
+
   const profit = revenue + manualIncome - expenses;
-  const viewStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : "income";
+  const viewStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : "income";
   const viewRecords = records.filter((record) => view === "Ingresos" ? record.status === "income" : record.status === viewStatus);
   const suppliers = records.filter((r) => r.status === "supplier");
-  return <section className="grid gap-6"><ModuleHero eyebrow="Finance OS" title="Facturación y control económico" description="Gestiona cotizaciones, facturas, cobros y movimientos básicos desde el submenú lateral. Cada sección filtra y prepara el formulario correcto automáticamente." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Proveedores", "Presupuestos"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Proveedores: "module:facturacion:proveedores", Presupuestos: "module:facturacion:presupuestos" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} /><div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Reservas cobradas" value={`${revenue.toFixed(2)}€`} helper="Automático" /><Metric icon={<TrendingUp />} label="Ingresos manuales" value={`${manualIncome.toFixed(2)}€`} helper="Añadidos" /><Metric icon={<CreditCard />} label="Gastos" value={`${expenses.toFixed(2)}€`} helper="Manuales" /><Metric icon={<FileText />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /></div><section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title={`Nuevo registro · ${view}`}><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="income">Ingreso manual</option><option value="expense">Gasto</option><option value="supplier">Proveedor</option><option value="budget">Presupuesto</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={view === "Proveedores" ? "Proveedor / factura" : view === "Presupuestos" ? "Presupuesto para cliente" : view === "Gastos" ? "Concepto de gasto" : "Concepto de ingreso"} className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas, vencimiento, cliente, método de pago o responsable" className="input-dark min-h-32" /><button onClick={() => createRecord("billing", status || viewStatus)} className="btn-primary"><Plus size={17} /> Guardar {view.toLowerCase()}</button></div></GlassCard><GlassCard title={`${view} registrados`}><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Mostrados" value={viewRecords.length} /><InfoBox label="Proveedores" value={suppliers.length} /><InfoBox label="Total módulo" value={records.length} /></div><div className="mt-5"><RecordsList records={viewRecords} deleteRecord={deleteRecord} /></div></GlassCard></section></section>;
+  const pendingAppointments = appointments.slice(0, 8);
+
+  return <section className="grid gap-6">
+    <ModuleHero eyebrow="Finance OS" title="Facturación Básica incluida" description="Configura tus datos, logo, numeración y conecta la facturación sencilla con CRM, Agenda y WhatsApp para crear cotizaciones, facturas y cobros sin salir del panel." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Proveedores", "Presupuestos", "Agenda", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Proveedores: "module:facturacion:proveedores", Presupuestos: "module:facturacion:presupuestos", Agenda: "module:facturacion:agenda", Configuración: "module:facturacion:configuracion" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} />
+    <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Reservas cobradas" value={`${revenue.toFixed(2)}€`} helper="Agenda" /><Metric icon={<TrendingUp />} label="Ingresos manuales" value={`${manualIncome.toFixed(2)}€`} helper="Añadidos" /><Metric icon={<CreditCard />} label="Gastos" value={`${expenses.toFixed(2)}€`} helper="Manuales" /><Metric icon={<FileText />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /></div>
+
+    {view === "Configuración" && <section className="grid gap-6 xl:grid-cols-[1fr_.85fr]">
+      <GlassCard title="Configuración de facturación básica">
+        <div className="grid gap-3 md:grid-cols-2">
+          <input value={invoiceCompanyName} onChange={(e) => setInvoiceCompanyName(e.target.value)} placeholder="Nombre comercial / razón social" className="input-dark" />
+          <input value={invoiceTaxId} onChange={(e) => setInvoiceTaxId(e.target.value)} placeholder="RIF / cédula / identificación fiscal" className="input-dark" />
+          <input value={invoiceEmail} onChange={(e) => setInvoiceEmail(e.target.value)} placeholder="Correo de facturación" className="input-dark" />
+          <input value={invoicePhone} onChange={(e) => setInvoicePhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="input-dark" />
+          <input value={invoiceAddress} onChange={(e) => setInvoiceAddress(e.target.value)} placeholder="Dirección fiscal o comercial" className="input-dark md:col-span-2" />
+          <input value={invoiceLogoUrl} onChange={(e) => setInvoiceLogoUrl(e.target.value)} placeholder="URL del logo para PDFs" className="input-dark md:col-span-2" />
+          <input value={invoicePrefix} onChange={(e) => setInvoicePrefix(e.target.value)} placeholder="Prefijo facturas, ej. F-2026-" className="input-dark" />
+          <input value={quotePrefix} onChange={(e) => setQuotePrefix(e.target.value)} placeholder="Prefijo cotizaciones, ej. COT-2026-" className="input-dark" />
+          <input value={defaultTax} onChange={(e) => setDefaultTax(e.target.value)} placeholder="Impuesto/IVA por defecto" type="number" className="input-dark" />
+          <input value={agendaMode} onChange={(e) => setAgendaMode(e.target.value)} placeholder="Regla de conexión con Agenda" className="input-dark" />
+          <textarea value={paymentMethods} onChange={(e) => setPaymentMethods(e.target.value)} placeholder="Métodos de pago visibles en factura" className="input-dark min-h-28 md:col-span-2" />
+          <button onClick={saveBillingConfig} className="btn-primary md:col-span-2"><CheckCircle2 size={17} /> Guardar configuración</button>
+        </div>
+      </GlassCard>
+      <GlassCard title="Vista previa del documento">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-sm text-white/75">
+          <div className="mb-5 flex items-center gap-3">{invoiceLogoUrl ? <Image src={invoiceLogoUrl} alt="Logo facturación" width={46} height={46} className="rounded-2xl object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/15"><Receipt size={20} /></div>}<div><p className="font-semibold text-white">{invoiceCompanyName || business?.name || "Tu empresa"}</p><p className="text-xs text-white/45">{invoiceTaxId || "RIF / ID fiscal"}</p></div></div>
+          <p>Factura: {invoicePrefix}0001</p><p>Cotización: {quotePrefix}0001</p><p>Impuesto por defecto: {defaultTax || "0"}%</p><p className="mt-3 whitespace-pre-wrap">Pagos: {paymentMethods}</p>
+        </div>
+      </GlassCard>
+    </section>}
+
+    {view === "Agenda" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+      <GlassCard title="Conexión con Agenda"><p className="text-sm text-white/60">Convierte citas y reservas en ingresos o facturas básicas. Al preparar una factura desde una cita, Flowly rellena cliente, servicio, fecha e importe para que solo tengas que revisar y guardar.</p><div className="mt-5 grid gap-3"><InfoBox label="Citas disponibles" value={pendingAppointments.length} /><InfoBox label="Modo" value={agendaMode} /></div></GlassCard>
+      <GlassCard title="Últimas citas para facturar"><div className="grid gap-3">{pendingAppointments.map((appointment) => { const customer = relationOne(appointment.customers); const service = relationOne(appointment.services); const customerName = customer?.name || customer?.full_name || "Cliente"; const serviceName = service?.name || "Servicio"; return <div key={appointment.id} className="flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"><div><p className="font-medium">{customerName}</p><p className="text-sm text-white/50">{serviceName} · {appointment.appointment_date || appointment.starts_at || "Sin fecha"} · {Number(service?.price || 0).toFixed(2)}€</p></div><button onClick={() => prepareInvoiceFromAppointment(appointment)} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950">Preparar factura</button></div>; })}{!pendingAppointments.length && <Empty text="Aún no hay citas para conectar con facturación." />}</div></GlassCard>
+    </section>}
+
+    {view !== "Configuración" && view !== "Agenda" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title={`Nuevo registro · ${view}`}><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="income">Factura / ingreso</option><option value="budget">Cotización / presupuesto</option><option value="expense">Gasto</option><option value="supplier">Proveedor</option><option value="paid">Pagada</option><option value="pending">Pendiente</option><option value="overdue">Vencida</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={view === "Proveedores" ? "Proveedor / factura" : view === "Presupuestos" ? "Cotización para cliente" : view === "Gastos" ? "Concepto de gasto" : "Factura, servicio o concepto de ingreso"} className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cliente, vencimiento, método de pago, datos de factura o notas para WhatsApp" className="input-dark min-h-32" /><button onClick={() => createRecord("billing", status || viewStatus)} className="btn-primary"><Plus size={17} /> Guardar {view.toLowerCase()}</button></div></GlassCard><GlassCard title={`${view} registrados`}><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Mostrados" value={viewRecords.length} /><InfoBox label="Proveedores" value={suppliers.length} /><InfoBox label="Total módulo" value={records.length} /></div><div className="mt-5"><RecordsList records={viewRecords} deleteRecord={deleteRecord} /></div></GlassCard></section>}
+  </section>;
 }
 
 function PosModule({ records, services, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
