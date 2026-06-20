@@ -2530,16 +2530,9 @@ function CrmModule({
   setActiveTab,
 }: Parameters<typeof ModuleSection>[0]) {
   const [crmView, setCrmView] = useState("Ficha 360");
-
-  useEffect(() => {
-    syncModuleSubmenu(activeTab, "module:crm:", {
-      ficha: "Ficha 360",
-      agenda: "Agenda CRM",
-      pipeline: "Pipeline",
-      hoy: "Hoy",
-      automatizaciones: "Automatizaciones",
-    }, setCrmView);
-  }, [activeTab]);
+  const [crmStatusFilter, setCrmStatusFilter] = useState("all");
+  const [detailTab, setDetailTab] = useState("Vista ejecutiva");
+  const [timelineFilter, setTimelineFilter] = useState("Todo");
   const [crmActionTitle, setCrmActionTitle] = useState("");
   const [crmActionNotes, setCrmActionNotes] = useState("");
   const [crmActionDueDate, setCrmActionDueDate] = useState("");
@@ -2549,9 +2542,6 @@ function CrmModule({
   const [crmAppointmentEmployee, setCrmAppointmentEmployee] = useState("");
   const [crmAppointmentService, setCrmAppointmentService] = useState("");
   const [crmAppointmentDate, setCrmAppointmentDate] = useState("");
-  const [crmStatusFilter, setCrmStatusFilter] = useState("all");
-  const [customerDetailTab, setCustomerDetailTab] = useState("Resumen");
-  const [timelineFilter, setTimelineFilter] = useState("Todo");
   const [documentTitle, setDocumentTitle] = useState("");
   const [documentType, setDocumentType] = useState("general");
   const [documentNotes, setDocumentNotes] = useState("");
@@ -2567,15 +2557,25 @@ function CrmModule({
   const [detailCrmStatus, setDetailCrmStatus] = useState("nuevo");
   const [detailNextFollowUp, setDetailNextFollowUp] = useState("");
 
-  const filtered = customers.filter((c) => {
-    const searchable = `${customerName(c)} ${c.phone || ""} ${c.email || ""} ${c.document_number || ""} ${c.document_type || ""} ${c.eps || ""} ${c.crm_status || ""} ${c.notes || ""} ${c.address || ""} ${c.responsible_name || ""}`.toLowerCase();
+  useEffect(() => {
+    syncModuleSubmenu(activeTab, "module:crm:", {
+      ficha: "Ficha 360",
+      agenda: "Agenda CRM",
+      pipeline: "Pipeline",
+      hoy: "Hoy",
+      automatizaciones: "Automatizaciones",
+    }, setCrmView);
+  }, [activeTab]);
+
+  const filteredCustomers = customers.filter((customer) => {
     const search = crmSearch.toLowerCase().trim();
+    const searchable = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""} ${customer.crm_status || ""} ${customer.notes || ""}`.toLowerCase();
     const matchesSearch = !search || searchable.includes(search);
-    const matchesStatus = crmStatusFilter === "all" || (c.crm_status || "nuevo") === crmStatusFilter;
+    const matchesStatus = crmStatusFilter === "all" || (customer.crm_status || "nuevo") === crmStatusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const selectedCustomer = customers.find((customer) => customer.id === selectedCrmCustomerId) || filtered[0] || null;
+  const selectedCustomer = customers.find((customer) => customer.id === selectedCrmCustomerId) || filteredCustomers[0] || null;
 
   useEffect(() => {
     if (!selectedCustomer) return;
@@ -2592,25 +2592,19 @@ function CrmModule({
     setDetailNextFollowUp(selectedCustomer.next_follow_up_at ? selectedCustomer.next_follow_up_at.slice(0, 16) : "");
   }, [selectedCustomer?.id]);
 
-  const customerAppointments = selectedCustomer
-    ? appointments.filter((appointment) => {
-        const related = firstRelation(appointment.customers);
-        return appointment.customer_id === selectedCustomer.id || customerName(related).toLowerCase() === customerName(selectedCustomer).toLowerCase();
-      })
-    : [];
-
-  const customerRecords = selectedCustomer
-    ? records.filter((record) => record.customer_id === selectedCustomer.id || (record.notes || "").includes(selectedCustomer.id))
-    : [];
-
+  const customerAppointments = selectedCustomer ? appointments.filter((appointment) => {
+    const related = firstRelation(appointment.customers);
+    return appointment.customer_id === selectedCustomer.id || customerName(related).toLowerCase() === customerName(selectedCustomer).toLowerCase();
+  }) : [];
+  const customerRecords = selectedCustomer ? records.filter((record) => record.customer_id === selectedCustomer.id || (record.notes || "").includes(selectedCustomer.id)) : [];
   const customerDocs = selectedCustomer ? clinicalDocuments.filter((document) => document.customer_id === selectedCustomer.id) : [];
   const customerMessages = selectedCustomer ? whatsappMessages.filter((message) => message.customer_id === selectedCustomer.id || normalizePhone(message.phone).endsWith(normalizePhone(selectedCustomer.phone).slice(-9))) : [];
   const customerReminders = selectedCustomer ? crmReminders.filter((reminder) => reminderCustomerId(reminder) === selectedCustomer.id).sort((a, b) => reminderTime(a) - reminderTime(b)) : [];
+  const customerBillingRecords = selectedCustomer ? allRecords.filter((record) => record.module_key === "billing" && (record.customer_id === selectedCustomer.id || (record.notes || "").includes(selectedCustomer.id) || (record.notes || "").toLowerCase().includes(customerName(selectedCustomer).toLowerCase()))) : [];
+  const customerBillingTotal = customerBillingRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const customerPendingBilling = customerBillingRecords.filter((record) => ["pending", "pendiente", "vencida", "overdue"].includes(String(record.status || "").toLowerCase())).length;
 
   const activeCustomers = customers.filter((customer) => !["cerrado", "perdido", "alta"].includes(customer.crm_status || "nuevo")).length;
-  const pendingFollowups = records.filter((record) => ["followup", "pendiente", "opportunity"].includes(record.status || "")).length;
-  const scheduled = appointments.filter((appointment) => appointment.status !== "cancelled").length;
-  const dueReminders = crmReminders.filter((reminder) => (reminder.status || "pending") === "pending" && reminderTime(reminder) <= Date.now()).length;
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(todayStart);
@@ -2619,36 +2613,10 @@ function CrmModule({
     const time = new Date(appointmentDate(appointment)).getTime();
     return time >= todayStart.getTime() && time < todayEnd.getTime();
   });
-  const todayReminders = crmReminders.filter((reminder) => {
-    const time = reminderTime(reminder);
-    return (reminder.status || "pending") === "pending" && time >= todayStart.getTime() && time < todayEnd.getTime();
-  });
+  const dueReminders = crmReminders.filter((reminder) => (reminder.status || "pending") === "pending" && reminderTime(reminder) <= Date.now()).length;
   const noFollowUpCustomers = customers.filter((customer) => !customer.next_follow_up_at && !["alta", "perdido", "cerrado"].includes(customer.crm_status || "nuevo"));
-
-  const statusCounts = crmStatusOptions.map((option) => ({
-    ...option,
-    count: customers.filter((customer) => (customer.crm_status || "nuevo") === option.value).length,
-  }));
-
-  const saveAction = async () => {
-    if (!selectedCustomer) return alert("Selecciona un cliente");
-    await createCrmAction(
-      selectedCustomer.id,
-      crmActionTitle || `Seguimiento · ${customerName(selectedCustomer)}`,
-      [
-        crmActionNotes,
-        `Cliente: ${customerName(selectedCustomer)}`,
-        `Teléfono: ${selectedCustomer.phone || "Sin teléfono"}`,
-        selectedCustomer.eps ? `Segmento/EPS: ${epsLabel(selectedCustomer.eps)}` : "",
-        selectedCustomer.document_number ? `Documento: ${selectedCustomer.document_number}` : "",
-      ].filter(Boolean).join("\n"),
-      "followup",
-      crmActionDueDate || undefined
-    );
-    setCrmActionTitle("");
-    setCrmActionNotes("");
-    setCrmActionDueDate("");
-  };
+  const statusCounts = crmStatusOptions.map((option) => ({ ...option, count: customers.filter((customer) => (customer.crm_status || "nuevo") === option.value).length }));
+  const sectorPreset = crmSectorPreset(business?.business_type || business?.panel_theme || "general");
 
   const saveCustomerDetails = async () => {
     if (!selectedCustomer) return;
@@ -2668,12 +2636,12 @@ function CrmModule({
     } as any);
   };
 
-  const scheduleFromCrm = async () => {
+  const saveAction = async () => {
     if (!selectedCustomer) return alert("Selecciona un cliente");
-    await createAppointmentForCustomer(selectedCustomer.id, crmAppointmentEmployee, crmAppointmentService, crmAppointmentDate);
-    setCrmAppointmentEmployee("");
-    setCrmAppointmentService("");
-    setCrmAppointmentDate("");
+    await createCrmAction(selectedCustomer.id, crmActionTitle || `Seguimiento · ${customerName(selectedCustomer)}`, crmActionNotes || `Próximo paso con ${customerName(selectedCustomer)}`, "followup", crmActionDueDate || undefined);
+    setCrmActionTitle("");
+    setCrmActionNotes("");
+    setCrmActionDueDate("");
   };
 
   const saveReminder = async () => {
@@ -2684,490 +2652,144 @@ function CrmModule({
     setReminderAt("");
   };
 
-  const primaryTemplate = whatsappTemplatesEffective[0];
-  const selectedLastAppointment = customerAppointments.slice().sort((a, b) => new Date(appointmentDate(b)).getTime() - new Date(appointmentDate(a)).getTime())[0];
-  const selectedNextAppointment = customerAppointments.slice().sort((a, b) => new Date(appointmentDate(a)).getTime() - new Date(appointmentDate(b)).getTime()).find((appointment) => new Date(appointmentDate(appointment)).getTime() >= Date.now());
-  const selectedNextReminder = customerReminders.find((reminder) => (reminder.status || "pending") === "pending");
-  const customerBillingRecords = selectedCustomer
-    ? allRecords.filter((record) => record.module_key === "billing" && (record.customer_id === selectedCustomer.id || (record.notes || "").includes(selectedCustomer.id) || (record.notes || "").toLowerCase().includes(customerName(selectedCustomer).toLowerCase())))
-    : [];
-  const customerBillingTotal = customerBillingRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const customerPendingBilling = customerBillingRecords.filter((record) => ["pending", "pendiente", "vencida", "overdue"].includes(String(record.status || "").toLowerCase())).length;
+  const scheduleFromCrm = async () => {
+    if (!selectedCustomer) return alert("Selecciona un cliente");
+    await createAppointmentForCustomer(selectedCustomer.id, crmAppointmentEmployee, crmAppointmentService, crmAppointmentDate);
+    setCrmAppointmentEmployee("");
+    setCrmAppointmentService("");
+    setCrmAppointmentDate("");
+  };
+
   const selectedInitials = selectedCustomer ? customerName(selectedCustomer).split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "CL" : "CL";
   const selectedOrigin = selectedCustomer?.crm_status === "nuevo_whatsapp" || customerMessages.length ? "WhatsApp" : selectedCustomer?.phone ? "CRM" : "Manual";
-  const sectorPreset = crmSectorPreset(business?.business_type || business?.panel_theme || "general");
-  const selectedTags = selectedCustomer ? [
-    selectedOrigin,
-    translateCrmStatus(selectedCustomer.crm_status || "nuevo"),
-    selectedCustomer.eps ? epsLabel(selectedCustomer.eps) : "Sin segmento",
-    selectedCustomer.next_follow_up_at || selectedNextReminder ? "Con seguimiento" : "Sin seguimiento",
-    customerPendingBilling ? "Pendiente de cobro" : "Sin deuda visible",
-  ] : [];
-  const crmWeekDays = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(todayStart);
-    date.setDate(todayStart.getDate() + index);
-    const end = new Date(date);
-    end.setDate(date.getDate() + 1);
-    return {
-      date,
-      appointments: appointments.filter((appointment) => {
-        const time = new Date(appointmentDate(appointment)).getTime();
-        return time >= date.getTime() && time < end.getTime();
-      }),
-      reminders: crmReminders.filter((reminder) => {
-        const time = reminderTime(reminder);
-        return (reminder.status || "pending") === "pending" && time >= date.getTime() && time < end.getTime();
-      }),
-    };
-  });
-  const next7Appointments = crmWeekDays.flatMap((day) => day.appointments).length;
-  const urgentCustomers = customers.filter((customer) => {
-    const status = customer.crm_status || "nuevo";
-    return ["nuevo", "contactado", "pendiente_documentacion", "pendiente_cita", "en_llamada"].includes(status) || !customer.next_follow_up_at;
-  });
-  const selectedHealthScore = selectedCustomer
-    ? Math.min(100,
-        18 +
-        (selectedCustomer.phone ? 12 : 0) +
-        (selectedCustomer.email ? 10 : 0) +
-        (selectedCustomer.document_number ? 12 : 0) +
-        (selectedCustomer.crm_status && selectedCustomer.crm_status !== "nuevo" ? 12 : 0) +
-        (selectedNextAppointment ? 14 : 0) +
-        (selectedNextReminder || selectedCustomer.next_follow_up_at ? 12 : 0) +
-        (customerMessages.length ? 5 : 0) +
-        (customerDocs.length ? 5 : 0))
-    : 0;
-  const crmPlaybook = selectedCustomer ? [
-    { label: "Datos de contacto", done: Boolean(selectedCustomer.phone || selectedCustomer.email) },
-    { label: "Documento o identificación", done: Boolean(selectedCustomer.document_number) },
-    { label: "Estado CRM definido", done: Boolean(selectedCustomer.crm_status && selectedCustomer.crm_status !== "nuevo") },
-    { label: "Próximo seguimiento", done: Boolean(selectedNextReminder || selectedCustomer.next_follow_up_at) },
-    { label: "Cita o acción agendada", done: Boolean(selectedNextAppointment || customerRecords.length) },
-  ] : [];
+  const nextAppointment = customerAppointments.slice().sort((a, b) => new Date(appointmentDate(a)).getTime() - new Date(appointmentDate(b)).getTime()).find((appointment) => new Date(appointmentDate(appointment)).getTime() >= Date.now());
+  const nextReminder = customerReminders.find((reminder) => (reminder.status || "pending") === "pending");
+  const clientScore = Math.min(98, 38 + customerAppointments.length * 8 + customerMessages.length * 4 + customerBillingRecords.length * 10 + (selectedCustomer?.next_follow_up_at ? 8 : 0));
+  const customerTags: string[] = selectedCustomer ? [selectedOrigin, translateCrmStatus(selectedCustomer.crm_status || "nuevo"), selectedCustomer.eps ? epsLabel(selectedCustomer.eps) : sectorPreset.label, customerPendingBilling ? "Pago pendiente" : "Al día"].filter(Boolean) : [];
   const suggestedActions = selectedCustomer ? [
-    { title: "Llamar y clasificar necesidad", notes: `Llamar a ${customerName(selectedCustomer)} para validar interés, urgencia y siguiente paso.`, status: "followup" },
-    { title: "Enviar WhatsApp de seguimiento", notes: `Enviar plantilla personalizada a ${customerName(selectedCustomer)} y registrar respuesta.`, status: "pendiente" },
-    { title: "Agendar cita / demo", notes: `Buscar disponibilidad y dejar cita confirmada para ${customerName(selectedCustomer)}.`, status: "opportunity" },
-    { title: "Solicitar documentación pendiente", notes: `Pedir documento, autorización o información pendiente a ${customerName(selectedCustomer)}.`, status: "pendiente_documentacion" },
+    { title: "Enviar seguimiento premium", notes: `Contactar a ${customerName(selectedCustomer)} con un mensaje breve, claro y orientado a cerrar el próximo paso.` },
+    { title: "Agendar próxima acción", notes: nextAppointment ? "Ya existe una cita próxima. Confirmar asistencia y preparar la atención." : "No hay cita próxima. Proponer disponibilidad y reservar desde Agenda." },
+    { title: "Revisar oportunidad", notes: customerBillingRecords.length ? "Tiene historial de facturación. Revisar recurrencia y opciones de venta adicional." : "Sin facturación vinculada. Crear presupuesto o factura desde el módulo de facturación." },
   ] : [];
+
+  const timelineEvents = selectedCustomer ? [
+    ...customerAppointments.map((appointment) => ({ id: `a-${appointment.id}`, type: "Agenda", title: `Cita · ${firstRelation(appointment.services)?.name || "Servicio"}`, meta: appointmentDate(appointment), body: appointment.status || "programada", tone: "cyan" })),
+    ...customerRecords.map((record) => ({ id: `r-${record.id}`, type: "CRM", title: record.title, meta: record.status || "actividad", body: record.notes, tone: "violet" })),
+    ...customerMessages.map((message) => ({ id: `w-${message.id}`, type: "WhatsApp", title: message.direction === "inbound" ? "WhatsApp recibido" : "WhatsApp enviado", meta: new Date(message.created_at).toLocaleString("es-ES"), body: message.message, tone: "green" })),
+    ...customerDocs.map((document) => ({ id: `d-${document.id}`, type: "Documentos", title: document.title, meta: document.document_type || "documento", body: document.notes, tone: "white" })),
+    ...customerReminders.map((reminder) => ({ id: `m-${reminder.id}`, type: "Recordatorios", title: reminder.title, meta: formatReminderDate(reminder), body: reminder.notes || reminder.description, tone: reminderTime(reminder) <= Date.now() ? "amber" : "white" })),
+    ...customerBillingRecords.map((record) => ({ id: `b-${record.id}`, type: "Facturación", title: record.title, meta: `${record.status || "documento"} · ${Number(record.amount || 0).toFixed(2)}`, body: record.notes, tone: "cyan" })),
+  ].filter((event) => timelineFilter === "Todo" || event.type === timelineFilter).slice(0, 24) : [];
+
+  const crmViews = ["Ficha 360", "Agenda CRM", "Pipeline", "Hoy", "Automatizaciones"];
 
   return (
-    <section className="grid gap-6">
-      <div className="relative overflow-hidden rounded-[2.4rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,.22),transparent_34%),radial-gradient(circle_at_top_right,rgba(124,58,237,.22),transparent_36%),linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.025))] p-6 shadow-2xl shadow-black/30">
-        <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/60 to-transparent" />
-        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-200">Flowly CRM Command Center</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">Clientes, agenda, WhatsApp y seguimiento en una ficha 360º.</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/62">Un CRM operativo para negocios modernos: pipeline, tareas, recordatorios, documentos, llamadas, WhatsApp y decisiones rápidas desde una sola pantalla.</p>
+    <section className="space-y-8 text-white">
+      <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_20%_0%,rgba(34,211,238,.24),transparent_34%),linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.95))] p-6 shadow-2xl shadow-cyan-950/20 md:p-8">
+        <div className="absolute right-8 top-8 hidden h-28 w-28 rounded-full border border-cyan-300/20 bg-cyan-300/10 blur-2xl lg:block" />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100"><Sparkles size={15} /> CRM premium</div>
+            <h2 className="mt-5 text-4xl font-semibold tracking-tight md:text-6xl">Panel de clientes limpio, visual y preparado para vender.</h2>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-white/62">Una vista 360º con clientes, agenda, WhatsApp, documentos, facturación y próximos pasos en una interfaz más minimalista y sofisticada.</p>
           </div>
-          <ModulePillTabs tabs={["Ficha 360", "Agenda CRM", "Pipeline", "Hoy", "Automatizaciones"]} active={crmView} setActive={(tab) => selectModuleSubmenu(setActiveTab, ({ "Ficha 360": "module:crm:ficha", "Agenda CRM": "module:crm:agenda", Pipeline: "module:crm:pipeline", Hoy: "module:crm:hoy", Automatizaciones: "module:crm:automatizaciones" } as Record<string, ActiveTab>)[tab] || "module:crm:ficha", setCrmView, tab)} />
+          <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[430px]">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs uppercase tracking-[0.18em] text-white/38">Clientes</p><p className="mt-2 text-3xl font-semibold">{customers.length}</p></div>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs uppercase tracking-[0.18em] text-white/38">Activos</p><p className="mt-2 text-3xl font-semibold">{activeCustomers}</p></div>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs uppercase tracking-[0.18em] text-white/38">Alertas</p><p className="mt-2 text-3xl font-semibold">{dueReminders}</p></div>
+          </div>
+        </div>
+        <div className="mt-7 flex flex-wrap gap-2">
+          {crmViews.map((view) => <button key={view} onClick={() => { setCrmView(view); selectModuleSubmenu(setActiveTab, ({ "Ficha 360": "module:crm:ficha", "Agenda CRM": "module:crm:agenda", Pipeline: "module:crm:pipeline", Hoy: "module:crm:hoy", Automatizaciones: "module:crm:automatizaciones" } as Record<string, ActiveTab>)[view] || "module:crm:ficha", setCrmView, view); }} className={`rounded-full px-4 py-2 text-sm font-semibold transition ${crmView === view ? "bg-white text-slate-950" : "border border-white/10 bg-white/[0.06] text-white/65 hover:bg-white/[0.1]"}`}>{view}</button>)}
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
-        <Metric icon={<Users />} label="Clientes CRM" value={customers.length} helper="Base total" />
-        <Metric icon={<UserCog />} label="Activos" value={activeCustomers} helper="En gestión" />
-        <Metric icon={<CheckCircle2 />} label="Seguimientos" value={pendingFollowups} helper="Acciones abiertas" />
-        <Metric icon={<CalendarDays />} label="Citas" value={scheduled} helper={`${next7Appointments} próximos 7 días`} />
-        <Metric icon={<Clock />} label="Alertas" value={dueReminders} helper="Vencidas ahora" />
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric icon={<Users />} label="Base CRM" value={customers.length} helper="Clientes registrados" />
+        <Metric icon={<CalendarDays />} label="Citas hoy" value={todayAppointments.length} helper="Agenda conectada" />
+        <Metric icon={<MessageCircle />} label="WhatsApp" value={whatsappMessages.length} helper="Mensajes guardados" />
+        <Metric icon={<Receipt />} label="Sin seguimiento" value={noFollowUpCustomers.length} helper="Oportunidad inmediata" />
       </div>
-
-      {incomingVoiceCall && (
-        <div className="rounded-[2rem] border border-green-300/25 bg-green-500/15 p-5 shadow-xl shadow-green-950/20">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-200">Llamada activa detectada</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-4">
-            <InfoBox label="Teléfono" value={incomingVoiceCall.caller_phone} />
-            <InfoBox label="Motivo" value={translateIntent(incomingVoiceCall.eps || incomingVoiceCall.intent || "informacion")} />
-            <InfoBox label="Documento" value={translateDocumentType(incomingVoiceCall.document_type || "") || "No indicado"} />
-            <InfoBox label="ID" value={incomingVoiceCall.document_number || "No indicado"} />
-          </div>
-        </div>
-      )}
-
-      {crmView === "Agenda CRM" && (
-        <section className="grid gap-6 xl:grid-cols-[1.45fr_.55fr]">
-          <GlassCard title="Agenda CRM · próximos 7 días">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-              {crmWeekDays.map((day) => (
-                <div key={day.date.toISOString()} className="min-h-56 rounded-3xl border border-white/10 bg-white/[0.045] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">{day.date.toLocaleDateString("es-ES", { weekday: "short" })}</p>
-                  <p className="mt-1 text-2xl font-semibold">{day.date.getDate()}</p>
-                  <div className="mt-4 space-y-2">
-                    {day.appointments.slice(0, 4).map((appointment) => {
-                      const customer = firstRelation(appointment.customers);
-                      const service = firstRelation(appointment.services);
-                      return (
-                        <button key={appointment.id} onClick={() => { if (appointment.customer_id) { setSelectedCrmCustomerId(appointment.customer_id); setCrmView("Ficha 360"); } }} className="w-full rounded-2xl bg-cyan-400/10 p-3 text-left hover:bg-cyan-400/15">
-                          <p className="truncate text-xs font-semibold text-cyan-100">{new Date(appointmentDate(appointment)).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {customerName(customer)}</p>
-                          <p className="mt-1 truncate text-[11px] text-white/45">{service?.name || "Cita CRM"}</p>
-                        </button>
-                      );
-                    })}
-                    {day.reminders.slice(0, 3).map((reminder) => (
-                      <button key={reminder.id} onClick={() => { const id = reminderCustomerId(reminder); if (id) { setSelectedCrmCustomerId(id); setCrmView("Ficha 360"); } }} className="w-full rounded-2xl bg-amber-400/10 p-3 text-left hover:bg-amber-400/15">
-                        <p className="truncate text-xs font-semibold text-amber-100">{new Date(reminderTime(reminder)).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {reminder.title}</p>
-                        <p className="mt-1 truncate text-[11px] text-white/45">{reminderCustomerName(reminder, customers)}</p>
-                      </button>
-                    ))}
-                    {!day.appointments.length && !day.reminders.length && <p className="rounded-2xl border border-dashed border-white/10 p-3 text-center text-[11px] text-white/35">Libre</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-          <div className="grid gap-6">
-            <GlassCard title="Agenda inteligente">
-              <div className="space-y-3">
-                <InfoBox label="Citas 7 días" value={next7Appointments} />
-                <InfoBox label="Alertas abiertas" value={crmWeekDays.flatMap((day) => day.reminders).length} />
-                <InfoBox label="Clientes urgentes" value={urgentCustomers.length} />
-              </div>
-            </GlassCard>
-            <GlassCard title="Prioridad comercial">
-              <div className="space-y-3">
-                {urgentCustomers.slice(0, 8).map((customer) => (
-                  <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]">
-                    <p className="truncate font-semibold">{customerName(customer)}</p>
-                    <p className="mt-1 truncate text-xs text-white/45">{translateCrmStatus(customer.crm_status || "nuevo")} · {customer.phone || "Sin teléfono"}</p>
-                  </button>
-                ))}
-              </div>
-            </GlassCard>
-          </div>
-        </section>
-      )}
-
-      {crmView === "Automatizaciones" && (
-        <section className="grid gap-6 xl:grid-cols-[.7fr_1.3fr]">
-          <GlassCard title="Motor CRM">
-            <p className="text-sm leading-6 text-white/55">Playbooks operativos para que ningún lead se quede sin seguimiento. Estas reglas convierten el CRM en agenda de trabajo diaria.</p>
-            <div className="mt-5 grid gap-3">
-              {[
-                { title: "Nuevo lead sin teléfono", body: "Solicitar contacto válido antes de avanzar de etapa." },
-                { title: "Pendiente documentación", body: "Crear alarma y WhatsApp automático de solicitud." },
-                { title: "Cita creada", body: "Registrar confirmación y seguimiento post-cita." },
-                { title: "Lead sin próximo paso", body: "Enviar a la cola de prioridad del día." },
-              ].map((rule) => (
-                <div key={rule.title} className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
-                  <p className="font-semibold">{rule.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-white/48">{rule.body}</p>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-          <GlassCard title="Centro de mando de seguimiento">
-            <div className="grid gap-4 md:grid-cols-2">
-              {crmStatusOptions.filter((status) => status.value !== "en_llamada").map((status) => {
-                const list = customers.filter((customer) => (customer.crm_status || "nuevo") === status.value);
-                return (
-                  <div key={status.value} className="rounded-3xl border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold">{status.label}</p>
-                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/65">{list.length}</span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {list.slice(0, 4).map((customer) => (
-                        <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]">
-                          <p className="truncate text-sm font-semibold">{customerName(customer)}</p>
-                          <p className="mt-1 truncate text-xs text-white/42">{customer.next_follow_up_at ? `Próximo paso ${new Date(customer.next_follow_up_at).toLocaleDateString("es-ES")}` : "Sin próximo paso"}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </GlassCard>
-        </section>
-      )}
 
       {crmView === "Pipeline" && (
         <section className="grid gap-4 xl:grid-cols-4">
-          {statusCounts.filter((status) => status.value !== "en_llamada" || status.count > 0).map((status) => {
-            const items = customers.filter((customer) => (customer.crm_status || "nuevo") === status.value).slice(0, 8);
-            return (
-              <div key={status.value} className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-4 shadow-xl shadow-black/20">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{status.label}</p>
-                    <p className="text-xs text-white/45">{status.count} clientes</p>
-                  </div>
-                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">{status.count}</span>
-                </div>
-                <div className="space-y-3">
-                  {items.map((customer) => (
-                    <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl border border-white/10 bg-black/25 p-3 text-left hover:bg-white/[0.08]">
-                      <p className="truncate font-semibold">{customerName(customer)}</p>
-                      <p className="mt-1 truncate text-xs text-white/45">{customer.phone || customer.email || "Sin contacto"}</p>
-                      <p className="mt-2 text-xs text-cyan-200">{customer.next_follow_up_at ? `Próx. seguimiento ${new Date(customer.next_follow_up_at).toLocaleDateString("es-ES")}` : "Sin seguimiento"}</p>
-                    </button>
-                  ))}
-                  {!items.length && <p className="rounded-2xl border border-dashed border-white/10 p-4 text-center text-xs text-white/35">Sin clientes en esta etapa.</p>}
-                </div>
-              </div>
-            );
+          {statusCounts.map((status) => {
+            const items = customers.filter((customer) => (customer.crm_status || "nuevo") === status.value).slice(0, 10);
+            return <div key={status.value} className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4"><div className="mb-4 flex items-center justify-between"><p className="font-semibold">{status.label}</p><span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/55">{status.count}</span></div><div className="space-y-3">{items.map((customer) => <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-left transition hover:-translate-y-0.5 hover:bg-white/[0.08]"><p className="font-semibold">{customerName(customer)}</p><p className="mt-1 text-xs text-white/45">{customer.phone || customer.email || "Sin contacto"}</p></button>)}{!items.length && <Empty text="Sin clientes en esta fase." />}</div></div>;
           })}
         </section>
       )}
 
-      {crmView === "Hoy" && (
-        <section className="grid gap-6 xl:grid-cols-3">
-          <GlassCard title="Agenda de hoy">
-            <div className="space-y-3">
-              {todayAppointments.map((appointment) => {
-                const customer = firstRelation(appointment.customers);
-                const service = firstRelation(appointment.services);
-                return <div key={appointment.id} className="rounded-2xl bg-white/[0.06] p-4"><p className="font-semibold">{customerName(customer)}</p><p className="mt-1 text-sm text-white/50">{new Date(appointmentDate(appointment)).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · {service?.name || "Servicio"}</p></div>;
-              })}
-              {!todayAppointments.length && <Empty text="No hay citas para hoy." />}
-            </div>
-          </GlassCard>
-          <GlassCard title="Recordatorios de hoy">
-            <div className="space-y-3">
-              {todayReminders.map((reminder) => <ReminderCard key={reminder.id} reminder={reminder} customers={customers} completeReminder={completeCrmReminder} deleteReminder={deleteCrmReminder} compact />)}
-              {!todayReminders.length && <Empty text="No hay recordatorios pendientes hoy." />}
-            </div>
-          </GlassCard>
-          <GlassCard title="Clientes sin seguimiento">
-            <div className="space-y-3">
-              {noFollowUpCustomers.slice(0, 8).map((customer) => <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl bg-white/[0.06] p-4 text-left hover:bg-white/[0.09]"><p className="font-semibold">{customerName(customer)}</p><p className="mt-1 text-sm text-white/45">{translateCrmStatus(customer.crm_status || "nuevo")}</p></button>)}
-              {!noFollowUpCustomers.length && <Empty text="Todos los clientes activos tienen próximo paso." />}
-            </div>
-          </GlassCard>
+      {crmView === "Agenda CRM" && (
+        <section className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+          <GlassCard title="Agenda vinculada a clientes"><div className="space-y-3">{appointments.slice(0, 14).map((appointment) => { const customer = firstRelation(appointment.customers); const service = firstRelation(appointment.services); return <button key={appointment.id} onClick={() => { if (appointment.customer_id) setSelectedCrmCustomerId(appointment.customer_id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] p-4 text-left hover:bg-white/[0.09]"><p className="font-semibold">{customerName(customer)}</p><p className="mt-1 text-sm text-white/48">{service?.name || "Servicio"} · {appointmentDate(appointment)}</p></button>; })}{!appointments.length && <Empty text="Aún no hay citas conectadas al CRM." />}</div></GlassCard>
+          <GlassCard title="Crear cita desde cliente"><div className="grid gap-3"><select value={crmAppointmentEmployee} onChange={(e) => setCrmAppointmentEmployee(e.target.value)} className="input-dark"><option value="">Profesional / responsable</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select><select value={crmAppointmentService} onChange={(e) => setCrmAppointmentService(e.target.value)} className="input-dark"><option value="">Servicio</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select><input type="datetime-local" value={crmAppointmentDate} onChange={(e) => setCrmAppointmentDate(e.target.value)} className="input-dark" /><button onClick={scheduleFromCrm} className="btn-primary"><CalendarDays size={17} /> Crear cita</button></div></GlassCard>
         </section>
       )}
 
+      {crmView === "Hoy" && (
+        <section className="grid gap-6 lg:grid-cols-2"><GlassCard title="Prioridad de hoy"><div className="space-y-3">{crmReminders.filter((r) => (r.status || "pending") === "pending").slice(0, 10).map((reminder) => <ReminderCard key={reminder.id} reminder={reminder} customers={customers} completeReminder={completeCrmReminder} deleteReminder={deleteCrmReminder} compact />)}{!crmReminders.length && <Empty text="No tienes recordatorios activos." />}</div></GlassCard><GlassCard title="Clientes a recuperar"><div className="space-y-3">{noFollowUpCustomers.slice(0, 10).map((customer) => <button key={customer.id} onClick={() => { setSelectedCrmCustomerId(customer.id); setCrmView("Ficha 360"); }} className="w-full rounded-2xl bg-white/[0.06] p-4 text-left hover:bg-white/[0.09]"><p className="font-semibold">{customerName(customer)}</p><p className="mt-1 text-sm text-white/45">Sin próxima acción · {translateCrmStatus(customer.crm_status || "nuevo")}</p></button>)}</div></GlassCard></section>
+      )}
+
+      {crmView === "Automatizaciones" && (
+        <section className="grid gap-6 lg:grid-cols-3">{["Nuevo WhatsApp → crear cliente y etiqueta", "Factura vencida → recordatorio por WhatsApp", "Cita próxima → confirmación automática", "Cliente sin seguimiento → tarea CRM", "Presupuesto aceptado → factura", "Documento subido → aviso interno"].map((automation) => <div key={automation} className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><Workflow size={20} /></div><p className="font-semibold">{automation}</p><p className="mt-2 text-sm leading-6 text-white/48">Automatización recomendada para reducir tareas manuales y mejorar el seguimiento.</p></div>)}</section>
+      )}
+
       {crmView === "Ficha 360" && (
-        <section className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
-          <GlassCard title="Base de clientes">
-            <div className="grid gap-3">
-              <div className="relative">
-                <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
-                <input value={crmSearch} onChange={(e) => setCrmSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, documento, estado, responsable o notas" className="input-dark pl-11" />
-              </div>
-              <select value={crmStatusFilter} onChange={(e) => setCrmStatusFilter(e.target.value)} className="input-dark">
-                <option value="all">Todos los estados</option>
-                {crmStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+        <section className="grid gap-6 xl:grid-cols-[420px_1fr]">
+          <aside className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20">
+            <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/55 p-3">
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-3"><Search size={17} className="text-white/35" /><input value={crmSearch} onChange={(e) => setCrmSearch(e.target.value)} placeholder="Buscar cliente, teléfono, RIF, estado..." className="w-full bg-transparent text-sm outline-none placeholder:text-white/35" /></div>
+              <div className="mt-3 grid grid-cols-2 gap-2"><select value={crmStatusFilter} onChange={(e) => setCrmStatusFilter(e.target.value)} className="input-dark"><option value="all">Todos</option>{crmStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button onClick={() => { setCrmSearch(""); setCrmStatusFilter("all"); }} className="rounded-2xl border border-white/10 bg-white/[0.06] text-sm text-white/65">Limpiar</button></div>
             </div>
-            <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
-              {filtered.slice(0, 90).map((customer) => {
-                const isSelected = selectedCustomer?.id === customer.id;
-                const nextReminder = crmReminders.find((reminder) => reminderCustomerId(reminder) === customer.id && (reminder.status || "pending") === "pending");
-                return (
-                  <button key={customer.id} onClick={() => setSelectedCrmCustomerId(customer.id)} className={`w-full rounded-3xl border p-4 text-left transition ${isSelected ? "border-cyan-300/45 bg-cyan-500/15 shadow-lg shadow-cyan-950/20" : "border-white/10 bg-white/[0.045] hover:bg-white/[0.075]"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold">{customerName(customer)}</p>
-                        <p className="mt-1 truncate text-sm text-white/48">{customer.phone || customer.email || "Sin contacto"}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="rounded-full bg-violet-400/15 px-3 py-1 text-[11px] text-violet-100">{translateCrmStatus(customer.crm_status || "nuevo")}</span>
-                          {customer.eps && <span className="rounded-full bg-cyan-400/15 px-3 py-1 text-[11px] text-cyan-100">{epsLabel(customer.eps)}</span>}
-                          {nextReminder && <span className="rounded-full bg-amber-400/15 px-3 py-1 text-[11px] text-amber-100">Alarma</span>}
-                        </div>
-                      </div>
-                      {customer.document_number && <span className="shrink-0 rounded-full bg-black/25 px-3 py-1 text-xs text-white/60">ID</span>}
-                    </div>
-                  </button>
-                );
+            <div className="mt-4 max-h-[760px] space-y-3 overflow-y-auto pr-1">
+              {filteredCustomers.map((customer) => {
+                const isActive = selectedCustomer?.id === customer.id;
+                const messages = whatsappMessages.filter((message) => message.customer_id === customer.id || normalizePhone(message.phone).endsWith(normalizePhone(customer.phone).slice(-9))).length;
+                const reminders = crmReminders.filter((reminder) => reminderCustomerId(reminder) === customer.id && (reminder.status || "pending") === "pending").length;
+                return <button key={customer.id} onClick={() => setSelectedCrmCustomerId(customer.id)} className={`w-full rounded-[1.4rem] border p-4 text-left transition ${isActive ? "border-cyan-300/45 bg-cyan-300/12 shadow-lg shadow-cyan-950/20" : "border-white/10 bg-white/[0.045] hover:bg-white/[0.08]"}`}><div className="flex items-start gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300/25 to-violet-300/20 text-sm font-bold text-white">{customerName(customer).split(" ").slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "CL"}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="truncate font-semibold">{customerName(customer)}</p><span className="rounded-full bg-white/10 px-2 py-1 text-[10px] text-white/50">{translateCrmStatus(customer.crm_status || "nuevo")}</span></div><p className="mt-1 truncate text-sm text-white/45">{customer.phone || customer.email || customer.document_number || "Sin contacto"}</p><div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-white/50"><span className="rounded-full bg-white/10 px-2 py-1">{messages} WhatsApp</span><span className="rounded-full bg-white/10 px-2 py-1">{reminders} tareas</span></div></div></div></button>;
               })}
-              {!filtered.length && <Empty text="No hay clientes que coincidan con la búsqueda." />}
+              {!filteredCustomers.length && <Empty text="No hay clientes con estos filtros." />}
             </div>
-          </GlassCard>
+          </aside>
 
-          <div className="grid gap-6">
-            {!selectedCustomer ? (
-              <GlassCard title="Ficha CRM"><Empty text="Selecciona un cliente para abrir su ficha 360º." /></GlassCard>
-            ) : (
+          <div className="space-y-6">
+            {!selectedCustomer ? <GlassCard title="Ficha CRM"><Empty text="Selecciona un cliente para abrir su ficha premium." /></GlassCard> : (
               <>
-                <GlassCard>
-                  <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
-                    <div className="flex min-w-0 gap-4">
-                      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[1.7rem] border border-cyan-300/25 bg-gradient-to-br from-cyan-300/25 to-violet-400/20 text-2xl font-semibold text-cyan-50 shadow-xl shadow-cyan-950/20">{selectedInitials}</div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200">Ficha Cliente 360 PRO</p>
-                        <h3 className="mt-2 break-words text-3xl font-semibold md:text-4xl">{customerName(selectedCustomer)}</h3>
-                        <p className="mt-2 break-words text-sm text-white/55">{selectedCustomer.phone || "Sin teléfono"} · {selectedCustomer.email || "Sin email"} · Origen {selectedOrigin}</p>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {selectedTags.map((tag) => <span key={tag} className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/70">{tag}</span>)}
-                        </div>
-                      </div>
+                <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,.11),rgba(255,255,255,.035))] shadow-2xl shadow-black/20">
+                  <div className="border-b border-white/10 bg-slate-950/35 p-6 md:p-7">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex items-start gap-5"><div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[1.7rem] border border-cyan-300/20 bg-cyan-300/12 text-2xl font-bold text-cyan-50">{selectedInitials}</div><div><div className="flex flex-wrap items-center gap-2">{customerTags.map((tag) => <span key={tag} className="rounded-full border border-white/10 bg-white/[0.07] px-3 py-1 text-xs text-white/62">{tag}</span>)}</div><h3 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{customerName(selectedCustomer)}</h3><p className="mt-2 text-sm text-white/52">{selectedCustomer.phone || "Sin teléfono"} · {selectedCustomer.email || "Sin email"} · {selectedCustomer.document_number || "Sin documento"}</p></div></div>
+                      <div className="grid gap-3 sm:grid-cols-3 lg:w-[410px]"><InfoBox label="Score" value={`${clientScore}%`} /><InfoBox label="Facturado" value={customerBillingTotal.toFixed(2)} /><InfoBox label="Pendiente" value={customerPendingBilling} /></div>
                     </div>
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <button onClick={() => openWhatsappForCustomer(selectedCustomer, primaryTemplate?.message || "Hola {nombre}")} className="btn-primary"><MessageCircle size={17} /> WhatsApp</button>
-                      <a href={selectedCustomer.phone ? `tel:${selectedCustomer.phone}` : undefined} className="btn-secondary"><PhoneCall size={17} /> Llamar</a>
-                      <button onClick={() => setReminderTitle(`Llamar a ${customerName(selectedCustomer)}`)} className="btn-secondary"><Clock size={17} /> Alarma</button>
-                      <button onClick={() => setCrmActionTitle(`Seguimiento · ${customerName(selectedCustomer)}`)} className="btn-secondary"><Plus size={17} /> Tarea</button>
-                      <button onClick={() => setActiveTab("module:billing")} className="btn-secondary"><Receipt size={17} /> Facturar</button>
-                    </div>
+                    <div className="mt-6 flex flex-wrap gap-2"><button onClick={() => openWhatsappForCustomer(selectedCustomer, whatsappTemplatesEffective[0]?.message || "Hola {{nombre}}, te contactamos desde Flowly.")} className="btn-primary"><MessageCircle size={17} /> WhatsApp</button><button onClick={() => setActiveTab("module:agenda")} className="btn-secondary"><CalendarDays size={17} /> Agenda</button><button onClick={() => setActiveTab("module:billing")} className="btn-secondary"><Receipt size={17} /> Facturar</button><button onClick={() => { setCrmActionTitle("Seguimiento comercial"); setCrmActionNotes(`Contactar a ${customerName(selectedCustomer)} y definir próximo paso.`); }} className="btn-secondary"><Plus size={17} /> Tarea</button></div>
                   </div>
-                  <div className="mt-5 grid gap-3 md:grid-cols-5">
-                    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-cyan-100/70">Score CRM</p>
-                      <div className="mt-3 flex items-end gap-2">
-                        <span className="text-3xl font-semibold text-cyan-50">{selectedHealthScore}</span>
-                        <span className="pb-1 text-sm text-white/45">/100</span>
-                      </div>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-300" style={{ width: `${selectedHealthScore}%` }} /></div>
-                    </div>
-                    <InfoBox label="Próxima cita" value={selectedNextAppointment ? new Date(appointmentDate(selectedNextAppointment)).toLocaleString("es-ES") : "Sin cita"} />
-                    <InfoBox label="Próximo recordatorio" value={selectedNextReminder ? formatReminderDate(selectedNextReminder) : "Sin alarma"} />
-                    <InfoBox label="Última cita" value={selectedLastAppointment ? new Date(appointmentDate(selectedLastAppointment)).toLocaleDateString("es-ES") : "Sin historial"} />
-                    <InfoBox label="Actividad" value={`${customerRecords.length + customerMessages.length + customerDocs.length} eventos`} />
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-5">
-                    {crmPlaybook.map((step) => (
-                      <div key={step.label} className={`rounded-2xl border p-3 ${step.done ? "border-green-300/20 bg-green-400/10" : "border-white/10 bg-white/[0.045]"}`}>
-                        <div className="flex items-center gap-2">
-                          <span className={`flex h-6 w-6 items-center justify-center rounded-full ${step.done ? "bg-green-300 text-neutral-950" : "bg-white/10 text-white/45"}`}>{step.done ? <CheckCircle2 size={14} /> : <Clock size={14} />}</span>
-                          <p className="text-xs font-semibold text-white/70">{step.label}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-5 flex flex-wrap gap-2 rounded-[1.4rem] border border-white/10 bg-black/20 p-2">
-                    {["Resumen", "Actividad", "Agenda", "Facturación", "Documentos", "Personalización"].map((tab) => (
-                      <button key={tab} onClick={() => setCustomerDetailTab(tab)} className={`rounded-full px-4 py-2 text-sm transition ${customerDetailTab === tab ? "bg-white text-neutral-950" : "text-white/65 hover:bg-white/10"}`}>{tab}</button>
-                    ))}
-                  </div>
-                </GlassCard>
+                  <div className="flex flex-wrap gap-2 p-4">{["Vista ejecutiva", "Datos", "Actividad", "Agenda", "Facturación", "Documentos", "IA"].map((tab) => <button key={tab} onClick={() => setDetailTab(tab)} className={`rounded-full px-4 py-2 text-sm font-semibold ${detailTab === tab ? "bg-white text-slate-950" : "bg-white/[0.06] text-white/58 hover:bg-white/[0.1]"}`}>{tab}</button>)}</div>
+                </div>
 
-                <section className="grid gap-6 xl:grid-cols-[1.05fr_.95fr]">
-                  <div className="grid gap-6">
-                    {customerDetailTab === "Resumen" && <GlassCard title="Resumen IA operativo">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100/70">Próximo mejor paso</p>
-                          <p className="mt-2 text-sm leading-6 text-white/70">{selectedNextAppointment ? "Preparar la cita y confirmar asistencia por WhatsApp." : selectedNextReminder ? "Atender el recordatorio pendiente y registrar resultado." : "Crear una cita, tarea o recordatorio para no perder seguimiento."}</p>
-                        </div>
-                        <div className="rounded-2xl border border-violet-300/15 bg-violet-400/10 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-100/70">Perfil del cliente</p>
-                          <p className="mt-2 text-sm leading-6 text-white/70">{customerMessages.length ? `Tiene ${customerMessages.length} mensajes de WhatsApp vinculados.` : "Aún no tiene conversación de WhatsApp vinculada."} {customerBillingRecords.length ? `Total facturado visible: ${customerBillingTotal.toFixed(2)}.` : "Sin facturas vinculadas en el módulo."}</p>
-                        </div>
-                      </div>
-                    </GlassCard>}
+                <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
+                  <div className="space-y-6">
+                    {detailTab === "Vista ejecutiva" && <div className="grid gap-4 md:grid-cols-3"><div className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-5"><p className="text-sm text-white/45">Próxima cita</p><p className="mt-2 font-semibold">{nextAppointment ? appointmentDate(nextAppointment) : "Sin cita"}</p></div><div className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-5"><p className="text-sm text-white/45">Próximo seguimiento</p><p className="mt-2 font-semibold">{nextReminder ? formatReminderDate(nextReminder) : selectedCustomer.next_follow_up_at || "Sin alarma"}</p></div><div className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-5"><p className="text-sm text-white/45">Valor cliente</p><p className="mt-2 font-semibold">{customerBillingTotal.toFixed(2)}</p></div></div>}
 
-                    {customerDetailTab === "Personalización" && <GlassCard title={`Campos inteligentes · ${sectorPreset.label}`}>
-                      <p className="text-sm leading-6 text-white/55">Plantilla visual por sector para que la ficha se adapte a clínicas, peluquerías, talleres, restaurantes o servicios profesionales. Estos campos se pueden guardar como notas hasta activar campos personalizados en base de datos.</p>
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        {sectorPreset.fields.map((field) => <input key={field} placeholder={field} className="input-dark" />)}
-                      </div>
-                    </GlassCard>}
+                    {(detailTab === "Datos" || detailTab === "Vista ejecutiva") && <GlassCard title="Datos del cliente"><div className="grid gap-3 md:grid-cols-2"><input value={detailName} onChange={(e) => setDetailName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={detailPhone} onChange={(e) => setDetailPhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><input value={detailEmail} onChange={(e) => setDetailEmail(e.target.value)} placeholder="Email" className="input-dark" /><input value={detailAddress} onChange={(e) => setDetailAddress(e.target.value)} placeholder="Dirección" className="input-dark" /><input value={detailDocumentType} onChange={(e) => setDetailDocumentType(e.target.value)} placeholder="Tipo documento" className="input-dark" /><input value={detailDocumentNumber} onChange={(e) => setDetailDocumentNumber(e.target.value)} placeholder="Documento / RIF" className="input-dark" /><input value={detailEps} onChange={(e) => setDetailEps(e.target.value)} placeholder="Segmento / EPS / categoría" className="input-dark" /><input value={detailResponsible} onChange={(e) => setDetailResponsible(e.target.value)} placeholder="Responsable" className="input-dark" /><select value={detailCrmStatus} onChange={(e) => setDetailCrmStatus(e.target.value)} className="input-dark">{crmStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><input type="datetime-local" value={detailNextFollowUp} onChange={(e) => setDetailNextFollowUp(e.target.value)} className="input-dark" /></div><textarea value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)} placeholder="Notas internas" className="input-dark mt-3 min-h-28" /><button onClick={saveCustomerDetails} className="btn-primary mt-4"><CheckCircle2 size={17} /> Guardar cambios</button></GlassCard>}
 
-                    <GlassCard title="Datos comerciales y personales">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <input value={detailName} onChange={(e) => setDetailName(e.target.value)} placeholder="Nombre completo" className="input-dark" />
-                        <input value={detailPhone} onChange={(e) => setDetailPhone(e.target.value)} placeholder="Teléfono" className="input-dark" />
-                        <input value={detailEmail} onChange={(e) => setDetailEmail(e.target.value)} placeholder="Email" className="input-dark" />
-                        <select value={detailEps} onChange={(e) => setDetailEps(e.target.value)} className="input-dark"><option value="">Segmento / EPS / tipo cliente</option>{EPS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                        <select value={detailDocumentType} onChange={(e) => setDetailDocumentType(e.target.value)} className="input-dark"><option value="">Tipo documento</option>{DOCUMENT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                        <input value={detailDocumentNumber} onChange={(e) => setDetailDocumentNumber(e.target.value)} placeholder="Número de identificación" className="input-dark" />
-                        <input value={detailAddress} onChange={(e) => setDetailAddress(e.target.value)} placeholder="Dirección" className="input-dark" />
-                        <input value={detailResponsible} onChange={(e) => setDetailResponsible(e.target.value)} placeholder="Responsable / propietario / acudiente" className="input-dark" />
-                        <select value={detailCrmStatus} onChange={(e) => setDetailCrmStatus(e.target.value)} className="input-dark">{crmStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                        <input type="datetime-local" value={detailNextFollowUp} onChange={(e) => setDetailNextFollowUp(e.target.value)} className="input-dark" title="Próximo seguimiento" />
-                      </div>
-                      <textarea value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)} placeholder="Notas internas, objeciones, contexto, necesidades, autorizaciones y próximos pasos" className="input-dark mt-3 min-h-28" />
-                      <button onClick={saveCustomerDetails} className="btn-primary mt-3"><CheckCircle2 size={17} /> Guardar ficha</button>
-                    </GlassCard>
+                    {(detailTab === "Actividad" || detailTab === "Vista ejecutiva") && <GlassCard title="Timeline premium"><div className="mb-4 flex flex-wrap gap-2">{["Todo", "Agenda", "CRM", "WhatsApp", "Facturación", "Documentos", "Recordatorios"].map((filter) => <button key={filter} onClick={() => setTimelineFilter(filter)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${timelineFilter === filter ? "bg-white text-slate-950" : "bg-white/[0.06] text-white/52"}`}>{filter}</button>)}</div><div className="space-y-3">{timelineEvents.map((event) => <div key={event.id} className="relative rounded-2xl border border-white/10 bg-white/[0.055] p-4 pl-5"><span className={`absolute left-0 top-5 h-8 w-1 rounded-r-full ${event.tone === "green" ? "bg-green-300" : event.tone === "cyan" ? "bg-cyan-300" : event.tone === "amber" ? "bg-amber-300" : "bg-violet-300"}`} /><p className="font-semibold">{event.title}</p><p className="mt-1 text-xs text-white/42">{event.meta}</p>{event.body && <p className="mt-2 line-clamp-3 break-words text-sm leading-6 text-white/55">{event.body}</p>}</div>)}{!timelineEvents.length && <Empty text="Sin actividad todavía." />}</div></GlassCard>}
 
-                    {customerDetailTab !== "Personalización" && <GlassCard title="Timeline inteligente">
-                      <div className="mb-4 flex flex-wrap gap-2">
-                        {["Todo", "CRM", "WhatsApp", "Documentos", "Recordatorios", "Facturación"].map((filter) => <button key={filter} onClick={() => setTimelineFilter(filter)} className={`rounded-full px-3 py-1.5 text-xs ${timelineFilter === filter ? "bg-white text-neutral-950" : "bg-white/10 text-white/65"}`}>{filter}</button>)}
-                      </div>
-                      <div className="space-y-3">
-                        {[
-                          ...customerRecords.map((record) => ({ id: `r-${record.id}`, type: "CRM", title: record.title, meta: `${record.status} · ${new Date(record.created_at).toLocaleString("es-ES")}`, body: record.notes, tone: "violet" })),
-                          ...customerMessages.map((message) => ({ id: `w-${message.id}`, type: "WhatsApp", title: message.direction === "inbound" ? "WhatsApp recibido" : "WhatsApp enviado", meta: `${message.template_key || "manual"} · ${new Date(message.created_at).toLocaleString("es-ES")}`, body: message.message, tone: "green" })),
-                          ...customerDocs.map((document) => ({ id: `d-${document.id}`, type: "Documentos", title: `Documento: ${document.title}`, meta: `${document.document_type || "archivo"} · ${new Date(document.created_at).toLocaleString("es-ES")}`, body: document.notes, tone: "cyan" })),
-                          ...customerReminders.map((reminder) => ({ id: `m-${reminder.id}`, type: "Recordatorios", title: reminder.title, meta: `Recordatorio · ${formatReminderDate(reminder)}`, body: reminder.notes || reminder.description, tone: reminderTime(reminder) <= Date.now() ? "amber" : "white" })),
-                          ...customerBillingRecords.map((record) => ({ id: `b-${record.id}`, type: "Facturación", title: record.title, meta: `${record.status} · ${Number(record.amount || 0).toFixed(2)}`, body: record.notes, tone: "cyan" })),
-                        ].filter((event) => timelineFilter === "Todo" || event.type === timelineFilter).slice(0, 20).map((event) => (
-                          <div key={event.id} className="relative rounded-2xl border border-white/10 bg-white/[0.055] p-4 pl-5">
-                            <span className={`absolute left-0 top-5 h-8 w-1 rounded-r-full ${event.tone === "green" ? "bg-green-300" : event.tone === "cyan" ? "bg-cyan-300" : event.tone === "amber" ? "bg-amber-300" : "bg-violet-300"}`} />
-                            <p className="font-semibold">{event.title}</p>
-                            <p className="mt-1 text-xs text-white/45">{event.meta}</p>
-                            {event.body && <p className="mt-2 line-clamp-3 break-words text-sm leading-6 text-white/55">{event.body}</p>}
-                          </div>
-                        ))}
-                        {!customerRecords.length && !customerMessages.length && !customerDocs.length && !customerReminders.length && !customerBillingRecords.length && <Empty text="La actividad aparecerá aquí en cuanto haya citas, notas, documentos, recordatorios, facturas o WhatsApp." />}
-                      </div>
-                    </GlassCard>}
+                    {detailTab === "Agenda" && <GlassCard title="Citas del cliente"><div className="space-y-3">{customerAppointments.map((appointment) => <div key={appointment.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4"><p className="font-semibold">{firstRelation(appointment.services)?.name || "Servicio"}</p><p className="mt-1 text-sm text-white/45">{appointmentDate(appointment)} · {appointment.status || "programada"}</p></div>)}{!customerAppointments.length && <Empty text="Sin citas registradas." />}</div></GlassCard>}
+
+                    {detailTab === "Facturación" && <GlassCard title="Facturación del cliente"><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Total" value={customerBillingTotal.toFixed(2)} /><InfoBox label="Documentos" value={customerBillingRecords.length} /><InfoBox label="Pendientes" value={customerPendingBilling} /></div><div className="mt-4 space-y-2">{customerBillingRecords.map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-white/45">{record.status} · {Number(record.amount || 0).toFixed(2)}</p></div>)}{!customerBillingRecords.length && <Empty text="Sin presupuestos o facturas vinculadas todavía." />}</div><button onClick={() => setActiveTab("module:billing")} className="btn-primary mt-4"><Receipt size={17} /> Abrir facturación</button></GlassCard>}
+
+                    {detailTab === "Documentos" && <GlassCard title="Documentos"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" /><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select><textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label></div><div className="mt-4 space-y-2">{customerDocs.map((document) => <a key={document.id} href={document.file_url || "#"} target="_blank" rel="noreferrer" className="block rounded-2xl border border-white/10 bg-white/[0.055] p-3 hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"}</p></a>)}{!customerDocs.length && <Empty text="Sin documentos cargados." />}</div></GlassCard>}
+
+                    {detailTab === "IA" && <GlassCard title="Resumen IA operativo"><p className="text-sm leading-7 text-white/60">Cliente procedente de {selectedOrigin}. Tiene {customerAppointments.length} citas, {customerMessages.length} mensajes, {customerBillingRecords.length} documentos de facturación y {customerReminders.length} recordatorios. Próximo paso recomendado: {nextAppointment ? "confirmar la cita y preparar seguimiento posterior" : "crear una cita o enviar propuesta por WhatsApp"}.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{sectorPreset.fields.map((field) => <div key={field} className="rounded-2xl bg-white/[0.055] p-3 text-sm text-white/58">{field}</div>)}</div></GlassCard>}
                   </div>
 
-                  <div className="grid gap-6">
-                    <GlassCard title="Playbook recomendado">
-                      <div className="space-y-3">
-                        {suggestedActions.map((action) => (
-                          <button key={action.title} onClick={() => { setCrmActionTitle(action.title); setCrmActionNotes(action.notes); }} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] p-4 text-left hover:bg-white/[0.09]">
-                            <p className="font-semibold">{action.title}</p>
-                            <p className="mt-1 line-clamp-2 text-sm leading-6 text-white/48">{action.notes}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </GlassCard>
-
-                    <GlassCard title="Acciones rápidas">
-                      <div className="grid gap-3">
-                        <input value={crmActionTitle} onChange={(e) => setCrmActionTitle(e.target.value)} placeholder="Tarea: llamar, enviar propuesta, confirmar cita..." className="input-dark" />
-                        <input type="datetime-local" value={crmActionDueDate} onChange={(e) => setCrmActionDueDate(e.target.value)} className="input-dark" />
-                        <textarea value={crmActionNotes} onChange={(e) => setCrmActionNotes(e.target.value)} placeholder="Notas de la tarea" className="input-dark min-h-24" />
-                        <button onClick={saveAction} className="btn-primary"><Plus size={17} /> Crear tarea CRM</button>
-                      </div>
-                    </GlassCard>
-
-                    <GlassCard title="Recordatorio con alarma">
-                      <div className="grid gap-3">
-                        <input value={reminderTitle} onChange={(e) => setReminderTitle(e.target.value)} placeholder="Título del recordatorio" className="input-dark" />
-                        <input type="datetime-local" value={reminderAt} onChange={(e) => setReminderAt(e.target.value)} className="input-dark" />
-                        <textarea value={reminderNotes} onChange={(e) => setReminderNotes(e.target.value)} placeholder="Notas del recordatorio" className="input-dark min-h-20" />
-                        <button onClick={saveReminder} className="btn-primary"><Clock size={17} /> Guardar alarma</button>
-                      </div>
-                    </GlassCard>
-
-                    <GlassCard title="Agendar desde CRM">
-                      <div className="grid gap-3">
-                        <select value={crmAppointmentEmployee} onChange={(e) => setCrmAppointmentEmployee(e.target.value)} className="input-dark"><option value="">Profesional / responsable</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select>
-                        <select value={crmAppointmentService} onChange={(e) => setCrmAppointmentService(e.target.value)} className="input-dark"><option value="">Servicio / producto</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select>
-                        <input type="datetime-local" value={crmAppointmentDate} onChange={(e) => setCrmAppointmentDate(e.target.value)} className="input-dark" />
-                        <button onClick={scheduleFromCrm} className="btn-primary"><CalendarDays size={17} /> Crear cita</button>
-                      </div>
-                    </GlassCard>
-
-                    <GlassCard title="WhatsApp CRM">
-                      <div className="grid gap-2">
-                        {whatsappTemplatesEffective.slice(0, 6).map((template) => <button key={template.key} onClick={() => { const msg = whatsappMessageForCustomer(template.message, selectedCustomer); saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", template.key, msg); openWhatsappForCustomer(selectedCustomer, template.message); }} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left text-sm hover:bg-white/[0.09]"><span className="font-semibold">{template.label}</span><span className="mt-1 block line-clamp-2 text-xs text-white/45">{template.message}</span></button>)}
-                        {!whatsappTemplatesEffective.length && <Empty text="Crea plantillas de WhatsApp para usarlas desde el CRM." />}
-                      </div>
-                    </GlassCard>
-
-                    {(customerDetailTab === "Facturación" || customerDetailTab === "Resumen") && <GlassCard title="Facturación del cliente">
-                      <div className="grid gap-3 md:grid-cols-3">
-                        <InfoBox label="Total facturado" value={customerBillingTotal ? customerBillingTotal.toFixed(2) : "0.00"} />
-                        <InfoBox label="Documentos" value={customerBillingRecords.length} />
-                        <InfoBox label="Pendientes" value={customerPendingBilling} />
-                      </div>
-                      <div className="mt-4 space-y-2">
-                        {customerBillingRecords.slice(0, 5).map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-white/45">{record.status} · {Number(record.amount || 0).toFixed(2)}</p></div>)}
-                        {!customerBillingRecords.length && <Empty text="Sin presupuestos o facturas vinculadas todavía." />}
-                      </div>
-                      <button onClick={() => setActiveTab("module:billing")} className="btn-primary mt-4"><Receipt size={17} /> Abrir facturación</button>
-                    </GlassCard>}
-
-                    <GlassCard title="Documentos del cliente">
-                      <div className="grid gap-3">
-                        <input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" />
-                        <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select>
-                        <textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas del documento" className="input-dark min-h-20" />
-                        <label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label>
-                      </div>
-                      <div className="mt-4 space-y-2">
-                        {customerDocs.slice(0, 5).map((document) => <a key={document.id} href={document.file_url || "#"} target="_blank" rel="noreferrer" className="block rounded-2xl border border-white/10 bg-white/[0.055] p-3 hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"} · {new Date(document.created_at).toLocaleString("es-ES")}</p></a>)}
-                        {!customerDocs.length && <Empty text="Sin documentos cargados." />}
-                      </div>
-                    </GlassCard>
-                  </div>
+                  <aside className="space-y-6">
+                    <GlassCard title="Playbook de ventas"><div className="space-y-3">{suggestedActions.map((action) => <button key={action.title} onClick={() => { setCrmActionTitle(action.title); setCrmActionNotes(action.notes); }} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] p-4 text-left hover:bg-white/[0.09]"><p className="font-semibold">{action.title}</p><p className="mt-1 line-clamp-2 text-sm leading-6 text-white/48">{action.notes}</p></button>)}</div></GlassCard>
+                    <GlassCard title="Nueva tarea"><div className="grid gap-3"><input value={crmActionTitle} onChange={(e) => setCrmActionTitle(e.target.value)} placeholder="Título" className="input-dark" /><input type="datetime-local" value={crmActionDueDate} onChange={(e) => setCrmActionDueDate(e.target.value)} className="input-dark" /><textarea value={crmActionNotes} onChange={(e) => setCrmActionNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-24" /><button onClick={saveAction} className="btn-primary"><Plus size={17} /> Crear tarea</button></div></GlassCard>
+                    <GlassCard title="Recordatorio"><div className="grid gap-3"><input value={reminderTitle} onChange={(e) => setReminderTitle(e.target.value)} placeholder="Título" className="input-dark" /><input type="datetime-local" value={reminderAt} onChange={(e) => setReminderAt(e.target.value)} className="input-dark" /><textarea value={reminderNotes} onChange={(e) => setReminderNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><button onClick={saveReminder} className="btn-primary"><Clock size={17} /> Guardar alarma</button></div></GlassCard>
+                    <GlassCard title="WhatsApp rápido"><div className="grid gap-2">{whatsappTemplatesEffective.slice(0, 5).map((template) => <button key={template.key} onClick={() => { const msg = whatsappMessageForCustomer(template.message, selectedCustomer); saveWhatsappMessage(selectedCustomer.id, selectedCustomer.phone || "", template.key, msg); openWhatsappForCustomer(selectedCustomer, template.message); }} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left text-sm hover:bg-white/[0.09]"><span className="font-semibold">{template.label}</span><span className="mt-1 block line-clamp-2 text-xs text-white/45">{template.message}</span></button>)}{!whatsappTemplatesEffective.length && <Empty text="Crea plantillas para usarlas aquí." />}</div></GlassCard>
+                  </aside>
                 </section>
               </>
             )}

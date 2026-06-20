@@ -155,6 +155,92 @@ function ProductMockup({ country }: { country: Country }) {
   );
 }
 
+
+function TrustPremiumSection() {
+  const trustBadges = [
+    { title: "Datos aislados por negocio", text: "Arquitectura multiempresa con separación por business_id para que cada cliente vea solo su información." },
+    { title: "Pagos preparados con Stripe", text: "Base lista para suscripciones, módulos y facturación recurrente según país y plan contratado." },
+    { title: "WhatsApp Cloud API", text: "Conexión profesional para conversaciones, seguimiento comercial y automatizaciones desde el panel." },
+    { title: "Infraestructura SaaS", text: "Diseñado para escalar en Vercel, Supabase y módulos independientes por tipo de negocio." },
+  ];
+
+  const sectorProof = [
+    { role: "Clínicas", quote: "Centraliza agenda, clientes, WhatsApp, documentos y seguimiento sin perder el contexto del paciente." },
+    { role: "Peluquerías y estética", quote: "Convierte reservas, preferencias, recordatorios y facturación básica en un flujo más ordenado y comercial." },
+    { role: "Talleres y servicios", quote: "Permite pasar de una conversación a una cita, presupuesto, factura y cobro desde un mismo lugar." },
+  ];
+
+  return (
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-16">
+      <div className="overflow-hidden rounded-[2.4rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))] p-6 shadow-2xl shadow-cyan-950/20 md:p-8">
+        <div className="grid gap-10 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
+          <div>
+            <div className="flowly-chip mb-5 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><ShieldCheck size={16} /> Confianza para vender software premium</div>
+            <h2 className="max-w-2xl text-4xl font-semibold tracking-tight md:text-6xl">Un producto que transmite orden, seguridad y nivel desde el primer clic.</h2>
+            <p className="mt-5 max-w-xl text-base leading-8 text-white/62">Flowly no se presenta como una herramienta suelta: se presenta como un centro operativo moderno para empresas que quieren captar, atender y cobrar mejor.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {trustBadges.map((badge) => (
+              <div key={badge.title} className="rounded-[1.6rem] border border-white/10 bg-slate-950/45 p-5">
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><CheckCircle2 size={20} /></div>
+                <p className="font-semibold">{badge.title}</p>
+                <p className="mt-2 text-sm leading-6 text-white/50">{badge.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          {sectorProof.map((item) => (
+            <div key={item.role} className="rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-6">
+              <div className="mb-4 flex items-center gap-1 text-cyan-200">{[0, 1, 2, 3, 4].map((star) => <Star key={star} size={15} fill="currentColor" />)}</div>
+              <p className="text-lg font-semibold">{item.role}</p>
+              <p className="mt-3 text-sm leading-7 text-white/56">“{item.quote}”</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PremiumVisualSystemSection() {
+  return (
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-14">
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
+        <div className="flowly-card overflow-hidden rounded-[2rem] p-6 md:p-8">
+          <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200/80">Panel premium</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">Simple por fuera. Potente por dentro.</h2>
+            </div>
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm text-cyan-100">CRM · Agenda · WhatsApp · Facturación</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {["Clientes 360", "Área Cliente", "Facturación básica", "Automatizaciones", "Métricas", "WhatsApp"].map((item) => (
+              <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.055] p-5 transition hover:-translate-y-1 hover:bg-white/[0.08]">
+                <p className="font-semibold">{item}</p>
+                <p className="mt-2 text-sm leading-6 text-white/46">Diseñado para verse limpio, rápido y profesional.</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/30">
+          <p className="text-sm text-white/45">Flujo comercial conectado</p>
+          <div className="mt-6 space-y-3">
+            {["Entra un WhatsApp", "Se crea cliente en CRM", "Se agenda una cita", "Se envía cotización", "Se genera factura", "Se registra el cobro"].map((step, index) => (
+              <div key={step} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-300/12 text-sm font-semibold text-cyan-100">{index + 1}</span>
+                <span className="text-sm font-medium text-white/78">{step}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const [country, setCountry] = useState<Country>("ES");
   const [ambassadorLoading, setAmbassadorLoading] = useState(false);
@@ -246,6 +332,9 @@ export default function Home() {
         </div>
         <ProductMockup country={country} />
       </section>
+
+      <TrustPremiumSection />
+      <PremiumVisualSystemSection />
 
       <section className="relative z-10 mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-4 md:grid-cols-4">
