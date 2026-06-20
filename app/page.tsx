@@ -20,6 +20,7 @@ import {
   Scissors,
   ShieldCheck,
   Sparkles,
+  Star,
   Store,
   Users,
   Zap,
