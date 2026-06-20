@@ -4704,104 +4704,184 @@ function ServicesSection({ services, serviceName, setServiceName, serviceDuratio
 function EmployeesSection({ employees, employeeName, setEmployeeName, employeePhone, setEmployeePhone, createEmployee }: any) { return <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><GlassCard title="Nuevo empleado"><div className="grid gap-3"><input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Nombre" className="input-dark" /><input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Teléfono" className="input-dark" /><button onClick={createEmployee} className="btn-primary"><Plus size={17} /> Crear empleado</button></div></GlassCard><GlassCard title="Equipo"><div className="space-y-3">{employees.map((employee: Employee) => <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p className="font-semibold">{employee.name}</p><p className="text-sm text-white/45">{employee.phone || "Sin teléfono"}</p></div>)}{!employees.length && <Empty text="Añade al primer profesional del negocio." />}</div></GlassCard></section>; }
 function CustomersSection({ customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) {
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"grid" | "list">("grid");
   const filteredCustomers = customers.filter((customer: Customer) => {
-    const text = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""} ${customer.crm_status || ""}`.toLowerCase();
+    const text = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""} ${customer.crm_status || ""} ${customer.notes || ""}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
   const withPhone = customers.filter((customer: Customer) => customer.phone).length;
   const whatsappLeads = customers.filter((customer: Customer) => (customer.crm_status || "").includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp")).length;
   const needsFollowUp = customers.filter((customer: Customer) => !customer.next_follow_up_at && !["cerrado", "perdido", "alta"].includes(customer.crm_status || "nuevo")).length;
-  const statuses: string[] = Array.from(new Set<string>(customers.map((customer: Customer) => translateCrmStatus(customer.crm_status || "nuevo")))).slice(0, 4);
+  const vipCustomers = Math.max(0, customers.filter((customer: Customer) => (customer.crm_status || "").includes("vip") || (customer.notes || "").toLowerCase().includes("vip")).length);
+  const featured = filteredCustomers.slice(0, 8);
+  const newest = filteredCustomers[0];
+  const segments: { label: string; value: number | string; helper: string; icon: any }[] = [
+    { label: "Base total", value: customers.length, helper: "clientes en CRM", icon: Users },
+    { label: "WhatsApp", value: whatsappLeads, helper: "origen conversacional", icon: MessageCircle },
+    { label: "Con contacto", value: withPhone, helper: "listos para campaña", icon: PhoneCall },
+    { label: "A revisar", value: needsFollowUp, helper: "sin próxima acción", icon: Clock },
+  ];
+  const kanban = [
+    { title: "Nuevo", count: customers.filter((c: Customer) => ["nuevo", "nuevo_whatsapp", undefined, null, ""].includes(c.crm_status as any)).length, tone: "cyan" },
+    { title: "Contactado", count: customers.filter((c: Customer) => ["contactar", "interesado", "cita_solicitada"].includes(c.crm_status || "")).length, tone: "violet" },
+    { title: "Cita / propuesta", count: customers.filter((c: Customer) => ["cita_agendada", "presupuesto", "seguimiento"].includes(c.crm_status || "")).length, tone: "emerald" },
+    { title: "Ganado", count: customers.filter((c: Customer) => ["cliente", "alta", "cerrado"].includes(c.crm_status || "")).length, tone: "amber" },
+  ];
 
   return (
-    <section className="grid gap-6">
-      <div className="overflow-hidden rounded-[2.25rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,.20),transparent_34%),linear-gradient(135deg,rgba(15,23,42,.96),rgba(30,27,75,.90))] p-6 shadow-2xl shadow-black/30 md:p-8">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+    <section className="space-y-7">
+      <div className="relative overflow-hidden rounded-[2.7rem] border border-white/10 bg-[radial-gradient(circle_at_15%_0%,rgba(34,211,238,.30),transparent_34%),radial-gradient(circle_at_85%_10%,rgba(168,85,247,.28),transparent_32%),linear-gradient(135deg,#020617,#0f172a_48%,#111827)] p-6 shadow-2xl shadow-black/40 md:p-8">
+        <div className="absolute right-8 top-8 hidden h-40 w-40 rounded-full border border-cyan-200/10 bg-cyan-300/10 blur-2xl lg:block" />
+        <div className="relative grid gap-8 xl:grid-cols-[1.15fr_.85fr] xl:items-end">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
-              <Users size={15} /> Centro de clientes
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">
+              <Sparkles size={15} /> Client OS Premium
             </div>
-            <h2 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl">Clientes ordenados, seguimiento claro y una experiencia mucho más profesional.</h2>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/58">Gestiona contactos, origen, estado, próximas acciones y datos clave desde una vista simple pero sofisticada. Pensado para vender más y no perder clientes entre notas sueltas.</p>
+            <h2 className="mt-6 max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-white md:text-6xl">
+              Clientes, seguimiento y ventas en una interfaz mucho más limpia.
+            </h2>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-white/62">
+              Vista rediseñada para que el negocio vea rápido quién es el cliente, de dónde viene, qué necesita y cuál es la siguiente acción comercial.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              {["CRM 360", "WhatsApp", "Agenda", "Facturación", "Notas", "Documentos"].map((item) => (
+                <span key={item} className="rounded-full border border-white/10 bg-white/[0.07] px-4 py-2 text-sm text-white/72">{item}</span>
+              ))}
+            </div>
           </div>
-          <div className="grid min-w-[300px] gap-3 sm:grid-cols-3">
-            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs text-white/45">Clientes</p><p className="mt-1 text-2xl font-semibold">{customers.length}</p></div>
-            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs text-white/45">Con teléfono</p><p className="mt-1 text-2xl font-semibold">{withPhone}</p></div>
-            <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4"><p className="text-xs text-white/45">Sin seguimiento</p><p className="mt-1 text-2xl font-semibold">{needsFollowUp}</p></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {segments.map(({ label, value, helper, icon: Icon }) => (
+              <div key={label} className="rounded-[1.55rem] border border-white/10 bg-white/[0.075] p-5 backdrop-blur-xl">
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><Icon size={20} /></div>
+                <p className="text-sm text-white/45">{label}</p>
+                <p className="mt-1 text-3xl font-semibold text-white">{value}</p>
+                <p className="mt-1 text-xs text-white/38">{helper}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
-        <div className="grid gap-6">
-          <GlassCard title="Crear cliente rápido">
-            <p className="mb-5 text-sm leading-6 text-white/50">Alta rápida para llamadas, WhatsApp o recepción. Después puedes completarlo desde CRM/Ficha 360.</p>
+      <section className="grid gap-6 xl:grid-cols-[380px_1fr]">
+        <aside className="space-y-6">
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/30">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/70">Alta rápida</p>
+                <h3 className="mt-1 text-xl font-semibold">Nuevo cliente</h3>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-950"><Plus size={19} /></div>
+            </div>
             <div className="grid gap-3">
-              <input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre del cliente" className="input-dark" />
+              <input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre completo" className="input-dark" />
               <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="input-dark" />
-              <button onClick={createCustomer} className="btn-primary"><Plus size={17} /> Crear cliente</button>
-            </div>
-          </GlassCard>
-
-          <GlassCard title="Segmentos visibles">
-            <div className="grid gap-3">
-              {(["Nuevo WhatsApp", ...statuses, whatsappLeads ? "Origen WhatsApp" : "Captación manual"] as string[]).slice(0, 5).map((tag) => (
-                <div key={tag} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3">
-                  <span className="text-sm font-medium">{tag}</span>
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/55">CRM</span>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-        </div>
-
-        <GlassCard title="Base de clientes">
-          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, documento, EPS, estado u origen" className="input-dark pl-11" />
-            </div>
-            <div className="flex rounded-2xl border border-white/10 bg-black/20 p-1">
-              {(["grid", "list"] as const).map((item) => <button key={item} onClick={() => setView(item)} className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${view === item ? "bg-white text-slate-950" : "text-white/55 hover:text-white"}`}>{item === "grid" ? "Cards" : "Lista"}</button>)}
+              <button onClick={createCustomer} className="btn-primary w-full justify-center"><Plus size={17} /> Crear ficha</button>
             </div>
           </div>
 
-          <div className={view === "grid" ? "grid gap-4 md:grid-cols-2" : "space-y-3"}>
-            {filteredCustomers.map((customer: Customer) => {
-              const initials = customerName(customer).split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "CL";
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">Pipeline visual</p>
+            <div className="mt-5 space-y-3">
+              {kanban.map((stage, index) => (
+                <div key={stage.title} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-white/84">{stage.title}</span>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/62">{stage.count}</span>
+                  </div>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full bg-cyan-200" style={{ width: `${Math.min(100, 18 + index * 18 + stage.count * 6)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-cyan-300/15 bg-cyan-300/[0.07] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100/70">Segmentos inteligentes</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {["Nuevo WhatsApp", "VIP", "Pendiente pago", "Sin seguimiento", "Cita próxima", "Factura pendiente"].map((tag) => (
+                <span key={tag} className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-2 text-xs text-white/68">{tag}</span>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        <div className="space-y-6">
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/65 p-4 shadow-2xl shadow-black/25">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, documento, EPS, estado, origen o nota" className="input-dark pl-11" />
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs text-white/55 sm:min-w-[330px]">
+                <div className="rounded-2xl bg-white/[0.06] px-3 py-3"><b className="block text-lg text-white">{filteredCustomers.length}</b> visibles</div>
+                <div className="rounded-2xl bg-white/[0.06] px-3 py-3"><b className="block text-lg text-white">{vipCustomers}</b> VIP</div>
+                <div className="rounded-2xl bg-white/[0.06] px-3 py-3"><b className="block text-lg text-white">{needsFollowUp}</b> revisar</div>
+              </div>
+            </div>
+          </div>
+
+          {newest && (
+            <div className="overflow-hidden rounded-[2.2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))] p-5">
+              <div className="grid gap-5 lg:grid-cols-[1fr_330px]">
+                <div className="flex gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-white text-xl font-semibold text-slate-950">
+                    {(customerName(newest).split(" ").filter(Boolean).slice(0, 2).map((part: string) => part[0]?.toUpperCase()).join("") || "CL")}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/70">Ficha destacada</p>
+                    <h3 className="mt-1 truncate text-2xl font-semibold">{customerName(newest)}</h3>
+                    <p className="mt-2 text-sm text-white/50">{newest.phone || newest.email || "Sin contacto"} · {translateCrmStatus(newest.crm_status || "nuevo")}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-950"><MessageCircle size={14} className="mr-1 inline" /> WhatsApp</button>
+                      <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-semibold text-white/72"><CalendarDays size={14} className="mr-1 inline" /> Agendar</button>
+                      <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-semibold text-white/72"><Receipt size={14} className="mr-1 inline" /> Facturar</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[1.6rem] border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/38">Resumen IA</p>
+                  <p className="mt-3 text-sm leading-6 text-white/62">Cliente listo para seguimiento. Revisa origen, próxima acción y posible presupuesto antes de cerrar la conversación.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4 2xl:grid-cols-2">
+            {featured.map((customer: Customer) => {
+              const initials = customerName(customer).split(" ").filter(Boolean).slice(0, 2).map((part: string) => part[0]?.toUpperCase()).join("") || "CL";
               const status = translateCrmStatus(customer.crm_status || "nuevo");
               const origin = (customer.crm_status || "").includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp") ? "WhatsApp" : "CRM";
               return (
-                <div key={customer.id} className="group rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-white/[0.085] hover:shadow-xl hover:shadow-cyan-950/15">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300/25 to-violet-300/25 text-sm font-bold text-white ring-1 ring-white/10">{initials}</div>
+                <article key={customer.id} className="group relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.052] p-5 transition duration-300 hover:-translate-y-1 hover:border-cyan-300/35 hover:bg-white/[0.085] hover:shadow-2xl hover:shadow-cyan-950/20">
+                  <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-cyan-300/10 blur-2xl transition group-hover:bg-cyan-300/20" />
+                  <div className="relative flex items-start gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-slate-950 text-base font-semibold text-cyan-100">{initials}</div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-base font-semibold text-white">{customerName(customer)}</p>
+                          <h3 className="truncate text-lg font-semibold text-white">{customerName(customer)}</h3>
                           <p className="mt-1 truncate text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p>
                         </div>
                         <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold text-cyan-100">{origin}</span>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/68">{status}</span>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/70">{status}</span>
                         {customer.document_number && <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/55">ID {customer.document_number}</span>}
                         {customer.eps && <span className="rounded-full bg-violet-300/10 px-3 py-1 text-[11px] text-violet-100">{translateIntent(customer.eps || "informacion")}</span>}
                       </div>
-                      <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                        <button className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10"><MessageCircle size={14} className="mr-1 inline" /> WhatsApp</button>
-                        <button className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10"><CalendarDays size={14} className="mr-1 inline" /> Agendar</button>
-                        <button className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10"><Receipt size={14} className="mr-1 inline" /> Facturar</button>
+                      <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                        <button className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/72 transition hover:bg-white/10"><MessageCircle size={14} className="mr-1 inline" /> WhatsApp</button>
+                        <button className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/72 transition hover:bg-white/10"><CalendarDays size={14} className="mr-1 inline" /> Agenda</button>
+                        <button className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/72 transition hover:bg-white/10"><Receipt size={14} className="mr-1 inline" /> Factura</button>
                       </div>
                     </div>
                   </div>
-                </div>
+                </article>
               );
             })}
             {!filteredCustomers.length && <Empty text="No hay clientes que coincidan con la búsqueda." />}
           </div>
-        </GlassCard>
+        </div>
       </section>
     </section>
   );

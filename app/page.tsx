@@ -331,6 +331,20 @@ export default function Home() {
         <div className="mt-8 grid gap-3 text-sm text-white/65 sm:grid-cols-3">
           {["Implementación rápida", "Diseño premium", "Escalable por módulos"].map((item) => <div key={item} className="flowly-chip rounded-2xl px-4 py-3"><CheckCircle2 className="mr-2 inline text-cyan-200" size={16} />{item}</div>)}
         </div>
+
+        <div className="mx-auto mt-10 grid max-w-5xl gap-3 rounded-[2rem] border border-white/10 bg-white/[0.055] p-3 text-left shadow-2xl shadow-cyan-950/20 backdrop-blur-xl md:grid-cols-3">
+          {[
+            ["Seguridad", "Datos separados por negocio y preparados para operación multiempresa."],
+            ["Producto premium", "CRM, agenda, WhatsApp, facturación e IA con una experiencia visual unificada."],
+            ["Confianza comercial", "Panel pensado para vender, atender y cobrar sin perder el contexto del cliente."],
+          ].map(([title, text]) => (
+            <div key={title} className="rounded-[1.4rem] border border-white/10 bg-slate-950/55 p-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><ShieldCheck size={18} /></div>
+              <p className="font-semibold text-white">{title}</p>
+              <p className="mt-2 text-sm leading-6 text-white/52">{text}</p>
+            </div>
+          ))}
+        </div>
         <ProductMockup country={country} />
       </section>
 
