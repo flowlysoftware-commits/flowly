@@ -36,11 +36,11 @@ type MarketConfig = {
 };
 
 const markets: MarketConfig[] = [
-  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", headline: "Flowly IA Venezuela · gestión completa en USD", dashboardMoney: "$13.5k" },
-  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", headline: "SaaS premium para negocios modernos", dashboardMoney: "12.4k€" },
-  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", headline: "Flowly IA Colombia · operación comercial conectada", dashboardMoney: "$54.0M" },
-  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", headline: "Flowly IA Ecuador · gestión comercial en USD", dashboardMoney: "$13.5k" },
-  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", headline: "Flowly IA Puerto Rico · negocio conectado", dashboardMoney: "$13.5k" },
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", headline: "Todo tu negocio en una sola plataforma", dashboardMoney: "$13.5k" },
+  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", headline: "Gestiona clientes, citas y facturas desde un único lugar", dashboardMoney: "12.4k€" },
+  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", headline: "Más control. Menos herramientas.", dashboardMoney: "$54.0M" },
+  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", headline: "CRM, Agenda, WhatsApp y Facturación conectados", dashboardMoney: "$13.5k" },
+  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", headline: "Organiza y haz crecer tu negocio", dashboardMoney: "$13.5k" },
 ];
 
 const productPillars = [
@@ -497,7 +497,7 @@ function AmbassadorSection() {
       email: ambassadorEmail,
       phone: ambassadorPhone,
       company: ambassadorCity,
-      type: "Trabaja con nosotros",
+      type: "Empezar ahora",
       message,
       status: "Nuevo",
     });
@@ -520,7 +520,7 @@ function AmbassadorSection() {
     <section id="trabaja-con-nosotros" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
       <div className="grid gap-6 rounded-[2.4rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/15 md:p-8 lg:grid-cols-[.95fr_1.05fr] lg:items-center">
         <div>
-          <div className="flowly-chip mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> Trabaja con nosotros</div>
+          <div className="flowly-chip mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> Empezar ahora</div>
           <h2 className="text-4xl font-semibold tracking-tight md:text-5xl">Embajadores para llevar Flowly a negocios de LATAM.</h2>
           <p className="mt-5 text-base leading-8 text-white/62">Una propuesta comercial clara: software, automatización, WhatsApp, agenda, CRM, facturación y marketing en una única plataforma.</p>
         </div>
