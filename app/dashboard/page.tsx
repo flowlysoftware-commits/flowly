@@ -1114,6 +1114,30 @@ export default function DashboardPage() {
   };
 
 
+  const openClinicalDocument = async (document: ClinicalDocument) => {
+    if (!business) return;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    const response = await fetch("/api/documents/sign", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ documentId: document.id, businessId: business.id }),
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok || !result.url) {
+      alert(result.error || "No se pudo abrir el documento de forma segura");
+      return;
+    }
+
+    window.open(result.url, "_blank", "noopener,noreferrer");
+  };
+
   const uploadClinicalDocument = async (customerId: string, file: File, title?: string, documentType = "clinico", notes = "") => {
     if (!business || !customerId || !file) return alert("Selecciona un paciente y un archivo");
 
@@ -1126,17 +1150,13 @@ export default function DashboardPage() {
 
     if (uploadError) return alert(uploadError.message);
 
-    const { data: publicData } = supabase.storage
-      .from("clinical_documents")
-      .getPublicUrl(path);
-
     const { error: insertError } = await supabase.from("clinical_documents").insert({
       business_id: business.id,
       customer_id: customerId,
       title: title || file.name,
       file_name: file.name,
       file_path: path,
-      file_url: publicData.publicUrl,
+      file_url: null,
       document_type: documentType || "clinico",
       notes: notes || null,
     });
@@ -2779,7 +2799,7 @@ function CrmModule({
 
                     {detailTab === "Facturación" && <GlassCard title="Facturación del cliente"><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Total" value={customerBillingTotal.toFixed(2)} /><InfoBox label="Documentos" value={customerBillingRecords.length} /><InfoBox label="Pendientes" value={customerPendingBilling} /></div><div className="mt-4 space-y-2">{customerBillingRecords.map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-white/45">{record.status} · {Number(record.amount || 0).toFixed(2)}</p></div>)}{!customerBillingRecords.length && <Empty text="Sin presupuestos o facturas vinculadas todavía." />}</div><button onClick={() => setActiveTab("module:billing")} className="btn-primary mt-4"><Receipt size={17} /> Abrir facturación</button></GlassCard>}
 
-                    {detailTab === "Documentos" && <GlassCard title="Documentos"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" /><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select><textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label></div><div className="mt-4 space-y-2">{customerDocs.map((document) => <a key={document.id} href={document.file_url || "#"} target="_blank" rel="noreferrer" className="block rounded-2xl border border-white/10 bg-white/[0.055] p-3 hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"}</p></a>)}{!customerDocs.length && <Empty text="Sin documentos cargados." />}</div></GlassCard>}
+                    {detailTab === "Documentos" && <GlassCard title="Documentos"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" /><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select><textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label></div><div className="mt-4 space-y-2">{customerDocs.map((document) => <button key={document.id} type="button" onClick={() => openClinicalDocument(document)} className="block w-full rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"} · enlace privado de 5 min</p></button>)}{!customerDocs.length && <Empty text="Sin documentos cargados." />}</div></GlassCard>}
 
                     {detailTab === "IA" && <GlassCard title="Resumen IA operativo"><p className="text-sm leading-7 text-white/60">Cliente procedente de {selectedOrigin}. Tiene {customerAppointments.length} citas, {customerMessages.length} mensajes, {customerBillingRecords.length} documentos de facturación y {customerReminders.length} recordatorios. Próximo paso recomendado: {nextAppointment ? "confirmar la cita y preparar seguimiento posterior" : "crear una cita o enviar propuesta por WhatsApp"}.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{sectorPreset.fields.map((field) => <div key={field} className="rounded-2xl bg-white/[0.055] p-3 text-sm text-white/58">{field}</div>)}</div></GlassCard>}
                   </div>
