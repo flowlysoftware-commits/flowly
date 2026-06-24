@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import {
   ArrowRight,
   Bot,
@@ -16,7 +15,6 @@ import {
   MessageCircle,
   Play,
   Scissors,
-  Send,
   ShieldCheck,
   Sparkles,
   Store,
@@ -36,85 +34,67 @@ type MarketConfig = {
 };
 
 const markets: MarketConfig[] = [
-  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", headline: "Todo tu negocio en una sola plataforma", dashboardMoney: "$13.5k" },
-  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", headline: "Gestiona clientes, citas y facturas desde un único lugar", dashboardMoney: "12.4k€" },
-  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", headline: "Más control. Menos herramientas.", dashboardMoney: "$54.0M" },
-  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", headline: "CRM, Agenda, WhatsApp y Facturación conectados", dashboardMoney: "$13.5k" },
-  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", headline: "Organiza y haz crecer tu negocio", dashboardMoney: "$13.5k" },
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", headline: "Flowly IA Venezuela · gestión comercial en USD", dashboardMoney: "$13.5k" },
+  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", headline: "SaaS premium para negocios modernos", dashboardMoney: "12.4k€" },
+  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", headline: "Flowly IA Colombia · operación comercial conectada", dashboardMoney: "$54.0M" },
+  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", headline: "Flowly IA Ecuador · gestión comercial en USD", dashboardMoney: "$13.5k" },
+  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", headline: "Flowly IA Puerto Rico · negocio conectado", dashboardMoney: "$13.5k" },
 ];
 
-const productPillars = [
-  {
-    icon: Users,
-    title: "CRM",
-    text: "Clientes, contactos, historial, etiquetas, tareas y oportunidades sin hojas sueltas.",
-  },
-  {
-    icon: MessageCircle,
-    title: "WhatsApp",
-    text: "Conversaciones conectadas al cliente, plantillas, seguimiento y contexto comercial.",
-  },
-  {
-    icon: CalendarDays,
-    title: "Agenda",
-    text: "Reservas, citas, disponibilidad y recordatorios desde el mismo panel.",
-  },
-  {
-    icon: FileText,
-    title: "Facturación",
-    text: "Cotizaciones, facturas sencillas, PDF, cobros y estado de pago en Flowly Basic.",
-  },
-  {
-    icon: Bot,
-    title: "Automatizaciones",
-    text: "Recordatorios, cambios de estado y acciones repetitivas ejecutadas por reglas.",
-  },
-  {
-    icon: BrainCircuit,
-    title: "IA",
-    text: "Resumen operativo, próximos pasos, asistencia comercial y flujos inteligentes.",
-  },
-];
-
-const sectorsBase = [
-  {
-    name: "Flowly Clinic",
-    icon: HeartPulse,
-    tag: "Clínicas, estética, fisioterapia y centros médicos",
-    href: "/demo/clinic",
-    highlights: ["Pacientes 360", "Citas y recordatorios", "Documentos y seguimiento"],
-  },
-  {
-    name: "Flowly Hair",
-    icon: Scissors,
-    tag: "Peluquerías, barberías, beauty y estética",
-    href: "/demo/hair",
-    highlights: ["Reservas rápidas", "Preferencias de cliente", "Campañas por WhatsApp"],
-  },
-  {
-    name: "Flowly POS",
-    icon: Store,
-    tag: "Restaurantes, comercios, talleres y servicios",
-    href: "/demo/restaurant",
-    highlights: ["Clientes y ventas", "Cotización a factura", "Cobros y métricas"],
-  },
+const productModules = [
+  { icon: Users, title: "CRM", text: "Clientes, contactos, historial, etiquetas y seguimiento comercial en una sola ficha." },
+  { icon: MessageCircle, title: "WhatsApp", text: "Conversaciones conectadas al cliente para responder, vender y hacer seguimiento." },
+  { icon: CalendarDays, title: "Agenda", text: "Citas, reservas y recordatorios para organizar mejor cada día de trabajo." },
+  { icon: FileText, title: "Facturación", text: "Cotizaciones, facturas sencillas, PDFs y registro de cobros desde Flowly Basic." },
+  { icon: Bot, title: "Automatizaciones", text: "Mensajes, tareas y recordatorios automáticos para reducir trabajo repetitivo." },
+  { icon: BrainCircuit, title: "IA", text: "Resumen de clientes, próximos pasos y asistencia para tomar mejores decisiones." },
 ];
 
 const workflow = [
-  { title: "Entra un cliente", text: "WhatsApp, llamada, formulario, reserva o contacto manual.", icon: MessageCircle },
-  { title: "Flowly lo organiza", text: "Se crea o actualiza su ficha con historial, estado y próxima acción.", icon: Users },
-  { title: "Agenda el servicio", text: "Cita, disponibilidad, recordatorio y seguimiento sin salir del panel.", icon: CalendarDays },
-  { title: "Cotiza y factura", text: "Presupuesto, factura PDF, registro de cobro y estado de pago.", icon: FileText },
-  { title: "Automatiza el seguimiento", text: "Mensajes, recordatorios, tareas e IA para que nada se pierda.", icon: Zap },
+  { title: "Cliente escribe", text: "Llega por WhatsApp, formulario, reserva o contacto manual.", icon: MessageCircle },
+  { title: "Flowly lo guarda", text: "Se crea o actualiza su ficha con historial, origen y estado.", icon: Users },
+  { title: "Agenda la cita", text: "Organiza disponibilidad, servicios, recordatorios y tareas.", icon: CalendarDays },
+  { title: "Cotiza y factura", text: "Convierte presupuestos en facturas y registra el cobro.", icon: FileText },
+  { title: "Haz seguimiento", text: "Automatiza mensajes y próximos pasos para no perder oportunidades.", icon: Zap },
 ];
 
-const comparisonRows: Array<[string, boolean, boolean]> = [
-  ["CRM + clientes", true, true],
-  ["Agenda y reservas", true, false],
-  ["WhatsApp conectado al historial", true, false],
-  ["Cotizaciones y facturas básicas", true, false],
-  ["Automatizaciones e IA", true, false],
-  ["Todo en un mismo flujo", true, false],
+const sectors = [
+  {
+    name: "Clínicas y estética",
+    icon: HeartPulse,
+    href: "/demo/clinic",
+    result: "Pacientes organizados, citas visibles y seguimiento desde una ficha 360.",
+    tags: ["Pacientes", "Agenda", "Documentos"],
+  },
+  {
+    name: "Peluquerías y barberías",
+    icon: Scissors,
+    href: "/demo/hair",
+    result: "Reservas, preferencias, recordatorios y campañas por WhatsApp en un solo lugar.",
+    tags: ["Reservas", "Preferencias", "WhatsApp"],
+  },
+  {
+    name: "Comercios y servicios",
+    icon: Store,
+    href: "/demo/restaurant",
+    result: "Clientes, presupuestos, facturas y cobros conectados al proceso comercial.",
+    tags: ["Clientes", "Ventas", "Cobros"],
+  },
+];
+
+const outcomes = [
+  { title: "Menos herramientas abiertas", text: "Sustituye hojas, apps sueltas y conversaciones perdidas por un panel centralizado." },
+  { title: "Más control comercial", text: "Cada cliente tiene historial, próxima acción, citas, documentos y facturación." },
+  { title: "Seguimiento más rápido", text: "WhatsApp, tareas y automatizaciones ayudan a responder antes y vender mejor." },
+];
+
+const comparisonRows: Array<[string, string, string]> = [
+  ["Clientes y CRM", "Integrado", "Separado o manual"],
+  ["Agenda y reservas", "Incluido", "Otra aplicación"],
+  ["WhatsApp con historial", "Conectado", "Sin contexto"],
+  ["Cotizaciones y facturas", "Desde el cliente", "Herramienta aparte"],
+  ["Automatizaciones e IA", "En el flujo", "No conectado"],
+  ["Visión del negocio", "Unificada", "Fragmentada"],
 ];
 
 function isCountry(value: string | null): value is Country {
@@ -147,9 +127,7 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
           <span className="text-lg">{market.flag}</span>
           <select value={country} onChange={(event) => setMarket(event.target.value as Country)} className="bg-transparent text-xs font-medium outline-none sm:text-sm" aria-label="Seleccionar país">
             {markets.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.label} · {item.currency}
-              </option>
+              <option key={item.code} value={item.code}>{item.label} · {item.currency}</option>
             ))}
           </select>
         </label>
@@ -164,13 +142,13 @@ function ProductMockup({ country }: { country: Country }) {
   const money = getMarket(country).dashboardMoney;
 
   return (
-    <div id="producto" className="flowly-product-stage relative mx-auto mt-14 max-w-6xl rounded-[2.4rem] p-3 sm:p-4">
+    <div id="producto" className="flowly-product-stage relative mx-auto mt-14 max-w-6xl rounded-[2.6rem] p-3 sm:p-4">
       <div className="flowly-scanline" />
-      <div className="rounded-[1.9rem] border border-white/10 bg-slate-950/86 p-4 shadow-2xl shadow-cyan-950/30 sm:p-6">
+      <div className="rounded-[2rem] border border-white/10 bg-slate-950/88 p-4 shadow-2xl shadow-cyan-950/30 sm:p-6">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="flex items-center gap-2 text-sm text-cyan-200/80"><span className="flowly-live-dot" /> Centro operativo en vivo</p>
-            <h3 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Flowly Command Center</h3>
+            <p className="flex items-center gap-2 text-sm text-cyan-200/80"><span className="flowly-live-dot" /> Panel operativo en tiempo real</p>
+            <h3 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Flowly Business Center</h3>
           </div>
           <div className="flex flex-wrap gap-2 text-xs text-white/70">
             {["CRM", "Agenda", "WhatsApp", "Facturación", "IA"].map((item) => (
@@ -180,7 +158,7 @@ function ProductMockup({ country }: { country: Country }) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
-          {[["Ingresos", money, "+28%"], ["Clientes activos", "842", "+64"], ["Reservas", "312", "+19%"], ["Tareas IA", "94%", "online"]].map(([label, value, meta]) => (
+          {[["Ingresos", money, "+28%"], ["Clientes activos", "842", "+64"], ["Reservas", "312", "+19%"], ["Seguimientos", "94%", "online"]].map(([label, value, meta]) => (
             <div key={label} className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
               <p className="text-sm text-white/45">{label}</p>
               <div className="mt-3 flex items-end justify-between gap-3">
@@ -191,7 +169,7 @@ function ProductMockup({ country }: { country: Country }) {
           ))}
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
           <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-5">
             <div className="mb-4 flex items-center justify-between text-sm text-white/55">
               <span>Rendimiento semanal</span>
@@ -206,12 +184,12 @@ function ProductMockup({ country }: { country: Country }) {
 
           <div className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.045] p-5">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm text-white/55">Actividad conectada</p>
+              <p className="text-sm text-white/55">Flujo conectado</p>
               <BrainCircuit className="text-cyan-200" size={18} />
             </div>
             {[
-              ["WhatsApp recibido", "Se detecta cliente nuevo"],
-              ["Ficha CRM creada", "Origen, teléfono y seguimiento listos"],
+              ["WhatsApp recibido", "Cliente nuevo detectado"],
+              ["Ficha CRM actualizada", "Origen, teléfono e historial listos"],
               ["Cita agendada", "Recordatorio automático preparado"],
               ["Factura enviada", "PDF y cobro registrados"],
             ].map(([title, detail]) => (
@@ -231,13 +209,7 @@ function TrustBar() {
   return (
     <section className="relative z-10 mx-auto max-w-7xl px-6">
       <div className="grid gap-3 rounded-[2rem] border border-white/10 bg-white/[0.05] p-3 text-sm text-white/70 shadow-2xl shadow-cyan-950/20 backdrop-blur-xl md:grid-cols-5">
-        {[
-          "Datos aislados por empresa",
-          "Infraestructura cloud",
-          "WhatsApp integrado",
-          "Pagos y módulos preparados",
-          "Soporte humano",
-        ].map((item) => (
+        {["Datos aislados por empresa", "Infraestructura cloud", "WhatsApp integrado", "Soporte humano", "Actualizaciones continuas"].map((item) => (
           <div key={item} className="flex items-center gap-2 rounded-2xl bg-slate-950/45 px-4 py-3">
             <CheckCircle2 size={16} className="shrink-0 text-cyan-200" />
             <span>{item}</span>
@@ -250,20 +222,18 @@ function TrustBar() {
 
 function WorkflowSection() {
   return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-28">
       <div className="mx-auto max-w-3xl text-center">
         <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Así funciona</p>
-        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">De conversación a cobro, sin cambiar de herramienta.</h2>
-        <p className="mt-5 text-lg leading-8 text-white/62">La ventaja de Flowly no es tener muchos módulos. Es que todos trabajan en el mismo recorrido comercial.</p>
+        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">De primer mensaje a cobro, sin cambiar de herramienta.</h2>
+        <p className="mt-5 text-lg leading-8 text-white/62">Flowly une el recorrido completo del negocio: captación, atención, agenda, presupuesto, factura y seguimiento.</p>
       </div>
 
-      <div className="mt-12 grid gap-4 lg:grid-cols-5">
+      <div className="mt-14 grid gap-4 lg:grid-cols-5">
         {workflow.map(({ title, text, icon: Icon }, index) => (
           <div key={title} className="group relative rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.075]">
             <div className="mb-8 flex items-center justify-between">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100">
-                <Icon size={22} />
-              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><Icon size={22} /></div>
               <span className="text-sm text-white/35">0{index + 1}</span>
             </div>
             <h3 className="text-lg font-semibold">{title}</h3>
@@ -275,26 +245,44 @@ function WorkflowSection() {
   );
 }
 
-function PillarsSection() {
+function OutcomesSection() {
   return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-20">
-      <div className="grid gap-10 lg:grid-cols-[.85fr_1.15fr] lg:items-start">
-        <div className="lg:sticky lg:top-10">
-          <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Producto</p>
-          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Todo conectado, pero sin saturar al usuario.</h2>
-          <p className="mt-5 text-lg leading-8 text-white/62">Flowly se adapta al tamaño de cada negocio: empieza con lo básico y activa módulos cuando realmente los necesita.</p>
-          <Link href="/demo/login" className="flowly-primary mt-8 inline-flex items-center gap-2 rounded-full px-6 py-4 font-semibold">Probar demo <ArrowRight size={18} /></Link>
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+      <div className="grid gap-10 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Por qué Flowly</p>
+          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Más orden, menos tareas manuales y mejor seguimiento.</h2>
+          <p className="mt-5 text-lg leading-8 text-white/62">El cliente no compra módulos: compra control, rapidez y una forma más profesional de trabajar cada día.</p>
         </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {productPillars.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-6 transition hover:-translate-y-1 hover:border-cyan-300/35 hover:bg-white/[0.075]">
-              <Icon className="mb-6 text-cyan-200" size={28} />
-              <h3 className="text-xl font-semibold">{title}</h3>
-              <p className="mt-3 text-sm leading-7 text-white/55">{text}</p>
+        <div className="grid gap-4">
+          {outcomes.map((item) => (
+            <div key={item.title} className="rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-6">
+              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-300/12 text-emerald-200"><CheckCircle2 size={20} /></div>
+              <h3 className="text-xl font-semibold">{item.title}</h3>
+              <p className="mt-3 text-sm leading-7 text-white/56">{item.text}</p>
             </div>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function ModulesSection() {
+  return (
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+      <div className="mb-12 max-w-3xl">
+        <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Producto</p>
+        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Todo lo importante conectado en un mismo panel.</h2>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {productModules.map(({ icon: Icon, title, text }) => (
+          <div key={title} className="rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-6 transition hover:-translate-y-1 hover:border-cyan-300/35 hover:bg-white/[0.075]">
+            <Icon className="mb-6 text-cyan-200" size={28} />
+            <h3 className="text-xl font-semibold">{title}</h3>
+            <p className="mt-3 text-sm leading-7 text-white/55">{text}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -306,30 +294,26 @@ function SectorsSection() {
       <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Sectores</p>
-          <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">Una base común, experiencias adaptadas por negocio.</h2>
+          <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">Una plataforma adaptable a negocios reales.</h2>
         </div>
         <Link href="/demo/login" className="flowly-chip inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm">Ver demos <ChevronRight size={16} /></Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {sectorsBase.map(({ name, icon: Icon, tag, href, highlights }) => (
+        {sectors.map(({ name, icon: Icon, href, result, tags }) => (
           <Link key={name} href={href} className="group overflow-hidden rounded-[2.2rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/15 transition hover:-translate-y-1 hover:border-cyan-300/35 hover:bg-white/[0.075]">
-            <div className="relative mb-7 h-44 overflow-hidden rounded-[1.7rem] border border-white/10 bg-slate-950/60 p-4">
+            <div className="relative mb-7 h-48 overflow-hidden rounded-[1.7rem] border border-white/10 bg-slate-950/60 p-4">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_10%,rgba(34,211,238,.22),transparent_34%),radial-gradient(circle_at_80%_30%,rgba(236,72,153,.16),transparent_36%)]" />
               <div className="relative z-10 flex items-center justify-between">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-violet-500 text-slate-950">
-                  <Icon size={23} />
-                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-violet-500 text-slate-950"><Icon size={23} /></div>
                 <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/60">Demo</span>
               </div>
-              <div className="relative z-10 mt-8 space-y-2">
-                {highlights.map((item) => (
-                  <div key={item} className="h-8 rounded-xl border border-white/10 bg-white/[0.08] px-3 py-2 text-xs text-white/60">{item}</div>
-                ))}
+              <div className="relative z-10 mt-8 grid gap-2">
+                {tags.map((tag) => <span key={tag} className="rounded-xl border border-white/10 bg-white/[0.08] px-3 py-2 text-xs text-white/66">{tag}</span>)}
               </div>
             </div>
             <h3 className="text-2xl font-semibold">{name}</h3>
-            <p className="mt-2 text-white/55">{tag}</p>
+            <p className="mt-3 text-sm leading-7 text-white/55">{result}</p>
             <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-cyan-200">Abrir demo <ArrowRight size={16} /></div>
           </Link>
         ))}
@@ -338,55 +322,31 @@ function SectorsSection() {
   );
 }
 
-function ProofSection() {
-  const stories = [
-    {
-      title: "Clínicas",
-      text: "Menos llamadas perdidas, citas mejor organizadas y pacientes con historial visible antes de atender.",
-    },
-    {
-      title: "Estética y peluquería",
-      text: "Reservas, preferencias, recordatorios y campañas en un solo recorrido comercial.",
-    },
-    {
-      title: "Servicios y talleres",
-      text: "Del primer mensaje al presupuesto, factura y cobro sin depender de hojas externas.",
-    },
+function TrustSection() {
+  const items = [
+    ["Multiempresa", "Cada negocio trabaja con sus propios datos, clientes, mensajes y configuraciones."],
+    ["Implementación acompañada", "Soporte para configurar módulos, procesos, agenda, WhatsApp y facturación."],
+    ["Preparado para crecer", "Empieza con Basic y activa módulos cuando el negocio los necesite."],
+    ["Experiencia profesional", "Un panel moderno para que tu equipo trabaje mejor y el cliente perciba más confianza."],
   ];
 
   return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
       <div className="overflow-hidden rounded-[2.4rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))] p-6 shadow-2xl shadow-cyan-950/20 md:p-8">
-        <div className="grid gap-10 lg:grid-cols-[.95fr_1.05fr] lg:items-center">
+        <div className="grid gap-10 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
           <div>
-            <div className="flowly-chip mb-5 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><ShieldCheck size={16} /> Confianza operativa</div>
-            <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">Un producto que debe sentirse serio antes de vender una sola función.</h2>
-            <p className="mt-5 max-w-xl text-base leading-8 text-white/62">Por eso Flowly comunica seguridad, orden, soporte y una experiencia de producto integrada, no una colección de herramientas sueltas.</p>
+            <div className="flowly-chip mb-5 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><ShieldCheck size={16} /> Confianza y control</div>
+            <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">Gestiona clientes, citas, mensajes y cobros con una imagen profesional.</h2>
+            <p className="mt-5 max-w-xl text-base leading-8 text-white/62">Flowly ayuda a que tu negocio funcione con más orden, mejor seguimiento y menos dependencia de herramientas sueltas.</p>
           </div>
-
           <div className="grid gap-3">
-            {[
-              ["Multiempresa", "Datos separados por negocio y arquitectura preparada para miles de clientes."],
-              ["Escalable", "Módulos independientes para contratar solo lo necesario y crecer después."],
-              ["Comercial", "Pensado para captar, atender, agendar, cotizar, facturar y hacer seguimiento."],
-              ["Soporte", "Acompañamiento humano para implementación, configuración y evolución del negocio."],
-            ].map(([title, text]) => (
+            {items.map(([title, text]) => (
               <div key={title} className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-5">
                 <p className="font-semibold">{title}</p>
                 <p className="mt-2 text-sm leading-6 text-white/50">{text}</p>
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {stories.map((item) => (
-            <div key={item.title} className="rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-200/75">Caso de uso</p>
-              <p className="mt-4 text-xl font-semibold">{item.title}</p>
-              <p className="mt-3 text-sm leading-7 text-white/56">{item.text}</p>
-            </div>
-          ))}
         </div>
       </div>
     </section>
@@ -399,20 +359,18 @@ function ComparisonSection({ pricesHref }: { pricesHref: string }) {
       <div className="mx-auto max-w-3xl text-center">
         <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Comparativa</p>
         <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Flowly sustituye el caos de herramientas separadas.</h2>
-        <p className="mt-5 text-lg leading-8 text-white/62">La diferencia está en que cada módulo entiende el contexto del cliente y trabaja con el resto.</p>
+        <p className="mt-5 text-lg leading-8 text-white/62">Todo el contexto del cliente queda conectado: mensajes, citas, tareas, presupuestos, facturas y seguimiento.</p>
       </div>
 
       <div className="mx-auto mt-12 max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.055]">
-        <div className="grid grid-cols-[1.2fr_.55fr_.75fr] border-b border-white/10 bg-white/[0.06] px-5 py-4 text-sm font-semibold text-white/75">
-          <span>Función</span>
-          <span className="text-center">Flowly</span>
-          <span className="text-center">Herramientas sueltas</span>
+        <div className="grid grid-cols-[1.1fr_.65fr_.8fr] border-b border-white/10 bg-white/[0.06] px-5 py-4 text-sm font-semibold text-white/75">
+          <span>Necesidad</span><span className="text-center">Flowly</span><span className="text-center">Sin Flowly</span>
         </div>
         {comparisonRows.map(([label, flowly, separate]) => (
-          <div key={String(label)} className="grid grid-cols-[1.2fr_.55fr_.75fr] items-center border-b border-white/10 px-5 py-4 text-sm last:border-b-0">
+          <div key={label} className="grid grid-cols-[1.1fr_.65fr_.8fr] items-center border-b border-white/10 px-5 py-4 text-sm last:border-b-0">
             <span className="font-medium text-white/82">{label}</span>
-            <span className="flex justify-center">{flowly ? <CheckCircle2 size={19} className="text-emerald-300" /> : "—"}</span>
-            <span className="text-center text-white/45">{separate ? "Sí, separado" : "No integrado"}</span>
+            <span className="flex justify-center"><span className="rounded-full bg-emerald-300/12 px-3 py-1 text-xs text-emerald-200">{flowly}</span></span>
+            <span className="text-center text-white/45">{separate}</span>
           </div>
         ))}
       </div>
@@ -426,25 +384,13 @@ function ComparisonSection({ pricesHref }: { pricesHref: string }) {
 
 function PricingPreview({ pricesHref }: { pricesHref: string }) {
   const plans = [
-    {
-      name: "Basic",
-      text: "Agenda, CRM esencial y facturación básica para negocios que quieren empezar ordenados.",
-      badge: "Incluye facturación básica",
-    },
-    {
-      name: "Modular",
-      text: "Activa WhatsApp, marketing, automatizaciones, facturación PRO y otros módulos según necesidad.",
-      badge: "Escalable",
-    },
-    {
-      name: "Enterprise",
-      text: "Solución personalizada para empresas con procesos, equipos o integraciones especiales.",
-      badge: "A medida",
-    },
+    { name: "Basic", text: "Agenda, CRM esencial y facturación básica para empezar con orden desde el primer día.", badge: "Para empezar" },
+    { name: "Modular", text: "Activa WhatsApp, marketing, automatizaciones, facturación PRO y módulos avanzados.", badge: "Más elegido" },
+    { name: "Enterprise", text: "Solución a medida para empresas con equipos, procesos o integraciones específicas.", badge: "A medida" },
   ];
 
   return (
-    <section id="precios" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+    <section id="precios" className="relative z-10 mx-auto max-w-7xl px-6 py-24">
       <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Planes</p>
@@ -469,88 +415,37 @@ function PricingPreview({ pricesHref }: { pricesHref: string }) {
   );
 }
 
-function AmbassadorSection() {
-  const [ambassadorLoading, setAmbassadorLoading] = useState(false);
-  const [ambassadorSent, setAmbassadorSent] = useState(false);
-  const [ambassadorName, setAmbassadorName] = useState("");
-  const [ambassadorEmail, setAmbassadorEmail] = useState("");
-  const [ambassadorPhone, setAmbassadorPhone] = useState("");
-  const [ambassadorCity, setAmbassadorCity] = useState("");
-  const [ambassadorExperience, setAmbassadorExperience] = useState("");
-
-  const submitAmbassador = async () => {
-    if (!ambassadorName || !ambassadorEmail || !ambassadorPhone) {
-      alert("Rellena nombre, email y teléfono");
-      return;
-    }
-
-    setAmbassadorLoading(true);
-
-    const message = [
-      "Solicitud para trabajar como Embajador de Flowly",
-      `Ciudad / zona: ${ambassadorCity || "No indicado"}`,
-      `Experiencia: ${ambassadorExperience || "No indicado"}`,
-    ].join("\n\n");
-
-    const { error } = await supabase.from("contacts").insert({
-      name: ambassadorName,
-      email: ambassadorEmail,
-      phone: ambassadorPhone,
-      company: ambassadorCity,
-      type: "Empezar ahora",
-      message,
-      status: "Nuevo",
-    });
-
-    if (error) {
-      alert(`Error enviando solicitud: ${error.message}`);
-    } else {
-      setAmbassadorSent(true);
-      setAmbassadorName("");
-      setAmbassadorEmail("");
-      setAmbassadorPhone("");
-      setAmbassadorCity("");
-      setAmbassadorExperience("");
-    }
-
-    setAmbassadorLoading(false);
-  };
-
+function FinalCTA({ pricesHref }: { pricesHref: string }) {
   return (
-    <section id="trabaja-con-nosotros" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
-      <div className="grid gap-6 rounded-[2.4rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/15 md:p-8 lg:grid-cols-[.95fr_1.05fr] lg:items-center">
-        <div>
-          <div className="flowly-chip mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> Empezar ahora</div>
-          <h2 className="text-4xl font-semibold tracking-tight md:text-5xl">Embajadores para llevar Flowly a negocios de LATAM.</h2>
-          <p className="mt-5 text-base leading-8 text-white/62">Una propuesta comercial clara: software, automatización, WhatsApp, agenda, CRM, facturación y marketing en una única plataforma.</p>
-        </div>
-
-        <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-6">
-          {ambassadorSent ? (
-            <div className="py-10 text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-300 text-slate-950"><CheckCircle2 /></div>
-              <h3 className="text-2xl font-semibold">Solicitud enviada</h3>
-              <p className="mt-3 text-white/60">Hemos recibido tu candidatura como embajador de Flowly.</p>
-              <button onClick={() => setAmbassadorSent(false)} className="flowly-primary mt-8 rounded-full px-6 py-3 font-semibold">Enviar otra solicitud</button>
-            </div>
-          ) : (
-            <>
-              <h3 className="text-2xl font-semibold">Quiero ser embajador</h3>
-              <div className="mt-6 grid gap-4">
-                <input value={ambassadorName} onChange={(e) => setAmbassadorName(e.target.value)} placeholder="Nombre completo" className="flowly-input-light rounded-2xl px-4 py-3" />
-                <input value={ambassadorEmail} onChange={(e) => setAmbassadorEmail(e.target.value)} placeholder="Email" type="email" className="flowly-input-light rounded-2xl px-4 py-3" />
-                <input value={ambassadorPhone} onChange={(e) => setAmbassadorPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="flowly-input-light rounded-2xl px-4 py-3" />
-                <input value={ambassadorCity} onChange={(e) => setAmbassadorCity(e.target.value)} placeholder="Ciudad o zona donde venderías" className="flowly-input-light rounded-2xl px-4 py-3" />
-                <textarea value={ambassadorExperience} onChange={(e) => setAmbassadorExperience(e.target.value)} placeholder="Experiencia comercial o contactos" className="flowly-input-light min-h-28 rounded-2xl px-4 py-3" />
-              </div>
-              <button onClick={submitAmbassador} disabled={ambassadorLoading} className="flowly-primary mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
-                <Send size={16} /> {ambassadorLoading ? "Enviando..." : "Enviar candidatura"}
-              </button>
-            </>
-          )}
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+      <div className="flowly-glass rounded-[2.5rem] px-8 py-16 text-center">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><Sparkles /></div>
+        <h2 className="mx-auto max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl">Organiza tu negocio y ofrece una experiencia más profesional a tus clientes.</h2>
+        <p className="mx-auto mt-5 max-w-2xl text-white/60">Prueba Flowly, revisa las demos y elige el plan que mejor encaje con tu negocio.</p>
+        <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
+          <Link href={pricesHref} className="flowly-primary inline-flex justify-center rounded-full px-7 py-4 font-semibold transition">Ver planes</Link>
+          <Link href="/contacto" className="flowly-secondary inline-flex justify-center rounded-full px-7 py-4 font-semibold">Solicitar propuesta</Link>
         </div>
       </div>
     </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="relative z-10 mx-auto max-w-7xl border-t border-white/10 px-6 py-8 text-sm text-white/55">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap gap-5">
+          <Link href="/#producto" className="hover:text-cyan-200">Producto</Link>
+          <Link href="/contacto" className="hover:text-cyan-200">Contacto</Link>
+          <Link href="/privacy" className="hover:text-cyan-200">Política privacidad</Link>
+          <Link href="/legal/condiciones" className="hover:text-cyan-200">Términos</Link>
+          <Link href="/contacto" className="hover:text-cyan-200">Soporte</Link>
+          <Link href="/trabaja-con-nosotros" className="hover:text-cyan-200">Trabaja con nosotros</Link>
+        </div>
+        <div className="text-white/45">Copyright 2026 Flowly IA · Version 2.0</div>
+      </div>
+    </footer>
   );
 }
 
@@ -581,55 +476,31 @@ export default function Home() {
 
       <Header country={country} setMarket={setMarket} pricesHref={pricesHref} />
 
-      <section className="relative z-10 mx-auto max-w-7xl px-6 pb-16 pt-16 text-center sm:pt-20">
+      <section className="relative z-10 mx-auto max-w-7xl px-6 pb-16 pt-16 text-center sm:pt-24">
         <div className="flowly-chip mx-auto mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> {market.headline}</div>
         <h1 className="mx-auto max-w-6xl text-5xl font-semibold tracking-tight md:text-7xl lg:text-8xl">
           Todo tu negocio. <span className="flowly-gradient-text">Una sola plataforma.</span>
         </h1>
         <p className="mx-auto mt-7 max-w-3xl text-lg leading-8 text-white/68">
-          CRM, WhatsApp, Agenda, Facturación, Automatizaciones e IA conectados para captar clientes, atender mejor y cobrar sin perder el control.
+          CRM, Agenda, WhatsApp, Facturación, Automatizaciones e IA conectados para captar clientes, responder mejor, organizar citas y cobrar con más control.
         </p>
         <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
           <Link href="/demo/login" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold transition"><Play size={18} /> Ver demostración</Link>
           <Link href={pricesHref} className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">Ver planes <ArrowRight size={18} /></Link>
         </div>
-
         <ProductMockup country={country} />
       </section>
 
       <TrustBar />
       <WorkflowSection />
-      <PillarsSection />
+      <OutcomesSection />
+      <ModulesSection />
       <SectorsSection />
-      <ProofSection />
+      <TrustSection />
       <ComparisonSection pricesHref={pricesHref} />
       <PricingPreview pricesHref={pricesHref} />
-      <AmbassadorSection />
-
-      <section id="quienes-somos" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
-        <div className="flowly-glass rounded-[2.5rem] px-8 py-16 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><ShieldCheck /></div>
-          <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">Haz que tu negocio parezca más grande, más ordenado y más tecnológico.</h2>
-          <p className="mx-auto mt-5 max-w-2xl text-white/60">Activa Flowly, prueba las demos y muestra una experiencia SaaS moderna a tus clientes desde hoy.</p>
-          <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
-            <Link href={pricesHref} className="flowly-primary inline-flex rounded-full px-7 py-4 font-semibold transition">Ver planes</Link>
-            <Link href="/contacto" className="flowly-secondary inline-flex rounded-full px-7 py-4 font-semibold">Solicitar propuesta</Link>
-          </div>
-        </div>
-      </section>
-
-      <footer className="relative z-10 mx-auto max-w-7xl border-t border-white/10 px-6 py-8 text-sm text-white/55">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-5">
-            <Link href="/#quienes-somos" className="hover:text-cyan-200">Quiénes somos</Link>
-            <Link href="/contacto" className="hover:text-cyan-200">Contacto</Link>
-            <Link href="/privacy" className="hover:text-cyan-200">Política privacidad</Link>
-            <Link href="/legal/condiciones" className="hover:text-cyan-200">Términos</Link>
-            <Link href="/contacto" className="hover:text-cyan-200">Soporte</Link>
-          </div>
-          <div className="text-white/45">Copyright 2026 Flowly IA · Version 2.0</div>
-        </div>
-      </footer>
+      <FinalCTA pricesHref={pricesHref} />
+      <Footer />
     </main>
   );
 }
