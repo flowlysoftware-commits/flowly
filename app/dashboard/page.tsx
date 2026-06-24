@@ -2393,6 +2393,8 @@ function BillingModule({ business, reloadData, records, appointments, customers,
   const [invoiceEmail, setInvoiceEmail] = useState(config.email || "");
   const [invoicePhone, setInvoicePhone] = useState(config.phone || "");
   const [invoiceLogoUrl, setInvoiceLogoUrl] = useState(config.logoUrl || business?.logo_url || "");
+  const [invoiceLogoFile, setInvoiceLogoFile] = useState<File | null>(null);
+  const [isSavingBillingConfig, setIsSavingBillingConfig] = useState(false);
   const [invoicePrefix, setInvoicePrefix] = useState(config.invoicePrefix || "F-2026-");
   const [quotePrefix, setQuotePrefix] = useState(config.quotePrefix || "COT-2026-");
   const [defaultTax, setDefaultTax] = useState(config.defaultTax || "16");
@@ -2442,14 +2444,23 @@ function BillingModule({ business, reloadData, records, appointments, customers,
   }, [config, business?.name, business?.logo_url]);
 
   useEffect(() => {
-    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", proveedores: "Proveedores", presupuestos: "Presupuestos", documentos: "Documentos", estadisticas: "Estadísticas", agenda: "Agenda", configuracion: "Configuración" }, setView);
+    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", presupuestos: "Presupuestos", factura: "Factura", configuracion: "Configuración" }, setView);
   }, [activeTab]);
   useEffect(() => {
-    const nextStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : "income";
+    const nextStatus = view === "Gastos" ? "expense" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : view === "Factura" ? "pending" : "income";
     setStatus(nextStatus);
     if (view === "Gastos") setBillingFileType("expense");
     if (view === "Ingresos") setBillingFileType("income");
-  }, [view, setStatus]);
+    if (view === "Presupuestos") {
+      setDocumentType("quote");
+      setInvoiceNumber(`${quotePrefix}${String(records.filter((record) => record.status === "budget").length + 1).padStart(4, "0")}`);
+      setInvoicePaymentStatus("pending");
+    }
+    if (view === "Factura") {
+      setDocumentType("invoice");
+      setInvoiceNumber(nextInvoiceNumber);
+    }
+  }, [view, setStatus, quotePrefix, records, nextInvoiceNumber]);
 
   const parseBillingMetadata = (record: ModuleRecord) => {
     try {
@@ -2462,27 +2473,32 @@ function BillingModule({ business, reloadData, records, appointments, customers,
 
   const saveBillingConfig = async () => {
     if (!business) return alert("No se ha encontrado el negocio.");
-    const payload = {
-      companyName: invoiceCompanyName,
-      taxId: invoiceTaxId,
-      address: invoiceAddress,
-      email: invoiceEmail,
-      phone: invoicePhone,
-      logoUrl: invoiceLogoUrl,
-      invoicePrefix,
-      quotePrefix,
-      defaultTax,
-      paymentMethods,
-      agendaMode,
-      accountantEmail,
-    };
-    const row = { business_id: business.id, module_key: "billing", title: "Configuración de facturación básica", amount: null, status: "billing_config", notes: JSON.stringify(payload, null, 2) };
-    const result = configRecord?.id
-      ? await supabase.from("module_records").update(row).eq("id", configRecord.id).eq("business_id", business.id)
-      : await supabase.from("module_records").insert(row);
-    if (result.error) return alert(result.error.message);
-    await reloadData();
-    alert("Configuración de facturación guardada.");
+    setIsSavingBillingConfig(true);
+    try {
+      let finalLogoUrl = invoiceLogoUrl;
+      if (invoiceLogoFile) {
+        const safeName = invoiceLogoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${business.id}/config/logo-${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from("billing_documents").upload(path, invoiceLogoFile, { upsert: false, contentType: invoiceLogoFile.type });
+        if (uploadError) throw new Error(uploadError.message);
+        const { data } = await supabase.storage.from("billing_documents").createSignedUrl(path, 60 * 60 * 24 * 365);
+        finalLogoUrl = data?.signedUrl || finalLogoUrl;
+        setInvoiceLogoUrl(finalLogoUrl);
+      }
+      const payload = { companyName: invoiceCompanyName, taxId: invoiceTaxId, address: invoiceAddress, email: invoiceEmail, phone: invoicePhone, logoUrl: finalLogoUrl, invoicePrefix, quotePrefix, defaultTax, paymentMethods, agendaMode, accountantEmail };
+      const row = { business_id: business.id, module_key: "billing", title: "Configuración de facturación básica", amount: null, status: "billing_config", notes: JSON.stringify(payload, null, 2) };
+      const result = configRecord?.id
+        ? await supabase.from("module_records").update(row).eq("id", configRecord.id).eq("business_id", business.id)
+        : await supabase.from("module_records").insert(row);
+      if (result.error) throw new Error(result.error.message);
+      setInvoiceLogoFile(null);
+      await reloadData();
+      alert("Configuración de facturación guardada.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo guardar la configuración.");
+    } finally {
+      setIsSavingBillingConfig(false);
+    }
   };
 
   const relationOne = <T,>(value: Relation<T>) => Array.isArray(value) ? value[0] : value;
@@ -2603,32 +2619,18 @@ function BillingModule({ business, reloadData, records, appointments, customers,
 
   const uploadBillingDocument = async () => {
     if (!business) return alert("No se ha encontrado el negocio.");
-    if (!billingFile) return alert("Selecciona una factura o documento.");
+    if (!billingFileTitle.trim() && !billingFile) return alert("Añade un concepto o adjunta una factura.");
     setIsUploadingBillingFile(true);
     try {
-      const safeName = billingFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${business.id}/${billingFileType}/${Date.now()}-${safeName}`;
-      const { error: uploadError } = await supabase.storage.from("billing_documents").upload(path, billingFile, { upsert: false, contentType: billingFile.type });
-      if (uploadError) throw new Error(uploadError.message);
-      const metadata = {
-        flowly_billing: true,
-        file_path: path,
-        file_name: billingFile.name,
-        file_type: billingFile.type,
-        file_size: billingFile.size,
-        kind: billingFileType,
-        counterparty: billingFileCounterparty,
-        document_date: billingFileDate,
-        notes: billingFileNotes,
-      };
-      const { error } = await supabase.from("module_records").insert({
-        business_id: business.id,
-        module_key: "billing",
-        title: billingFileTitle || `${billingFileType === "income" ? "Ingreso" : "Gasto"} · ${billingFile.name}`,
-        amount: billingFileAmount ? Number(billingFileAmount) : null,
-        status: billingFileType === "income" ? "income" : "expense",
-        notes: JSON.stringify(metadata, null, 2),
-      });
+      let path = "";
+      if (billingFile) {
+        const safeName = billingFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        path = `${business.id}/${billingFileType}/${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from("billing_documents").upload(path, billingFile, { upsert: false, contentType: billingFile.type });
+        if (uploadError) throw new Error(uploadError.message);
+      }
+      const metadata = { flowly_billing: true, file_path: path || null, file_name: billingFile?.name || null, file_type: billingFile?.type || null, file_size: billingFile?.size || null, kind: billingFileType, counterparty: billingFileCounterparty, document_date: billingFileDate, notes: billingFileNotes, manual_entry: !billingFile };
+      const { error } = await supabase.from("module_records").insert({ business_id: business.id, module_key: "billing", title: billingFileTitle || `${billingFileType === "income" ? "Ingreso" : "Gasto"} manual`, amount: billingFileAmount ? Number(billingFileAmount) : null, status: billingFileType === "income" ? "income" : "expense", notes: JSON.stringify(metadata, null, 2) });
       if (error) throw new Error(error.message);
       setBillingFile(null);
       setBillingFileTitle("");
@@ -2636,9 +2638,9 @@ function BillingModule({ business, reloadData, records, appointments, customers,
       setBillingFileCounterparty("");
       setBillingFileNotes("");
       await reloadData();
-      alert("Documento subido a facturación.");
+      alert(billingFile ? "Documento subido a facturación." : "Registro manual guardado.");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "No se pudo subir el documento");
+      alert(error instanceof Error ? error.message : "No se pudo guardar el registro");
     } finally {
       setIsUploadingBillingFile(false);
     }
@@ -2660,19 +2662,19 @@ function BillingModule({ business, reloadData, records, appointments, customers,
     window.location.href = `mailto:${accountantEmail}?subject=${subject}&body=${body}`;
   };
 
-  const pendingAppointments = appointments.slice(0, 8);
-  const viewStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : view === "Documentos" ? "document" : "income";
+  const viewStatus = view === "Gastos" ? "expense" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : view === "Factura" ? "pending" : "income";
   const viewRecords = records.filter((record) => {
-    if (view === "Ingresos") return ["income", "paid", "pending", "overdue"].includes(record.status);
-    if (view === "Documentos") return Boolean(parseBillingMetadata(record)?.file_path);
-    if (view === "Estadísticas") return record.status !== "billing_config";
+    if (view === "Ingresos") return record.status === "income" || record.status === "paid";
+    if (view === "Factura") return ["pending", "paid", "overdue"].includes(record.status);
     return record.status === viewStatus;
   });
 
   return <section className="grid gap-6">
-    <ModuleHero eyebrow="Finance OS" title="Facturación Básica incluida" description="Crea facturas manuales con PDF, sube ingresos y gastos reales, conecta facturación con Agenda y mantén estadísticas claras para enviar todo a tu gestor." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Presupuestos", "Documentos", "Estadísticas", "Agenda", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Presupuestos: "module:facturacion:presupuestos", Documentos: "module:facturacion:documentos", Estadísticas: "module:facturacion:estadisticas", Agenda: "module:facturacion:agenda", Configuración: "module:facturacion:configuracion" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} />
+    <ModuleHero eyebrow="Incluido en Basic" title="Facturación" description="Controla ingresos, gastos, presupuestos, facturas PDF y configuración fiscal básica desde un panel simple, ordenado y conectado con Flowly." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Presupuestos", "Factura", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Presupuestos: "module:facturacion:presupuestos", Factura: "module:facturacion:factura", Configuración: "module:facturacion:configuracion" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} />
 
-    <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Ingresos" value={`${(incomeTotal + revenue).toFixed(2)}€`} helper="Facturas y agenda" /><Metric icon={<CreditCard />} label="Gastos" value={`${expensesTotal.toFixed(2)}€`} helper="Facturas subidas" /><Metric icon={<TrendingUp />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /><Metric icon={<FileText />} label="Documentos" value={uploadedDocuments.length} helper="Archivo privado" /></div>
+    <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Ingresos" value={`${(incomeTotal + revenue).toFixed(2)}€`} helper="Manuales y facturas" /><Metric icon={<CreditCard />} label="Gastos" value={`${expensesTotal.toFixed(2)}€`} helper="Manuales y facturas" /><Metric icon={<TrendingUp />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Ingresos - gastos" /><Metric icon={<FileText />} label="Archivos" value={uploadedDocuments.length} helper="Adjuntos privados" /></div>
+
+    <GlassCard title="Estadísticas automáticas"><div className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]"><div className="space-y-4">{[{ label: "Ingresos", value: incomeTotal + revenue }, { label: "Gastos", value: expensesTotal }, { label: "Pagado", value: paidAmount }, { label: "Pendiente", value: pendingAmount }].map((item) => <div key={item.label}><div className="mb-2 flex justify-between text-sm"><span className="text-white/65">{item.label}</span><strong>{item.value.toFixed(2)}€</strong></div><div className="h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-200" style={{ width: `${Math.max(4, (item.value / maxChartValue) * 100)}%` }} /></div></div>)}</div><div className="grid gap-3"><InfoBox label="Presupuestos" value={records.filter((record) => record.status === "budget").length} /><InfoBox label="Facturas" value={records.filter((record) => ["pending", "paid", "overdue"].includes(record.status)).length} /><InfoBox label="Resultado" value={`${profit.toFixed(2)}€`} /></div></div></GlassCard>
 
     {view === "Configuración" && <section className="grid gap-6 xl:grid-cols-[1fr_.85fr]">
       <GlassCard title="Configuración de facturación básica">
@@ -2682,33 +2684,36 @@ function BillingModule({ business, reloadData, records, appointments, customers,
           <input value={invoiceEmail} onChange={(e) => setInvoiceEmail(e.target.value)} placeholder="Correo de facturación" className="input-dark" />
           <input value={invoicePhone} onChange={(e) => setInvoicePhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="input-dark" />
           <input value={invoiceAddress} onChange={(e) => setInvoiceAddress(e.target.value)} placeholder="Dirección fiscal o comercial" className="input-dark md:col-span-2" />
-          <input value={invoiceLogoUrl} onChange={(e) => setInvoiceLogoUrl(e.target.value)} placeholder="URL del logo para PDFs" className="input-dark md:col-span-2" />
+          <input value={invoiceLogoUrl} onChange={(e) => setInvoiceLogoUrl(e.target.value)} placeholder="URL del logo para PDFs (opcional)" className="input-dark md:col-span-2" />
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setInvoiceLogoFile(e.target.files?.[0] || null)} className="input-dark md:col-span-2" />
           <input value={invoicePrefix} onChange={(e) => setInvoicePrefix(e.target.value)} placeholder="Prefijo facturas, ej. F-2026-" className="input-dark" />
           <input value={quotePrefix} onChange={(e) => setQuotePrefix(e.target.value)} placeholder="Prefijo cotizaciones, ej. COT-2026-" className="input-dark" />
           <input value={defaultTax} onChange={(e) => setDefaultTax(e.target.value)} placeholder="Impuesto/IVA por defecto" type="number" className="input-dark" />
-          <input value={agendaMode} onChange={(e) => setAgendaMode(e.target.value)} placeholder="Regla de conexión con Agenda" className="input-dark" />
+          <input value={agendaMode} onChange={(e) => setAgendaMode(e.target.value)} placeholder="Conexión con Agenda, ej. facturar cita completada" className="input-dark" />
           <input value={accountantEmail} onChange={(e) => setAccountantEmail(e.target.value)} placeholder="Email del gestor / contador" type="email" className="input-dark md:col-span-2" />
           <textarea value={paymentMethods} onChange={(e) => setPaymentMethods(e.target.value)} placeholder="Métodos de pago visibles en factura" className="input-dark min-h-28 md:col-span-2" />
-          <button onClick={saveBillingConfig} className="btn-primary md:col-span-2"><CheckCircle2 size={17} /> Guardar configuración</button>
+          <button onClick={saveBillingConfig} disabled={isSavingBillingConfig} className="btn-primary md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 size={17} /> {isSavingBillingConfig ? "Guardando..." : "Guardar configuración"}</button>
+          <button type="button" onClick={() => alert("Conexión preparada para futuras integraciones de factura electrónica.")} className="btn-secondary md:col-span-2"><Workflow size={17} /> Conectar facturación electrónica</button>
         </div>
       </GlassCard>
       <GlassCard title="Vista previa del documento">
         <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-sm text-white/75">
-          <div className="mb-5 flex items-center gap-3">{invoiceLogoUrl ? <Image src={invoiceLogoUrl} alt="Logo facturación" width={46} height={46} className="rounded-2xl object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/15"><Receipt size={20} /></div>}<div><p className="font-semibold text-white">{invoiceCompanyName || business?.name || "Tu empresa"}</p><p className="text-xs text-white/45">{invoiceTaxId || "RIF / ID fiscal"}</p></div></div>
+          <div className="mb-5 flex items-center gap-3">{invoiceLogoUrl ? <img src={invoiceLogoUrl} alt="Logo facturación" className="h-12 w-12 rounded-2xl object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/15"><Receipt size={20} /></div>}<div><p className="font-semibold text-white">{invoiceCompanyName || business?.name || "Tu empresa"}</p><p className="text-xs text-white/45">{invoiceTaxId || "RIF / ID fiscal"}</p></div></div>
           <p>Factura: {invoicePrefix}0001</p><p>Cotización: {quotePrefix}0001</p><p>Impuesto por defecto: {defaultTax || "0"}%</p><p>Gestor: {accountantEmail || "Pendiente"}</p><p className="mt-3 whitespace-pre-wrap">Pagos: {paymentMethods}</p>
         </div>
       </GlassCard>
     </section>}
 
-    {view === "Agenda" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
-      <GlassCard title="Conexión con Agenda"><p className="text-sm text-white/60">Convierte citas y reservas en facturas. Flowly rellena cliente, servicio, fecha e importe para que solo tengas que revisar, guardar y generar PDF.</p><div className="mt-5 grid gap-3"><InfoBox label="Citas disponibles" value={pendingAppointments.length} /><InfoBox label="Modo" value={agendaMode} /></div></GlassCard>
-      <GlassCard title="Últimas citas para facturar"><div className="grid gap-3">{pendingAppointments.map((appointment) => { const customer = relationOne(appointment.customers); const service = relationOne(appointment.services); const customerName = customer?.name || customer?.full_name || "Cliente"; const serviceName = service?.name || "Servicio"; return <div key={appointment.id} className="flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"><div><p className="font-medium">{customerName}</p><p className="text-sm text-white/50">{serviceName} · {appointment.appointment_date || appointment.starts_at || "Sin fecha"} · {Number(service?.price || 0).toFixed(2)}€</p></div><button onClick={() => prepareInvoiceFromAppointment(appointment)} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950">Preparar factura</button></div>; })}{!pendingAppointments.length && <Empty text="Aún no hay citas para conectar con facturación." />}</div></GlassCard>
+
+    {view === "Ingresos" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+      <GlassCard title="Anotar ingreso manual o subir factura"><BillingUploadForm billingFileType={billingFileType} setBillingFileType={setBillingFileType} billingFileTitle={billingFileTitle} setBillingFileTitle={setBillingFileTitle} billingFileAmount={billingFileAmount} setBillingFileAmount={setBillingFileAmount} billingFileCounterparty={billingFileCounterparty} setBillingFileCounterparty={setBillingFileCounterparty} billingFileDate={billingFileDate} setBillingFileDate={setBillingFileDate} billingFileNotes={billingFileNotes} setBillingFileNotes={setBillingFileNotes} setBillingFile={setBillingFile} uploadBillingDocument={uploadBillingDocument} isUploadingBillingFile={isUploadingBillingFile} forcedType="income" /></GlassCard>
+      <GlassCard title="Ingresos registrados"><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
     </section>}
 
-    {(view === "Ingresos" || view === "Presupuestos") && <section className="grid gap-6 xl:grid-cols-[1fr_.9fr]">
-      <GlassCard title="Generar factura manual en PDF">
+    {(view === "Presupuestos" || view === "Factura") && <section className="grid gap-6 xl:grid-cols-[1fr_.9fr]">
+      <GlassCard title={view === "Presupuestos" ? "Generar presupuesto en PDF" : "Generar factura en PDF"}>
         <div className="grid gap-3 md:grid-cols-2">
-          <select value={documentType} onChange={(e) => { const next = e.target.value as "invoice" | "quote"; setDocumentType(next); setInvoiceNumber(next === "invoice" ? nextInvoiceNumber : `${quotePrefix}${String(records.filter((record) => record.status === "budget").length + 1).padStart(4, "0")}`); }} className="input-dark"><option value="invoice">Factura</option><option value="quote">Cotización / presupuesto</option></select>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white">{view === "Presupuestos" ? "Presupuesto" : "Factura"}</div>
           <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Número" className="input-dark" />
           <select value={invoiceCustomerId} onChange={(e) => fillCustomerFromCrm(e.target.value)} className="input-dark md:col-span-2"><option value="">Seleccionar cliente del CRM (opcional)</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name || customer.full_name || customer.phone || "Cliente"}</option>)}</select>
           <input value={invoiceCustomerName} onChange={(e) => setInvoiceCustomerName(e.target.value)} placeholder="Cliente / razón social" className="input-dark" />
@@ -2727,22 +2732,12 @@ function BillingModule({ business, reloadData, records, appointments, customers,
           <button onClick={() => saveGeneratedInvoice(true)} className="btn-primary md:col-span-2"><FileText size={17} /> Guardar y generar PDF</button>
         </div>
       </GlassCard>
-      <GlassCard title="Facturas y presupuestos registrados"><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
+      <GlassCard title={view === "Presupuestos" ? "Presupuestos registrados" : "Facturas registradas"}><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
     </section>}
 
     {view === "Gastos" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
       <GlassCard title="Subir factura de gasto"><BillingUploadForm billingFileType={billingFileType} setBillingFileType={setBillingFileType} billingFileTitle={billingFileTitle} setBillingFileTitle={setBillingFileTitle} billingFileAmount={billingFileAmount} setBillingFileAmount={setBillingFileAmount} billingFileCounterparty={billingFileCounterparty} setBillingFileCounterparty={setBillingFileCounterparty} billingFileDate={billingFileDate} setBillingFileDate={setBillingFileDate} billingFileNotes={billingFileNotes} setBillingFileNotes={setBillingFileNotes} setBillingFile={setBillingFile} uploadBillingDocument={uploadBillingDocument} isUploadingBillingFile={isUploadingBillingFile} forcedType="expense" /></GlassCard>
       <GlassCard title="Gastos registrados"><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
-    </section>}
-
-    {view === "Documentos" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
-      <GlassCard title="Subir factura o justificante"><BillingUploadForm billingFileType={billingFileType} setBillingFileType={setBillingFileType} billingFileTitle={billingFileTitle} setBillingFileTitle={setBillingFileTitle} billingFileAmount={billingFileAmount} setBillingFileAmount={setBillingFileAmount} billingFileCounterparty={billingFileCounterparty} setBillingFileCounterparty={setBillingFileCounterparty} billingFileDate={billingFileDate} setBillingFileDate={setBillingFileDate} billingFileNotes={billingFileNotes} setBillingFileNotes={setBillingFileNotes} setBillingFile={setBillingFile} uploadBillingDocument={uploadBillingDocument} isUploadingBillingFile={isUploadingBillingFile} /></GlassCard>
-      <GlassCard title="Archivo de facturación"><div className="mb-4 flex justify-end"><button onClick={sendToAccountant} className="btn-secondary"><Send size={16} /> Enviar resumen al gestor</button></div><BillingRecordsList records={uploadedDocuments} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
-    </section>}
-
-    {view === "Estadísticas" && <section className="grid gap-6 xl:grid-cols-[1fr_.9fr]">
-      <GlassCard title="Control real de facturación"><div className="space-y-4">{[{ label: "Ingresos", value: incomeTotal + revenue }, { label: "Gastos", value: expensesTotal }, { label: "Pagado", value: paidAmount }, { label: "Pendiente", value: pendingAmount }].map((item) => <div key={item.label}><div className="mb-2 flex justify-between text-sm"><span className="text-white/65">{item.label}</span><strong>{item.value.toFixed(2)}€</strong></div><div className="h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-200" style={{ width: `${Math.max(4, (item.value / maxChartValue) * 100)}%` }} /></div></div>)}</div></GlassCard>
-      <GlassCard title="Resumen para dirección"><div className="grid gap-3"><InfoBox label="Facturas / ingresos" value={incomeRecords.length} /><InfoBox label="Gastos" value={expenseRecords.length} /><InfoBox label="Archivos subidos" value={uploadedDocuments.length} /><InfoBox label="Resultado estimado" value={`${profit.toFixed(2)}€`} /></div><button onClick={sendToAccountant} className="btn-primary mt-5"><Send size={17} /> Preparar email para gestor</button></GlassCard>
     </section>}
   </section>;
 }
@@ -2751,12 +2746,13 @@ function BillingUploadForm({ billingFileType, setBillingFileType, billingFileTit
   useEffect(() => { if (forcedType) setBillingFileType(forcedType); }, [forcedType, setBillingFileType]);
   return <div className="grid gap-3">
     {!forcedType && <select value={billingFileType} onChange={(e) => setBillingFileType(e.target.value as "income" | "expense")} className="input-dark"><option value="income">Ingreso / factura emitida</option><option value="expense">Gasto / factura recibida</option></select>}
-    <input value={billingFileTitle} onChange={(e) => setBillingFileTitle(e.target.value)} placeholder="Título del documento" className="input-dark" />
+    <input value={billingFileTitle} onChange={(e) => setBillingFileTitle(e.target.value)} placeholder="Concepto del ingreso/gasto" className="input-dark" />
     <input value={billingFileCounterparty} onChange={(e) => setBillingFileCounterparty(e.target.value)} placeholder="Cliente, proveedor o contraparte" className="input-dark" />
     <div className="grid gap-3 md:grid-cols-2"><input value={billingFileAmount} onChange={(e) => setBillingFileAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><input value={billingFileDate} onChange={(e) => setBillingFileDate(e.target.value)} type="date" className="input-dark" /></div>
     <input type="file" accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx" onChange={(e) => setBillingFile(e.target.files?.[0] || null)} className="input-dark" />
+    <p className="text-xs text-white/42">Puedes guardar el registro manual sin archivo, o adjuntar la factura real en PDF/imagen/documento.</p>
     <textarea value={billingFileNotes} onChange={(e) => setBillingFileNotes(e.target.value)} placeholder="Notas para control interno o gestor" className="input-dark min-h-24" />
-    <button onClick={uploadBillingDocument} disabled={isUploadingBillingFile} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"><FileText size={17} /> {isUploadingBillingFile ? "Subiendo..." : "Subir a facturación"}</button>
+    <button onClick={uploadBillingDocument} disabled={isUploadingBillingFile} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"><FileText size={17} /> {isUploadingBillingFile ? "Guardando..." : forcedType === "income" ? "Guardar ingreso" : forcedType === "expense" ? "Guardar gasto" : "Guardar registro"}</button>
   </div>;
 }
 
@@ -3059,7 +3055,7 @@ function CrmModule({
 
                     {detailTab === "Facturación" && <GlassCard title="Facturación del cliente"><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Total" value={customerBillingTotal.toFixed(2)} /><InfoBox label="Documentos" value={customerBillingRecords.length} /><InfoBox label="Pendientes" value={customerPendingBilling} /></div><div className="mt-4 space-y-2">{customerBillingRecords.map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-white/45">{record.status} · {Number(record.amount || 0).toFixed(2)}</p></div>)}{!customerBillingRecords.length && <Empty text="Sin presupuestos o facturas vinculadas todavía." />}</div><button onClick={() => setActiveTab("module:billing")} className="btn-primary mt-4"><Receipt size={17} /> Abrir facturación</button></GlassCard>}
 
-                    {detailTab === "Documentos" && <GlassCard title="Documentos"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" /><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select><textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label></div><div className="mt-4 space-y-2">{customerDocs.map((document) => <button key={document.id} type="button" onClick={() => openClinicalDocument(document)} className="block w-full rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"} · enlace privado de 5 min</p></button>)}{!customerDocs.length && <Empty text="Sin documentos cargados." />}</div></GlassCard>}
+                    {detailTab === "Documentos" && <GlassCard title="Documentos"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Concepto del ingreso/gasto" className="input-dark" /><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select><textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label></div><div className="mt-4 space-y-2">{customerDocs.map((document) => <button key={document.id} type="button" onClick={() => openClinicalDocument(document)} className="block w-full rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"} · enlace privado de 5 min</p></button>)}{!customerDocs.length && <Empty text="Sin documentos cargados." />}</div></GlassCard>}
 
                     {detailTab === "IA" && <GlassCard title="Resumen IA operativo"><p className="text-sm leading-7 text-white/60">Cliente procedente de {selectedOrigin}. Tiene {customerAppointments.length} citas, {customerMessages.length} mensajes, {customerBillingRecords.length} documentos de facturación y {customerReminders.length} recordatorios. Próximo paso recomendado: {nextAppointment ? "confirmar la cita y preparar seguimiento posterior" : "crear una cita o enviar propuesta por WhatsApp"}.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{sectorPreset.fields.map((field) => <div key={field} className="rounded-2xl bg-white/[0.055] p-3 text-sm text-white/58">{field}</div>)}</div></GlassCard>}
                   </div>

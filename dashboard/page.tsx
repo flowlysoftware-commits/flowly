@@ -1114,6 +1114,30 @@ export default function DashboardPage() {
   };
 
 
+  const openClinicalDocument = async (document: ClinicalDocument) => {
+    if (!business) return;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    const response = await fetch("/api/documents/sign", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ documentId: document.id, businessId: business.id }),
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok || !result.url) {
+      alert(result.error || "No se pudo abrir el documento de forma segura");
+      return;
+    }
+
+    window.open(result.url, "_blank", "noopener,noreferrer");
+  };
+
   const uploadClinicalDocument = async (customerId: string, file: File, title?: string, documentType = "clinico", notes = "") => {
     if (!business || !customerId || !file) return alert("Selecciona un paciente y un archivo");
 
@@ -1126,17 +1150,13 @@ export default function DashboardPage() {
 
     if (uploadError) return alert(uploadError.message);
 
-    const { data: publicData } = supabase.storage
-      .from("clinical_documents")
-      .getPublicUrl(path);
-
     const { error: insertError } = await supabase.from("clinical_documents").insert({
       business_id: business.id,
       customer_id: customerId,
       title: title || file.name,
       file_name: file.name,
       file_path: path,
-      file_url: publicData.publicUrl,
+      file_url: null,
       document_type: documentType || "clinico",
       notes: notes || null,
     });
@@ -1682,7 +1702,7 @@ export default function DashboardPage() {
             activateModule={activateModule}
             deactivateModule={deactivateModule}
           />}
-          {activeModule && <ModuleSection business={business} integrations={businessIntegrations} reloadData={loadData} module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} whatsappBotRules={whatsappBotRules} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
+          {activeModule && <ModuleSection business={business} integrations={businessIntegrations} reloadData={loadData} module={activeModule} records={moduleRecords.filter((r) => r.module_key === activeModule.key)} allRecords={moduleRecords} customers={customers} employees={employees} appointments={appointments} services={services} revenue={revenue} expenses={expenses} manualIncome={manualIncome} title={recordTitle} setTitle={setRecordTitle} notes={recordNotes} setNotes={setRecordNotes} amount={recordAmount} setAmount={setRecordAmount} status={recordStatus} setStatus={setRecordStatus} crmSearch={crmSearch} setCrmSearch={setCrmSearch} clinicalDocuments={clinicalDocuments} whatsappMessages={whatsappMessages} whatsappTemplatesEffective={whatsappTemplatesEffective} whatsappBotRules={whatsappBotRules} saveWhatsappTemplate={saveWhatsappTemplate} deleteWhatsappTemplate={deleteWhatsappTemplate} saveWhatsappMessage={saveWhatsappMessage} uploadClinicalDocument={uploadClinicalDocument} openClinicalDocument={openClinicalDocument} voiceCalls={voiceCalls} voiceCallerName={voiceCallerName} setVoiceCallerName={setVoiceCallerName} voiceCallerPhone={voiceCallerPhone} setVoiceCallerPhone={setVoiceCallerPhone} voiceReason={voiceReason} setVoiceReason={setVoiceReason} voiceTranscript={voiceTranscript} setVoiceTranscript={setVoiceTranscript} voiceIntent={voiceIntent} setVoiceIntent={setVoiceIntent} voiceStatus={voiceStatus} setVoiceStatus={setVoiceStatus} voicePriority={voicePriority} setVoicePriority={setVoicePriority} createVoiceCall={createVoiceCall} updateVoiceCallStatus={updateVoiceCallStatus} deleteVoiceCall={deleteVoiceCall} convertVoiceCallToCustomer={convertVoiceCallToCustomer} voiceScheduleCallId={voiceScheduleCallId} setVoiceScheduleCallId={setVoiceScheduleCallId} voiceScheduleEmployee={voiceScheduleEmployee} setVoiceScheduleEmployee={setVoiceScheduleEmployee} voiceScheduleService={voiceScheduleService} setVoiceScheduleService={setVoiceScheduleService} voiceScheduleDate={voiceScheduleDate} setVoiceScheduleDate={setVoiceScheduleDate} createAppointmentFromVoiceCall={createAppointmentFromVoiceCall} selectedCrmCustomerId={selectedCrmCustomerId} setSelectedCrmCustomerId={setSelectedCrmCustomerId} incomingVoiceCall={incomingVoiceCall} updateCustomerCrm={updateCustomerCrm} createCrmAction={createCrmAction} createAppointmentForCustomer={createAppointmentForCustomer} crmReminders={crmReminders} saveCrmReminder={saveCrmReminder} completeCrmReminder={completeCrmReminder} deleteCrmReminder={deleteCrmReminder} activeTab={activeTab} setActiveTab={setActiveTab} createRecord={createModuleRecord} deleteRecord={deleteModuleRecord} businessAvatar={businessAvatar} settings={settings} />}
 
           <DashboardFooter />
 
@@ -2186,7 +2206,7 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
   );
 }
 
-function ModuleSection(props: { business: Business | null; integrations: BusinessIntegration[]; reloadData: () => Promise<void>; module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; whatsappBotRules: WhatsappBotRule[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null; settings?: BookingSettings | null }) {
+function ModuleSection(props: { business: Business | null; integrations: BusinessIntegration[]; reloadData: () => Promise<void>; module: ModuleItem; records: ModuleRecord[]; allRecords: ModuleRecord[]; customers: Customer[]; employees: Employee[]; appointments: Appointment[]; services: Service[]; revenue: number; expenses: number; manualIncome: number; title: string; setTitle: (v: string) => void; notes: string; setNotes: (v: string) => void; amount: string; setAmount: (v: string) => void; status: string; setStatus: (v: string) => void; crmSearch: string; setCrmSearch: (v: string) => void; clinicalDocuments: ClinicalDocument[]; whatsappMessages: WhatsappMessage[]; whatsappTemplatesEffective: WhatsappTemplate[]; whatsappBotRules: WhatsappBotRule[]; saveWhatsappTemplate: (template: WhatsappTemplate) => void; deleteWhatsappTemplate: (template: WhatsappTemplate) => void; saveWhatsappMessage: (customerId: string | null, phone: string, templateKey: string | null, message: string) => void; uploadClinicalDocument: (customerId: string, file: File, title?: string, documentType?: string, notes?: string) => void; openClinicalDocument: (document: ClinicalDocument) => Promise<void>; voiceCalls: VoiceCall[]; voiceCallerName: string; setVoiceCallerName: (v: string) => void; voiceCallerPhone: string; setVoiceCallerPhone: (v: string) => void; voiceReason: string; setVoiceReason: (v: string) => void; voiceTranscript: string; setVoiceTranscript: (v: string) => void; voiceIntent: string; setVoiceIntent: (v: string) => void; voiceStatus: string; setVoiceStatus: (v: string) => void; voicePriority: string; setVoicePriority: (v: string) => void; createVoiceCall: () => void; updateVoiceCallStatus: (id: string, status: string) => void; deleteVoiceCall: (id: string) => void; convertVoiceCallToCustomer: (call: VoiceCall) => void; voiceScheduleCallId: string; setVoiceScheduleCallId: (v: string) => void; voiceScheduleEmployee: string; setVoiceScheduleEmployee: (v: string) => void; voiceScheduleService: string; setVoiceScheduleService: (v: string) => void; voiceScheduleDate: string; setVoiceScheduleDate: (v: string) => void; createAppointmentFromVoiceCall: (call: VoiceCall) => void; selectedCrmCustomerId: string; setSelectedCrmCustomerId: (v: string) => void; incomingVoiceCall: VoiceCall | null; updateCustomerCrm: (customerId: string, updates: Partial<Customer>) => void; createCrmAction: (customerId: string, title: string, notes: string, status?: string, dueDate?: string) => void; createAppointmentForCustomer: (customerId: string, employeeId: string, serviceId: string, dateValue: string) => void; crmReminders: CrmReminder[]; saveCrmReminder: (customerId: string, title: string, remindAt: string, notes?: string) => void; completeCrmReminder: (id: string) => void; deleteCrmReminder: (id: string) => void; activeTab: ActiveTab; setActiveTab: (tab: ActiveTab) => void; createRecord: (moduleKey: string, defaultStatus?: string) => void; deleteRecord: (id: string) => void; businessAvatar?: BusinessAvatar | null; settings?: BookingSettings | null }) {
   const { module, records, customers, employees, appointments, services, revenue, expenses, manualIncome } = props;
   if (module.key === "billing") return <BillingModule {...props} />;
   if (module.key === "pos") return <PosModule {...props} />;
@@ -2252,33 +2272,31 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
   const Icon = module.Icon;
   if (module.key === "client_portal") {
     const portalFeatures = [
-      { title: "Citas", body: "Próximas reservas, cambios y confirmaciones en un espacio privado.", Icon: CalendarDays },
-      { title: "Documentos", body: "Facturas, presupuestos y archivos listos para descargar.", Icon: FileText },
-      { title: "Pagos", body: "Importes pendientes y estados de cobro visibles sin preguntar.", Icon: CreditCard },
-      { title: "Solicitudes", body: "El cliente pide cambios o soporte de forma ordenada.", Icon: MessageCircle },
+      { title: "Citas y reservas", body: "El cliente ve sus próximas citas, horarios y confirmaciones sin llamar al negocio.", Icon: CalendarDays },
+      { title: "Documentos", body: "Presupuestos, facturas, consentimientos o archivos importantes en un espacio privado.", Icon: FileText },
+      { title: "Pagos y cobros", body: "Estado de facturas, importes pendientes y acceso directo a métodos de pago.", Icon: CreditCard },
+      { title: "Solicitudes", body: "Formulario ordenado para pedir cambios, soporte, citas o información adicional.", Icon: MessageCircle },
     ];
-    const portalSteps = ["Invitar", "Consultar", "Solicitar", "Pagar"];
+    const portalSteps = ["Invitación por WhatsApp o email", "Acceso privado del cliente", "Consulta de citas/documentos", "Solicitud o pago enviado"];
     return (
-      <section className="space-y-8">
-        <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-white p-6 text-slate-950 shadow-2xl shadow-black/25 md:p-8">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-cyan-200/70 blur-3xl" />
-          <div className="relative grid gap-8 xl:grid-cols-[1fr_420px] xl:items-center">
+      <section className="grid gap-6">
+        <div className="overflow-hidden rounded-[2.4rem] border border-white/10 bg-[radial-gradient(circle_at_12%_20%,rgba(34,211,238,.24),transparent_30%),radial-gradient(circle_at_88%_10%,rgba(167,139,250,.22),transparent_32%),linear-gradient(135deg,rgba(2,6,23,.98),rgba(15,23,42,.94))] p-6 shadow-2xl shadow-black/30 md:p-8">
+          <div className="grid gap-8 xl:grid-cols-[1fr_.8fr] xl:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500"><ShieldCheck size={15} /> Área Cliente</div>
-              <h2 className="mt-5 text-4xl font-semibold tracking-[-0.04em] md:text-6xl">Una zona privada que vende confianza.</h2>
-              <p className="mt-5 max-w-2xl text-base leading-8 text-slate-500">Menos desorden, más claridad: citas, documentos, facturas y solicitudes presentados como una experiencia premium para el cliente final.</p>
-              <div className="mt-7 flex flex-wrap gap-3">
-                <button onClick={() => selectModuleSubmenu(setActiveTab, "module:portal-cliente:inicio" as ActiveTab, setTab, "Inicio")} className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white"><Sparkles size={17} /> Configurar portal</button>
-                <button onClick={() => selectModuleSubmenu(setActiveTab, "module:portal-cliente:accesos" as ActiveTab, setTab, "Accesos")} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700"><ShieldCheck size={17} /> Accesos</button>
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100"><ShieldCheck size={15} /> Área Cliente PRO</div>
+              <h2 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight md:text-5xl">Un portal privado que hace que el negocio parezca más grande, más serio y más fácil de comprar.</h2>
+              <p className="mt-5 max-w-2xl text-sm leading-7 text-white/60">Centraliza citas, documentos, facturas, solicitudes y pagos en una experiencia limpia para el cliente final. No es una lista de registros: es una zona premium para aumentar confianza y reducir mensajes repetidos.</p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button onClick={() => selectModuleSubmenu(setActiveTab, "module:portal-cliente:inicio" as ActiveTab, setTab, "Inicio")} className="btn-primary"><Sparkles size={17} /> Diseñar portal</button>
+                <button onClick={() => selectModuleSubmenu(setActiveTab, "module:portal-cliente:accesos" as ActiveTab, setTab, "Accesos")} className="btn-secondary"><ShieldCheck size={17} /> Gestionar accesos</button>
               </div>
             </div>
-            <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-5 text-white shadow-2xl shadow-slate-300/40">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold">Vista cliente</p>
-                <span className="rounded-full bg-emerald-300/15 px-3 py-1 text-xs font-semibold text-emerald-100">Activo</span>
-              </div>
-              <div className="mt-5 space-y-3">
-                {["Próxima cita", "Factura pendiente", "Documento disponible", "Solicitud enviada"].map((item) => <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.07] p-4"><p className="text-sm font-semibold">{item}</p><p className="mt-1 text-xs text-white/40">Visible y ordenado para el cliente</p></div>)}
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.07] p-5 shadow-xl shadow-black/20">
+              <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/65 p-4">
+                <div className="flex items-center justify-between"><p className="font-semibold">Vista del cliente</p><span className="rounded-full bg-green-400/15 px-3 py-1 text-xs text-green-100">Activo</span></div>
+                <div className="mt-5 grid gap-3">
+                  {["Próxima cita confirmada", "Factura pendiente", "Documento listo para descargar", "Solicitud enviada"].map((item) => <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4"><p className="text-sm font-semibold">{item}</p><p className="mt-1 text-xs text-white/42">Visible en el portal privado</p></div>)}
+                </div>
               </div>
             </div>
           </div>
@@ -2288,41 +2306,43 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
           <MetricCard label="Clientes" value={customers.length} />
           <MetricCard label="Solicitudes" value={records.filter((record) => record.status === "request").length} />
           <MetricCard label="Accesos" value={records.filter((record) => record.status === "access").length} />
-          <MetricCard label="Estado" value="PRO" />
+          <MetricCard label="Estado" value="Premium" />
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-          <div className="rounded-[2.2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">
-            <div className="mb-6 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/35">Experiencia</p>
-                <h3 className="mt-2 text-2xl font-semibold text-white">Qué ve el cliente</h3>
-              </div>
-              <span className="rounded-full bg-cyan-200 px-3 py-1 text-xs font-bold text-slate-950">Premium</span>
-            </div>
+        <section className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
+          <GlassCard title="Qué verá tu cliente">
             <div className="grid gap-4 md:grid-cols-2">
               {portalFeatures.map(({ title: featureTitle, body, Icon: FeatureIcon }) => (
-                <div key={featureTitle} className="rounded-[1.7rem] border border-white/10 bg-slate-950/60 p-5">
+                <div key={featureTitle} className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 transition hover:border-cyan-300/25 hover:bg-white/[0.08]">
                   <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-100"><FeatureIcon size={19} /></div>
-                  <p className="font-semibold text-white">{featureTitle}</p>
+                  <p className="font-semibold">{featureTitle}</p>
                   <p className="mt-2 text-sm leading-6 text-white/50">{body}</p>
                 </div>
               ))}
             </div>
-          </div>
+          </GlassCard>
 
-          <div className="rounded-[2.2rem] border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/25">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-cyan-200/80">Flujo simple</p>
-            <div className="mt-5 space-y-3">
-              {portalSteps.map((step, index) => (
-                <div key={step} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-black text-slate-950">{index + 1}</span>
-                  <span className="font-semibold text-white">{step}</span>
-                </div>
-              ))}
+          <GlassCard title="Configurar acceso">
+            <div className="mb-5 space-y-3">
+              {portalSteps.map((step, index) => <div key={step} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-950">{index + 1}</span><p className="text-sm leading-6 text-white/65">{step}</p></div>)}
             </div>
+            <div className="grid gap-3">
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre del acceso, página o solicitud" className="input-dark" />
+              <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark">
+                {cfg.statuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Descripción, URL privada, instrucciones de acceso o mensaje para el cliente" className="input-dark min-h-28" />
+              <button onClick={() => createRecord(module.key, status || "published")} className="btn-primary"><Plus size={17} /> Crear elemento del portal</button>
+            </div>
+          </GlassCard>
+        </section>
+
+        <GlassCard title="Elementos del Área Cliente">
+          <div className="grid gap-3 md:grid-cols-3">
+            {records.slice(0, 9).map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-white/45">{record.status} · {new Date(record.created_at).toLocaleDateString("es-ES")}</p>{record.notes && <p className="mt-3 line-clamp-3 text-sm leading-6 text-white/48">{record.notes}</p>}</div>)}
+            {!records.length && <div className="md:col-span-3"><Empty text="Crea el primer acceso, solicitud o contenido del portal." /></div>}
           </div>
-        </div>
+        </GlassCard>
       </section>
     );
   }
@@ -2356,7 +2376,7 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
   );
 }
 
-function BillingModule({ business, reloadData, records, appointments, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+function BillingModule({ business, reloadData, records, appointments, customers, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [view, setView] = useState("Ingresos");
   const configRecord = records.find((record) => record.status === "billing_config");
   const config = useMemo(() => {
@@ -2366,17 +2386,47 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
       return {} as Record<string, string>;
     }
   }, [configRecord?.notes]);
+
   const [invoiceCompanyName, setInvoiceCompanyName] = useState(config.companyName || business?.name || "");
   const [invoiceTaxId, setInvoiceTaxId] = useState(config.taxId || "");
   const [invoiceAddress, setInvoiceAddress] = useState(config.address || "");
   const [invoiceEmail, setInvoiceEmail] = useState(config.email || "");
   const [invoicePhone, setInvoicePhone] = useState(config.phone || "");
   const [invoiceLogoUrl, setInvoiceLogoUrl] = useState(config.logoUrl || business?.logo_url || "");
+  const [invoiceLogoFile, setInvoiceLogoFile] = useState<File | null>(null);
+  const [isSavingBillingConfig, setIsSavingBillingConfig] = useState(false);
   const [invoicePrefix, setInvoicePrefix] = useState(config.invoicePrefix || "F-2026-");
   const [quotePrefix, setQuotePrefix] = useState(config.quotePrefix || "COT-2026-");
   const [defaultTax, setDefaultTax] = useState(config.defaultTax || "16");
   const [paymentMethods, setPaymentMethods] = useState(config.paymentMethods || "Efectivo, transferencia, pago móvil, tarjeta y divisas");
   const [agendaMode, setAgendaMode] = useState(config.agendaMode || "Crear factura desde cita completada");
+  const [accountantEmail, setAccountantEmail] = useState(config.accountantEmail || "");
+
+  const nextInvoiceNumber = `${invoicePrefix}${String(records.filter((record) => ["income", "paid", "pending", "overdue"].includes(record.status)).length + 1).padStart(4, "0")}`;
+  const [documentType, setDocumentType] = useState<"invoice" | "quote">("invoice");
+  const [invoiceNumber, setInvoiceNumber] = useState(nextInvoiceNumber);
+  const [invoiceCustomerId, setInvoiceCustomerId] = useState("");
+  const [invoiceCustomerName, setInvoiceCustomerName] = useState("");
+  const [invoiceCustomerTaxId, setInvoiceCustomerTaxId] = useState("");
+  const [invoiceCustomerEmail, setInvoiceCustomerEmail] = useState("");
+  const [invoiceCustomerAddress, setInvoiceCustomerAddress] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [invoiceDueDate, setInvoiceDueDate] = useState("");
+  const [invoiceLineConcept, setInvoiceLineConcept] = useState("");
+  const [invoiceLineQuantity, setInvoiceLineQuantity] = useState("1");
+  const [invoiceLinePrice, setInvoiceLinePrice] = useState("");
+  const [invoiceLineTax, setInvoiceLineTax] = useState(defaultTax || "0");
+  const [invoicePaymentStatus, setInvoicePaymentStatus] = useState("pending");
+  const [invoiceExtraNotes, setInvoiceExtraNotes] = useState("");
+
+  const [billingFile, setBillingFile] = useState<File | null>(null);
+  const [billingFileType, setBillingFileType] = useState<"income" | "expense">("income");
+  const [billingFileTitle, setBillingFileTitle] = useState("");
+  const [billingFileAmount, setBillingFileAmount] = useState("");
+  const [billingFileCounterparty, setBillingFileCounterparty] = useState("");
+  const [billingFileDate, setBillingFileDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [billingFileNotes, setBillingFileNotes] = useState("");
+  const [isUploadingBillingFile, setIsUploadingBillingFile] = useState(false);
 
   useEffect(() => {
     setInvoiceCompanyName(config.companyName || business?.name || "");
@@ -2390,41 +2440,78 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
     setDefaultTax(config.defaultTax || "16");
     setPaymentMethods(config.paymentMethods || "Efectivo, transferencia, pago móvil, tarjeta y divisas");
     setAgendaMode(config.agendaMode || "Crear factura desde cita completada");
+    setAccountantEmail(config.accountantEmail || "");
   }, [config, business?.name, business?.logo_url]);
 
   useEffect(() => {
-    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", proveedores: "Proveedores", presupuestos: "Presupuestos", configuracion: "Configuración", agenda: "Agenda" }, setView);
+    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", presupuestos: "Presupuestos", factura: "Factura", configuracion: "Configuración" }, setView);
   }, [activeTab]);
   useEffect(() => {
-    const nextStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : "income";
+    const nextStatus = view === "Gastos" ? "expense" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : view === "Factura" ? "pending" : "income";
     setStatus(nextStatus);
-  }, [view, setStatus]);
+    if (view === "Gastos") setBillingFileType("expense");
+    if (view === "Ingresos") setBillingFileType("income");
+    if (view === "Presupuestos") {
+      setDocumentType("quote");
+      setInvoiceNumber(`${quotePrefix}${String(records.filter((record) => record.status === "budget").length + 1).padStart(4, "0")}`);
+      setInvoicePaymentStatus("pending");
+    }
+    if (view === "Factura") {
+      setDocumentType("invoice");
+      setInvoiceNumber(nextInvoiceNumber);
+    }
+  }, [view, setStatus, quotePrefix, records, nextInvoiceNumber]);
+
+  const parseBillingMetadata = (record: ModuleRecord) => {
+    try {
+      const parsed = record.notes ? JSON.parse(record.notes) as Record<string, unknown> : null;
+      return parsed && typeof parsed === "object" && parsed.flowly_billing ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
 
   const saveBillingConfig = async () => {
     if (!business) return alert("No se ha encontrado el negocio.");
-    const payload = {
-      companyName: invoiceCompanyName,
-      taxId: invoiceTaxId,
-      address: invoiceAddress,
-      email: invoiceEmail,
-      phone: invoicePhone,
-      logoUrl: invoiceLogoUrl,
-      invoicePrefix,
-      quotePrefix,
-      defaultTax,
-      paymentMethods,
-      agendaMode,
-    };
-    const row = { business_id: business.id, module_key: "billing", title: "Configuración de facturación básica", amount: null, status: "billing_config", notes: JSON.stringify(payload, null, 2) };
-    const result = configRecord?.id
-      ? await supabase.from("module_records").update(row).eq("id", configRecord.id).eq("business_id", business.id)
-      : await supabase.from("module_records").insert(row);
-    if (result.error) return alert(result.error.message);
-    await reloadData();
-    alert("Configuración de facturación guardada.");
+    setIsSavingBillingConfig(true);
+    try {
+      let finalLogoUrl = invoiceLogoUrl;
+      if (invoiceLogoFile) {
+        const safeName = invoiceLogoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${business.id}/config/logo-${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from("billing_documents").upload(path, invoiceLogoFile, { upsert: false, contentType: invoiceLogoFile.type });
+        if (uploadError) throw new Error(uploadError.message);
+        const { data } = await supabase.storage.from("billing_documents").createSignedUrl(path, 60 * 60 * 24 * 365);
+        finalLogoUrl = data?.signedUrl || finalLogoUrl;
+        setInvoiceLogoUrl(finalLogoUrl);
+      }
+      const payload = { companyName: invoiceCompanyName, taxId: invoiceTaxId, address: invoiceAddress, email: invoiceEmail, phone: invoicePhone, logoUrl: finalLogoUrl, invoicePrefix, quotePrefix, defaultTax, paymentMethods, agendaMode, accountantEmail };
+      const row = { business_id: business.id, module_key: "billing", title: "Configuración de facturación básica", amount: null, status: "billing_config", notes: JSON.stringify(payload, null, 2) };
+      const result = configRecord?.id
+        ? await supabase.from("module_records").update(row).eq("id", configRecord.id).eq("business_id", business.id)
+        : await supabase.from("module_records").insert(row);
+      if (result.error) throw new Error(result.error.message);
+      setInvoiceLogoFile(null);
+      await reloadData();
+      alert("Configuración de facturación guardada.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo guardar la configuración.");
+    } finally {
+      setIsSavingBillingConfig(false);
+    }
   };
 
   const relationOne = <T,>(value: Relation<T>) => Array.isArray(value) ? value[0] : value;
+  const fillCustomerFromCrm = (customerId: string) => {
+    setInvoiceCustomerId(customerId);
+    const customer = customers.find((item) => item.id === customerId);
+    if (!customer) return;
+    setInvoiceCustomerName(customer.name || customer.full_name || "");
+    setInvoiceCustomerEmail(customer.email || "");
+    setInvoiceCustomerTaxId(customer.document_number || "");
+    setInvoiceCustomerAddress(customer.address || "");
+  };
+
   const prepareInvoiceFromAppointment = (appointment: Appointment) => {
     const customer = relationOne(appointment.customers);
     const service = relationOne(appointment.services);
@@ -2434,6 +2521,13 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
     setView("Ingresos");
     setActiveTab("module:facturacion:ingresos");
     setStatus("income");
+    setDocumentType("invoice");
+    setInvoiceNumber(nextInvoiceNumber);
+    setInvoiceCustomerName(customerName);
+    setInvoiceLineConcept(serviceName);
+    setInvoiceLinePrice(price ? String(price) : "");
+    setInvoicePaymentStatus("pending");
+    setInvoiceExtraNotes(`Origen: Agenda\nFecha de cita: ${appointment.appointment_date || appointment.starts_at || "Sin fecha"}`);
     setTitle(`Factura · ${customerName} · ${serviceName}`);
     setAmount(price ? String(price) : "");
     setNotes([
@@ -2446,15 +2540,141 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
     ].join("\n"));
   };
 
-  const profit = revenue + manualIncome - expenses;
-  const viewStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : "income";
-  const viewRecords = records.filter((record) => view === "Ingresos" ? record.status === "income" : record.status === viewStatus);
-  const suppliers = records.filter((r) => r.status === "supplier");
-  const pendingAppointments = appointments.slice(0, 8);
+  const quantity = Number(invoiceLineQuantity || 0);
+  const unitPrice = Number(invoiceLinePrice || 0);
+  const taxRate = Number(invoiceLineTax || 0);
+  const subtotal = quantity * unitPrice;
+  const taxTotal = subtotal * (taxRate / 100);
+  const invoiceTotal = subtotal + taxTotal;
+
+  const uploadedDocuments = records.filter((record) => Boolean(parseBillingMetadata(record)?.file_path));
+  const incomeRecords = records.filter((record) => ["income", "paid", "pending", "overdue"].includes(record.status));
+  const expenseRecords = records.filter((record) => record.status === "expense");
+  const pendingAmount = incomeRecords.filter((record) => ["pending", "overdue", "income"].includes(record.status)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const paidAmount = incomeRecords.filter((record) => record.status === "paid").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const expensesTotal = expenseRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const incomeTotal = incomeRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const profit = incomeTotal + revenue - expensesTotal;
+  const maxChartValue = Math.max(incomeTotal + revenue, expensesTotal, paidAmount, pendingAmount, 1);
+
+  const buildInvoicePayload = () => ({
+    flowly_billing: true,
+    kind: documentType,
+    number: invoiceNumber || (documentType === "invoice" ? nextInvoiceNumber : `${quotePrefix}${String(records.filter((record) => record.status === "budget").length + 1).padStart(4, "0")}`),
+    date: invoiceDate,
+    due_date: invoiceDueDate,
+    customer_id: invoiceCustomerId || null,
+    customer_name: invoiceCustomerName,
+    customer_tax_id: invoiceCustomerTaxId,
+    customer_email: invoiceCustomerEmail,
+    customer_address: invoiceCustomerAddress,
+    concept: invoiceLineConcept,
+    quantity,
+    unit_price: unitPrice,
+    tax_rate: taxRate,
+    subtotal,
+    tax_total: taxTotal,
+    total: invoiceTotal,
+    status: invoicePaymentStatus,
+    notes: invoiceExtraNotes,
+  });
+
+  const documentStatus = documentType === "quote" ? "budget" : invoicePaymentStatus === "paid" ? "paid" : invoicePaymentStatus === "overdue" ? "overdue" : "pending";
+  const saveGeneratedInvoice = async (openPdf = true) => {
+    if (!business) return alert("No se ha encontrado el negocio.");
+    if (!invoiceCustomerName.trim()) return alert("Añade el cliente de la factura.");
+    if (!invoiceLineConcept.trim()) return alert("Añade al menos un concepto.");
+    const payload = buildInvoicePayload();
+    const row = {
+      business_id: business.id,
+      module_key: "billing",
+      title: `${documentType === "invoice" ? "Factura" : "Cotización"} ${payload.number} · ${invoiceCustomerName}`,
+      amount: invoiceTotal,
+      status: documentStatus,
+      notes: JSON.stringify(payload, null, 2),
+    };
+    const { error } = await supabase.from("module_records").insert(row);
+    if (error) return alert(error.message);
+    if (openPdf) openInvoicePdf(payload);
+    await reloadData();
+    setInvoiceNumber(`${invoicePrefix}${String(records.length + 2).padStart(4, "0")}`);
+    setInvoiceLineConcept("");
+    setInvoiceLinePrice("");
+    setInvoiceExtraNotes("");
+  };
+
+  const openInvoicePdf = (payload = buildInvoicePayload()) => {
+    const htmlEntities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" };
+    const escape = (value: unknown) => String(value ?? "").replace(/[&<>"]/g, (char) => htmlEntities[char] || char);
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) return alert("El navegador ha bloqueado la ventana del PDF.");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escape(payload.number)}</title><style>
+      *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;margin:0;background:#f3f6fb;color:#101828}.page{width:210mm;min-height:297mm;margin:0 auto;background:#fff;padding:34px}.top{display:flex;justify-content:space-between;gap:28px;border-bottom:1px solid #e5e7eb;padding-bottom:24px}.brand{display:flex;gap:14px;align-items:center}.logo{width:58px;height:58px;border-radius:18px;object-fit:cover;border:1px solid #e5e7eb}.logoFallback{width:58px;height:58px;border-radius:18px;background:#0f172a;color:white;display:flex;align-items:center;justify-content:center;font-weight:800}.muted{color:#667085}.title{text-align:right}.title h1{margin:0;font-size:34px;letter-spacing:-.04em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}.box{border:1px solid #e5e7eb;border-radius:20px;padding:18px;background:#fbfcff}.box h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:#667085}table{width:100%;border-collapse:collapse;margin-top:30px}th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#667085;border-bottom:1px solid #e5e7eb;padding:12px}td{padding:16px 12px;border-bottom:1px solid #eef2f7}.right{text-align:right}.totals{margin-left:auto;margin-top:24px;width:310px}.totals div{display:flex;justify-content:space-between;padding:10px 0}.grand{font-size:24px;font-weight:800;border-top:1px solid #e5e7eb}.notes{margin-top:30px;border-radius:20px;background:#f8fafc;padding:18px;white-space:pre-wrap}.footer{margin-top:34px;color:#98a2b3;font-size:12px}@media print{body{background:white}.page{width:auto;min-height:auto;margin:0;padding:24px}.noPrint{display:none}}
+    </style></head><body><main class="page"><section class="top"><div class="brand">${invoiceLogoUrl ? `<img class="logo" src="${escape(invoiceLogoUrl)}" />` : `<div class="logoFallback">F</div>`}<div><h2>${escape(invoiceCompanyName || business?.name || "Tu empresa")}</h2><p class="muted">${escape(invoiceTaxId || "ID fiscal")}</p><p class="muted">${escape(invoiceAddress || "Dirección")}</p><p class="muted">${escape(invoiceEmail || "")} ${escape(invoicePhone || "")}</p></div></div><div class="title"><h1>${payload.kind === "quote" ? "Cotización" : "Factura"}</h1><p><strong>${escape(payload.number)}</strong></p><p class="muted">Fecha: ${escape(payload.date)}</p><p class="muted">Vencimiento: ${escape(payload.due_date || "—")}</p></div></section><section class="grid"><div class="box"><h3>Cliente</h3><p><strong>${escape(payload.customer_name)}</strong></p><p class="muted">${escape(payload.customer_tax_id || "")}</p><p class="muted">${escape(payload.customer_email || "")}</p><p class="muted">${escape(payload.customer_address || "")}</p></div><div class="box"><h3>Pago</h3><p>${escape(paymentMethods)}</p><p class="muted">Estado: ${escape(payload.status)}</p></div></section><table><thead><tr><th>Concepto</th><th class="right">Cantidad</th><th class="right">Precio</th><th class="right">Impuesto</th><th class="right">Total</th></tr></thead><tbody><tr><td>${escape(payload.concept)}</td><td class="right">${escape(payload.quantity)}</td><td class="right">${Number(payload.unit_price).toFixed(2)}</td><td class="right">${Number(payload.tax_rate).toFixed(2)}%</td><td class="right">${Number(payload.total).toFixed(2)}</td></tr></tbody></table><section class="totals"><div><span>Subtotal</span><strong>${Number(payload.subtotal).toFixed(2)}</strong></div><div><span>Impuestos</span><strong>${Number(payload.tax_total).toFixed(2)}</strong></div><div class="grand"><span>Total</span><span>${Number(payload.total).toFixed(2)}</span></div></section>${payload.notes ? `<section class="notes">${escape(payload.notes)}</section>` : ""}<p class="footer">Documento generado desde Flowly IA. Puedes imprimir o guardar como PDF desde esta ventana.</p><button class="noPrint" onclick="window.print()" style="margin-top:18px;padding:12px 18px;border:0;border-radius:999px;background:#0f172a;color:white;font-weight:700">Guardar / imprimir PDF</button></main></body></html>`;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 450);
+  };
+
+  const uploadBillingDocument = async () => {
+    if (!business) return alert("No se ha encontrado el negocio.");
+    if (!billingFileTitle.trim() && !billingFile) return alert("Añade un concepto o adjunta una factura.");
+    setIsUploadingBillingFile(true);
+    try {
+      let path = "";
+      if (billingFile) {
+        const safeName = billingFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        path = `${business.id}/${billingFileType}/${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from("billing_documents").upload(path, billingFile, { upsert: false, contentType: billingFile.type });
+        if (uploadError) throw new Error(uploadError.message);
+      }
+      const metadata = { flowly_billing: true, file_path: path || null, file_name: billingFile?.name || null, file_type: billingFile?.type || null, file_size: billingFile?.size || null, kind: billingFileType, counterparty: billingFileCounterparty, document_date: billingFileDate, notes: billingFileNotes, manual_entry: !billingFile };
+      const { error } = await supabase.from("module_records").insert({ business_id: business.id, module_key: "billing", title: billingFileTitle || `${billingFileType === "income" ? "Ingreso" : "Gasto"} manual`, amount: billingFileAmount ? Number(billingFileAmount) : null, status: billingFileType === "income" ? "income" : "expense", notes: JSON.stringify(metadata, null, 2) });
+      if (error) throw new Error(error.message);
+      setBillingFile(null);
+      setBillingFileTitle("");
+      setBillingFileAmount("");
+      setBillingFileCounterparty("");
+      setBillingFileNotes("");
+      await reloadData();
+      alert(billingFile ? "Documento subido a facturación." : "Registro manual guardado.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo guardar el registro");
+    } finally {
+      setIsUploadingBillingFile(false);
+    }
+  };
+
+  const openBillingDocument = async (record: ModuleRecord) => {
+    const metadata = parseBillingMetadata(record);
+    const filePath = typeof metadata?.file_path === "string" ? metadata.file_path : "";
+    if (!filePath) return alert("Este registro no tiene archivo adjunto.");
+    const { data, error } = await supabase.storage.from("billing_documents").createSignedUrl(filePath, 60 * 5);
+    if (error || !data?.signedUrl) return alert(error?.message || "No se pudo abrir el documento.");
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const sendToAccountant = () => {
+    if (!accountantEmail) return alert("Añade el correo del gestor en Configuración.");
+    const subject = encodeURIComponent(`Facturación ${invoiceCompanyName || business?.name || "Flowly"}`);
+    const body = encodeURIComponent(`Hola,\n\nTe envío el resumen de facturación desde Flowly.\n\nIngresos: ${(incomeTotal + revenue).toFixed(2)}\nGastos: ${expensesTotal.toFixed(2)}\nResultado: ${profit.toFixed(2)}\nDocumentos subidos: ${uploadedDocuments.length}\n\nPuedes revisar los PDFs y facturas adjuntos desde el panel de Flowly.\n\nGracias.`);
+    window.location.href = `mailto:${accountantEmail}?subject=${subject}&body=${body}`;
+  };
+
+  const viewStatus = view === "Gastos" ? "expense" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : view === "Factura" ? "pending" : "income";
+  const viewRecords = records.filter((record) => {
+    if (view === "Ingresos") return record.status === "income" || record.status === "paid";
+    if (view === "Factura") return ["pending", "paid", "overdue"].includes(record.status);
+    return record.status === viewStatus;
+  });
 
   return <section className="grid gap-6">
-    <ModuleHero eyebrow="Finance OS" title="Facturación Básica incluida" description="Configura tus datos, logo, numeración y conecta la facturación sencilla con CRM, Agenda y WhatsApp para crear cotizaciones, facturas y cobros sin salir del panel." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Proveedores", "Presupuestos", "Agenda", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Proveedores: "module:facturacion:proveedores", Presupuestos: "module:facturacion:presupuestos", Agenda: "module:facturacion:agenda", Configuración: "module:facturacion:configuracion" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} />
-    <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Reservas cobradas" value={`${revenue.toFixed(2)}€`} helper="Agenda" /><Metric icon={<TrendingUp />} label="Ingresos manuales" value={`${manualIncome.toFixed(2)}€`} helper="Añadidos" /><Metric icon={<CreditCard />} label="Gastos" value={`${expenses.toFixed(2)}€`} helper="Manuales" /><Metric icon={<FileText />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /></div>
+    <ModuleHero eyebrow="Incluido en Basic" title="Facturación" description="Controla ingresos, gastos, presupuestos, facturas PDF y configuración fiscal básica desde un panel simple, ordenado y conectado con Flowly." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Presupuestos", "Factura", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Presupuestos: "module:facturacion:presupuestos", Factura: "module:facturacion:factura", Configuración: "module:facturacion:configuracion" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} />
+
+    <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Ingresos" value={`${(incomeTotal + revenue).toFixed(2)}€`} helper="Manuales y facturas" /><Metric icon={<CreditCard />} label="Gastos" value={`${expensesTotal.toFixed(2)}€`} helper="Manuales y facturas" /><Metric icon={<TrendingUp />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Ingresos - gastos" /><Metric icon={<FileText />} label="Archivos" value={uploadedDocuments.length} helper="Adjuntos privados" /></div>
+
+    <GlassCard title="Estadísticas automáticas"><div className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]"><div className="space-y-4">{[{ label: "Ingresos", value: incomeTotal + revenue }, { label: "Gastos", value: expensesTotal }, { label: "Pagado", value: paidAmount }, { label: "Pendiente", value: pendingAmount }].map((item) => <div key={item.label}><div className="mb-2 flex justify-between text-sm"><span className="text-white/65">{item.label}</span><strong>{item.value.toFixed(2)}€</strong></div><div className="h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-200" style={{ width: `${Math.max(4, (item.value / maxChartValue) * 100)}%` }} /></div></div>)}</div><div className="grid gap-3"><InfoBox label="Presupuestos" value={records.filter((record) => record.status === "budget").length} /><InfoBox label="Facturas" value={records.filter((record) => ["pending", "paid", "overdue"].includes(record.status)).length} /><InfoBox label="Resultado" value={`${profit.toFixed(2)}€`} /></div></div></GlassCard>
 
     {view === "Configuración" && <section className="grid gap-6 xl:grid-cols-[1fr_.85fr]">
       <GlassCard title="Configuración de facturación básica">
@@ -2464,30 +2684,85 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
           <input value={invoiceEmail} onChange={(e) => setInvoiceEmail(e.target.value)} placeholder="Correo de facturación" className="input-dark" />
           <input value={invoicePhone} onChange={(e) => setInvoicePhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="input-dark" />
           <input value={invoiceAddress} onChange={(e) => setInvoiceAddress(e.target.value)} placeholder="Dirección fiscal o comercial" className="input-dark md:col-span-2" />
-          <input value={invoiceLogoUrl} onChange={(e) => setInvoiceLogoUrl(e.target.value)} placeholder="URL del logo para PDFs" className="input-dark md:col-span-2" />
+          <input value={invoiceLogoUrl} onChange={(e) => setInvoiceLogoUrl(e.target.value)} placeholder="URL del logo para PDFs (opcional)" className="input-dark md:col-span-2" />
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setInvoiceLogoFile(e.target.files?.[0] || null)} className="input-dark md:col-span-2" />
           <input value={invoicePrefix} onChange={(e) => setInvoicePrefix(e.target.value)} placeholder="Prefijo facturas, ej. F-2026-" className="input-dark" />
           <input value={quotePrefix} onChange={(e) => setQuotePrefix(e.target.value)} placeholder="Prefijo cotizaciones, ej. COT-2026-" className="input-dark" />
           <input value={defaultTax} onChange={(e) => setDefaultTax(e.target.value)} placeholder="Impuesto/IVA por defecto" type="number" className="input-dark" />
-          <input value={agendaMode} onChange={(e) => setAgendaMode(e.target.value)} placeholder="Regla de conexión con Agenda" className="input-dark" />
+          <input value={agendaMode} onChange={(e) => setAgendaMode(e.target.value)} placeholder="Conexión con Agenda, ej. facturar cita completada" className="input-dark" />
+          <input value={accountantEmail} onChange={(e) => setAccountantEmail(e.target.value)} placeholder="Email del gestor / contador" type="email" className="input-dark md:col-span-2" />
           <textarea value={paymentMethods} onChange={(e) => setPaymentMethods(e.target.value)} placeholder="Métodos de pago visibles en factura" className="input-dark min-h-28 md:col-span-2" />
-          <button onClick={saveBillingConfig} className="btn-primary md:col-span-2"><CheckCircle2 size={17} /> Guardar configuración</button>
+          <button onClick={saveBillingConfig} disabled={isSavingBillingConfig} className="btn-primary md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 size={17} /> {isSavingBillingConfig ? "Guardando..." : "Guardar configuración"}</button>
+          <button type="button" onClick={() => alert("Conexión preparada para futuras integraciones de factura electrónica.")} className="btn-secondary md:col-span-2"><Workflow size={17} /> Conectar facturación electrónica</button>
         </div>
       </GlassCard>
       <GlassCard title="Vista previa del documento">
         <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-sm text-white/75">
-          <div className="mb-5 flex items-center gap-3">{invoiceLogoUrl ? <Image src={invoiceLogoUrl} alt="Logo facturación" width={46} height={46} className="rounded-2xl object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/15"><Receipt size={20} /></div>}<div><p className="font-semibold text-white">{invoiceCompanyName || business?.name || "Tu empresa"}</p><p className="text-xs text-white/45">{invoiceTaxId || "RIF / ID fiscal"}</p></div></div>
-          <p>Factura: {invoicePrefix}0001</p><p>Cotización: {quotePrefix}0001</p><p>Impuesto por defecto: {defaultTax || "0"}%</p><p className="mt-3 whitespace-pre-wrap">Pagos: {paymentMethods}</p>
+          <div className="mb-5 flex items-center gap-3">{invoiceLogoUrl ? <img src={invoiceLogoUrl} alt="Logo facturación" className="h-12 w-12 rounded-2xl object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/15"><Receipt size={20} /></div>}<div><p className="font-semibold text-white">{invoiceCompanyName || business?.name || "Tu empresa"}</p><p className="text-xs text-white/45">{invoiceTaxId || "RIF / ID fiscal"}</p></div></div>
+          <p>Factura: {invoicePrefix}0001</p><p>Cotización: {quotePrefix}0001</p><p>Impuesto por defecto: {defaultTax || "0"}%</p><p>Gestor: {accountantEmail || "Pendiente"}</p><p className="mt-3 whitespace-pre-wrap">Pagos: {paymentMethods}</p>
         </div>
       </GlassCard>
     </section>}
 
-    {view === "Agenda" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
-      <GlassCard title="Conexión con Agenda"><p className="text-sm text-white/60">Convierte citas y reservas en ingresos o facturas básicas. Al preparar una factura desde una cita, Flowly rellena cliente, servicio, fecha e importe para que solo tengas que revisar y guardar.</p><div className="mt-5 grid gap-3"><InfoBox label="Citas disponibles" value={pendingAppointments.length} /><InfoBox label="Modo" value={agendaMode} /></div></GlassCard>
-      <GlassCard title="Últimas citas para facturar"><div className="grid gap-3">{pendingAppointments.map((appointment) => { const customer = relationOne(appointment.customers); const service = relationOne(appointment.services); const customerName = customer?.name || customer?.full_name || "Cliente"; const serviceName = service?.name || "Servicio"; return <div key={appointment.id} className="flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"><div><p className="font-medium">{customerName}</p><p className="text-sm text-white/50">{serviceName} · {appointment.appointment_date || appointment.starts_at || "Sin fecha"} · {Number(service?.price || 0).toFixed(2)}€</p></div><button onClick={() => prepareInvoiceFromAppointment(appointment)} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950">Preparar factura</button></div>; })}{!pendingAppointments.length && <Empty text="Aún no hay citas para conectar con facturación." />}</div></GlassCard>
+
+    {view === "Ingresos" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+      <GlassCard title="Anotar ingreso manual o subir factura"><BillingUploadForm billingFileType={billingFileType} setBillingFileType={setBillingFileType} billingFileTitle={billingFileTitle} setBillingFileTitle={setBillingFileTitle} billingFileAmount={billingFileAmount} setBillingFileAmount={setBillingFileAmount} billingFileCounterparty={billingFileCounterparty} setBillingFileCounterparty={setBillingFileCounterparty} billingFileDate={billingFileDate} setBillingFileDate={setBillingFileDate} billingFileNotes={billingFileNotes} setBillingFileNotes={setBillingFileNotes} setBillingFile={setBillingFile} uploadBillingDocument={uploadBillingDocument} isUploadingBillingFile={isUploadingBillingFile} forcedType="income" /></GlassCard>
+      <GlassCard title="Ingresos registrados"><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
     </section>}
 
-    {view !== "Configuración" && view !== "Agenda" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title={`Nuevo registro · ${view}`}><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="income">Factura / ingreso</option><option value="budget">Cotización / presupuesto</option><option value="expense">Gasto</option><option value="supplier">Proveedor</option><option value="paid">Pagada</option><option value="pending">Pendiente</option><option value="overdue">Vencida</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={view === "Proveedores" ? "Proveedor / factura" : view === "Presupuestos" ? "Cotización para cliente" : view === "Gastos" ? "Concepto de gasto" : "Factura, servicio o concepto de ingreso"} className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cliente, vencimiento, método de pago, datos de factura o notas para WhatsApp" className="input-dark min-h-32" /><button onClick={() => createRecord("billing", status || viewStatus)} className="btn-primary"><Plus size={17} /> Guardar {view.toLowerCase()}</button></div></GlassCard><GlassCard title={`${view} registrados`}><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Mostrados" value={viewRecords.length} /><InfoBox label="Proveedores" value={suppliers.length} /><InfoBox label="Total módulo" value={records.length} /></div><div className="mt-5"><RecordsList records={viewRecords} deleteRecord={deleteRecord} /></div></GlassCard></section>}
+    {(view === "Presupuestos" || view === "Factura") && <section className="grid gap-6 xl:grid-cols-[1fr_.9fr]">
+      <GlassCard title={view === "Presupuestos" ? "Generar presupuesto en PDF" : "Generar factura en PDF"}>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white">{view === "Presupuestos" ? "Presupuesto" : "Factura"}</div>
+          <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Número" className="input-dark" />
+          <select value={invoiceCustomerId} onChange={(e) => fillCustomerFromCrm(e.target.value)} className="input-dark md:col-span-2"><option value="">Seleccionar cliente del CRM (opcional)</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name || customer.full_name || customer.phone || "Cliente"}</option>)}</select>
+          <input value={invoiceCustomerName} onChange={(e) => setInvoiceCustomerName(e.target.value)} placeholder="Cliente / razón social" className="input-dark" />
+          <input value={invoiceCustomerTaxId} onChange={(e) => setInvoiceCustomerTaxId(e.target.value)} placeholder="RIF / cédula cliente" className="input-dark" />
+          <input value={invoiceCustomerEmail} onChange={(e) => setInvoiceCustomerEmail(e.target.value)} placeholder="Email cliente" className="input-dark" />
+          <input value={invoiceCustomerAddress} onChange={(e) => setInvoiceCustomerAddress(e.target.value)} placeholder="Dirección cliente" className="input-dark" />
+          <input value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} type="date" className="input-dark" />
+          <input value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} type="date" className="input-dark" />
+          <input value={invoiceLineConcept} onChange={(e) => setInvoiceLineConcept(e.target.value)} placeholder="Concepto / servicio" className="input-dark md:col-span-2" />
+          <input value={invoiceLineQuantity} onChange={(e) => setInvoiceLineQuantity(e.target.value)} placeholder="Cantidad" type="number" className="input-dark" />
+          <input value={invoiceLinePrice} onChange={(e) => setInvoiceLinePrice(e.target.value)} placeholder="Precio unitario" type="number" className="input-dark" />
+          <input value={invoiceLineTax} onChange={(e) => setInvoiceLineTax(e.target.value)} placeholder="Impuesto %" type="number" className="input-dark" />
+          <select value={invoicePaymentStatus} onChange={(e) => setInvoicePaymentStatus(e.target.value)} className="input-dark"><option value="pending">Pendiente</option><option value="paid">Pagada</option><option value="overdue">Vencida</option></select>
+          <textarea value={invoiceExtraNotes} onChange={(e) => setInvoiceExtraNotes(e.target.value)} placeholder="Notas visibles o internas" className="input-dark min-h-24 md:col-span-2" />
+          <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-sm text-cyan-50 md:col-span-2"><p className="font-semibold">Total: {invoiceTotal.toFixed(2)}€</p><p className="mt-1 text-cyan-50/70">Subtotal {subtotal.toFixed(2)} · Impuesto {taxTotal.toFixed(2)}</p></div>
+          <button onClick={() => saveGeneratedInvoice(true)} className="btn-primary md:col-span-2"><FileText size={17} /> Guardar y generar PDF</button>
+        </div>
+      </GlassCard>
+      <GlassCard title={view === "Presupuestos" ? "Presupuestos registrados" : "Facturas registradas"}><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
+    </section>}
+
+    {view === "Gastos" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+      <GlassCard title="Subir factura de gasto"><BillingUploadForm billingFileType={billingFileType} setBillingFileType={setBillingFileType} billingFileTitle={billingFileTitle} setBillingFileTitle={setBillingFileTitle} billingFileAmount={billingFileAmount} setBillingFileAmount={setBillingFileAmount} billingFileCounterparty={billingFileCounterparty} setBillingFileCounterparty={setBillingFileCounterparty} billingFileDate={billingFileDate} setBillingFileDate={setBillingFileDate} billingFileNotes={billingFileNotes} setBillingFileNotes={setBillingFileNotes} setBillingFile={setBillingFile} uploadBillingDocument={uploadBillingDocument} isUploadingBillingFile={isUploadingBillingFile} forcedType="expense" /></GlassCard>
+      <GlassCard title="Gastos registrados"><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
+    </section>}
   </section>;
+}
+
+function BillingUploadForm({ billingFileType, setBillingFileType, billingFileTitle, setBillingFileTitle, billingFileAmount, setBillingFileAmount, billingFileCounterparty, setBillingFileCounterparty, billingFileDate, setBillingFileDate, billingFileNotes, setBillingFileNotes, setBillingFile, uploadBillingDocument, isUploadingBillingFile, forcedType }: { billingFileType: "income" | "expense"; setBillingFileType: (value: "income" | "expense") => void; billingFileTitle: string; setBillingFileTitle: (value: string) => void; billingFileAmount: string; setBillingFileAmount: (value: string) => void; billingFileCounterparty: string; setBillingFileCounterparty: (value: string) => void; billingFileDate: string; setBillingFileDate: (value: string) => void; billingFileNotes: string; setBillingFileNotes: (value: string) => void; setBillingFile: (file: File | null) => void; uploadBillingDocument: () => void; isUploadingBillingFile: boolean; forcedType?: "income" | "expense" }) {
+  useEffect(() => { if (forcedType) setBillingFileType(forcedType); }, [forcedType, setBillingFileType]);
+  return <div className="grid gap-3">
+    {!forcedType && <select value={billingFileType} onChange={(e) => setBillingFileType(e.target.value as "income" | "expense")} className="input-dark"><option value="income">Ingreso / factura emitida</option><option value="expense">Gasto / factura recibida</option></select>}
+    <input value={billingFileTitle} onChange={(e) => setBillingFileTitle(e.target.value)} placeholder="Concepto del ingreso/gasto" className="input-dark" />
+    <input value={billingFileCounterparty} onChange={(e) => setBillingFileCounterparty(e.target.value)} placeholder="Cliente, proveedor o contraparte" className="input-dark" />
+    <div className="grid gap-3 md:grid-cols-2"><input value={billingFileAmount} onChange={(e) => setBillingFileAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><input value={billingFileDate} onChange={(e) => setBillingFileDate(e.target.value)} type="date" className="input-dark" /></div>
+    <input type="file" accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx" onChange={(e) => setBillingFile(e.target.files?.[0] || null)} className="input-dark" />
+    <p className="text-xs text-white/42">Puedes guardar el registro manual sin archivo, o adjuntar la factura real en PDF/imagen/documento.</p>
+    <textarea value={billingFileNotes} onChange={(e) => setBillingFileNotes(e.target.value)} placeholder="Notas para control interno o gestor" className="input-dark min-h-24" />
+    <button onClick={uploadBillingDocument} disabled={isUploadingBillingFile} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"><FileText size={17} /> {isUploadingBillingFile ? "Guardando..." : forcedType === "income" ? "Guardar ingreso" : forcedType === "expense" ? "Guardar gasto" : "Guardar registro"}</button>
+  </div>;
+}
+
+function BillingRecordsList({ records, deleteRecord, openBillingDocument, openInvoicePdf, parseBillingMetadata }: { records: ModuleRecord[]; deleteRecord: (id: string) => void; openBillingDocument: (record: ModuleRecord) => void; openInvoicePdf: (payload?: any) => void; parseBillingMetadata: (record: ModuleRecord) => Record<string, unknown> | null }) {
+  return <div className="space-y-3">{records.map((record) => {
+    const metadata = parseBillingMetadata(record);
+    const hasFile = Boolean(metadata?.file_path);
+    const isGenerated = Boolean(metadata?.number && metadata?.concept);
+    return <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{record.title}</p>{metadata ? <div className="mt-2 grid gap-1 text-sm text-white/55"><p>{String(metadata.customer_name || metadata.counterparty || metadata.file_name || "Documento de facturación")}</p>{metadata.document_date || metadata.date ? <p>Fecha: {String(metadata.document_date || metadata.date)}</p> : null}{metadata.due_date ? <p>Vence: {String(metadata.due_date)}</p> : null}</div> : record.notes && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/55">{record.notes}</p>}<p className="mt-2 text-xs text-white/35">{record.status} · {new Date(record.created_at).toLocaleString("es-ES")}</p></div>{record.amount !== null && <p className="rounded-full bg-violet-500/20 px-3 py-1 text-sm text-violet-100">{Number(record.amount).toFixed(2)}€</p>}</div><div className="mt-3 flex flex-wrap gap-2">{hasFile && <button onClick={() => openBillingDocument(record)} className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10">Abrir archivo</button>}{isGenerated && <button onClick={() => openInvoicePdf(metadata)} className="rounded-full border border-cyan-300/20 px-3 py-1.5 text-xs text-cyan-100 hover:bg-cyan-400/10">PDF</button>}<button onClick={() => deleteRecord(record.id)} className="rounded-full border border-red-300/20 px-3 py-1.5 text-xs text-red-200/80 hover:bg-red-500/10">Eliminar</button></div></div>;
+  })}{!records.length && <Empty text="Aún no hay registros." />}</div>;
 }
 
 function PosModule({ records, services, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
@@ -2519,6 +2794,7 @@ function CrmModule({
   createAppointmentForCustomer,
   clinicalDocuments,
   uploadClinicalDocument,
+  openClinicalDocument,
   whatsappMessages,
   whatsappTemplatesEffective,
   saveWhatsappMessage,
@@ -2779,7 +3055,7 @@ function CrmModule({
 
                     {detailTab === "Facturación" && <GlassCard title="Facturación del cliente"><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Total" value={customerBillingTotal.toFixed(2)} /><InfoBox label="Documentos" value={customerBillingRecords.length} /><InfoBox label="Pendientes" value={customerPendingBilling} /></div><div className="mt-4 space-y-2">{customerBillingRecords.map((record) => <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-white/45">{record.status} · {Number(record.amount || 0).toFixed(2)}</p></div>)}{!customerBillingRecords.length && <Empty text="Sin presupuestos o facturas vinculadas todavía." />}</div><button onClick={() => setActiveTab("module:billing")} className="btn-primary mt-4"><Receipt size={17} /> Abrir facturación</button></GlassCard>}
 
-                    {detailTab === "Documentos" && <GlassCard title="Documentos"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Título del documento" className="input-dark" /><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select><textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label></div><div className="mt-4 space-y-2">{customerDocs.map((document) => <a key={document.id} href={document.file_url || "#"} target="_blank" rel="noreferrer" className="block rounded-2xl border border-white/10 bg-white/[0.055] p-3 hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"}</p></a>)}{!customerDocs.length && <Empty text="Sin documentos cargados." />}</div></GlassCard>}
+                    {detailTab === "Documentos" && <GlassCard title="Documentos"><div className="grid gap-3"><input value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Concepto del ingreso/gasto" className="input-dark" /><select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="input-dark"><option value="general">General</option><option value="contrato">Contrato</option><option value="imagen">Imagen</option><option value="pdf">PDF</option><option value="consentimiento">Consentimiento</option></select><textarea value={documentNotes} onChange={(e) => setDocumentNotes(e.target.value)} placeholder="Notas" className="input-dark min-h-20" /><label className="btn-secondary cursor-pointer justify-center"><FileText size={17} /> Subir archivo<input type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { await uploadClinicalDocument(selectedCustomer.id, file, documentTitle || file.name, documentType, documentNotes); setDocumentTitle(""); setDocumentType("general"); setDocumentNotes(""); } e.currentTarget.value = ""; }} /></label></div><div className="mt-4 space-y-2">{customerDocs.map((document) => <button key={document.id} type="button" onClick={() => openClinicalDocument(document)} className="block w-full rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-left hover:bg-white/[0.09]"><p className="font-semibold">{document.title}</p><p className="mt-1 text-xs text-white/45">{document.document_type || "Documento"} · enlace privado de 5 min</p></button>)}{!customerDocs.length && <Empty text="Sin documentos cargados." />}</div></GlassCard>}
 
                     {detailTab === "IA" && <GlassCard title="Resumen IA operativo"><p className="text-sm leading-7 text-white/60">Cliente procedente de {selectedOrigin}. Tiene {customerAppointments.length} citas, {customerMessages.length} mensajes, {customerBillingRecords.length} documentos de facturación y {customerReminders.length} recordatorios. Próximo paso recomendado: {nextAppointment ? "confirmar la cita y preparar seguimiento posterior" : "crear una cita o enviar propuesta por WhatsApp"}.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{sectorPreset.fields.map((field) => <div key={field} className="rounded-2xl bg-white/[0.055] p-3 text-sm text-white/58">{field}</div>)}</div></GlassCard>}
                   </div>
@@ -4705,175 +4981,187 @@ function EmployeesSection({ employees, employeeName, setEmployeeName, employeePh
 function CustomersSection({ customers, customerFormName, setCustomerFormName, customerPhone, setCustomerPhone, createCustomer }: any) {
   const [search, setSearch] = useState("");
   const filteredCustomers = customers.filter((customer: Customer) => {
-    const text = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""} ${customer.crm_status || ""}`.toLowerCase();
+    const text = `${customerName(customer)} ${customer.phone || ""} ${customer.email || ""} ${customer.document_number || ""} ${customer.eps || ""} ${customer.crm_status || ""} ${customer.notes || ""}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
   const withPhone = customers.filter((customer: Customer) => customer.phone).length;
-  const whatsappLeads = customers.filter((customer: Customer) => (customer.crm_status || "").toLowerCase().includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp")).length;
-  const missingContact = customers.filter((customer: Customer) => !customer.phone && !customer.email).length;
+  const whatsappLeads = customers.filter((customer: Customer) => (customer.crm_status || "").includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp")).length;
   const needsFollowUp = customers.filter((customer: Customer) => !customer.next_follow_up_at && !["cerrado", "perdido", "alta"].includes(customer.crm_status || "nuevo")).length;
-  const newestCustomers = [...customers].slice(0, 4);
-  const pipeline = [
-    { label: "Nuevo", count: customers.filter((c: Customer) => !c.crm_status || ["nuevo", "new"].includes(String(c.crm_status).toLowerCase())).length },
-    { label: "WhatsApp", count: whatsappLeads },
-    { label: "Seguimiento", count: needsFollowUp },
-    { label: "Sin datos", count: missingContact },
+  const vipCustomers = Math.max(0, customers.filter((customer: Customer) => (customer.crm_status || "").includes("vip") || (customer.notes || "").toLowerCase().includes("vip")).length);
+  const featured = filteredCustomers.slice(0, 8);
+  const newest = filteredCustomers[0];
+  const segments: { label: string; value: number | string; helper: string; icon: any }[] = [
+    { label: "Base total", value: customers.length, helper: "clientes en CRM", icon: Users },
+    { label: "WhatsApp", value: whatsappLeads, helper: "origen conversacional", icon: MessageCircle },
+    { label: "Con contacto", value: withPhone, helper: "listos para campaña", icon: PhoneCall },
+    { label: "A revisar", value: needsFollowUp, helper: "sin próxima acción", icon: Clock },
+  ];
+  const kanban = [
+    { title: "Nuevo", count: customers.filter((c: Customer) => ["nuevo", "nuevo_whatsapp", undefined, null, ""].includes(c.crm_status as any)).length, tone: "cyan" },
+    { title: "Contactado", count: customers.filter((c: Customer) => ["contactar", "interesado", "cita_solicitada"].includes(c.crm_status || "")).length, tone: "violet" },
+    { title: "Cita / propuesta", count: customers.filter((c: Customer) => ["cita_agendada", "presupuesto", "seguimiento"].includes(c.crm_status || "")).length, tone: "emerald" },
+    { title: "Ganado", count: customers.filter((c: Customer) => ["cliente", "alta", "cerrado"].includes(c.crm_status || "")).length, tone: "amber" },
   ];
 
   return (
-    <section className="space-y-8">
-      <div className="relative overflow-hidden rounded-[2.4rem] border border-white/10 bg-white p-6 text-slate-950 shadow-2xl shadow-black/25 md:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-cyan-200/55 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-violet-200/60 blur-3xl" />
-        <div className="relative grid gap-8 xl:grid-cols-[1.1fr_.9fr] xl:items-end">
+    <section className="space-y-7">
+      <div className="relative overflow-hidden rounded-[2.7rem] border border-white/10 bg-[radial-gradient(circle_at_15%_0%,rgba(34,211,238,.30),transparent_34%),radial-gradient(circle_at_85%_10%,rgba(168,85,247,.28),transparent_32%),linear-gradient(135deg,#020617,#0f172a_48%,#111827)] p-6 shadow-2xl shadow-black/40 md:p-8">
+        <div className="absolute right-8 top-8 hidden h-40 w-40 rounded-full border border-cyan-200/10 bg-cyan-300/10 blur-2xl lg:block" />
+        <div className="relative grid gap-8 xl:grid-cols-[1.15fr_.85fr] xl:items-end">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
-              <Users size={15} /> CRM clientes
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">
+              <Sparkles size={15} /> Client OS Premium
             </div>
-            <h2 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-slate-950 md:text-6xl">Un panel de clientes limpio, comercial y fácil de usar.</h2>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-500">Una vista menos saturada: clientes importantes arriba, búsqueda clara, acciones rápidas y estado comercial visible sin entrar en diez pantallas.</p>
+            <h2 className="mt-6 max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-white md:text-6xl">
+              Clientes, seguimiento y ventas en una interfaz mucho más limpia.
+            </h2>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-white/62">
+              Vista rediseñada para que el negocio vea rápido quién es el cliente, de dónde viene, qué necesita y cuál es la siguiente acción comercial.
+            </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <button onClick={createCustomer} className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-slate-950/20"><Plus size={17} /> Crear cliente</button>
-              <a href="#clientes-lista" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700"><Search size={17} /> Buscar cliente</a>
+              {["CRM 360", "WhatsApp", "Agenda", "Facturación", "Notas", "Documentos"].map((item) => (
+                <span key={item} className="rounded-full border border-white/10 bg-white/[0.07] px-4 py-2 text-sm text-white/72">{item}</span>
+              ))}
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              ["Clientes", customers.length, "Base total"],
-              ["Con WhatsApp", withPhone, "Contactables"],
-              ["Origen WhatsApp", whatsappLeads, "Entradas calientes"],
-              ["Sin seguimiento", needsFollowUp, "Revisar hoy"],
-            ].map(([label, value, helper]) => (
-              <div key={String(label)} className="rounded-[1.7rem] border border-slate-200 bg-white/80 p-5 shadow-lg shadow-slate-200/50 backdrop-blur">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-                <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
-                <p className="mt-1 text-xs text-slate-400">{helper}</p>
+            {segments.map(({ label, value, helper, icon: Icon }) => (
+              <div key={label} className="rounded-[1.55rem] border border-white/10 bg-white/[0.075] p-5 backdrop-blur-xl">
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><Icon size={20} /></div>
+                <p className="text-sm text-white/45">{label}</p>
+                <p className="mt-1 text-3xl font-semibold text-white">{value}</p>
+                <p className="mt-1 text-xs text-white/38">{helper}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[360px_1fr]">
+      <section className="grid gap-6 xl:grid-cols-[380px_1fr]">
         <aside className="space-y-6">
-          <div className="rounded-[2rem] border border-white/10 bg-slate-950 p-5 shadow-2xl shadow-black/25">
-            <div className="flex items-center justify-between">
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/30">
+            <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-cyan-200/80">Alta rápida</p>
-                <h3 className="mt-2 text-xl font-semibold text-white">Nuevo cliente</h3>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/70">Alta rápida</p>
+                <h3 className="mt-1 text-xl font-semibold">Nuevo cliente</h3>
               </div>
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-100"><Plus size={20} /></div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-950"><Plus size={19} /></div>
             </div>
-            <div className="mt-5 grid gap-3">
-              <input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre completo" className="rounded-2xl border border-white/10 bg-white/[0.07] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40" />
-              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="rounded-2xl border border-white/10 bg-white/[0.07] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40" />
-              <button onClick={createCustomer} className="mt-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-50"><Plus size={17} /> Guardar cliente</button>
+            <div className="grid gap-3">
+              <input value={customerFormName} onChange={(e) => setCustomerFormName(e.target.value)} placeholder="Nombre completo" className="input-dark" />
+              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="input-dark" />
+              <button onClick={createCustomer} className="btn-primary w-full justify-center"><Plus size={17} /> Crear ficha</button>
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.07] p-5 shadow-2xl shadow-black/20 backdrop-blur-xl">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/35">Pipeline rápido</p>
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">Pipeline visual</p>
             <div className="mt-5 space-y-3">
-              {pipeline.map((item) => (
-                <div key={item.label} className="rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-white">{item.label}</span>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-950">{item.count}</span>
+              {kanban.map((stage, index) => (
+                <div key={stage.title} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-white/84">{stage.title}</span>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/62">{stage.count}</span>
                   </div>
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full bg-cyan-200" style={{ width: `${Math.min(100, customers.length ? (item.count / customers.length) * 100 : 0)}%` }} />
+                    <div className="h-full rounded-full bg-cyan-200" style={{ width: `${Math.min(100, 18 + index * 18 + stage.count * 6)}%` }} />
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
+          <div className="rounded-[2rem] border border-cyan-300/15 bg-cyan-300/[0.07] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100/70">Segmentos inteligentes</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {["Nuevo WhatsApp", "VIP", "Pendiente pago", "Sin seguimiento", "Cita próxima", "Factura pendiente"].map((tag) => (
+                <span key={tag} className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-2 text-xs text-white/68">{tag}</span>
+              ))}
+            </div>
+          </div>
         </aside>
 
-        <div id="clientes-lista" className="rounded-[2.2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/20 backdrop-blur-xl md:p-6">
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/35">Base de clientes</p>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">Contactos ordenados</h3>
-            </div>
-            <div className="relative w-full lg:max-w-md">
-              <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nombre, teléfono, documento, EPS..." className="w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40" />
+        <div className="space-y-6">
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/65 p-4 shadow-2xl shadow-black/25">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-3.5 text-white/35" size={18} />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, documento, EPS, estado, origen o nota" className="input-dark pl-11" />
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs text-white/55 sm:min-w-[330px]">
+                <div className="rounded-2xl bg-white/[0.06] px-3 py-3"><b className="block text-lg text-white">{filteredCustomers.length}</b> visibles</div>
+                <div className="rounded-2xl bg-white/[0.06] px-3 py-3"><b className="block text-lg text-white">{vipCustomers}</b> VIP</div>
+                <div className="rounded-2xl bg-white/[0.06] px-3 py-3"><b className="block text-lg text-white">{needsFollowUp}</b> revisar</div>
+              </div>
             </div>
           </div>
 
-          {newestCustomers.length > 0 && !search && (
-            <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {newestCustomers.map((customer: Customer) => {
-                const initials = customerName(customer).split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "CL";
-                return (
-                  <div key={customer.id} className="rounded-[1.5rem] border border-cyan-300/15 bg-cyan-300/[0.055] p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-200 text-xs font-black text-slate-950">{initials}</div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-white">{customerName(customer)}</p>
-                        <p className="truncate text-xs text-white/45">Nuevo contacto</p>
-                      </div>
+          {newest && (
+            <div className="overflow-hidden rounded-[2.2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))] p-5">
+              <div className="grid gap-5 lg:grid-cols-[1fr_330px]">
+                <div className="flex gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-white text-xl font-semibold text-slate-950">
+                    {(customerName(newest).split(" ").filter(Boolean).slice(0, 2).map((part: string) => part[0]?.toUpperCase()).join("") || "CL")}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/70">Ficha destacada</p>
+                    <h3 className="mt-1 truncate text-2xl font-semibold">{customerName(newest)}</h3>
+                    <p className="mt-2 text-sm text-white/50">{newest.phone || newest.email || "Sin contacto"} · {translateCrmStatus(newest.crm_status || "nuevo")}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-950"><MessageCircle size={14} className="mr-1 inline" /> WhatsApp</button>
+                      <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-semibold text-white/72"><CalendarDays size={14} className="mr-1 inline" /> Agendar</button>
+                      <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-semibold text-white/72"><Receipt size={14} className="mr-1 inline" /> Facturar</button>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+                <div className="rounded-[1.6rem] border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/38">Resumen IA</p>
+                  <p className="mt-3 text-sm leading-6 text-white/62">Cliente listo para seguimiento. Revisa origen, próxima acción y posible presupuesto antes de cerrar la conversación.</p>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-slate-950/60">
-            <div className="hidden grid-cols-[1.35fr_.9fr_.75fr_.75fr] gap-4 border-b border-white/10 px-5 py-3 text-xs font-bold uppercase tracking-[0.16em] text-white/35 md:grid">
-              <span>Cliente</span>
-              <span>Contacto</span>
-              <span>Estado</span>
-              <span className="text-right">Acciones</span>
-            </div>
-            <div className="divide-y divide-white/10">
-              {filteredCustomers.map((customer: Customer) => {
-                const initials = customerName(customer).split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "CL";
-                const status = translateCrmStatus(customer.crm_status || "nuevo");
-                const origin = (customer.crm_status || "").toLowerCase().includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp") ? "WhatsApp" : "CRM";
-                return (
-                  <article key={customer.id} className="grid gap-4 px-5 py-4 transition hover:bg-white/[0.045] md:grid-cols-[1.35fr_.9fr_.75fr_.75fr] md:items-center">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-black text-slate-950">{initials}</div>
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-white">{customerName(customer)}</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-100">{origin}</span>
-                          {customer.document_number && <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/55">Doc. {customer.document_number}</span>}
+          <div className="grid gap-4 2xl:grid-cols-2">
+            {featured.map((customer: Customer) => {
+              const initials = customerName(customer).split(" ").filter(Boolean).slice(0, 2).map((part: string) => part[0]?.toUpperCase()).join("") || "CL";
+              const status = translateCrmStatus(customer.crm_status || "nuevo");
+              const origin = (customer.crm_status || "").includes("whatsapp") || (customer.notes || "").toLowerCase().includes("whatsapp") ? "WhatsApp" : "CRM";
+              return (
+                <article key={customer.id} className="group relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.052] p-5 transition duration-300 hover:-translate-y-1 hover:border-cyan-300/35 hover:bg-white/[0.085] hover:shadow-2xl hover:shadow-cyan-950/20">
+                  <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-cyan-300/10 blur-2xl transition group-hover:bg-cyan-300/20" />
+                  <div className="relative flex items-start gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-slate-950 text-base font-semibold text-cyan-100">{initials}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-lg font-semibold text-white">{customerName(customer)}</h3>
+                          <p className="mt-1 truncate text-sm text-white/45">{customer.phone || customer.email || "Sin contacto"}</p>
                         </div>
+                        <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold text-cyan-100">{origin}</span>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/70">{status}</span>
+                        {customer.document_number && <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/55">ID {customer.document_number}</span>}
+                        {customer.eps && <span className="rounded-full bg-violet-300/10 px-3 py-1 text-[11px] text-violet-100">{translateIntent(customer.eps || "informacion")}</span>}
+                      </div>
+                      <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                        <button className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/72 transition hover:bg-white/10"><MessageCircle size={14} className="mr-1 inline" /> WhatsApp</button>
+                        <button className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/72 transition hover:bg-white/10"><CalendarDays size={14} className="mr-1 inline" /> Agenda</button>
+                        <button className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/72 transition hover:bg-white/10"><Receipt size={14} className="mr-1 inline" /> Factura</button>
                       </div>
                     </div>
-                    <div className="min-w-0 text-sm text-white/58">
-                      <p className="truncate">{customer.phone || "Sin teléfono"}</p>
-                      <p className="truncate text-xs text-white/35">{customer.email || customer.eps || "Añadir datos para completar ficha"}</p>
-                    </div>
-                    <div>
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-xs font-semibold text-white/75">{status}</span>
-                    </div>
-                    <div className="flex flex-wrap justify-start gap-2 md:justify-end">
-                      <button className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/10"><MessageCircle size={14} className="mr-1 inline" /> WhatsApp</button>
-                      <button className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/10"><CalendarDays size={14} className="mr-1 inline" /> Cita</button>
-                      <button className="rounded-full bg-cyan-200 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-white"><Receipt size={14} className="mr-1 inline" /> Factura</button>
-                    </div>
-                  </article>
-                );
-              })}
-              {!filteredCustomers.length && (
-                <div className="p-10 text-center">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-white/10 text-white"><Search size={22} /></div>
-                  <p className="mt-4 font-semibold text-white">No hay clientes que coincidan.</p>
-                  <p className="mt-1 text-sm text-white/45">Prueba otra búsqueda o crea un cliente nuevo.</p>
-                </div>
-              )}
-            </div>
+                  </div>
+                </article>
+              );
+            })}
+            {!filteredCustomers.length && <Empty text="No hay clientes que coincidan con la búsqueda." />}
           </div>
         </div>
       </section>
     </section>
   );
 }
-
 function SettingsSection({
   business,
   settings,
