@@ -2376,7 +2376,7 @@ function BusinessOpsModule({ module, records, customers, employees, title, setTi
   );
 }
 
-function BillingModule({ business, reloadData, records, appointments, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
+function BillingModule({ business, reloadData, records, appointments, customers, revenue, expenses, manualIncome, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
   const [view, setView] = useState("Ingresos");
   const configRecord = records.find((record) => record.status === "billing_config");
   const config = useMemo(() => {
@@ -2386,6 +2386,7 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
       return {} as Record<string, string>;
     }
   }, [configRecord?.notes]);
+
   const [invoiceCompanyName, setInvoiceCompanyName] = useState(config.companyName || business?.name || "");
   const [invoiceTaxId, setInvoiceTaxId] = useState(config.taxId || "");
   const [invoiceAddress, setInvoiceAddress] = useState(config.address || "");
@@ -2397,6 +2398,33 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
   const [defaultTax, setDefaultTax] = useState(config.defaultTax || "16");
   const [paymentMethods, setPaymentMethods] = useState(config.paymentMethods || "Efectivo, transferencia, pago móvil, tarjeta y divisas");
   const [agendaMode, setAgendaMode] = useState(config.agendaMode || "Crear factura desde cita completada");
+  const [accountantEmail, setAccountantEmail] = useState(config.accountantEmail || "");
+
+  const nextInvoiceNumber = `${invoicePrefix}${String(records.filter((record) => ["income", "paid", "pending", "overdue"].includes(record.status)).length + 1).padStart(4, "0")}`;
+  const [documentType, setDocumentType] = useState<"invoice" | "quote">("invoice");
+  const [invoiceNumber, setInvoiceNumber] = useState(nextInvoiceNumber);
+  const [invoiceCustomerId, setInvoiceCustomerId] = useState("");
+  const [invoiceCustomerName, setInvoiceCustomerName] = useState("");
+  const [invoiceCustomerTaxId, setInvoiceCustomerTaxId] = useState("");
+  const [invoiceCustomerEmail, setInvoiceCustomerEmail] = useState("");
+  const [invoiceCustomerAddress, setInvoiceCustomerAddress] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [invoiceDueDate, setInvoiceDueDate] = useState("");
+  const [invoiceLineConcept, setInvoiceLineConcept] = useState("");
+  const [invoiceLineQuantity, setInvoiceLineQuantity] = useState("1");
+  const [invoiceLinePrice, setInvoiceLinePrice] = useState("");
+  const [invoiceLineTax, setInvoiceLineTax] = useState(defaultTax || "0");
+  const [invoicePaymentStatus, setInvoicePaymentStatus] = useState("pending");
+  const [invoiceExtraNotes, setInvoiceExtraNotes] = useState("");
+
+  const [billingFile, setBillingFile] = useState<File | null>(null);
+  const [billingFileType, setBillingFileType] = useState<"income" | "expense">("income");
+  const [billingFileTitle, setBillingFileTitle] = useState("");
+  const [billingFileAmount, setBillingFileAmount] = useState("");
+  const [billingFileCounterparty, setBillingFileCounterparty] = useState("");
+  const [billingFileDate, setBillingFileDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [billingFileNotes, setBillingFileNotes] = useState("");
+  const [isUploadingBillingFile, setIsUploadingBillingFile] = useState(false);
 
   useEffect(() => {
     setInvoiceCompanyName(config.companyName || business?.name || "");
@@ -2410,15 +2438,27 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
     setDefaultTax(config.defaultTax || "16");
     setPaymentMethods(config.paymentMethods || "Efectivo, transferencia, pago móvil, tarjeta y divisas");
     setAgendaMode(config.agendaMode || "Crear factura desde cita completada");
+    setAccountantEmail(config.accountantEmail || "");
   }, [config, business?.name, business?.logo_url]);
 
   useEffect(() => {
-    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", proveedores: "Proveedores", presupuestos: "Presupuestos", configuracion: "Configuración", agenda: "Agenda" }, setView);
+    syncModuleSubmenu(activeTab, "module:facturacion:", { ingresos: "Ingresos", gastos: "Gastos", proveedores: "Proveedores", presupuestos: "Presupuestos", documentos: "Documentos", estadisticas: "Estadísticas", agenda: "Agenda", configuracion: "Configuración" }, setView);
   }, [activeTab]);
   useEffect(() => {
     const nextStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : "income";
     setStatus(nextStatus);
+    if (view === "Gastos") setBillingFileType("expense");
+    if (view === "Ingresos") setBillingFileType("income");
   }, [view, setStatus]);
+
+  const parseBillingMetadata = (record: ModuleRecord) => {
+    try {
+      const parsed = record.notes ? JSON.parse(record.notes) as Record<string, unknown> : null;
+      return parsed && typeof parsed === "object" && parsed.flowly_billing ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
 
   const saveBillingConfig = async () => {
     if (!business) return alert("No se ha encontrado el negocio.");
@@ -2434,6 +2474,7 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
       defaultTax,
       paymentMethods,
       agendaMode,
+      accountantEmail,
     };
     const row = { business_id: business.id, module_key: "billing", title: "Configuración de facturación básica", amount: null, status: "billing_config", notes: JSON.stringify(payload, null, 2) };
     const result = configRecord?.id
@@ -2445,6 +2486,16 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
   };
 
   const relationOne = <T,>(value: Relation<T>) => Array.isArray(value) ? value[0] : value;
+  const fillCustomerFromCrm = (customerId: string) => {
+    setInvoiceCustomerId(customerId);
+    const customer = customers.find((item) => item.id === customerId);
+    if (!customer) return;
+    setInvoiceCustomerName(customer.name || customer.full_name || "");
+    setInvoiceCustomerEmail(customer.email || "");
+    setInvoiceCustomerTaxId(customer.document_number || "");
+    setInvoiceCustomerAddress(customer.address || "");
+  };
+
   const prepareInvoiceFromAppointment = (appointment: Appointment) => {
     const customer = relationOne(appointment.customers);
     const service = relationOne(appointment.services);
@@ -2454,6 +2505,13 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
     setView("Ingresos");
     setActiveTab("module:facturacion:ingresos");
     setStatus("income");
+    setDocumentType("invoice");
+    setInvoiceNumber(nextInvoiceNumber);
+    setInvoiceCustomerName(customerName);
+    setInvoiceLineConcept(serviceName);
+    setInvoiceLinePrice(price ? String(price) : "");
+    setInvoicePaymentStatus("pending");
+    setInvoiceExtraNotes(`Origen: Agenda\nFecha de cita: ${appointment.appointment_date || appointment.starts_at || "Sin fecha"}`);
     setTitle(`Factura · ${customerName} · ${serviceName}`);
     setAmount(price ? String(price) : "");
     setNotes([
@@ -2466,15 +2524,155 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
     ].join("\n"));
   };
 
-  const profit = revenue + manualIncome - expenses;
-  const viewStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : "income";
-  const viewRecords = records.filter((record) => view === "Ingresos" ? record.status === "income" : record.status === viewStatus);
-  const suppliers = records.filter((r) => r.status === "supplier");
+  const quantity = Number(invoiceLineQuantity || 0);
+  const unitPrice = Number(invoiceLinePrice || 0);
+  const taxRate = Number(invoiceLineTax || 0);
+  const subtotal = quantity * unitPrice;
+  const taxTotal = subtotal * (taxRate / 100);
+  const invoiceTotal = subtotal + taxTotal;
+
+  const uploadedDocuments = records.filter((record) => Boolean(parseBillingMetadata(record)?.file_path));
+  const incomeRecords = records.filter((record) => ["income", "paid", "pending", "overdue"].includes(record.status));
+  const expenseRecords = records.filter((record) => record.status === "expense");
+  const pendingAmount = incomeRecords.filter((record) => ["pending", "overdue", "income"].includes(record.status)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const paidAmount = incomeRecords.filter((record) => record.status === "paid").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const expensesTotal = expenseRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const incomeTotal = incomeRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const profit = incomeTotal + revenue - expensesTotal;
+  const maxChartValue = Math.max(incomeTotal + revenue, expensesTotal, paidAmount, pendingAmount, 1);
+
+  const buildInvoicePayload = () => ({
+    flowly_billing: true,
+    kind: documentType,
+    number: invoiceNumber || (documentType === "invoice" ? nextInvoiceNumber : `${quotePrefix}${String(records.filter((record) => record.status === "budget").length + 1).padStart(4, "0")}`),
+    date: invoiceDate,
+    due_date: invoiceDueDate,
+    customer_id: invoiceCustomerId || null,
+    customer_name: invoiceCustomerName,
+    customer_tax_id: invoiceCustomerTaxId,
+    customer_email: invoiceCustomerEmail,
+    customer_address: invoiceCustomerAddress,
+    concept: invoiceLineConcept,
+    quantity,
+    unit_price: unitPrice,
+    tax_rate: taxRate,
+    subtotal,
+    tax_total: taxTotal,
+    total: invoiceTotal,
+    status: invoicePaymentStatus,
+    notes: invoiceExtraNotes,
+  });
+
+  const documentStatus = documentType === "quote" ? "budget" : invoicePaymentStatus === "paid" ? "paid" : invoicePaymentStatus === "overdue" ? "overdue" : "pending";
+  const saveGeneratedInvoice = async (openPdf = true) => {
+    if (!business) return alert("No se ha encontrado el negocio.");
+    if (!invoiceCustomerName.trim()) return alert("Añade el cliente de la factura.");
+    if (!invoiceLineConcept.trim()) return alert("Añade al menos un concepto.");
+    const payload = buildInvoicePayload();
+    const row = {
+      business_id: business.id,
+      module_key: "billing",
+      title: `${documentType === "invoice" ? "Factura" : "Cotización"} ${payload.number} · ${invoiceCustomerName}`,
+      amount: invoiceTotal,
+      status: documentStatus,
+      notes: JSON.stringify(payload, null, 2),
+    };
+    const { error } = await supabase.from("module_records").insert(row);
+    if (error) return alert(error.message);
+    if (openPdf) openInvoicePdf(payload);
+    await reloadData();
+    setInvoiceNumber(`${invoicePrefix}${String(records.length + 2).padStart(4, "0")}`);
+    setInvoiceLineConcept("");
+    setInvoiceLinePrice("");
+    setInvoiceExtraNotes("");
+  };
+
+  const openInvoicePdf = (payload = buildInvoicePayload()) => {
+    const htmlEntities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" };
+    const escape = (value: unknown) => String(value ?? "").replace(/[&<>"]/g, (char) => htmlEntities[char] || char);
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) return alert("El navegador ha bloqueado la ventana del PDF.");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escape(payload.number)}</title><style>
+      *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;margin:0;background:#f3f6fb;color:#101828}.page{width:210mm;min-height:297mm;margin:0 auto;background:#fff;padding:34px}.top{display:flex;justify-content:space-between;gap:28px;border-bottom:1px solid #e5e7eb;padding-bottom:24px}.brand{display:flex;gap:14px;align-items:center}.logo{width:58px;height:58px;border-radius:18px;object-fit:cover;border:1px solid #e5e7eb}.logoFallback{width:58px;height:58px;border-radius:18px;background:#0f172a;color:white;display:flex;align-items:center;justify-content:center;font-weight:800}.muted{color:#667085}.title{text-align:right}.title h1{margin:0;font-size:34px;letter-spacing:-.04em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}.box{border:1px solid #e5e7eb;border-radius:20px;padding:18px;background:#fbfcff}.box h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:#667085}table{width:100%;border-collapse:collapse;margin-top:30px}th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#667085;border-bottom:1px solid #e5e7eb;padding:12px}td{padding:16px 12px;border-bottom:1px solid #eef2f7}.right{text-align:right}.totals{margin-left:auto;margin-top:24px;width:310px}.totals div{display:flex;justify-content:space-between;padding:10px 0}.grand{font-size:24px;font-weight:800;border-top:1px solid #e5e7eb}.notes{margin-top:30px;border-radius:20px;background:#f8fafc;padding:18px;white-space:pre-wrap}.footer{margin-top:34px;color:#98a2b3;font-size:12px}@media print{body{background:white}.page{width:auto;min-height:auto;margin:0;padding:24px}.noPrint{display:none}}
+    </style></head><body><main class="page"><section class="top"><div class="brand">${invoiceLogoUrl ? `<img class="logo" src="${escape(invoiceLogoUrl)}" />` : `<div class="logoFallback">F</div>`}<div><h2>${escape(invoiceCompanyName || business?.name || "Tu empresa")}</h2><p class="muted">${escape(invoiceTaxId || "ID fiscal")}</p><p class="muted">${escape(invoiceAddress || "Dirección")}</p><p class="muted">${escape(invoiceEmail || "")} ${escape(invoicePhone || "")}</p></div></div><div class="title"><h1>${payload.kind === "quote" ? "Cotización" : "Factura"}</h1><p><strong>${escape(payload.number)}</strong></p><p class="muted">Fecha: ${escape(payload.date)}</p><p class="muted">Vencimiento: ${escape(payload.due_date || "—")}</p></div></section><section class="grid"><div class="box"><h3>Cliente</h3><p><strong>${escape(payload.customer_name)}</strong></p><p class="muted">${escape(payload.customer_tax_id || "")}</p><p class="muted">${escape(payload.customer_email || "")}</p><p class="muted">${escape(payload.customer_address || "")}</p></div><div class="box"><h3>Pago</h3><p>${escape(paymentMethods)}</p><p class="muted">Estado: ${escape(payload.status)}</p></div></section><table><thead><tr><th>Concepto</th><th class="right">Cantidad</th><th class="right">Precio</th><th class="right">Impuesto</th><th class="right">Total</th></tr></thead><tbody><tr><td>${escape(payload.concept)}</td><td class="right">${escape(payload.quantity)}</td><td class="right">${Number(payload.unit_price).toFixed(2)}</td><td class="right">${Number(payload.tax_rate).toFixed(2)}%</td><td class="right">${Number(payload.total).toFixed(2)}</td></tr></tbody></table><section class="totals"><div><span>Subtotal</span><strong>${Number(payload.subtotal).toFixed(2)}</strong></div><div><span>Impuestos</span><strong>${Number(payload.tax_total).toFixed(2)}</strong></div><div class="grand"><span>Total</span><span>${Number(payload.total).toFixed(2)}</span></div></section>${payload.notes ? `<section class="notes">${escape(payload.notes)}</section>` : ""}<p class="footer">Documento generado desde Flowly IA. Puedes imprimir o guardar como PDF desde esta ventana.</p><button class="noPrint" onclick="window.print()" style="margin-top:18px;padding:12px 18px;border:0;border-radius:999px;background:#0f172a;color:white;font-weight:700">Guardar / imprimir PDF</button></main></body></html>`;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 450);
+  };
+
+  const uploadBillingDocument = async () => {
+    if (!business) return alert("No se ha encontrado el negocio.");
+    if (!billingFile) return alert("Selecciona una factura o documento.");
+    setIsUploadingBillingFile(true);
+    try {
+      const safeName = billingFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${business.id}/${billingFileType}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from("billing_documents").upload(path, billingFile, { upsert: false, contentType: billingFile.type });
+      if (uploadError) throw new Error(uploadError.message);
+      const metadata = {
+        flowly_billing: true,
+        file_path: path,
+        file_name: billingFile.name,
+        file_type: billingFile.type,
+        file_size: billingFile.size,
+        kind: billingFileType,
+        counterparty: billingFileCounterparty,
+        document_date: billingFileDate,
+        notes: billingFileNotes,
+      };
+      const { error } = await supabase.from("module_records").insert({
+        business_id: business.id,
+        module_key: "billing",
+        title: billingFileTitle || `${billingFileType === "income" ? "Ingreso" : "Gasto"} · ${billingFile.name}`,
+        amount: billingFileAmount ? Number(billingFileAmount) : null,
+        status: billingFileType === "income" ? "income" : "expense",
+        notes: JSON.stringify(metadata, null, 2),
+      });
+      if (error) throw new Error(error.message);
+      setBillingFile(null);
+      setBillingFileTitle("");
+      setBillingFileAmount("");
+      setBillingFileCounterparty("");
+      setBillingFileNotes("");
+      await reloadData();
+      alert("Documento subido a facturación.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo subir el documento");
+    } finally {
+      setIsUploadingBillingFile(false);
+    }
+  };
+
+  const openBillingDocument = async (record: ModuleRecord) => {
+    const metadata = parseBillingMetadata(record);
+    const filePath = typeof metadata?.file_path === "string" ? metadata.file_path : "";
+    if (!filePath) return alert("Este registro no tiene archivo adjunto.");
+    const { data, error } = await supabase.storage.from("billing_documents").createSignedUrl(filePath, 60 * 5);
+    if (error || !data?.signedUrl) return alert(error?.message || "No se pudo abrir el documento.");
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const sendToAccountant = () => {
+    if (!accountantEmail) return alert("Añade el correo del gestor en Configuración.");
+    const subject = encodeURIComponent(`Facturación ${invoiceCompanyName || business?.name || "Flowly"}`);
+    const body = encodeURIComponent(`Hola,\n\nTe envío el resumen de facturación desde Flowly.\n\nIngresos: ${(incomeTotal + revenue).toFixed(2)}\nGastos: ${expensesTotal.toFixed(2)}\nResultado: ${profit.toFixed(2)}\nDocumentos subidos: ${uploadedDocuments.length}\n\nPuedes revisar los PDFs y facturas adjuntos desde el panel de Flowly.\n\nGracias.`);
+    window.location.href = `mailto:${accountantEmail}?subject=${subject}&body=${body}`;
+  };
+
   const pendingAppointments = appointments.slice(0, 8);
+  const viewStatus = view === "Gastos" ? "expense" : view === "Proveedores" ? "supplier" : view === "Presupuestos" ? "budget" : view === "Configuración" ? "billing_config" : view === "Documentos" ? "document" : "income";
+  const viewRecords = records.filter((record) => {
+    if (view === "Ingresos") return ["income", "paid", "pending", "overdue"].includes(record.status);
+    if (view === "Documentos") return Boolean(parseBillingMetadata(record)?.file_path);
+    if (view === "Estadísticas") return record.status !== "billing_config";
+    return record.status === viewStatus;
+  });
 
   return <section className="grid gap-6">
-    <ModuleHero eyebrow="Finance OS" title="Facturación Básica incluida" description="Configura tus datos, logo, numeración y conecta la facturación sencilla con CRM, Agenda y WhatsApp para crear cotizaciones, facturas y cobros sin salir del panel." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Proveedores", "Presupuestos", "Agenda", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Proveedores: "module:facturacion:proveedores", Presupuestos: "module:facturacion:presupuestos", Agenda: "module:facturacion:agenda", Configuración: "module:facturacion:configuracion" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} />
-    <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Reservas cobradas" value={`${revenue.toFixed(2)}€`} helper="Agenda" /><Metric icon={<TrendingUp />} label="Ingresos manuales" value={`${manualIncome.toFixed(2)}€`} helper="Añadidos" /><Metric icon={<CreditCard />} label="Gastos" value={`${expenses.toFixed(2)}€`} helper="Manuales" /><Metric icon={<FileText />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /></div>
+    <ModuleHero eyebrow="Finance OS" title="Facturación Básica incluida" description="Crea facturas manuales con PDF, sube ingresos y gastos reales, conecta facturación con Agenda y mantén estadísticas claras para enviar todo a tu gestor." actions={<ModulePillTabs tabs={["Ingresos", "Gastos", "Presupuestos", "Documentos", "Estadísticas", "Agenda", "Configuración"]} active={view} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Ingresos: "module:facturacion:ingresos", Gastos: "module:facturacion:gastos", Presupuestos: "module:facturacion:presupuestos", Documentos: "module:facturacion:documentos", Estadísticas: "module:facturacion:estadisticas", Agenda: "module:facturacion:agenda", Configuración: "module:facturacion:configuracion" } as Record<string, ActiveTab>)[next] || "module:facturacion:ingresos", setView, next)} />} />
+
+    <div className="grid gap-4 md:grid-cols-4"><Metric icon={<Receipt />} label="Ingresos" value={`${(incomeTotal + revenue).toFixed(2)}€`} helper="Facturas y agenda" /><Metric icon={<CreditCard />} label="Gastos" value={`${expensesTotal.toFixed(2)}€`} helper="Facturas subidas" /><Metric icon={<TrendingUp />} label="Resultado" value={`${profit.toFixed(2)}€`} helper="Estimado" /><Metric icon={<FileText />} label="Documentos" value={uploadedDocuments.length} helper="Archivo privado" /></div>
 
     {view === "Configuración" && <section className="grid gap-6 xl:grid-cols-[1fr_.85fr]">
       <GlassCard title="Configuración de facturación básica">
@@ -2489,6 +2687,7 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
           <input value={quotePrefix} onChange={(e) => setQuotePrefix(e.target.value)} placeholder="Prefijo cotizaciones, ej. COT-2026-" className="input-dark" />
           <input value={defaultTax} onChange={(e) => setDefaultTax(e.target.value)} placeholder="Impuesto/IVA por defecto" type="number" className="input-dark" />
           <input value={agendaMode} onChange={(e) => setAgendaMode(e.target.value)} placeholder="Regla de conexión con Agenda" className="input-dark" />
+          <input value={accountantEmail} onChange={(e) => setAccountantEmail(e.target.value)} placeholder="Email del gestor / contador" type="email" className="input-dark md:col-span-2" />
           <textarea value={paymentMethods} onChange={(e) => setPaymentMethods(e.target.value)} placeholder="Métodos de pago visibles en factura" className="input-dark min-h-28 md:col-span-2" />
           <button onClick={saveBillingConfig} className="btn-primary md:col-span-2"><CheckCircle2 size={17} /> Guardar configuración</button>
         </div>
@@ -2496,18 +2695,78 @@ function BillingModule({ business, reloadData, records, appointments, revenue, e
       <GlassCard title="Vista previa del documento">
         <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-sm text-white/75">
           <div className="mb-5 flex items-center gap-3">{invoiceLogoUrl ? <Image src={invoiceLogoUrl} alt="Logo facturación" width={46} height={46} className="rounded-2xl object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/15"><Receipt size={20} /></div>}<div><p className="font-semibold text-white">{invoiceCompanyName || business?.name || "Tu empresa"}</p><p className="text-xs text-white/45">{invoiceTaxId || "RIF / ID fiscal"}</p></div></div>
-          <p>Factura: {invoicePrefix}0001</p><p>Cotización: {quotePrefix}0001</p><p>Impuesto por defecto: {defaultTax || "0"}%</p><p className="mt-3 whitespace-pre-wrap">Pagos: {paymentMethods}</p>
+          <p>Factura: {invoicePrefix}0001</p><p>Cotización: {quotePrefix}0001</p><p>Impuesto por defecto: {defaultTax || "0"}%</p><p>Gestor: {accountantEmail || "Pendiente"}</p><p className="mt-3 whitespace-pre-wrap">Pagos: {paymentMethods}</p>
         </div>
       </GlassCard>
     </section>}
 
     {view === "Agenda" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
-      <GlassCard title="Conexión con Agenda"><p className="text-sm text-white/60">Convierte citas y reservas en ingresos o facturas básicas. Al preparar una factura desde una cita, Flowly rellena cliente, servicio, fecha e importe para que solo tengas que revisar y guardar.</p><div className="mt-5 grid gap-3"><InfoBox label="Citas disponibles" value={pendingAppointments.length} /><InfoBox label="Modo" value={agendaMode} /></div></GlassCard>
+      <GlassCard title="Conexión con Agenda"><p className="text-sm text-white/60">Convierte citas y reservas en facturas. Flowly rellena cliente, servicio, fecha e importe para que solo tengas que revisar, guardar y generar PDF.</p><div className="mt-5 grid gap-3"><InfoBox label="Citas disponibles" value={pendingAppointments.length} /><InfoBox label="Modo" value={agendaMode} /></div></GlassCard>
       <GlassCard title="Últimas citas para facturar"><div className="grid gap-3">{pendingAppointments.map((appointment) => { const customer = relationOne(appointment.customers); const service = relationOne(appointment.services); const customerName = customer?.name || customer?.full_name || "Cliente"; const serviceName = service?.name || "Servicio"; return <div key={appointment.id} className="flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"><div><p className="font-medium">{customerName}</p><p className="text-sm text-white/50">{serviceName} · {appointment.appointment_date || appointment.starts_at || "Sin fecha"} · {Number(service?.price || 0).toFixed(2)}€</p></div><button onClick={() => prepareInvoiceFromAppointment(appointment)} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950">Preparar factura</button></div>; })}{!pendingAppointments.length && <Empty text="Aún no hay citas para conectar con facturación." />}</div></GlassCard>
     </section>}
 
-    {view !== "Configuración" && view !== "Agenda" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]"><GlassCard title={`Nuevo registro · ${view}`}><div className="grid gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="input-dark"><option value="income">Factura / ingreso</option><option value="budget">Cotización / presupuesto</option><option value="expense">Gasto</option><option value="supplier">Proveedor</option><option value="paid">Pagada</option><option value="pending">Pendiente</option><option value="overdue">Vencida</option></select><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={view === "Proveedores" ? "Proveedor / factura" : view === "Presupuestos" ? "Cotización para cliente" : view === "Gastos" ? "Concepto de gasto" : "Factura, servicio o concepto de ingreso"} className="input-dark" /><input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cliente, vencimiento, método de pago, datos de factura o notas para WhatsApp" className="input-dark min-h-32" /><button onClick={() => createRecord("billing", status || viewStatus)} className="btn-primary"><Plus size={17} /> Guardar {view.toLowerCase()}</button></div></GlassCard><GlassCard title={`${view} registrados`}><div className="grid gap-3 md:grid-cols-3"><InfoBox label="Mostrados" value={viewRecords.length} /><InfoBox label="Proveedores" value={suppliers.length} /><InfoBox label="Total módulo" value={records.length} /></div><div className="mt-5"><RecordsList records={viewRecords} deleteRecord={deleteRecord} /></div></GlassCard></section>}
+    {(view === "Ingresos" || view === "Presupuestos") && <section className="grid gap-6 xl:grid-cols-[1fr_.9fr]">
+      <GlassCard title="Generar factura manual en PDF">
+        <div className="grid gap-3 md:grid-cols-2">
+          <select value={documentType} onChange={(e) => { const next = e.target.value as "invoice" | "quote"; setDocumentType(next); setInvoiceNumber(next === "invoice" ? nextInvoiceNumber : `${quotePrefix}${String(records.filter((record) => record.status === "budget").length + 1).padStart(4, "0")}`); }} className="input-dark"><option value="invoice">Factura</option><option value="quote">Cotización / presupuesto</option></select>
+          <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Número" className="input-dark" />
+          <select value={invoiceCustomerId} onChange={(e) => fillCustomerFromCrm(e.target.value)} className="input-dark md:col-span-2"><option value="">Seleccionar cliente del CRM (opcional)</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name || customer.full_name || customer.phone || "Cliente"}</option>)}</select>
+          <input value={invoiceCustomerName} onChange={(e) => setInvoiceCustomerName(e.target.value)} placeholder="Cliente / razón social" className="input-dark" />
+          <input value={invoiceCustomerTaxId} onChange={(e) => setInvoiceCustomerTaxId(e.target.value)} placeholder="RIF / cédula cliente" className="input-dark" />
+          <input value={invoiceCustomerEmail} onChange={(e) => setInvoiceCustomerEmail(e.target.value)} placeholder="Email cliente" className="input-dark" />
+          <input value={invoiceCustomerAddress} onChange={(e) => setInvoiceCustomerAddress(e.target.value)} placeholder="Dirección cliente" className="input-dark" />
+          <input value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} type="date" className="input-dark" />
+          <input value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} type="date" className="input-dark" />
+          <input value={invoiceLineConcept} onChange={(e) => setInvoiceLineConcept(e.target.value)} placeholder="Concepto / servicio" className="input-dark md:col-span-2" />
+          <input value={invoiceLineQuantity} onChange={(e) => setInvoiceLineQuantity(e.target.value)} placeholder="Cantidad" type="number" className="input-dark" />
+          <input value={invoiceLinePrice} onChange={(e) => setInvoiceLinePrice(e.target.value)} placeholder="Precio unitario" type="number" className="input-dark" />
+          <input value={invoiceLineTax} onChange={(e) => setInvoiceLineTax(e.target.value)} placeholder="Impuesto %" type="number" className="input-dark" />
+          <select value={invoicePaymentStatus} onChange={(e) => setInvoicePaymentStatus(e.target.value)} className="input-dark"><option value="pending">Pendiente</option><option value="paid">Pagada</option><option value="overdue">Vencida</option></select>
+          <textarea value={invoiceExtraNotes} onChange={(e) => setInvoiceExtraNotes(e.target.value)} placeholder="Notas visibles o internas" className="input-dark min-h-24 md:col-span-2" />
+          <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-sm text-cyan-50 md:col-span-2"><p className="font-semibold">Total: {invoiceTotal.toFixed(2)}€</p><p className="mt-1 text-cyan-50/70">Subtotal {subtotal.toFixed(2)} · Impuesto {taxTotal.toFixed(2)}</p></div>
+          <button onClick={() => saveGeneratedInvoice(true)} className="btn-primary md:col-span-2"><FileText size={17} /> Guardar y generar PDF</button>
+        </div>
+      </GlassCard>
+      <GlassCard title="Facturas y presupuestos registrados"><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
+    </section>}
+
+    {view === "Gastos" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+      <GlassCard title="Subir factura de gasto"><BillingUploadForm billingFileType={billingFileType} setBillingFileType={setBillingFileType} billingFileTitle={billingFileTitle} setBillingFileTitle={setBillingFileTitle} billingFileAmount={billingFileAmount} setBillingFileAmount={setBillingFileAmount} billingFileCounterparty={billingFileCounterparty} setBillingFileCounterparty={setBillingFileCounterparty} billingFileDate={billingFileDate} setBillingFileDate={setBillingFileDate} billingFileNotes={billingFileNotes} setBillingFileNotes={setBillingFileNotes} setBillingFile={setBillingFile} uploadBillingDocument={uploadBillingDocument} isUploadingBillingFile={isUploadingBillingFile} forcedType="expense" /></GlassCard>
+      <GlassCard title="Gastos registrados"><BillingRecordsList records={viewRecords} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
+    </section>}
+
+    {view === "Documentos" && <section className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
+      <GlassCard title="Subir factura o justificante"><BillingUploadForm billingFileType={billingFileType} setBillingFileType={setBillingFileType} billingFileTitle={billingFileTitle} setBillingFileTitle={setBillingFileTitle} billingFileAmount={billingFileAmount} setBillingFileAmount={setBillingFileAmount} billingFileCounterparty={billingFileCounterparty} setBillingFileCounterparty={setBillingFileCounterparty} billingFileDate={billingFileDate} setBillingFileDate={setBillingFileDate} billingFileNotes={billingFileNotes} setBillingFileNotes={setBillingFileNotes} setBillingFile={setBillingFile} uploadBillingDocument={uploadBillingDocument} isUploadingBillingFile={isUploadingBillingFile} /></GlassCard>
+      <GlassCard title="Archivo de facturación"><div className="mb-4 flex justify-end"><button onClick={sendToAccountant} className="btn-secondary"><Send size={16} /> Enviar resumen al gestor</button></div><BillingRecordsList records={uploadedDocuments} deleteRecord={deleteRecord} openBillingDocument={openBillingDocument} openInvoicePdf={openInvoicePdf} parseBillingMetadata={parseBillingMetadata} /></GlassCard>
+    </section>}
+
+    {view === "Estadísticas" && <section className="grid gap-6 xl:grid-cols-[1fr_.9fr]">
+      <GlassCard title="Control real de facturación"><div className="space-y-4">{[{ label: "Ingresos", value: incomeTotal + revenue }, { label: "Gastos", value: expensesTotal }, { label: "Pagado", value: paidAmount }, { label: "Pendiente", value: pendingAmount }].map((item) => <div key={item.label}><div className="mb-2 flex justify-between text-sm"><span className="text-white/65">{item.label}</span><strong>{item.value.toFixed(2)}€</strong></div><div className="h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-200" style={{ width: `${Math.max(4, (item.value / maxChartValue) * 100)}%` }} /></div></div>)}</div></GlassCard>
+      <GlassCard title="Resumen para dirección"><div className="grid gap-3"><InfoBox label="Facturas / ingresos" value={incomeRecords.length} /><InfoBox label="Gastos" value={expenseRecords.length} /><InfoBox label="Archivos subidos" value={uploadedDocuments.length} /><InfoBox label="Resultado estimado" value={`${profit.toFixed(2)}€`} /></div><button onClick={sendToAccountant} className="btn-primary mt-5"><Send size={17} /> Preparar email para gestor</button></GlassCard>
+    </section>}
   </section>;
+}
+
+function BillingUploadForm({ billingFileType, setBillingFileType, billingFileTitle, setBillingFileTitle, billingFileAmount, setBillingFileAmount, billingFileCounterparty, setBillingFileCounterparty, billingFileDate, setBillingFileDate, billingFileNotes, setBillingFileNotes, setBillingFile, uploadBillingDocument, isUploadingBillingFile, forcedType }: { billingFileType: "income" | "expense"; setBillingFileType: (value: "income" | "expense") => void; billingFileTitle: string; setBillingFileTitle: (value: string) => void; billingFileAmount: string; setBillingFileAmount: (value: string) => void; billingFileCounterparty: string; setBillingFileCounterparty: (value: string) => void; billingFileDate: string; setBillingFileDate: (value: string) => void; billingFileNotes: string; setBillingFileNotes: (value: string) => void; setBillingFile: (file: File | null) => void; uploadBillingDocument: () => void; isUploadingBillingFile: boolean; forcedType?: "income" | "expense" }) {
+  useEffect(() => { if (forcedType) setBillingFileType(forcedType); }, [forcedType, setBillingFileType]);
+  return <div className="grid gap-3">
+    {!forcedType && <select value={billingFileType} onChange={(e) => setBillingFileType(e.target.value as "income" | "expense")} className="input-dark"><option value="income">Ingreso / factura emitida</option><option value="expense">Gasto / factura recibida</option></select>}
+    <input value={billingFileTitle} onChange={(e) => setBillingFileTitle(e.target.value)} placeholder="Título del documento" className="input-dark" />
+    <input value={billingFileCounterparty} onChange={(e) => setBillingFileCounterparty(e.target.value)} placeholder="Cliente, proveedor o contraparte" className="input-dark" />
+    <div className="grid gap-3 md:grid-cols-2"><input value={billingFileAmount} onChange={(e) => setBillingFileAmount(e.target.value)} placeholder="Importe" type="number" className="input-dark" /><input value={billingFileDate} onChange={(e) => setBillingFileDate(e.target.value)} type="date" className="input-dark" /></div>
+    <input type="file" accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx" onChange={(e) => setBillingFile(e.target.files?.[0] || null)} className="input-dark" />
+    <textarea value={billingFileNotes} onChange={(e) => setBillingFileNotes(e.target.value)} placeholder="Notas para control interno o gestor" className="input-dark min-h-24" />
+    <button onClick={uploadBillingDocument} disabled={isUploadingBillingFile} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"><FileText size={17} /> {isUploadingBillingFile ? "Subiendo..." : "Subir a facturación"}</button>
+  </div>;
+}
+
+function BillingRecordsList({ records, deleteRecord, openBillingDocument, openInvoicePdf, parseBillingMetadata }: { records: ModuleRecord[]; deleteRecord: (id: string) => void; openBillingDocument: (record: ModuleRecord) => void; openInvoicePdf: (payload?: any) => void; parseBillingMetadata: (record: ModuleRecord) => Record<string, unknown> | null }) {
+  return <div className="space-y-3">{records.map((record) => {
+    const metadata = parseBillingMetadata(record);
+    const hasFile = Boolean(metadata?.file_path);
+    const isGenerated = Boolean(metadata?.number && metadata?.concept);
+    return <div key={record.id} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{record.title}</p>{metadata ? <div className="mt-2 grid gap-1 text-sm text-white/55"><p>{String(metadata.customer_name || metadata.counterparty || metadata.file_name || "Documento de facturación")}</p>{metadata.document_date || metadata.date ? <p>Fecha: {String(metadata.document_date || metadata.date)}</p> : null}{metadata.due_date ? <p>Vence: {String(metadata.due_date)}</p> : null}</div> : record.notes && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/55">{record.notes}</p>}<p className="mt-2 text-xs text-white/35">{record.status} · {new Date(record.created_at).toLocaleString("es-ES")}</p></div>{record.amount !== null && <p className="rounded-full bg-violet-500/20 px-3 py-1 text-sm text-violet-100">{Number(record.amount).toFixed(2)}€</p>}</div><div className="mt-3 flex flex-wrap gap-2">{hasFile && <button onClick={() => openBillingDocument(record)} className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10">Abrir archivo</button>}{isGenerated && <button onClick={() => openInvoicePdf(metadata)} className="rounded-full border border-cyan-300/20 px-3 py-1.5 text-xs text-cyan-100 hover:bg-cyan-400/10">PDF</button>}<button onClick={() => deleteRecord(record.id)} className="rounded-full border border-red-300/20 px-3 py-1.5 text-xs text-red-200/80 hover:bg-red-500/10">Eliminar</button></div></div>;
+  })}{!records.length && <Empty text="Aún no hay registros." />}</div>;
 }
 
 function PosModule({ records, services, title, setTitle, notes, setNotes, amount, setAmount, status, setStatus, createRecord, deleteRecord, activeTab, setActiveTab }: Parameters<typeof ModuleSection>[0]) {
