@@ -2837,7 +2837,9 @@ function CrmModule({
   const [selectedWorkContactId, setSelectedWorkContactId] = useState("");
   const [workName, setWorkName] = useState("");
   const [workPhone, setWorkPhone] = useState("");
-  const [workEmail, setWorkEmail] = useState("");
+  const [workDocumentNumber, setWorkDocumentNumber] = useState("");
+  const [workDocumentType, setWorkDocumentType] = useState("CC");
+  const [workEps, setWorkEps] = useState("");
   const [workNotes, setWorkNotes] = useState("");
   const [workResult, setWorkResult] = useState("contactado");
   const [workReminderTitle, setWorkReminderTitle] = useState("");
@@ -2888,7 +2890,9 @@ function CrmModule({
       setSelectedWorkContactId("");
       setWorkName("");
       setWorkPhone("");
-      setWorkEmail("");
+      setWorkDocumentNumber("");
+      setWorkDocumentType("CC");
+      setWorkEps("");
       setWorkNotes("");
       setWorkResult("contactado");
       setWorkReminderTitle("");
@@ -2899,7 +2903,9 @@ function CrmModule({
     if (selectedWorkContactId !== activeWorkContact.id) setSelectedWorkContactId(activeWorkContact.id);
     setWorkName(customerName(activeWorkContact));
     setWorkPhone(activeWorkContact.phone || "");
-    setWorkEmail(activeWorkContact.email || "");
+    setWorkDocumentNumber(activeWorkContact.document_number || "");
+    setWorkDocumentType(activeWorkContact.document_type || "CC");
+    setWorkEps(activeWorkContact.eps || "");
     setWorkNotes(activeWorkContact.notes || "");
     setWorkResult("contactado");
     setWorkReminderTitle(`Seguimiento · ${customerName(activeWorkContact)}`);
@@ -2970,36 +2976,77 @@ function CrmModule({
 
   const importWorkContacts = async () => {
     if (!business) return alert("No se ha cargado el negocio");
+    const existingDocuments = new Set(customers.map((customer) => String(customer.document_number || "").replace(/\D/g, "")).filter(Boolean));
+    const existingPhones = new Set(customers.map((customer) => normalizePhone(customer.phone)).filter(Boolean));
+    const seenDocuments = new Set<string>();
+    const seenPhones = new Set<string>();
+    let skipped = 0;
+
     const rows = bulkContactsText
       .split(/\n+/)
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        const phoneMatch = line.match(/\+?\d[\d\s().-]{6,}\d/);
-        const phone = phoneMatch?.[0]?.replace(/[^\d+]/g, "").trim() || "";
-        const name = (phoneMatch ? line.replace(phoneMatch[0], "") : line)
-          .replace(/[;,|·•-]+/g, " ")
-          .replace(/\s+/g, " ")
-          .trim() || `Contacto ${phone || "sin teléfono"}`;
+        const parts = line.split(/[;|\t,]+/).map((part) => part.trim()).filter(Boolean);
+        let name = "";
+        let documentNumber = "";
+        let phone = "";
+        let documentType = "CC";
+        let eps = "";
+
+        if (parts.length >= 2) {
+          name = parts[0];
+          documentNumber = parts[1]?.replace(/\D/g, "") || "";
+          phone = parts[2]?.replace(/[^\d+]/g, "") || "";
+          const possibleType = String(parts[3] || "").trim().toUpperCase();
+          if (["RC", "TI", "CC", "PT"].includes(possibleType)) documentType = possibleType;
+          eps = ["RC", "TI", "CC", "PT"].includes(possibleType) ? (parts[4] || "") : (parts[3] || "");
+        } else {
+          const documentMatch = line.match(/\b\d{5,15}\b/g)?.at(-1) || "";
+          documentNumber = documentMatch.replace(/\D/g, "");
+          name = documentMatch ? line.replace(documentMatch, "") : line;
+          name = name.replace(/[;,|·•-]+/g, " ").replace(/\s+/g, " ").trim();
+        }
+
+        name = name.replace(/\s+/g, " ").trim() || `Contacto ${documentNumber || "sin identificar"}`;
+        const normalizedDocument = documentNumber.replace(/\D/g, "");
+        const normalizedPhone = normalizePhone(phone);
+
+        if (!name || !normalizedDocument) {
+          skipped += 1;
+          return null;
+        }
+        if (existingDocuments.has(normalizedDocument) || seenDocuments.has(normalizedDocument) || (normalizedPhone && (existingPhones.has(normalizedPhone) || seenPhones.has(normalizedPhone)))) {
+          skipped += 1;
+          return null;
+        }
+
+        seenDocuments.add(normalizedDocument);
+        if (normalizedPhone) seenPhones.add(normalizedPhone);
+
         return {
           business_id: business.id,
           name,
           full_name: name,
           phone: phone || null,
           email: null,
+          document_type: documentType,
+          document_number: normalizedDocument,
+          eps: eps || null,
           notes: "Importado manualmente para trabajar desde CRM Contactos.",
           crm_status: "contacto_pendiente",
           last_contact_at: null,
           next_follow_up_at: null,
         };
       })
-      .filter((row) => row.phone || row.name);
+      .filter(Boolean);
 
-    if (!rows.length) return alert("Pega al menos un contacto con nombre y teléfono");
+    if (!rows.length) return alert(skipped ? "No se importó ningún contacto: todos estaban duplicados o no tenían número de identidad." : "Pega al menos un contacto con nombre y número de identidad");
     const { error } = await supabase.from("customers").insert(rows as any);
     if (error) return alert(error.message);
     setBulkContactsText("");
     await reloadData();
+    alert(`Contactos importados: ${rows.length}${skipped ? ` · Duplicados/no válidos omitidos: ${skipped}` : ""}`);
   };
 
   const finishWorkContact = async () => {
@@ -3011,7 +3058,10 @@ function CrmModule({
         name: workName.trim(),
         full_name: workName.trim(),
         phone: workPhone.trim() || null,
-        email: workEmail.trim() || null,
+        email: null,
+        document_number: workDocumentNumber.trim() || null,
+        document_type: workDocumentType || null,
+        eps: workEps.trim() || null,
         notes: workNotes || null,
         crm_status: workResult || "contactado",
         next_follow_up_at: workReminderAt ? localDateTimeToBogotaIso(workReminderAt) : null,
@@ -3131,15 +3181,15 @@ function CrmModule({
             <div className="rounded-[1.6rem] border border-cyan-300/15 bg-cyan-300/10 p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">Lista de trabajo</p>
               <h3 className="mt-2 text-2xl font-semibold">Contactos pendientes</h3>
-              <p className="mt-2 text-sm leading-6 text-white/55">Pega una lista de nombres y teléfonos. Se quedarán aquí hasta que los trabajes y los pases al CRM.</p>
+              <p className="mt-2 text-sm leading-6 text-white/55">Pega una lista con nombre y número de identidad. Flowly omitirá duplicados por documento o teléfono y los dejará aquí hasta trabajarlos.</p>
             </div>
             <textarea
               value={bulkContactsText}
               onChange={(e) => setBulkContactsText(e.target.value)}
               placeholder={`Ejemplo:
-María Pérez +573001112233
-Juan Gómez, 604123456
-Ana López; +34666111222`}
+María Pérez, 1020304050
+Juan Gómez; 99887766
+Ana López | 123456789 | +573001112233 | CC | Nueva EPS`}
               className="input-dark mt-4 min-h-44 resize-none"
             />
             <button onClick={importWorkContacts} className="btn-primary mt-3 w-full justify-center"><Plus size={17} /> Importar contactos</button>
@@ -3151,12 +3201,12 @@ Ana López; +34666111222`}
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xs font-bold">{customerName(customer).split(" ").slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "C"}</div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold">{customerName(customer)}</p>
-                      <p className="truncate text-xs text-white/45">{customer.phone || "Sin teléfono"}</p>
+                      <p className="truncate text-xs text-white/45">ID {customer.document_number || "sin identidad"}{customer.phone ? ` · ${customer.phone}` : ""}</p>
                     </div>
                   </div>
                 </button>;
               })}
-              {!workQueueContacts.length && <Empty text="No hay contactos pendientes. Importa una lista para empezar." />}
+              {!workQueueContacts.length && <Empty text="No hay contactos pendientes. Importa una lista con nombre e identidad para empezar." />}
             </div>
           </aside>
 
@@ -3173,7 +3223,14 @@ Ana López; +34666111222`}
                     <div className="grid gap-3 md:grid-cols-2">
                       <input value={workName} onChange={(e) => setWorkName(e.target.value)} placeholder="Nombre completo" className="input-dark" />
                       <input value={workPhone} onChange={(e) => setWorkPhone(e.target.value)} placeholder="Teléfono" className="input-dark" />
-                      <input value={workEmail} onChange={(e) => setWorkEmail(e.target.value)} placeholder="Email" className="input-dark" />
+                      <input value={workDocumentNumber} onChange={(e) => setWorkDocumentNumber(e.target.value)} placeholder="Número de identidad" className="input-dark" />
+                      <select value={workDocumentType} onChange={(e) => setWorkDocumentType(e.target.value)} className="input-dark">
+                        <option value="RC">RC · Registro Civil</option>
+                        <option value="TI">TI · Tarjeta de Identidad</option>
+                        <option value="CC">CC · Cédula de Ciudadanía</option>
+                        <option value="PT">PT · Permiso Temporal</option>
+                      </select>
+                      <input value={workEps} onChange={(e) => setWorkEps(e.target.value)} placeholder="EPS" className="input-dark" />
                       <select value={workResult} onChange={(e) => setWorkResult(e.target.value)} className="input-dark">
                         <option value="contactado">Contactado</option>
                         <option value="nuevo">Nuevo</option>
@@ -3203,13 +3260,13 @@ Ana López; +34666111222`}
       )}
 
       {crmView === "Ficha 360" && (
-        <section className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20">
+        <section className="grid gap-6">
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20">
             <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/55 p-3">
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-3"><Search size={17} className="text-white/35" /><input value={crmSearch} onChange={(e) => setCrmSearch(e.target.value)} placeholder="Buscar cliente, teléfono, RIF, estado..." className="w-full bg-transparent text-sm outline-none placeholder:text-white/35" /></div>
               <div className="mt-3 grid grid-cols-2 gap-2"><select value={crmStatusFilter} onChange={(e) => setCrmStatusFilter(e.target.value)} className="input-dark"><option value="all">Todos</option>{crmStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button onClick={() => { setCrmSearch(""); setCrmStatusFilter("all"); }} className="rounded-2xl border border-white/10 bg-white/[0.06] text-sm text-white/65">Limpiar</button></div>
             </div>
-            <div className="mt-4 max-h-[calc(100vh-360px)] min-h-[420px] space-y-2 overflow-y-auto pr-1">
+            <div className="mt-4 grid max-h-72 gap-3 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredCustomers.map((customer) => {
                 const isActive = selectedCustomer?.id === customer.id;
                 const messages = whatsappMessages.filter((message) => message.customer_id === customer.id || normalizePhone(message.phone).endsWith(normalizePhone(customer.phone).slice(-9))).length;
@@ -3218,7 +3275,7 @@ Ana López; +34666111222`}
               })}
               {!filteredCustomers.length && <Empty text="No hay clientes con estos filtros." />}
             </div>
-          </aside>
+          </div>
 
           <div className="space-y-6">
             {!selectedCustomer ? <GlassCard title="Ficha CRM"><Empty text="Selecciona un cliente para abrir su ficha premium." /></GlassCard> : (
