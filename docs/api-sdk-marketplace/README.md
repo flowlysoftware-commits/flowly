@@ -1,3 +1,5 @@
 # API · SDK · Marketplace
 
-Vista conjunta del ecosistema externo de Flowly.
+Vista combinada para integradores, partners y extensiones.
+
+Esta sección forma parte de Flowly Docs, el sistema de conocimiento vivo del proyecto.
