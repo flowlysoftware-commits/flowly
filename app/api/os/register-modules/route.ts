@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { buildKernelSeedFromMigration } from "@/lib/flowlyOSMigration";
-import { createClient } from "@/lib/supabaseAdmin";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST() {
   const items = buildKernelSeedFromMigration();
   try {
-    const supabase = createClient();
-    const { error } = await supabase.from("flowly_kernel_registry").upsert(items.map((item) => ({
+    const { error } = await supabaseAdmin.from("flowly_kernel_registry").upsert(items.map((item) => ({
       id: item.id,
       kind: item.kind,
       name: item.name,
