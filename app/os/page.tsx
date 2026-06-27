@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, BookOpen, BrainCircuit, Cpu, GitBranch, Hammer, Plus, ShieldCheck, Sparkles } from "lucide-react";
+import { Bot, BookOpen, BrainCircuit, Cpu, GitBranch, Github, Hammer, Plus, ShieldCheck, Sparkles } from "lucide-react";
 
 const tools = [
   { href: "/os/brain", title: "Flowly Brain", description: "Cerebro operativo: contexto, Knowledge, Analyzer, Kernel y Planner antes de responder.", icon: BrainCircuit },
@@ -10,6 +10,7 @@ const tools = [
   { href: "/kernel", title: "Kernel", description: "Registro interno, runtimes, event bus y estado operativo.", icon: Cpu },
   { href: "/docs", title: "Flowly Docs", description: "Documentación viva de arquitectura, ingeniería y producto.", icon: BookOpen },
   { href: "/os/migration", title: "Migration Blueprint", description: "Auditoría del panel actual, registro Kernel y plan de migración a Flowly OS.", icon: GitBranch },
+  { href: "/os/github", title: "GitHub Executor", description: "Conecta Flowly Brain con GitHub para crear ramas y Pull Requests seguros.", icon: Github },
 ];
 
 export default function FlowlyOsPage() {
