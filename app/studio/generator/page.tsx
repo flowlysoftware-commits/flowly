@@ -11,6 +11,7 @@ import {
   Code2,
   Database,
   Download,
+  FileArchive,
   GitBranch,
   Network,
   PackageCheck,
@@ -42,6 +43,29 @@ type Suggestion = {
   policies: string[];
 };
 
+type ModuleReview = {
+  approved: boolean;
+  blockers: string[];
+  warnings: string[];
+  actions: string[];
+  score: number;
+};
+
+const kindLabels: Record<string, string> = {
+  business_object: "Objeto de negocio",
+  capability: "Capacidad",
+  workflow: "Flujo de trabajo",
+  policy: "Política",
+  app: "Aplicación",
+  architect_blueprint: "Plano de Architect",
+};
+
+const riskLabels: Record<string, string> = {
+  low: "Bajo",
+  medium: "Medio",
+  high: "Alto",
+};
+
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json();
@@ -57,6 +81,21 @@ function downloadText(filename: string, value: string, type = "text/plain") {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+async function downloadZipFromPost(url: string, body: unknown, filename: string) {
+  const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || "No se pudo descargar el ZIP.");
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(objectUrl);
 }
 
 function ArtifactBlock({ title, value, filename }: { title: string; value: string; filename: string }) {
@@ -98,8 +137,9 @@ export default function FlowlyGeneratorPage() {
   const [library, setLibrary] = useState<StudioArtifactRow[]>([]);
   const [analysis, setAnalysis] = useState<FlowlyArchitectureAnalysis | null>(null);
   const [generation, setGeneration] = useState<FlowlyModuleGeneration | null>(null);
+  const [review, setReview] = useState<ModuleReview | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [moduleName, setModuleName] = useState("Flowly Generated Module");
+  const [moduleName, setModuleName] = useState("Módulo generado por Flowly");
   const [architectPrompt, setArchitectPrompt] = useState("Quiero crear un módulo de alquiler de vehículos");
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [search, setSearch] = useState("");
@@ -121,10 +161,7 @@ export default function FlowlyGeneratorPage() {
     setError("");
     setIsLoading(true);
     try {
-      const [libraryResponse, architectureResponse] = await Promise.all([
-        fetch("/api/studio/artifacts"),
-        fetch("/api/studio/architecture"),
-      ]);
+      const [libraryResponse, architectureResponse] = await Promise.all([fetch("/api/studio/artifacts"), fetch("/api/studio/architecture")]);
       const libraryData = await libraryResponse.json();
       const architectureData = await architectureResponse.json();
       if (!libraryResponse.ok) throw new Error(libraryData.error || "No se pudo cargar Studio.");
@@ -146,12 +183,52 @@ export default function FlowlyGeneratorPage() {
     try {
       const data = await postJson<{ generation: FlowlyModuleGeneration }>("/api/studio/generate/module", { moduleName, slugs: selected });
       setGeneration(data.generation);
-      setMessage("Módulo generado y registrado en Flowly Studio.");
+      setReview(null);
+      setMessage("Módulo generado y guardado como generación revisable.");
       await loadEverything();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo generar el módulo.");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function reviewModule() {
+    setError("");
+    setMessage("");
+    setIsLoading(true);
+    try {
+      const data = await postJson<{ review: ModuleReview; generation: FlowlyModuleGeneration }>("/api/studio/review/module", { moduleName, slugs: selected });
+      setReview(data.review);
+      setGeneration(data.generation);
+      setMessage(data.review.approved ? "Revisión superada. El módulo puede exportarse." : "Revisión completada con bloqueos. Corrige antes de instalar.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo revisar el módulo.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function exportInstallableZip() {
+    setError("");
+    setMessage("");
+    try {
+      await downloadZipFromPost("/api/studio/export/module", { moduleName, slugs: selected, force: true }, `${moduleName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-flowly-module.zip`);
+      setMessage("ZIP instalable generado. Descomprímelo encima del proyecto y ejecuta su migración SQL.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo exportar el ZIP.");
+    }
+  }
+
+  async function installLocally() {
+    setError("");
+    setMessage("");
+    try {
+      const data = await postJson<{ ok: boolean; written: string[]; review: ModuleReview }>("/api/studio/install/module", { moduleName, slugs: selected });
+      setReview(data.review);
+      setMessage(`Instalación local completada. Archivos escritos: ${data.written.length}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo instalar directamente. Usa la exportación ZIP.");
     }
   }
 
@@ -162,9 +239,27 @@ export default function FlowlyGeneratorPage() {
       const data = await postJson<{ suggestion: Suggestion }>("/api/studio/architect/suggest", { prompt: architectPrompt });
       setSuggestion(data.suggestion);
       setModuleName(data.suggestion.moduleName);
-      setMessage("Architect ha preparado una propuesta inicial. Crea esos artefactos en Builder o genera con los existentes.");
+      setMessage("Architect ha preparado una propuesta inicial.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo consultar Architect.");
+    }
+  }
+
+  async function createFromArchitect() {
+    setError("");
+    setMessage("");
+    setIsLoading(true);
+    try {
+      const data = await postJson<{ suggestion: Suggestion; created: StudioArtifactRow[] }>("/api/studio/architect/create", { prompt: architectPrompt });
+      setSuggestion(data.suggestion);
+      setModuleName(data.suggestion.moduleName);
+      setSelected(data.created.map((item) => item.slug));
+      setMessage(`Architect ha creado ${data.created.length} diseños en Builder. Ya puedes revisarlos y generar el módulo.`);
+      await loadEverything();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron crear los diseños desde Architect.");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -186,21 +281,21 @@ export default function FlowlyGeneratorPage() {
         <Link href="/studio" className="inline-flex items-center gap-2 text-sm text-white/55 transition hover:text-white"><ArrowLeft size={16} /> Volver a Studio</Link>
 
         <header className="mt-6 overflow-hidden rounded-[2.2rem] border border-white/10 bg-white/[0.06] p-8 backdrop-blur-2xl md:p-10">
-          <span className="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">Flowly Generator</span>
+          <span className="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">Generador de Flowly</span>
           <div className="mt-6 grid gap-8 lg:grid-cols-[1.1fr,0.9fr] lg:items-end">
             <div>
               <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">El corazón de Flowly Studio</h1>
-              <p className="mt-5 max-w-3xl text-base leading-8 text-white/62">Convierte diseños de Studio en módulos revisables: SQL, TypeScript, SDK, documentación, tests, impacto y grafo de dependencias.</p>
+              <p className="mt-5 max-w-3xl text-base leading-8 text-white/62">Convierte diseños en módulos instalables: migraciones Supabase, rutas, API, SDK, documentación, pruebas, revisión automática y ZIP listo para aplicar.</p>
             </div>
             <div className={`rounded-[1.5rem] border p-5 ${riskClasses}`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] opacity-65">Architecture Score</p>
+                  <p className="text-xs uppercase tracking-[0.22em] opacity-65">Puntuación arquitectónica</p>
                   <p className="mt-2 text-5xl font-semibold">{analysis?.architectureScore ?? "--"}</p>
                 </div>
                 <ShieldAlert size={44} className="opacity-70" />
               </div>
-              <p className="mt-3 text-sm opacity-75">Riesgo: {analysis?.riskLevel || "pendiente"}. Este score mide duplicidades, dependencias no registradas y piezas faltantes.</p>
+              <p className="mt-3 text-sm opacity-75">Riesgo: {riskLabels[analysis?.riskLevel || ""] || "pendiente"}. Mide duplicidades, dependencias no registradas y piezas faltantes.</p>
             </div>
           </div>
           {message ? <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{message}</div> : null}
@@ -208,20 +303,20 @@ export default function FlowlyGeneratorPage() {
         </header>
 
         <section className="mt-6 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <StatCard label="Business Objects" value={totals.business_object || 0} icon={<Boxes size={18} />} />
-          <StatCard label="Capabilities" value={totals.capability || 0} icon={<Code2 size={18} />} />
-          <StatCard label="Workflows" value={totals.workflow || 0} icon={<Workflow size={18} />} />
-          <StatCard label="Policies" value={totals.policy || 0} icon={<ShieldAlert size={18} />} />
+          <StatCard label="Objetos" value={totals.business_object || 0} icon={<Boxes size={18} />} />
+          <StatCard label="Capacidades" value={totals.capability || 0} icon={<Code2 size={18} />} />
+          <StatCard label="Flujos" value={totals.workflow || 0} icon={<Workflow size={18} />} />
+          <StatCard label="Políticas" value={totals.policy || 0} icon={<ShieldAlert size={18} />} />
           <StatCard label="Apps" value={totals.app || 0} icon={<PackageCheck size={18} />} />
-          <StatCard label="Edges" value={analysis?.edges.length || 0} icon={<Network size={18} />} />
+          <StatCard label="Relaciones" value={analysis?.edges.length || 0} icon={<Network size={18} />} />
         </section>
 
         <section className="mt-6 grid gap-5 lg:grid-cols-[0.95fr,1.05fr]">
           <div className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold">Module Composer</h2>
-                <p className="mt-1 text-sm text-white/50">Selecciona artefactos y genera un módulo completo revisable.</p>
+                <h2 className="text-xl font-semibold">Compositor de módulos</h2>
+                <p className="mt-1 text-sm text-white/50">Selecciona piezas de Studio y genera un módulo completo instalable.</p>
               </div>
               <button onClick={loadEverything} className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-white hover:bg-white/10"><RefreshCw size={16} className={isLoading ? "animate-spin" : ""} /></button>
             </div>
@@ -233,14 +328,14 @@ export default function FlowlyGeneratorPage() {
               </label>
               <div className="flex flex-wrap gap-2">
                 {(["business_object", "capability", "workflow", "policy", "app"] as FlowlyStudioArtifactKind[]).map((kind) => (
-                  <button key={kind} onClick={() => selectKind(kind)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10">Añadir {kind}</button>
+                  <button key={kind} onClick={() => selectKind(kind)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10">Añadir {kindLabels[kind]}</button>
                 ))}
-                <button onClick={() => setSelected(library.map((item) => item.slug))} className="rounded-xl border border-cyan-200/20 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100">Todo</button>
+                <button onClick={() => setSelected(library.map((item) => item.slug))} className="rounded-xl border border-cyan-200/20 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100">Seleccionar todo</button>
                 <button onClick={() => setSelected([])} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white/70">Limpiar</button>
               </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-3.5 text-white/35" size={16} />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar artefactos..." className="w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-9 pr-4 text-sm text-white outline-none" />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar piezas..." className="w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-9 pr-4 text-sm text-white outline-none" />
               </div>
             </div>
 
@@ -250,39 +345,56 @@ export default function FlowlyGeneratorPage() {
                   <div className="flex items-start gap-3">
                     <input type="checkbox" checked={selected.includes(artifact.slug)} onChange={() => toggle(artifact.slug)} className="mt-1" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{artifact.name}</h3><span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-white/40">{artifact.kind}</span></div>
+                      <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{artifact.name}</h3><span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-white/40">{kindLabels[artifact.kind] || artifact.kind}</span></div>
                       <p className="mt-1 text-xs text-cyan-100/55">{artifact.domain} · {artifact.status} · {artifact.slug}</p>
                       <p className="mt-2 text-sm leading-6 text-white/50">{artifact.description}</p>
                     </div>
                   </div>
                 </label>
               ))}
-              {!filtered.length ? <p className="text-sm text-white/45">No hay artefactos guardados todavía.</p> : null}
+              {!filtered.length ? <p className="text-sm text-white/45">No hay piezas guardadas todavía.</p> : null}
             </div>
 
-            <button onClick={generateModule} disabled={isLoading || !selected.length} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-100 px-5 py-4 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45">
-              <Rocket size={17} /> Generar módulo completo
-            </button>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button onClick={reviewModule} disabled={isLoading || !selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"><ShieldAlert size={17} /> Revisar antes</button>
+              <button onClick={generateModule} disabled={isLoading || !selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-100 px-5 py-4 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"><Rocket size={17} /> Generar</button>
+              <button onClick={exportInstallableZip} disabled={!selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-5 py-4 text-sm font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"><FileArchive size={17} /> Exportar ZIP</button>
+              <button onClick={installLocally} disabled={!selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-5 py-4 text-sm font-semibold text-amber-100 disabled:cursor-not-allowed disabled:opacity-45"><Database size={17} /> Instalar local</button>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-white/40">Instalar local solo funciona en desarrollo si activas <code>FLOWLY_STUDIO_ALLOW_FILE_WRITE=true</code>. En producción usa el ZIP instalable.</p>
           </div>
 
           <div className="grid gap-5">
             <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl">
-              <div className="mb-4 flex items-center gap-3"><BrainCircuit className="text-cyan-100" size={20} /><h2 className="text-xl font-semibold">Architect AI seed</h2></div>
+              <div className="mb-4 flex items-center gap-3"><BrainCircuit className="text-cyan-100" size={20} /><h2 className="text-xl font-semibold">Architect AI</h2></div>
               <textarea value={architectPrompt} onChange={(event) => setArchitectPrompt(event.target.value)} rows={4} className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-cyan-200/45" />
-              <button onClick={askArchitect} className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white hover:bg-white/10"><Sparkles size={16} /> Proponer arquitectura</button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={askArchitect} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white hover:bg-white/10"><Sparkles size={16} /> Proponer</button>
+                <button onClick={createFromArchitect} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-200/20 bg-cyan-300/10 px-4 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15"><CheckCircle2 size={16} /> Crear diseños</button>
+              </div>
               {suggestion ? (
                 <div className="mt-4 rounded-2xl border border-cyan-200/15 bg-cyan-300/10 p-4 text-sm leading-6 text-cyan-50/80">
                   <strong>{suggestion.moduleName}</strong>
-                  <p className="mt-2">Business Objects: {suggestion.businessObjects.join(", ")}</p>
-                  <p>Capabilities: {suggestion.capabilities.join(", ")}</p>
-                  <p>Workflows: {suggestion.workflows.join(", ")}</p>
-                  <p>Policies: {suggestion.policies.join(", ")}</p>
+                  <p className="mt-2">Objetos: {suggestion.businessObjects.join(", ")}</p>
+                  <p>Capacidades: {suggestion.capabilities.join(", ")}</p>
+                  <p>Flujos: {suggestion.workflows.join(", ")}</p>
+                  <p>Políticas: {suggestion.policies.join(", ")}</p>
                 </div>
               ) : null}
             </section>
 
+            {review ? (
+              <section className={`rounded-[1.7rem] border p-5 backdrop-blur-2xl ${review.approved ? "border-emerald-300/20 bg-emerald-400/10" : "border-red-300/20 bg-red-400/10"}`}>
+                <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-semibold">Revisión automática</h2><span className="rounded-full bg-white/10 px-3 py-1 text-sm">{review.score}/100</span></div>
+                <p className="text-sm text-white/70">{review.approved ? "Aprobado para exportar." : "Bloqueado hasta corregir los puntos críticos."}</p>
+                {review.blockers.length ? <div className="mt-4"><h3 className="font-semibold text-red-100">Bloqueos</h3><ul className="mt-2 space-y-1 text-sm text-white/70">{review.blockers.map((item) => <li key={item}>• {item}</li>)}</ul></div> : null}
+                {review.warnings.length ? <div className="mt-4"><h3 className="font-semibold text-amber-100">Avisos</h3><ul className="mt-2 space-y-1 text-sm text-white/70">{review.warnings.map((item) => <li key={item}>• {item}</li>)}</ul></div> : null}
+                <div className="mt-4"><h3 className="font-semibold text-cyan-100">Siguientes acciones</h3><ul className="mt-2 space-y-1 text-sm text-white/70">{review.actions.map((item) => <li key={item}>• {item}</li>)}</ul></div>
+              </section>
+            ) : null}
+
             <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl">
-              <div className="mb-4 flex items-center gap-3"><GitBranch className="text-cyan-100" size={20} /><h2 className="text-xl font-semibold">Dependency Graph</h2></div>
+              <div className="mb-4 flex items-center gap-3"><GitBranch className="text-cyan-100" size={20} /><h2 className="text-xl font-semibold">Grafo de dependencias</h2></div>
               <div className="max-h-80 overflow-auto rounded-2xl border border-white/10 bg-black/25 p-4">
                 {(analysis?.edges || []).slice(0, 80).map((edge) => (
                   <div key={edge.id} className="grid grid-cols-[1fr,auto,1fr] gap-2 border-b border-white/5 py-2 text-xs text-white/55 last:border-b-0">
@@ -291,12 +403,12 @@ export default function FlowlyGeneratorPage() {
                     <span className="truncate text-right">{edge.target}</span>
                   </div>
                 ))}
-                {!analysis?.edges.length ? <p className="text-sm text-white/45">Guarda artefactos para construir el grafo.</p> : null}
+                {!analysis?.edges.length ? <p className="text-sm text-white/45">Guarda piezas para construir el grafo.</p> : null}
               </div>
             </section>
 
             <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl">
-              <div className="mb-4 flex items-center gap-3"><ShieldAlert className="text-cyan-100" size={20} /><h2 className="text-xl font-semibold">Impact Analyzer</h2></div>
+              <div className="mb-4 flex items-center gap-3"><ShieldAlert className="text-cyan-100" size={20} /><h2 className="text-xl font-semibold">Analizador de impacto</h2></div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-amber-100">Avisos</h3><ul className="mt-3 space-y-2 text-sm text-white/55">{(analysis?.warnings || []).map((item) => <li key={item}>• {item}</li>)}{!analysis?.warnings.length ? <li>• Sin avisos críticos.</li> : null}</ul></div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-cyan-100">Recomendaciones</h3><ul className="mt-3 space-y-2 text-sm text-white/55">{(analysis?.recommendations || []).map((item) => <li key={item}>• {item}</li>)}{!analysis?.recommendations.length ? <li>• Listo para revisar generación.</li> : null}</ul></div>
@@ -310,13 +422,13 @@ export default function FlowlyGeneratorPage() {
             <div className="lg:col-span-2 rounded-[1.7rem] border border-emerald-300/20 bg-emerald-400/10 p-5 text-emerald-50">
               <div className="flex items-center gap-3"><CheckCircle2 size={22} /><div><h2 className="text-xl font-semibold">{generation.moduleName}</h2><p className="mt-1 text-sm opacity-75">{generation.summary}</p></div></div>
             </div>
-            <ArtifactBlock title="Migration SQL" value={generation.migrationSql} filename={`${generation.slug}.migration.sql`} />
-            <ArtifactBlock title="TypeScript Index" value={generation.typeScriptIndex} filename={`${generation.slug}.ts`} />
-            <ArtifactBlock title="API Manifest" value={generation.apiManifest} filename={`${generation.slug}.api.json`} />
-            <ArtifactBlock title="SDK Index" value={generation.sdkIndex} filename={`${generation.slug}.sdk.ts`} />
-            <ArtifactBlock title="Docs Index" value={generation.docsIndex} filename={`${generation.slug}.md`} />
-            <ArtifactBlock title="Test Plan" value={generation.testPlan} filename={`${generation.slug}.tests.md`} />
-            <div className="lg:col-span-2"><ArtifactBlock title="Impact Report" value={generation.impactReport} filename={`${generation.slug}.impact.md`} /></div>
+            <ArtifactBlock title="Migración Supabase" value={generation.migrationSql} filename={`${generation.slug}.migration.sql`} />
+            <ArtifactBlock title="Índice TypeScript" value={generation.typeScriptIndex} filename={`${generation.slug}.ts`} />
+            <ArtifactBlock title="Manifiesto API" value={generation.apiManifest} filename={`${generation.slug}.api.json`} />
+            <ArtifactBlock title="SDK" value={generation.sdkIndex} filename={`${generation.slug}.sdk.ts`} />
+            <ArtifactBlock title="Documentación" value={generation.docsIndex} filename={`${generation.slug}.md`} />
+            <ArtifactBlock title="Plan de pruebas" value={generation.testPlan} filename={`${generation.slug}.tests.md`} />
+            <div className="lg:col-span-2"><ArtifactBlock title="Informe de impacto" value={generation.impactReport} filename={`${generation.slug}.impact.md`} /></div>
           </section>
         ) : null}
       </section>
