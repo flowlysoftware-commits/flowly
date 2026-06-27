@@ -1,3 +1,4 @@
-# Marketplace
+# Marketplace Specification
 
-Sección preparada para documentar Marketplace dentro de Flowly Docs.
+Apps, Plugins, Tools, Capabilities y monetización.
+

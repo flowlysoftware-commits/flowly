@@ -1,5 +1,4 @@
-# Flowly OS Reference Architecture
+# Reference Architecture
 
-Plano técnico de Flowly OS.
+Mapa técnico del Kernel, Engines, Capabilities, Organizations, Identity, Context y Governance.
 
-Define cómo encajan Kernel, Engines, Capabilities, Business Objects, Organizations, Identity, Authorization, Memory, Context, AI Runtime, Governance, Observability y Evolution Architecture.

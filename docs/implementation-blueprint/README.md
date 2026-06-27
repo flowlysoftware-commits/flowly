@@ -1,12 +1,4 @@
-# Flowly Implementation Blueprint
+# Implementation Blueprint
 
-Siguiente gran documento.
+Plano ejecutable para construir Flowly OS encima del proyecto actual.
 
-Su objetivo es convertir la arquitectura en tareas reales de construcción:
-
-- estructura física definitiva,
-- esquema de Supabase,
-- APIs,
-- módulos prioritarios,
-- roadmap técnico,
-- migración desde el Flowly actual.
