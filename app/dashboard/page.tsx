@@ -545,7 +545,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!businessAvatar?.avatar_name) return;
-    setAssistantMessages((current) => current.length ? current : [{ role: "assistant", content: `Hola, soy ${businessAvatar.avatar_name}. Estoy aquí para ayudarte a moverte por Flowly, explicarte cada módulo y recomendarte acciones dentro del panel.` }]);
+    setAssistantMessages((current) => current.length ? current : [{ role: "assistant", content: `Hola, soy ${businessAvatar?.avatar_name}. Estoy aquí para ayudarte a moverte por Flowly, explicarte cada módulo y recomendarte acciones dentro del panel.` }]);
   }, [businessAvatar?.avatar_name]);
 
   useEffect(() => {
@@ -1445,7 +1445,7 @@ export default function DashboardPage() {
               <Image src="/logo.png" alt="Flowly IA" width={136} height={38} className="h-auto w-32 object-contain" priority />
             </div>
             <p className="mt-3 text-sm text-violet-200">Panel cliente</p>
-            {false && businessAvatar?.avatar_name && <p className="mt-1 text-xs text-white/40">Mascota IA: {businessAvatar.avatar_name}</p>}
+            {false && businessAvatar?.avatar_name && <p className="mt-1 text-xs text-white/40">Mascota IA: {businessAvatar?.avatar_name}</p>}
           </div>
 
           <nav className="grid gap-2">
@@ -1604,7 +1604,7 @@ export default function DashboardPage() {
                 {businessAvatar?.avatar_name && (
                   <div className="rounded-[1.5rem] border border-cyan-300/20 bg-cyan-500/10 p-4 text-cyan-50 shadow-xl shadow-cyan-950/20">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Asistente 3D activo</p>
-                    <p className="mt-1 text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"} camina por el panel</p>
+                    <p className="mt-1 text-lg font-semibold">{businessAvatar?.avatar_name || "Mascota IA"} camina por el panel</p>
                   </div>
                 )}
                 <div className="rounded-[1.5rem] border border-violet-300/20 bg-violet-500/15 px-5 py-4 text-violet-100"><p className="text-sm text-violet-200">Estado suscripción</p><p className="mt-1 text-2xl font-semibold capitalize">{business.subscription_status || "trialing"}</p></div>
@@ -2164,7 +2164,7 @@ function AreaSection({ business, businessAvatar, activeModules, inactiveModules,
             {businessAvatar?.avatar_name && (
               <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Asistente 3D</p>
-                <p className="text-lg font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</p>
+                <p className="text-lg font-semibold">{businessAvatar?.avatar_name || "Mascota IA"}</p>
                 <p className="mt-1 text-xs text-white/45">Personaje interactivo activo en pantalla.</p>
               </div>
             )}
@@ -3694,11 +3694,11 @@ function AiModule({ business, integrations, reloadData, records, customers, appo
   const occupancySignal = appointments.length ? "Datos suficientes" : "Necesita agenda";
   return (
     <section className="grid gap-6">
-      <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description={businessAvatar?.avatar_name ? `${businessAvatar.avatar_name} es la mascota IA del negocio: analiza CRM, agenda, ventas y campañas para dar notas ejecutivas dentro del panel.` : "Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA."} actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Copiloto: "module:ia:copiloto", Automatizaciones: "module:ia:automatizaciones", Prompts: "module:ia:prompts", Conectores: "module:ia:conectores" } as Record<string, ActiveTab>)[next] || "module:ia:copiloto", setTab, next)} />} />
+      <ModuleHero eyebrow="Flowly Intelligence" title="IA operativa para dirección" description={businessAvatar?.avatar_name ? `${businessAvatar?.avatar_name} es la mascota IA del negocio: analiza CRM, agenda, ventas y campañas para dar notas ejecutivas dentro del panel.` : "Centro de inteligencia preparado para analizar CRM, agenda, ventas, campañas y voz. Guarda instrucciones reutilizables y conecta más adelante el proveedor IA."} actions={<ModulePillTabs tabs={["Copiloto", "Automatizaciones", "Prompts", "Conectores"]} active={tab} setActive={(next) => selectModuleSubmenu(setActiveTab, ({ Copiloto: "module:ia:copiloto", Automatizaciones: "module:ia:automatizaciones", Prompts: "module:ia:prompts", Conectores: "module:ia:conectores" } as Record<string, ActiveTab>)[next] || "module:ia:copiloto", setTab, next)} />} />
       {businessAvatar?.avatar_name && (
         <div className="rounded-[2rem] border border-cyan-300/20 bg-gradient-to-br from-cyan-500/15 via-violet-500/10 to-black/20 p-5 shadow-2xl shadow-cyan-950/20">
           <p className="text-sm uppercase tracking-[0.18em] text-cyan-100/70">Asistente 3D activo</p>
-          <h3 className="mt-1 text-2xl font-semibold">{businessAvatar.avatar_name || "Mascota IA"}</h3>
+          <h3 className="mt-1 text-2xl font-semibold">{businessAvatar?.avatar_name || "Mascota IA"}</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/58">El personaje 3D flotante puede hacer tours, hablar con voz del navegador y guiar al usuario por CRM, Agenda, WhatsApp, Voice, IA, pagos y estadísticas.</p>
         </div>
       )}
@@ -5565,7 +5565,7 @@ function SettingsSection({
           <div className="grid gap-4">
             <div className="flex items-center gap-4">
               <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-cyan-300/20 bg-cyan-400/10">
-                {businessAvatar?.avatar_url ? <img src={businessAvatar.avatar_url} alt={businessAvatar.avatar_name || "Mascota IA"} className="h-full w-full object-cover" /> : <Bot className="text-cyan-100" size={34} />}
+                {businessAvatar?.avatar_url ? <img src={businessAvatar?.avatar_url} alt={businessAvatar?.avatar_name || "Mascota IA"} className="h-full w-full object-cover" /> : <Bot className="text-cyan-100" size={34} />}
               </div>
               <div>
                 <p className="text-sm text-white/55">Crea un avatar fusionado con el estilo visual del negocio.</p>
