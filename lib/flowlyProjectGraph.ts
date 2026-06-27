@@ -136,6 +136,8 @@ const MODULE_RULES = [
   },
 ] as const;
 
+type FlowlyModuleRule = (typeof MODULE_RULES)[number];
+
 const MAX_READ_FILES = 72;
 const MAX_READ_CHARS = 18000;
 
@@ -180,7 +182,7 @@ function labelForPath(path: string) {
 
 function moduleForPathAndContent(path: string, content = "") {
   const text = normalize(`${path}\n${content.slice(0, 5000)}`);
-  let best = MODULE_RULES[0];
+  let best: FlowlyModuleRule | undefined;
   let bestScore = 0;
 
   for (const rule of MODULE_RULES) {
@@ -194,7 +196,7 @@ function moduleForPathAndContent(path: string, content = "") {
     }
   }
 
-  if (bestScore <= 0) return undefined;
+  if (!best || bestScore <= 0) return undefined;
   return { ...best, score: bestScore };
 }
 
