@@ -605,8 +605,11 @@ export default function FlowlyStudioV2Page() {
                           <summary className="cursor-pointer text-sm font-semibold text-cyan-100">{blueprintLabels[key] || key} ({value.length})</summary>
                           <div className="mt-3 grid gap-2">
                             {value.slice(0, 12).map((entry, index) => {
-                              const record = typeof entry === "object" && entry ? entry as Record<string, unknown> : { name: entry };
-                              return <div key={`${key}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-white/55"><strong className="text-white/75">{String(record.label || record.name || record.target || `Elemento ${index + 1}`)}</strong>{record.type ? <span className="ml-2 text-white/35">{String(record.type)}</span> : null}{record.description ? <p className="mt-1 text-white/35">{String(record.description)}</p> : null}</div>;
+                              const record: Record<string, unknown> = typeof entry === "object" && entry !== null ? entry as Record<string, unknown> : { name: entry };
+                              const itemTitle = record.label ?? record.name ?? record.target ?? `Elemento ${index + 1}`;
+                              const itemType = record.type;
+                              const itemDescription = record.description;
+                              return <div key={`${key}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-white/55"><strong className="text-white/75">{String(itemTitle)}</strong>{itemType ? <span className="ml-2 text-white/35">{String(itemType)}</span> : null}{itemDescription ? <p className="mt-1 text-white/35">{String(itemDescription)}</p> : null}</div>;
                             })}
                           </div>
                         </details>
