@@ -134,6 +134,7 @@ export default function FlowlyDocsPage() {
                 <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/60 md:w-72">
                   <p className="flex items-center gap-2 font-semibold text-white"><Sparkles size={17} /> Objetivo</p>
                   <p className="mt-2 leading-6">Convertir documentación estática en conocimiento navegable, consultable y conectado con el código.</p>
+                  <Link href={`/docs/${activeSection.slug}`} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-300/15">Abrir libro <ArrowRight size={15} /></Link>
                 </div>
               </div>
             </div>

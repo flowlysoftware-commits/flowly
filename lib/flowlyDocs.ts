@@ -154,10 +154,10 @@ export const flowlyDocSections: FlowlyDocSection[] = [
 ];
 
 export const flowlyDocsStats = [
-  { label: "Libros fundacionales", value: "3" },
-  { label: "Capítulos definidos", value: "96" },
-  { label: "Áreas documentales", value: "9" },
-  { label: "Siguiente hito", value: "Blueprint" },
+  { label: "Libros disponibles", value: "13" },
+  { label: "Capítulos base", value: "250+" },
+  { label: "Áreas documentales", value: "13" },
+  { label: "Modo", value: "Nativo" },
 ];
 
 export const flowlyDocsRoadmap = [

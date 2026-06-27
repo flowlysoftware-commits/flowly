@@ -1,3 +1,4 @@
-# Api
+# API Specification
 
-Sección preparada para documentar Api dentro de Flowly Docs.
+Especificación de APIs públicas basadas en Capabilities.
+
