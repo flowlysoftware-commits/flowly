@@ -231,6 +231,56 @@ async function createPullRequest(owner: string, repo: string, title: string, bod
   });
 }
 
+
+
+export type GitHubTreeItem = {
+  path: string;
+  mode: string;
+  type: "blob" | "tree" | string;
+  sha: string;
+  size?: number;
+  url: string;
+};
+
+export async function listRepositoryTree(branch?: string) {
+  const config = getGitHubExecutorConfig();
+  if (!config.hasCredentials) {
+    throw new Error(`GitHub Executor no configurado. Faltan: ${config.missing.join(" | ")}`);
+  }
+  const owner = config.owner;
+  const repo = config.repo;
+  const targetBranch = branch || config.defaultBranch || "main";
+  const sha = await getBranchSha(owner, repo, targetBranch);
+  const tree = await githubFetch<{ tree: GitHubTreeItem[]; truncated: boolean }>(`/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`);
+  return {
+    owner,
+    repo,
+    branch: targetBranch,
+    truncated: tree.truncated,
+    items: tree.tree || [],
+  };
+}
+
+export async function readRepositoryFile(path: string, branch?: string) {
+  const config = getGitHubExecutorConfig();
+  if (!config.hasCredentials) {
+    throw new Error(`GitHub Executor no configurado. Faltan: ${config.missing.join(" | ")}`);
+  }
+  const owner = config.owner;
+  const repo = config.repo;
+  const targetBranch = branch || config.defaultBranch || "main";
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const file = await githubFetch<{ content?: string; encoding?: string; sha: string; size: number; path: string }>(`/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(targetBranch)}`);
+  const rawContent = file.content || "";
+  const content = file.encoding === "base64" ? Buffer.from(rawContent.replace(/\n/g, ""), "base64").toString("utf8") : rawContent;
+  return {
+    path: file.path || path,
+    sha: file.sha,
+    size: file.size,
+    content,
+  };
+}
+
 function slugifyBranch(value: string) {
   return value
     .toLowerCase()

@@ -1,19 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
+import { runExecutorV2 } from "@/lib/flowlyExecutorV2";
+
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => ({}));
-  const approved = Boolean(body.approved);
-  const action = String(body.action || "");
+  try {
+    const body = await request.json().catch(() => ({}));
+    const approved = Boolean(body.approved);
+    const action = String(body.action || body.instruction || "").trim();
 
-  if (!approved) {
-    return NextResponse.json({ ok: false, error: "Flowly Brain no ejecuta acciones sin aprobación explícita." }, { status: 400 });
+    if (!approved) {
+      return NextResponse.json({ ok: false, error: "Flowly Brain no ejecuta acciones sin aprobación explícita." }, { status: 400 });
+    }
+
+    if (!action) {
+      return NextResponse.json({ ok: false, error: "Falta la acción que debe ejecutar Brain." }, { status: 400 });
+    }
+
+    const result = await runExecutorV2({ instruction: action, approved: true, mode: "pull_request" });
+    return NextResponse.json({
+      ok: !result.error,
+      status: result.status,
+      action,
+      message: result.pullRequestUrl ? "Executor V2 ha creado un Pull Request para revisión." : "Executor V2 ha preparado la acción, pero no pudo abrir Pull Request.",
+      pullRequestUrl: result.pullRequestUrl,
+      pullRequestNumber: result.pullRequestNumber,
+      branch: result.branch,
+      error: result.error,
+      details: result,
+    }, { status: result.error ? 400 : 200 });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-
-  return NextResponse.json({
-    ok: true,
-    status: "queued",
-    action,
-    message: "Acción aceptada por Flowly Brain. En esta primera versión queda preparada para Builder/Executor.",
-    next: ["Registrar evento", "Enviar a Builder", "Verificar resultado", "Actualizar Docs"],
-  });
 }

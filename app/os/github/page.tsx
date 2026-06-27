@@ -103,7 +103,7 @@ export default function FlowlyGitHubExecutorPage() {
       <section className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/os" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-sm font-bold text-white/70 hover:bg-white/[0.08]"><ArrowLeft size={16} /> Volver a OS</Link>
-          <button onClick={loadStatus} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-black text-cyan-50">Actualizar estado</button>
+          <div className="flex flex-wrap gap-2"><Link href="/os/executor" className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-4 py-2 text-sm font-black text-emerald-50">Abrir Executor V2</Link><button onClick={loadStatus} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-black text-cyan-50">Actualizar estado</button></div>
         </div>
 
         <header className="mt-6 rounded-[2rem] border border-white/10 bg-white/[0.06] p-7 shadow-2xl shadow-black/35">
