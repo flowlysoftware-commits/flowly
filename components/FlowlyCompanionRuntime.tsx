@@ -7,7 +7,6 @@ import { ChevronDown, Code2, MessageCircle, Minimize2, Send, ShieldCheck, Sparkl
 import EvolutionaryCompanionAvatar from "@/components/EvolutionaryCompanionAvatar";
 import { companionMissions, companionRewards, companionStats, getCompanionContext } from "@/lib/flowlyCompanionRuntime";
 import { getFlowlyRuntimeMode } from "@/lib/flowlyProductModes";
-import { buildCompanionReply } from "@/lib/flowlyContextEngine";
 
 const HIDDEN_PREFIXES = ["/login", "/registro", "/reservas", "/demo/login"];
 
@@ -22,6 +21,7 @@ export default function FlowlyCompanionRuntime() {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [message, setMessage] = useState("");
+  const [thinking, setThinking] = useState(false);
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
@@ -32,17 +32,36 @@ export default function FlowlyCompanionRuntime() {
 
   if (shouldHide(pathname)) return null;
 
-  const sendMessage = (event: FormEvent) => {
+  const sendMessage = async (event: FormEvent) => {
     event.preventDefault();
     const clean = message.trim();
-    if (!clean) return;
+    if (!clean || thinking) return;
     setMessage("");
+    setThinking(true);
 
-    setConversation((current) => [
-      ...current,
-      { role: "user", content: clean },
-      { role: "assistant", content: buildCompanionReply(clean, pathname) },
-    ]);
+    const nextConversation = [...conversation, { role: "user" as const, content: clean }];
+    setConversation(nextConversation);
+
+    try {
+      const response = await fetch("/api/companion/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: clean, pathname, conversation }),
+      });
+      const data = await response.json();
+      const answer = typeof data?.answer === "string"
+        ? data.answer
+        : "No he podido pensar bien la respuesta. Inténtalo otra vez en unos segundos.";
+      setConversation((current) => [...current, { role: "assistant", content: answer }]);
+    } catch (error) {
+      console.error("Companion chat error", error);
+      setConversation((current) => [
+        ...current,
+        { role: "assistant", content: "Ahora mismo no puedo conectar con mi motor de IA. Puedo seguir ayudándote si lo intentas de nuevo." },
+      ]);
+    } finally {
+      setThinking(false);
+    }
   };
 
   return (
@@ -92,11 +111,12 @@ export default function FlowlyCompanionRuntime() {
           <section className="flowly-companion-chat-card">
             <span className="flowly-companion-section-title"><Sparkles size={14} /> {isArchitect ? "Asistente técnico" : "Ayuda del panel"}</span>
             <div className="flowly-companion-conversation">
-              {conversation.slice(-4).map((item, index) => <p key={`${item.role}-${index}`} data-role={item.role}>{item.content}</p>)}
+              {conversation.slice(-5).map((item, index) => <p key={`${item.role}-${index}`} data-role={item.role}>{item.content}</p>)}
+              {thinking && <p data-role="assistant">Estoy pensando con el contexto de Flowly...</p>}
             </div>
             <form className="flowly-companion-chat-input" onSubmit={sendMessage}>
-              <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isArchitect ? "Describe el cambio técnico..." : "Pídeme ayuda sobre tu negocio..."} />
-              <button type="submit"><Send size={14} /></button>
+              <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isArchitect ? "Describe el cambio técnico..." : "Pídeme ayuda sobre tu negocio..."} disabled={thinking} />
+              <button type="submit" disabled={thinking}><Send size={14} /></button>
             </form>
             {isArchitect ? (
               <Link href="/asistente" className="flowly-companion-architect-link"><Code2 size={14} /> Abrir Asistente Arquitecto</Link>
