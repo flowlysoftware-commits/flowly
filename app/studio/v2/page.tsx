@@ -29,8 +29,8 @@ import {
   Wand2,
   Workflow,
 } from "lucide-react";
-import type { FlowlyProjectType, FlowlyStudioProjectBlueprint } from "@/lib/flowlyStudioProjects";
-import type { FlowlyStudioArtifactKind, FlowlyStudioDefinition } from "@/lib/flowlyStudio";
+import { buildProjectDefinitions, type FlowlyProjectType, type FlowlyStudioProjectBlueprint } from "@/lib/flowlyStudioProjects";
+import { generateStudioArtifacts, type FlowlyStudioArtifactKind, type FlowlyStudioDefinition } from "@/lib/flowlyStudio";
 
 type ProjectRow = {
   id: string;
@@ -103,6 +103,60 @@ const artifactIcons: Record<string, ReactNode> = {
   app: <LayoutDashboard size={16} />,
   architect_blueprint: <BrainCircuit size={16} />,
 };
+
+
+const blueprintLabels: Record<string, string> = {
+  businessObjects: "Objetos de negocio",
+  capabilities: "Capacidades",
+  workflows: "Flujos de trabajo",
+  policies: "Políticas",
+  apps: "Aplicaciones",
+  risks: "Riesgos",
+  nextSteps: "Próximos pasos",
+  modules: "Módulos",
+  fields: "Campos",
+  states: "Estados",
+  steps: "Pasos",
+  rules: "Reglas",
+  events: "Eventos",
+};
+
+function definitionToRuntimeArtifact(definition: FlowlyStudioDefinition): ArtifactRow {
+  const generated = generateStudioArtifacts(definition);
+  return {
+    id: `runtime-${definition.kind}-${definition.slug}`,
+    kind: definition.kind || "business_object",
+    name: definition.name,
+    slug: definition.slug,
+    domain: definition.domain,
+    description: definition.description,
+    status: definition.status,
+    definition,
+    generated_sql: generated.sql,
+    generated_typescript: generated.typescript,
+    generated_api: generated.apiRoute,
+    generated_markdown: generated.markdown,
+    generated_tests: generated.testPlan,
+    generated_sdk: generated.sdk,
+  };
+}
+
+function buildBlueprintRuntimeArtifacts(project?: ProjectRow | null, storedArtifacts: ArtifactRow[] = []) {
+  if (!project?.blueprint) return storedArtifacts;
+  const storedByKey = new Map(storedArtifacts.map((artifact) => [`${artifact.kind}:${artifact.slug}`, artifact]));
+  const runtime = buildProjectDefinitions(project.blueprint).map((definition) => {
+    const key = `${definition.kind}:${definition.slug}`;
+    return storedByKey.get(key) || definitionToRuntimeArtifact(definition);
+  });
+  const runtimeKeys = new Set(runtime.map((artifact) => `${artifact.kind}:${artifact.slug}`));
+  const relatedStored = storedArtifacts.filter((artifact) => !runtimeKeys.has(`${artifact.kind}:${artifact.slug}`) && artifact.domain === runtime[0]?.domain);
+  return [...runtime, ...relatedStored];
+}
+
+function blueprintCount(project: ProjectRow | null | undefined, key: keyof FlowlyStudioProjectBlueprint) {
+  const value = project?.blueprint?.[key];
+  return Array.isArray(value) ? value.length : 0;
+}
 
 const projectTypes: Array<{ id: FlowlyProjectType; label: string }> = [
   { id: "ia_assistant", label: "IA Assistant / Companion" },
@@ -221,11 +275,17 @@ export default function FlowlyStudioV2Page() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const selectedProject = selected.type === "project" ? selected.item : null;
+  const selectedArtifact = selected.type === "artifact" ? selected.item : null;
+  const activeProject = selectedProject || projects.find((project) => project.name === moduleName) || projects[0] || null;
+
+  const runtimeArtifacts = useMemo(() => buildBlueprintRuntimeArtifacts(activeProject, artifacts), [activeProject, artifacts]);
+
   const filteredArtifacts = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!value) return artifacts;
-    return artifacts.filter((item) => [item.name, item.slug, item.domain, item.kind, item.description].join(" ").toLowerCase().includes(value));
-  }, [artifacts, query]);
+    if (!value) return runtimeArtifacts;
+    return runtimeArtifacts.filter((item) => [item.name, item.slug, item.domain, item.kind, item.description].join(" ").toLowerCase().includes(value));
+  }, [runtimeArtifacts, query]);
 
   const groupedArtifacts = useMemo(() => {
     return filteredArtifacts.reduce<Record<string, ArtifactRow[]>>((acc, item) => {
@@ -235,7 +295,7 @@ export default function FlowlyStudioV2Page() {
     }, {});
   }, [filteredArtifacts]);
 
-  const selectedSlugs = useMemo(() => artifacts.map((item) => item.slug), [artifacts]);
+  const selectedSlugs = useMemo(() => runtimeArtifacts.map((item) => item.slug), [runtimeArtifacts]);
 
   useEffect(() => {
     void loadStudio();
@@ -317,7 +377,7 @@ export default function FlowlyStudioV2Page() {
     setLoading(true);
     setError("");
     try {
-      const data = await postJson<{ review: ReviewReport }>("/api/studio/review/module", { moduleName, slugs: selectedSlugs });
+      const data = await postJson<{ review: ReviewReport }>("/api/studio/review/module", { moduleName, slugs: selectedSlugs, artifacts: runtimeArtifacts });
       setReview(data.review);
       pushConsole(`Revisión completada. Puntuación: ${data.review.score}/100.`);
     } catch (err) {
@@ -331,7 +391,7 @@ export default function FlowlyStudioV2Page() {
     setLoading(true);
     setError("");
     try {
-      const data = await postJson<{ review: ReviewReport }>("/api/studio/generate/module", { moduleName, slugs: selectedSlugs });
+      const data = await postJson<{ review: ReviewReport }>("/api/studio/generate/module", { moduleName, slugs: selectedSlugs, artifacts: runtimeArtifacts });
       setReview(data.review);
       pushConsole(`Generación registrada. Revisión: ${data.review.score}/100.`);
     } catch (err) {
@@ -345,7 +405,7 @@ export default function FlowlyStudioV2Page() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/studio/export/module", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ moduleName, slugs: selectedSlugs, force: true }) });
+      const response = await fetch("/api/studio/export/module", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ moduleName, slugs: selectedSlugs, artifacts: runtimeArtifacts, force: true }) });
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || "No se pudo exportar el módulo.");
@@ -369,7 +429,7 @@ export default function FlowlyStudioV2Page() {
     setLoading(true);
     setError("");
     try {
-      const data = await postJson<{ written: string[]; review: ReviewReport }>("/api/studio/install/module", { moduleName, slugs: selectedSlugs, force: true });
+      const data = await postJson<{ written: string[]; review: ReviewReport }>("/api/studio/install/module", { moduleName, slugs: selectedSlugs, artifacts: runtimeArtifacts, force: true });
       setReview(data.review);
       pushConsole(`Instalación local completada. Archivos escritos: ${data.written.length}.`);
     } catch (err) {
@@ -378,9 +438,6 @@ export default function FlowlyStudioV2Page() {
       setLoading(false);
     }
   }
-
-  const selectedArtifact = selected.type === "artifact" ? selected.item : null;
-  const selectedProject = selected.type === "project" ? selected.item : null;
 
   return (
     <main className="min-h-screen bg-[#06040d] text-white">
@@ -396,7 +453,7 @@ export default function FlowlyStudioV2Page() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <SmallButton onClick={loadStudio} disabled={loading}><Search size={14} /> Sincronizar</SmallButton>
-              <SmallButton onClick={() => downloadJson("flowly-studio-blueprint.json", { projects, artifacts, analysis })}><FileJson size={14} /> Exportar JSON</SmallButton>
+              <SmallButton onClick={() => downloadJson("flowly-studio-blueprint.json", { projects, artifacts: runtimeArtifacts, analysis, activeProject })}><FileJson size={14} /> Exportar JSON</SmallButton>
               <Link href="/studio/projects" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white/75 hover:bg-white/[0.1]"><PackagePlus size={14} /> Modo clásico</Link>
             </div>
           </div>
@@ -414,7 +471,7 @@ export default function FlowlyStudioV2Page() {
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/40">Puntuación</p><p className="mt-1 text-2xl font-semibold">{analysis?.architectureScore ?? "—"}/100</p></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/40">Riesgo</p><p className="mt-1 text-2xl font-semibold">{riskLabel(analysis?.riskLevel)}</p></div>
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/40">Piezas</p><p className="mt-1 text-2xl font-semibold">{artifacts.length}</p></div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/40">Piezas</p><p className="mt-1 text-2xl font-semibold">{runtimeArtifacts.length}</p></div>
             </div>
           </div>
           {message ? <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{message}</div> : null}
@@ -438,6 +495,20 @@ export default function FlowlyStudioV2Page() {
                 )) : <p className="text-sm text-white/35">Aún no hay proyectos.</p>}
               </div>
 
+              {activeProject ? (
+                <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.06] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">Runtime del Blueprint</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{activeProject.name}</p>
+                  <p className="mt-1 text-xs leading-5 text-white/45">El árbol se construye directamente desde el blueprint activo. Todo lo que aparece aquí alimenta al editor, inspector y Generator.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <span className="rounded-lg bg-black/25 px-2 py-1 text-white/55">BO: {blueprintCount(activeProject, "businessObjects")}</span>
+                    <span className="rounded-lg bg-black/25 px-2 py-1 text-white/55">Caps: {blueprintCount(activeProject, "capabilities")}</span>
+                    <span className="rounded-lg bg-black/25 px-2 py-1 text-white/55">Flows: {blueprintCount(activeProject, "workflows")}</span>
+                    <span className="rounded-lg bg-black/25 px-2 py-1 text-white/55">Apps: {blueprintCount(activeProject, "apps")}</span>
+                  </div>
+                </div>
+              ) : null}
+
               {Object.entries(artifactLabels).map(([kind, label]) => {
                 const items = groupedArtifacts[kind] || [];
                 return (
@@ -445,9 +516,9 @@ export default function FlowlyStudioV2Page() {
                     <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-white/75">{artifactIcons[kind]} {label} <span className="ml-auto text-xs text-white/35">{items.length}</span></summary>
                     <div className="mt-3 space-y-2">
                       {items.length ? items.map((artifact) => (
-                        <button key={`${artifact.kind}-${artifact.slug}`} onClick={() => setSelected({ type: "artifact", item: artifact })} className={cx("w-full rounded-lg border px-3 py-2 text-left text-xs transition", selectedArtifact?.slug === artifact.slug && selectedArtifact?.kind === artifact.kind ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-50" : "border-white/10 bg-white/[0.035] text-white/60 hover:bg-white/[0.07]")}> 
+                        <button key={`${artifact.kind}-${artifact.slug}`} onClick={() => { setSelected({ type: "artifact", item: artifact }); setModuleName(activeProject?.name || moduleName); }} className={cx("w-full rounded-lg border px-3 py-2 text-left text-xs transition", selectedArtifact?.slug === artifact.slug && selectedArtifact?.kind === artifact.kind ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-50" : "border-white/10 bg-white/[0.035] text-white/60 hover:bg-white/[0.07]")}> 
                           <span className="block truncate font-semibold">{artifact.name}</span>
-                          <span className="mt-1 block text-white/35">{artifact.domain}</span>
+                          <span className="mt-1 block text-white/35">{artifact.domain}{artifact.id.startsWith("runtime-") ? " · blueprint" : " · guardado"}</span>
                         </button>
                       )) : <p className="py-2 text-xs text-white/30">Vacío</p>}
                     </div>
@@ -485,12 +556,34 @@ export default function FlowlyStudioV2Page() {
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {Object.entries(selectedProject.blueprint || {}).filter(([, value]) => Array.isArray(value)).map(([key, value]) => (
                     <div key={key} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">{key}</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">{blueprintLabels[key] || key}</p>
                       <p className="mt-2 text-2xl font-semibold">{(value as unknown[]).length}</p>
                     </div>
                   ))}
                 </div>
-                <pre className="max-h-80 overflow-auto rounded-2xl border border-white/10 bg-black/30 p-4 text-xs leading-5 text-white/60">{JSON.stringify(selectedProject.blueprint, null, 2)}</pre>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {Object.entries(artifactLabels).map(([kind, label]) => {
+                    const items = runtimeArtifacts.filter((artifact) => artifact.kind === kind);
+                    if (!items.length) return null;
+                    return (
+                      <div key={kind} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-cyan-100">{artifactIcons[kind]} {label}</p>
+                        <div className="grid gap-2">
+                          {items.slice(0, 8).map((artifact) => (
+                            <button key={`${artifact.kind}-${artifact.slug}`} onClick={() => setSelected({ type: "artifact", item: artifact })} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-left text-xs text-white/60 hover:bg-white/[0.07]">
+                              <span className="block font-semibold text-white/75">{artifact.name}</span>
+                              <span className="mt-1 block text-white/35">{artifact.description}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <details className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Blueprint completo</summary>
+                  <pre className="mt-3 max-h-80 overflow-auto text-xs leading-5 text-white/60">{JSON.stringify(selectedProject.blueprint, null, 2)}</pre>
+                </details>
               </div>
             ) : null}
 
@@ -503,10 +596,28 @@ export default function FlowlyStudioV2Page() {
                   <div className="mt-4 flex flex-wrap gap-2">{artifactSummary(selectedArtifact).map(([label, value]) => <span key={label} className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/55">{label}: {value}</span>)}</div>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-2">
-                  <pre className="max-h-96 overflow-auto rounded-2xl border border-white/10 bg-black/30 p-4 text-xs leading-5 text-white/60">{JSON.stringify(selectedArtifact.definition, null, 2)}</pre>
+                  <div className="grid gap-3">
+                    {["fields", "states", "businessObjects", "capabilities", "steps", "rules", "events", "policies"].map((key) => {
+                      const value = (selectedArtifact.definition as unknown as Record<string, unknown>)[key];
+                      if (!Array.isArray(value) || !value.length) return null;
+                      return (
+                        <details key={key} open={key === "fields" || key === "states"} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <summary className="cursor-pointer text-sm font-semibold text-cyan-100">{blueprintLabels[key] || key} ({value.length})</summary>
+                          <div className="mt-3 grid gap-2">
+                            {value.slice(0, 12).map((entry, index) => {
+                              const record = typeof entry === "object" && entry ? entry as Record<string, unknown> : { name: entry };
+                              return <div key={`${key}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-white/55"><strong className="text-white/75">{String(record.label || record.name || record.target || `Elemento ${index + 1}`)}</strong>{record.type ? <span className="ml-2 text-white/35">{String(record.type)}</span> : null}{record.description ? <p className="mt-1 text-white/35">{String(record.description)}</p> : null}</div>;
+                            })}
+                          </div>
+                        </details>
+                      );
+                    })}
+                    <details className="rounded-2xl border border-white/10 bg-black/30 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">JSON del elemento</summary><pre className="mt-3 max-h-96 overflow-auto text-xs leading-5 text-white/60">{JSON.stringify(selectedArtifact.definition, null, 2)}</pre></details>
+                  </div>
                   <div className="grid gap-3">
                     <details open className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">SQL generado</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_sql || "Pendiente"}</pre></details>
                     <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">TypeScript generado</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_typescript || "Pendiente"}</pre></details>
+                    <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">API generada</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_api || "Pendiente"}</pre></details>
                     <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">Markdown generado</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_markdown || "Pendiente"}</pre></details>
                   </div>
                 </div>
