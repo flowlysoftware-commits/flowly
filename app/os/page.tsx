@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Bot, BookOpen, BrainCircuit, Cpu, GitBranch, Github, Hammer, Plus, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { Bot, BookOpen, BrainCircuit, Cpu, GitBranch, Github, Hammer, Plus, ShieldCheck, Sparkles, Wrench, Rocket } from "lucide-react";
 
 const tools = [
+  { href: "/developer", title: "Developer Center", description: "Panel tecnológico central con Cerebro, Corazón, Memoria, Studio, Executor y GitHub.", icon: ShieldCheck },
   { href: "/os/brain", title: "Flowly Brain", description: "Cerebro operativo: contexto, Knowledge, Analyzer, Kernel y Planner antes de responder.", icon: BrainCircuit },
   { href: "/asistente", title: "Asistente Arquitecto", description: "Habla con el Companion técnico para crear, analizar o modificar Flowly.", icon: Bot },
   { href: "/crear", title: "Crear simple", description: "Asistente sencillo para convertir una idea en un blueprint.", icon: Plus },
@@ -11,7 +12,8 @@ const tools = [
   { href: "/docs", title: "Flowly Docs", description: "Documentación viva de arquitectura, ingeniería y producto.", icon: BookOpen },
   { href: "/os/migration", title: "Migration Blueprint", description: "Auditoría del panel actual, registro Kernel y plan de migración a Flowly OS.", icon: GitBranch },
   { href: "/os/github", title: "GitHub Executor", description: "Conecta Flowly Brain con GitHub para crear ramas y Pull Requests seguros.", icon: Github },
-  { href: "/os/executor", title: "Executor V2", description: "Desarrollador autónomo: analiza petición, localiza archivos y crea Pull Requests de trabajo.", icon: Wrench },
+  { href: "/os/executor-v3", title: "Executor V3", description: "Agente de ingeniería: mapa profundo, dependencias, edición inteligente y Pull Requests seguros.", icon: Rocket },
+  { href: "/os/executor", title: "Executor V2", description: "Versión anterior del desarrollador autónomo por Pull Request.", icon: Wrench },
 ];
 
 export default function FlowlyOsPage() {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runExecutorV2 } from "@/lib/flowlyExecutorV2";
+import { runExecutorV3 } from "@/lib/flowlyExecutorV3";
 
 export const runtime = "nodejs";
 
@@ -17,12 +17,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Falta la acción que debe ejecutar Brain." }, { status: 400 });
     }
 
-    const result = await runExecutorV2({ instruction: action, approved: true, mode: "pull_request" });
+    const result = await runExecutorV3(action, true);
     return NextResponse.json({
       ok: !result.error,
       status: result.status,
       action,
-      message: result.pullRequestUrl ? "Executor V2 ha creado un Pull Request para revisión." : "Executor V2 ha preparado la acción, pero no pudo abrir Pull Request.",
+      message: result.pullRequestUrl ? "Executor V3 ha creado un Pull Request para revisión." : "Executor V3 ha preparado la acción, pero no pudo abrir Pull Request.",
       pullRequestUrl: result.pullRequestUrl,
       pullRequestNumber: result.pullRequestNumber,
       branch: result.branch,
