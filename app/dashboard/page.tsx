@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { marketingPlans } from "@/lib/marketingPlans";
 import {
   Bot,
+  BookOpen,
   ChevronRight,
   CalendarDays,
   CheckCircle2,
@@ -1449,6 +1450,7 @@ export default function DashboardPage() {
 
           <nav className="grid gap-2">
             {navItems.map(({ id, label, Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "menu-active" : "menu-item"}><Icon size={17} /> {label}</button>)}
+            <Link href="/docs" className="menu-item"><BookOpen size={17} /> Flowly Docs</Link>
           </nav>
 
           {activeModules.length > 0 && (
