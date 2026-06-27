@@ -1451,6 +1451,7 @@ export default function DashboardPage() {
           <nav className="grid gap-2">
             {navItems.map(({ id, label, Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "menu-active" : "menu-item"}><Icon size={17} /> {label}</button>)}
             <Link href="/crear" className="menu-item"><Plus size={17} /> Crear</Link>
+            <Link href="/asistente" className="menu-item"><Bot size={17} /> Asistente IA</Link>
             <Link href="/docs" className="menu-item"><BookOpen size={17} /> Flowly Docs</Link>
             <Link href="/studio" className="menu-item"><Sparkles size={17} /> Flowly Studio</Link>
             <Link href="/kernel" className="menu-item"><ShieldCheck size={17} /> Flowly Kernel</Link>
