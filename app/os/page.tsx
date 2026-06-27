@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Bot, BookOpen, Code2, Cpu, GitBranch, Hammer, Layers3, Plus, ShieldCheck, Sparkles } from "lucide-react";
+import { Bot, BookOpen, BrainCircuit, Cpu, GitBranch, Hammer, Plus, ShieldCheck, Sparkles } from "lucide-react";
 
 const tools = [
+  { href: "/os/brain", title: "Flowly Brain", description: "Cerebro operativo: contexto, Knowledge, Analyzer, Kernel y Planner antes de responder.", icon: BrainCircuit },
   { href: "/asistente", title: "Asistente Arquitecto", description: "Habla con el Companion técnico para crear, analizar o modificar Flowly.", icon: Bot },
   { href: "/crear", title: "Crear simple", description: "Asistente sencillo para convertir una idea en un blueprint.", icon: Plus },
   { href: "/studio/v2", title: "Flowly Studio", description: "Modo arquitecto: blueprints, piezas, relaciones, generator e inspector.", icon: Sparkles },

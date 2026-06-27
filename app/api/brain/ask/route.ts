@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const message = String(body.message || "").trim();
-    const pathname = String(body.pathname || "/dashboard");
+    const pathname = String(body.pathname || "/os/brain");
     const conversation = Array.isArray(body.conversation) ? (body.conversation as FlowlyBrainMessage[]) : [];
 
     if (!message) {
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const result = await runFlowlyBrain({ message, pathname, conversation });
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Flowly Companion Brain error", error);
-    return NextResponse.json({ error: "No se pudo generar la respuesta del Brain." }, { status: 500 });
+    console.error("Flowly Brain ask error", error);
+    return NextResponse.json({ error: "No se pudo ejecutar Flowly Brain." }, { status: 500 });
   }
 }
