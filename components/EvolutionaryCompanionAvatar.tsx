@@ -9,6 +9,7 @@ type EvolutionaryCompanionAvatarProps = {
   mood?: CompanionMood | string;
   compact?: boolean;
   onClick?: () => void;
+  memory?: string; // New prop for memory
 };
 
 function normalizeMood(value?: CompanionMood | string): CompanionMood {
@@ -30,6 +31,7 @@ export default function EvolutionaryCompanionAvatar({
   mood = "idle",
   compact = false,
   onClick,
+  memory = "", // Default memory
 }: EvolutionaryCompanionAvatarProps) {
   const normalizedMood = normalizeMood(mood);
   const stage = level >= 20 ? "legendary" : level >= 10 ? "evolved" : level >= 5 ? "growing" : "starter";
@@ -78,6 +80,7 @@ export default function EvolutionaryCompanionAvatar({
           <strong>{name}</strong>
           <small>Nivel {level} · Evolución {stage === "starter" ? "inicial" : stage === "growing" ? "creciendo" : stage === "evolved" ? "avanzada" : "legendaria"}</small>
           <span className="evo-xp"><i style={{ width: `${safeXp}%` }} /></span>
+          <p className="evo-memory">Memoria: {memory}</p> {/* Display memory */}
         </span>
       )}
     </button>
