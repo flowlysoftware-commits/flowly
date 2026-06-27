@@ -1,13 +1,4 @@
-# Flowly Capability Catalog
+# Capability Catalog
 
-Catálogo oficial de capacidades reutilizables de Flowly.
+Catálogo inicial de capacidades reutilizables del sistema.
 
-Cada Capability deberá documentar:
-
-- contrato de entrada,
-- contrato de salida,
-- Business Objects implicados,
-- permisos,
-- políticas,
-- eventos,
-- observabilidad.

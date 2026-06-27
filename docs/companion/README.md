@@ -1,3 +1,4 @@
-# Companion
+# Companion Specification
 
-Sección preparada para documentar Companion dentro de Flowly Docs.
+Especificación específica del Companion OS.
+
