@@ -31,8 +31,51 @@ export async function GET() {
   return NextResponse.json({ projects: data || [] });
 }
 
+async function deleteProjectById(id: string, deleteArtifacts: boolean) {
+  if (!dbReady()) return NextResponse.json({ error: "Supabase no está configurado. Ejecuta supabase/flowly_studio.sql." }, { status: 503 });
+  const { data: project, error: fetchError } = await supabaseAdmin
+    .from("flowly_studio_projects")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !project) return NextResponse.json({ error: fetchError?.message || "Proyecto no encontrado." }, { status: 404 });
+
+  if (deleteArtifacts) {
+    const blueprint = (project.blueprint || {}) as Record<string, unknown>;
+    const groups = ["businessObjects", "capabilities", "workflows", "policies", "apps"] as const;
+    const slugs = groups.flatMap((group) => {
+      const items = Array.isArray(blueprint[group]) ? blueprint[group] : [];
+      return items
+        .map((item) => typeof item === "object" && item && "slug" in item ? String((item as { slug?: unknown }).slug || "") : "")
+        .filter(Boolean);
+    });
+    if (slugs.length) {
+      const { error: artifactError } = await supabaseAdmin.from("flowly_studio_artifacts").delete().in("slug", slugs);
+      if (artifactError) return NextResponse.json({ error: artifactError.message }, { status: 500 });
+    }
+  }
+
+  const { error: deleteError } = await supabaseAdmin.from("flowly_studio_projects").delete().eq("id", id);
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true, deletedProject: project, deletedArtifacts: deleteArtifacts });
+}
+
+export async function DELETE(request: NextRequest) {
+  const id = request.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Falta el id del proyecto." }, { status: 400 });
+  return deleteProjectById(id, request.nextUrl.searchParams.get("deleteArtifacts") === "true");
+}
+
 export async function POST(request: NextRequest) {
-  const input = normalizeBody(await request.json());
+  const rawBody = await request.json();
+  if ((rawBody as Record<string, unknown>)._method === "DELETE") {
+    const id = request.nextUrl.searchParams.get("id") || String((rawBody as Record<string, unknown>).id || "");
+    if (!id) return NextResponse.json({ error: "Falta el id del proyecto." }, { status: 400 });
+    return deleteProjectById(id, request.nextUrl.searchParams.get("deleteArtifacts") === "true" || (rawBody as Record<string, unknown>).deleteArtifacts === true);
+  }
+  const input = normalizeBody(rawBody);
   const blueprintOnly = request.nextUrl.searchParams.get("preview") === "true";
   const blueprint = buildProjectBlueprint(input);
 

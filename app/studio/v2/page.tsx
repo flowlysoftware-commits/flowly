@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Sparkles,
   TerminalSquare,
+  Trash2,
   Wand2,
   Workflow,
 } from "lucide-react";
@@ -79,6 +80,25 @@ type ReviewReport = {
   warnings: string[];
   actions: string[];
   score: number;
+};
+
+type BuilderPhase = {
+  id: string;
+  name: string;
+  status: "pending" | "running" | "completed" | "warning" | "failed";
+  detail: string;
+};
+
+type BuilderRun = {
+  id: string;
+  moduleName: string;
+  slug: string;
+  status: "ready" | "completed" | "failed";
+  phases: BuilderPhase[];
+  files: Array<{ path: string; kind: string; description: string }>;
+  review: ReviewReport;
+  nextActions: string[];
+  createdAt: string;
 };
 
 type SelectedItem =
@@ -501,6 +521,40 @@ function GeneratorProgress({ runtimeArtifacts, review }: { runtimeArtifacts: Art
   );
 }
 
+function BuilderProgress({ run }: { run: BuilderRun | null }) {
+  if (!run) return null;
+  return (
+    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.06] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">Flowly Builder</p>
+          <h3 className="mt-1 text-lg font-semibold">{run.moduleName} · {run.status === "completed" ? "fabricado" : "preparado"}</h3>
+        </div>
+        <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/60">{run.files.length} archivos</span>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        {run.phases.map((phase) => (
+          <div key={phase.id} className={cx("rounded-xl border p-3", phase.status === "completed" ? "border-emerald-300/20 bg-emerald-300/10" : phase.status === "warning" ? "border-amber-300/20 bg-amber-300/10" : "border-white/10 bg-black/20")}>
+            <p className="flex items-center gap-2 text-xs font-semibold text-white/80">{phase.status === "completed" ? <CheckCircle2 size={14} /> : <Loader2 size={14} />} {phase.name}</p>
+            <p className="mt-1 text-xs text-white/40">{phase.detail}</p>
+          </div>
+        ))}
+      </div>
+      <details className="mt-4 rounded-xl border border-white/10 bg-black/25 p-3">
+        <summary className="cursor-pointer text-xs font-semibold text-cyan-100">Ver archivos que fabricará Flowly</summary>
+        <div className="mt-3 max-h-56 space-y-2 overflow-auto pr-1">
+          {run.files.map((file) => (
+            <div key={file.path} className="rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-white/55">
+              <span className="block font-mono text-white/75">{file.path}</span>
+              <span className="mt-1 block text-white/35">{file.description}</span>
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export default function FlowlyStudioV2Page() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactRow[]>([]);
@@ -513,6 +567,7 @@ export default function FlowlyStudioV2Page() {
   const [projectType, setProjectType] = useState<FlowlyProjectType>("ia_assistant");
   const [moduleName, setModuleName] = useState("IA Assistant");
   const [review, setReview] = useState<ReviewReport | null>(null);
+  const [builderRun, setBuilderRun] = useState<BuilderRun | null>(null);
   const [consoleLines, setConsoleLines] = useState<string[]>(["Studio V2 preparado. Crea o selecciona un proyecto para empezar."]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -682,6 +737,43 @@ export default function FlowlyStudioV2Page() {
     }
   }
 
+
+  async function buildModule() {
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const data = await postJson<{ run: BuilderRun }>("/api/studio/build/module", { moduleName, slugs: selectedSlugs, artifacts: runtimeArtifacts, force: true });
+      setBuilderRun(data.run);
+      setReview(data.run.review);
+      setMessage(`Builder preparado: ${data.run.files.length} archivos listos para fabricar.`);
+      pushConsole(`Flowly Builder listo para ${data.run.moduleName}: ${data.run.files.length} archivos, ${data.run.phases.length} fases.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo fabricar el módulo.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteProject(project: ProjectRow) {
+    const confirmed = window.confirm(`¿Eliminar el proyecto "${project.name}" y sus piezas de Studio? Esta acción no elimina código instalado, solo la prueba guardada en Studio.`);
+    if (!confirmed) return;
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      await postJson<{ ok: boolean }>(`/api/studio/projects?id=${encodeURIComponent(project.id)}&deleteArtifacts=true`, { _method: "DELETE" });
+      setMessage(`Proyecto eliminado: ${project.name}`);
+      if (selectedProject?.id === project.id) setSelected({ type: "none" });
+      pushConsole(`Proyecto eliminado: ${project.name}.`);
+      await loadStudio();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar el proyecto.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#06040d] text-white">
       <section className="mx-auto flex min-h-screen max-w-[1800px] flex-col px-4 py-4">
@@ -732,9 +824,15 @@ export default function FlowlyStudioV2Page() {
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/35">Proyectos</p>
                 {projects.length ? projects.map((project) => (
-                  <button key={project.id} onClick={() => { setSelected({ type: "project", item: project }); setModuleName(project.name); }} className={cx("mb-2 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition", selectedProject?.id === project.id ? "border-cyan-300/30 bg-cyan-300/10" : "border-white/10 bg-black/20 hover:bg-white/[0.06]")}> 
-                    <span className="truncate">{project.name}</span><ChevronRight size={14} className="text-white/35" />
-                  </button>
+                  <div key={project.id} className={cx("mb-2 flex w-full items-center gap-2 rounded-xl border px-2 py-2 transition", selectedProject?.id === project.id ? "border-cyan-300/30 bg-cyan-300/10" : "border-white/10 bg-black/20 hover:bg-white/[0.06]")}>
+                    <button onClick={() => { setSelected({ type: "project", item: project }); setModuleName(project.name); }} className="min-w-0 flex-1 text-left text-sm">
+                      <span className="block truncate">{project.name}</span>
+                    </button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); void deleteProject(project); }} title="Eliminar proyecto" className="rounded-lg border border-red-300/15 bg-red-400/10 p-1.5 text-red-100 opacity-70 transition hover:opacity-100">
+                      <Trash2 size={13} />
+                    </button>
+                    <ChevronRight size={14} className="text-white/35" />
+                  </div>
                 )) : <p className="text-sm text-white/35">Aún no hay proyectos.</p>}
               </div>
 
@@ -849,6 +947,7 @@ export default function FlowlyStudioV2Page() {
                 <div className="flex flex-wrap gap-2">
                   <SmallButton onClick={reviewModule} disabled={loading}><ShieldCheck size={14} /> Revisar</SmallButton>
                   <SmallButton onClick={generateModule} disabled={loading}><Code2 size={14} /> Generar</SmallButton>
+                  <SmallButton onClick={buildModule} disabled={loading} tone="primary"><Rocket size={14} /> Construir módulo</SmallButton>
                   <SmallButton onClick={exportModule} disabled={loading} tone="primary"><Download size={14} /> Exportar ZIP</SmallButton>
                   <SmallButton onClick={installLocal} disabled={loading} tone="danger"><Database size={14} /> Instalar local</SmallButton>
                 </div>
@@ -856,6 +955,7 @@ export default function FlowlyStudioV2Page() {
             </div>
             <div className="grid gap-3">
               <GeneratorProgress runtimeArtifacts={runtimeArtifacts} review={review} />
+              <BuilderProgress run={builderRun} />
               <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/35">Consola</p>
                 <div className="space-y-1 text-xs leading-5 text-white/55">{consoleLines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div>
