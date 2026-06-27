@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import FlowlyCompanionRuntime from "@/components/FlowlyCompanionRuntime";
 
 export const metadata: Metadata = {
   title: "Flowly IA | SaaS para negocios modernos",
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           />
         </noscript>
         {children}
+        <FlowlyCompanionRuntime />
       </body>
     </html>
   );
