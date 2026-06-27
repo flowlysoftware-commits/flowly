@@ -309,6 +309,7 @@ export default function FlowlyStudioPage() {
                 <button onClick={saveDefinition} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-slate-950"><Save size={16} /> Guardar</button>
                 <button onClick={generateArtifacts} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><Sparkles size={16} /> Generar</button>
                 <Link href="/studio/generator" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-cyan-200/20 bg-cyan-300/10 px-4 py-3 text-sm font-semibold text-cyan-100"><Rocket size={16} /> Generator</Link>
+                <Link href="/studio/core" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-emerald-200/20 bg-emerald-300/10 px-4 py-3 text-sm font-semibold text-emerald-100"><Layers3 size={16} /> Core</Link>
               </div>
             </div>
           </div>

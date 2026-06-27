@@ -1,5 +1,6 @@
-import { slugifyStudio, toPascalCase, toSnakeCase } from "@/lib/flowlyStudio";
+import { slugifyStudio, toPascalCase } from "@/lib/flowlyStudio";
 import type { FlowlyModuleGeneration } from "@/lib/flowlyStudioHeart";
+import { buildGeneratorPipeline, buildMarketplacePackage } from "@/lib/flowlyStudioCore";
 
 type ZipFile = {
   path: string;
@@ -124,6 +125,14 @@ function menuSnippet(moduleName: string, slug: string) {
   return `// Añadir este enlace al menú del dashboard cuando quieras activar el módulo:\n// { label: "${moduleName}", href: "/generated/${slug}", icon: "Package" }\n`;
 }
 
+function pipelineMarkdown(generation: FlowlyModuleGeneration) {
+  return `# Pipeline del Generator\n\n${buildGeneratorPipeline(generation).map((step) => `## ${step.paso}. ${step.nombre}\n\n- Estado: ${step.estado}\n- Detalle: ${step.detalle}`).join("\n\n")}`;
+}
+
+function marketplaceManifest(generation: FlowlyModuleGeneration) {
+  return JSON.stringify(buildMarketplacePackage(generation, "privado"), null, 2);
+}
+
 function installReadme(moduleName: string, slug: string) {
   return `# ${moduleName}\n\nPaquete generado por Flowly Studio.\n\n## Cómo instalarlo\n\n1. Copia las carpetas del ZIP encima de tu proyecto Flowly.\n2. Ejecuta la migración SQL ubicada en:\n\n\`supabase/migrations/${slug}.sql\`\n\n3. Abre la ruta generada:\n\n\`/generated/${slug}\`\n\n4. Revisa el archivo de menú:\n\n\`app/dashboard/generated-menu-snippet-${slug}.ts\`\n\n5. Antes de producción, conecta las acciones al Capability Runtime real y revisa las políticas.\n\n## Importante\n\nEste ZIP genera código instalable y revisable. Flowly Studio no sobrescribe automáticamente tu proyecto en producción para evitar cambios peligrosos sin revisión.\n`;
 }
@@ -145,6 +154,9 @@ export function buildModuleFiles(generation: FlowlyModuleGeneration): ZipFile[] 
     { path: `studio-exports/${slug}/api-manifest.json`, content: generation.apiManifest },
     { path: `studio-exports/${slug}/impact-report.md`, content: generation.impactReport },
     { path: `studio-exports/${slug}/module-index.ts`, content: `export { ${pascal}Module } from "../../lib/generated/${slug}";\n` },
+    { path: `studio-exports/${slug}/generator-pipeline.md`, content: pipelineMarkdown(generation) },
+    { path: `marketplace/generated/${slug}.json`, content: marketplaceManifest(generation) },
+    { path: `studio-exports/${slug}/architecture-registry.json`, content: safeJson({ module: generation.moduleName, artifacts: generation.artifacts.map((artifact) => ({ kind: artifact.kind, name: artifact.name, slug: artifact.slug, domain: artifact.domain })) }) },
   ];
 }
 

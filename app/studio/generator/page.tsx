@@ -20,6 +20,8 @@ import {
   Search,
   ShieldAlert,
   Sparkles,
+  Store,
+  Layers3,
   Workflow,
 } from "lucide-react";
 import type { FlowlyStudioArtifactKind } from "@/lib/flowlyStudio";
@@ -49,6 +51,25 @@ type ModuleReview = {
   warnings: string[];
   actions: string[];
   score: number;
+};
+
+type ReviewerAIReport = {
+  aprobado: boolean;
+  puntuacion: number;
+  criterios: Array<{ nombre: string; estado: string; detalle: string }>;
+  bloqueos: string[];
+  avisos: string[];
+  acciones: string[];
+};
+
+type MarketplacePackage = {
+  nombre: string;
+  slug: string;
+  estado: string;
+  version: string;
+  descripcion: string;
+  permisos: string[];
+  checklist: string[];
 };
 
 const kindLabels: Record<string, string> = {
@@ -138,6 +159,8 @@ export default function FlowlyGeneratorPage() {
   const [analysis, setAnalysis] = useState<FlowlyArchitectureAnalysis | null>(null);
   const [generation, setGeneration] = useState<FlowlyModuleGeneration | null>(null);
   const [review, setReview] = useState<ModuleReview | null>(null);
+  const [reviewerReport, setReviewerReport] = useState<ReviewerAIReport | null>(null);
+  const [marketplacePackage, setMarketplacePackage] = useState<MarketplacePackage | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [moduleName, setModuleName] = useState("Módulo generado por Flowly");
   const [architectPrompt, setArchitectPrompt] = useState("Quiero crear un módulo de alquiler de vehículos");
@@ -184,6 +207,8 @@ export default function FlowlyGeneratorPage() {
       const data = await postJson<{ generation: FlowlyModuleGeneration }>("/api/studio/generate/module", { moduleName, slugs: selected });
       setGeneration(data.generation);
       setReview(null);
+      setReviewerReport(null);
+      setMarketplacePackage(null);
       setMessage("Módulo generado y guardado como generación revisable.");
       await loadEverything();
     } catch (err) {
@@ -229,6 +254,37 @@ export default function FlowlyGeneratorPage() {
       setMessage(`Instalación local completada. Archivos escritos: ${data.written.length}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo instalar directamente. Usa la exportación ZIP.");
+    }
+  }
+
+
+  async function reviewerAI() {
+    setError("");
+    setMessage("");
+    setIsLoading(true);
+    try {
+      const data = await postJson<{ report: ReviewerAIReport }>("/api/studio/reviewer", { moduleName, slugs: selected });
+      setReviewerReport(data.report);
+      setMessage(data.report.aprobado ? "Reviewer AI aprueba el módulo para revisión final." : "Reviewer AI ha encontrado puntos que revisar.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo ejecutar Reviewer AI.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function buildMarketplace() {
+    setError("");
+    setMessage("");
+    setIsLoading(true);
+    try {
+      const data = await postJson<{ package: MarketplacePackage }>("/api/studio/marketplace/package", { moduleName, slugs: selected, estado: "privado" });
+      setMarketplacePackage(data.package);
+      setMessage("Paquete Marketplace preparado como privado.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear el paquete Marketplace.");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -278,7 +334,7 @@ export default function FlowlyGeneratorPage() {
   return (
     <main className="min-h-screen bg-[#080611] px-5 py-8 text-white lg:px-8">
       <section className="mx-auto max-w-7xl">
-        <Link href="/studio" className="inline-flex items-center gap-2 text-sm text-white/55 transition hover:text-white"><ArrowLeft size={16} /> Volver a Studio</Link>
+        <div className="flex flex-wrap items-center gap-3"><Link href="/studio" className="inline-flex items-center gap-2 text-sm text-white/55 transition hover:text-white"><ArrowLeft size={16} /> Volver a Studio</Link><Link href="/studio/core" className="inline-flex items-center gap-2 text-sm text-cyan-100/80 transition hover:text-cyan-100"><Layers3 size={16} /> Core avanzado</Link></div>
 
         <header className="mt-6 overflow-hidden rounded-[2.2rem] border border-white/10 bg-white/[0.06] p-8 backdrop-blur-2xl md:p-10">
           <span className="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">Generador de Flowly</span>
@@ -360,6 +416,8 @@ export default function FlowlyGeneratorPage() {
               <button onClick={generateModule} disabled={isLoading || !selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-100 px-5 py-4 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"><Rocket size={17} /> Generar</button>
               <button onClick={exportInstallableZip} disabled={!selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-5 py-4 text-sm font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"><FileArchive size={17} /> Exportar ZIP</button>
               <button onClick={installLocally} disabled={!selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-5 py-4 text-sm font-semibold text-amber-100 disabled:cursor-not-allowed disabled:opacity-45"><Database size={17} /> Instalar local</button>
+              <button onClick={reviewerAI} disabled={isLoading || !selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-violet-300/20 bg-violet-400/10 px-5 py-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"><BrainCircuit size={17} /> Reviewer AI</button>
+              <button onClick={buildMarketplace} disabled={isLoading || !selected.length} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-5 py-4 text-sm font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-45"><Store size={17} /> Marketplace</button>
             </div>
             <p className="mt-3 text-xs leading-5 text-white/40">Instalar local solo funciona en desarrollo si activas <code>FLOWLY_STUDIO_ALLOW_FILE_WRITE=true</code>. En producción usa el ZIP instalable.</p>
           </div>
@@ -393,6 +451,23 @@ export default function FlowlyGeneratorPage() {
               </section>
             ) : null}
 
+
+            {reviewerReport ? (
+              <section className={`rounded-[1.7rem] border p-5 backdrop-blur-2xl ${reviewerReport.aprobado ? "border-emerald-300/20 bg-emerald-400/10" : "border-amber-300/20 bg-amber-400/10"}`}>
+                <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-semibold">Reviewer AI</h2><span className="rounded-full bg-white/10 px-3 py-1 text-sm">{reviewerReport.puntuacion}/100</span></div>
+                <div className="space-y-2 text-sm text-white/70">{reviewerReport.criterios.map((item) => <p key={item.nombre}>• <strong>{item.nombre}</strong>: {item.estado} · {item.detalle}</p>)}</div>
+                {reviewerReport.avisos.length ? <div className="mt-4 text-sm text-amber-50/80"><strong>Avisos:</strong> {reviewerReport.avisos.join(" · ")}</div> : null}
+              </section>
+            ) : null}
+
+            {marketplacePackage ? (
+              <section className="rounded-[1.7rem] border border-cyan-300/20 bg-cyan-400/10 p-5 text-cyan-50 backdrop-blur-2xl">
+                <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-semibold">Paquete Marketplace</h2><span className="rounded-full bg-white/10 px-3 py-1 text-sm">{marketplacePackage.estado}</span></div>
+                <p className="text-sm opacity-75">{marketplacePackage.nombre} · versión {marketplacePackage.version}</p>
+                <p className="mt-3 text-sm opacity-75">Permisos: {marketplacePackage.permisos.slice(0, 6).join(", ") || "pendiente"}</p>
+                <ul className="mt-3 space-y-1 text-sm opacity-75">{marketplacePackage.checklist.map((item) => <li key={item}>• {item}</li>)}</ul>
+              </section>
+            ) : null}
             <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl">
               <div className="mb-4 flex items-center gap-3"><GitBranch className="text-cyan-100" size={20} /><h2 className="text-xl font-semibold">Grafo de dependencias</h2></div>
               <div className="max-h-80 overflow-auto rounded-2xl border border-white/10 bg-black/25 p-4">

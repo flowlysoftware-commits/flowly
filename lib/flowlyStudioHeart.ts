@@ -1,4 +1,4 @@
-import { generateStudioArtifacts, slugifyStudio, toPascalCase, toSnakeCase, type FlowlyGeneratedArtifacts, type FlowlyStudioArtifactKind, type FlowlyStudioDefinition } from "@/lib/flowlyStudio";
+import { generateStudioArtifacts, slugifyStudio, toPascalCase, type FlowlyStudioArtifactKind, type FlowlyStudioDefinition } from "@/lib/flowlyStudio";
 
 export type FlowlyStudioStoredArtifact = {
   id: string;
