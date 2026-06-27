@@ -2,6 +2,7 @@ import { analyzeCurrentFlowlyProject, analyzeModule } from "@/lib/flowlyAnalyzer
 import { detectCompanionIntent, getFlowlyContextSnapshot, type FlowlyCompanionIntent, type FlowlyContextSnapshot } from "@/lib/flowlyContextEngine";
 import { flowlyDocBooks } from "@/lib/flowlyDocsContent";
 import { flowlyMigrationModules, buildModuleBlueprint } from "@/lib/flowlyOSMigration";
+import { analyzeFlowlyImpact } from "@/lib/flowlyProjectGraph";
 
 export type FlowlyBrainMode = "cliente" | "arquitecto";
 export type FlowlyBrainStage = "contexto" | "conocimiento" | "analisis" | "plan" | "respuesta" | "bloqueado";
@@ -22,6 +23,7 @@ export type FlowlyBrainToolId =
   | "context_engine"
   | "knowledge_search"
   | "project_analyzer"
+  | "project_graph"
   | "kernel_registry"
   | "business_context"
   | "permission_guard"
@@ -198,6 +200,25 @@ function toolAnalyzer(message: string): FlowlyBrainToolResult {
     summary: mentioned.length ? `Módulos detectados: ${mentioned.map((module) => module.name).join(", ")}.` : `${report.summary.totalModules} módulos conocidos en la migración.`,
     data: { summary: report.summary, mentionedModules: mentioned, moduleAnalyses },
   };
+}
+
+async function toolProjectGraph(message: string): Promise<FlowlyBrainToolResult> {
+  try {
+    const impact = await analyzeFlowlyImpact(message);
+    return {
+      id: "project_graph",
+      label: "Project Graph",
+      summary: `${impact.detectedModules.length} módulo(s), ${impact.primaryFiles.length} archivo(s) principales y ${impact.secondaryFiles.length} secundarios detectados.`,
+      data: { impact },
+    };
+  } catch (error) {
+    return {
+      id: "project_graph",
+      label: "Project Graph",
+      summary: "Project Graph no pudo completarse, pero Brain seguirá con Analyzer/Knowledge.",
+      data: { error: error instanceof Error ? error.message : String(error) },
+    };
+  }
 }
 
 function toolKernel(message: string): FlowlyBrainToolResult {
@@ -440,6 +461,7 @@ export async function runFlowlyBrain(request: FlowlyBrainRequest): Promise<Flowl
 
   if (mode === "arquitecto" || intent === "mejorar_modulo" || intent === "crear_modulo") {
     tools.push(toolAnalyzer(request.message));
+    tools.push(await toolProjectGraph(request.message));
     tools.push(toolKernel(request.message));
   }
 

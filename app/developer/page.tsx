@@ -11,6 +11,7 @@ const coreModules = [
 ];
 
 const quickAccess = [
+  { title: "Project Graph", href: "/os/project-graph", icon: Network, tag: "Nuevo" },
   { title: "Executor V3", href: "/os/executor-v3", icon: Rocket, tag: "Nuevo" },
   { title: "GitHub Executor", href: "/os/github", icon: Github, tag: "Conectado" },
   { title: "Asistente Arquitecto", href: "/asistente", icon: Bot, tag: "Chat" },
@@ -65,7 +66,8 @@ export default function DeveloperControlCenterPage() {
               <MenuItem href="/studio/generator" icon={<FileCode2 size={17} />} label="Generador" />
             </MenuGroup>
             <MenuGroup title="Ejecución">
-              <MenuItem href="/os/executor-v3" icon={<Rocket size={17} />} label="Executor V3" highlight />
+              <MenuItem href="/os/project-graph" icon={<Network size={17} />} label="Project Graph" highlight />
+              <MenuItem href="/os/executor-v3" icon={<Rocket size={17} />} label="Executor V3" />
               <MenuItem href="/os/github" icon={<Github size={17} />} label="GitHub" />
               <MenuItem href="/os/migration" icon={<Network size={17} />} label="Migración OS" />
             </MenuGroup>

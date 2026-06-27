@@ -1,5 +1,6 @@
 import { createExecutorPullRequest, listRepositoryTree, readRepositoryFile, type ExecutorFileChange, type GitHubTreeItem } from "@/lib/flowlyGitHubExecutor";
 import { flowlyMigrationModules } from "@/lib/flowlyOSMigration";
+import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph, type FlowlyImpactAnalysis } from "@/lib/flowlyProjectGraph";
 
 export type ExecutorV3Risk = "bajo" | "medio" | "alto";
 
@@ -25,6 +26,8 @@ export type ExecutorV3ProjectMap = {
   modules: string[];
   dependencies: ExecutorV3Dependency[];
   candidates: ExecutorV3Candidate[];
+  projectGraph?: ReturnType<typeof summarizeProjectGraph>;
+  impact?: FlowlyImpactAnalysis;
 };
 
 export type ExecutorV3Plan = {
@@ -166,6 +169,9 @@ async function buildProjectMap(instruction: string): Promise<{ map: ExecutorV3Pr
   const modules = detectModules(instruction);
   const tree = await listRepositoryTree();
   const files = (tree.items || []).filter((item: GitHubTreeItem) => item.type === "blob");
+  const graph = await buildFlowlyProjectGraph(instruction);
+  const impact = await analyzeFlowlyImpact(instruction);
+  const graphSummary = summarizeProjectGraph(graph);
   const scored = files
     .map((item) => ({ item, score: scorePath(item.path, instruction, modules) }))
     .filter(({ score }) => score > 0)
@@ -187,8 +193,16 @@ async function buildProjectMap(instruction: string): Promise<{ map: ExecutorV3Pr
       relatedFiles: candidates.length,
       editableFiles: candidates.filter((file) => isEditablePath(file.path)).length,
       modules,
-      dependencies: dependencies.slice(0, 40),
+      dependencies: [
+        ...dependencies,
+        ...graph.edges
+          .filter((edge) => edge.type === "imports")
+          .slice(0, 32)
+          .map((edge) => ({ source: edge.source, target: edge.target, type: "import" as const })),
+      ].slice(0, 72),
       candidates,
+      projectGraph: graphSummary,
+      impact,
     },
     context,
   };
@@ -222,6 +236,18 @@ function buildPlanDoc(plan: Omit<ExecutorV3Plan, "proposedFiles">) {
     "## Archivos principales candidatos",
     "",
     ...plan.projectMap.candidates.slice(0, 12).map((file) => `- \`${file.path}\` — ${file.reason} Puntuación: ${file.score}`),
+    "",
+    "## Project Graph",
+    "",
+    `- Módulos del grafo: ${plan.projectMap.projectGraph?.modules?.map((module) => module.name).join(", ") || "No disponible"}`,
+    `- Rutas: ${plan.projectMap.projectGraph?.routes || 0}`,
+    `- APIs: ${plan.projectMap.projectGraph?.apiRoutes || 0}`,
+    `- Componentes: ${plan.projectMap.projectGraph?.components || 0}`,
+    `- Dependencias: ${plan.projectMap.projectGraph?.edges || 0}`,
+    "",
+    "## Archivos que deben revisarse antes de crear duplicados",
+    "",
+    ...(plan.projectMap.impact?.avoidCreating || []).map((file) => `- \`${file}\``),
     "",
     "## Razonamiento",
     "",
@@ -267,6 +293,8 @@ async function buildAIFiles(params: {
     "- No añadas dependencias nuevas al package.json.",
     "- Mantén cambios pequeños, revisables y compatibles con TypeScript estricto.",
     "- Si no puedes estar seguro, crea solo documentación en docs/executor/v3/ y explica el plan.",
+    "- Usa projectGraph e impact para decidir. Si impact.avoidCreating contiene archivos, revisa esos archivos antes de crear otros.",
+    "- Si existe un componente equivalente, devuélvelo modificado completo; no crees una versión paralela.",
     "- No expongas secretos ni variables privadas.",
   ].join("\n");
 
@@ -286,6 +314,8 @@ async function buildAIFiles(params: {
             instruction: params.plan.instruction,
             risk: params.plan.risk,
             projectMap: params.plan.projectMap,
+            projectGraph: params.plan.projectMap.projectGraph,
+            impact: params.plan.projectMap.impact,
             contextFiles: params.context,
           }),
         },
@@ -319,11 +349,13 @@ export async function planExecutorV3(instruction: string): Promise<ExecutorV3Pla
   const reasoning = [
     `Se han analizado ${map.analyzedFiles} archivos del repositorio antes de proponer cambios.`,
     `Se han detectado ${map.relatedFiles} archivos relacionados y ${map.editableFiles} editables.`,
+    `Project Graph detecta ${map.projectGraph?.modules.length || 0} módulos, ${map.projectGraph?.apiRoutes || 0} APIs y ${map.projectGraph?.edges || 0} dependencias.`,
     "Executor V3 prioriza editar piezas existentes antes de crear componentes duplicados.",
     "El cambio se preparará en una rama nueva y Pull Request para revisión humana.",
   ];
   const proposedSteps = [
-    "Construir mapa del proyecto y dependencias relevantes.",
+    "Construir Project Graph del repositorio completo.",
+    "Detectar módulos, rutas, APIs, componentes, SQL y dependencias.",
     "Leer archivos principales antes de decidir cambios.",
     "Preparar una modificación pequeña y coherente con la arquitectura actual.",
     "Crear rama segura y Pull Request.",
@@ -335,7 +367,7 @@ export async function planExecutorV3(instruction: string): Promise<ExecutorV3Pla
     version: "v3" as const,
     status: "planned" as const,
     instruction: clean,
-    summary: `Executor V3 ha analizado ${map.analyzedFiles} archivos, detectado ${map.relatedFiles} relacionados y priorizado ${map.candidates.slice(0, 6).length} candidatos principales.`,
+    summary: `Executor V3 ha construido Project Graph: ${map.projectGraph?.totalFiles || map.analyzedFiles} archivos, ${map.projectGraph?.modules.length || 0} módulos, ${map.projectGraph?.edges || 0} dependencias y ${map.relatedFiles} candidatos relacionados.`,
     risk,
     projectMap: map,
     reasoning,
