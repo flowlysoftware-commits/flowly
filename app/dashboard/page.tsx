@@ -1445,19 +1445,14 @@ export default function DashboardPage() {
               <Image src="/logo.png" alt="Flowly IA" width={136} height={38} className="h-auto w-32 object-contain" priority />
             </div>
             <p className="mt-3 text-sm text-violet-200">Panel cliente</p>
-            {businessAvatar?.avatar_name && <p className="mt-1 text-xs text-white/40">Mascota IA: {businessAvatar.avatar_name}</p>}
+            {false && businessAvatar?.avatar_name && <p className="mt-1 text-xs text-white/40">Mascota IA: {businessAvatar.avatar_name}</p>}
           </div>
 
           <nav className="grid gap-2">
             {navItems.map(({ id, label, Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "menu-active" : "menu-item"}><Icon size={17} /> {label}</button>)}
-            <Link href="/crear" className="menu-item"><Plus size={17} /> Crear</Link>
-            <Link href="/asistente" className="menu-item"><Bot size={17} /> Asistente IA</Link>
-            <Link href="/docs" className="menu-item"><BookOpen size={17} /> Flowly Docs</Link>
-            <Link href="/studio" className="menu-item"><Sparkles size={17} /> Flowly Studio</Link>
-            <Link href="/kernel" className="menu-item"><ShieldCheck size={17} /> Flowly Kernel</Link>
-            <Link href="/ia-assistant" className="menu-item"><Bot size={17} /> IA Assistant</Link>
-            <Link href="/studio/projects" className="menu-item"><Sparkles size={17} /> Nuevo proyecto</Link>
-            <Link href="/studio/generator" className="menu-item"><Workflow size={17} /> Flowly Generator</Link>
+            {/* Herramientas internas ocultas para clientes.
+                Studio, Builder, Kernel, Crear y Asistente Arquitecto viven en /os.
+                El panel del cliente solo muestra módulos de negocio. */}
           </nav>
 
           {activeModules.length > 0 && (
@@ -1715,7 +1710,7 @@ export default function DashboardPage() {
 
           <DashboardFooter />
 
-          {businessAvatar && <FloatingAvatarAssistant
+          {false && businessAvatar && <FloatingAvatarAssistant
             businessAvatar={businessAvatar}
             businessName={business?.name ?? "Flowly"}
             open={assistantOpen}

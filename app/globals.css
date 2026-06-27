@@ -1680,3 +1680,60 @@ input[type="date"].input-dark { color-scheme: dark; }
   .evo-body { scale: .76; bottom: 1.5rem; }
   .evo-card { scale: .88; bottom: .1rem; }
 }
+
+.flowly-companion-runtime[data-mode="arquitecto"] .flowly-companion-bubble,
+.flowly-companion-runtime[data-mode="arquitecto"] .flowly-companion-panel {
+  border-color: rgba(168, 85, 247, .28);
+  box-shadow: 0 24px 70px rgba(88, 28, 135, .32);
+}
+.flowly-companion-conversation {
+  display: grid;
+  gap: .45rem;
+  margin-top: .75rem;
+  max-height: 9rem;
+  overflow: auto;
+}
+.flowly-companion-conversation p {
+  margin: 0;
+  border-radius: 1rem;
+  padding: .6rem .75rem;
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.72);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+.flowly-companion-conversation p[data-role="user"] {
+  margin-left: 1.4rem;
+  background: rgba(103,232,249,.12);
+  color: #ecfeff;
+}
+.flowly-companion-chat-input button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.45rem;
+  height: 2.45rem;
+  border: 0;
+  border-radius: 999px;
+  background: #cffafe;
+  color: #0f172a;
+  cursor: pointer;
+}
+.flowly-companion-safe-note,
+.flowly-companion-architect-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  margin-top: .65rem;
+  color: rgba(255,255,255,.52);
+  font-size: .68rem;
+  line-height: 1.4;
+}
+.flowly-companion-architect-link {
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.1);
+  padding: .55rem .75rem;
+  color: #e9d5ff;
+  text-decoration: none;
+  background: rgba(168,85,247,.12);
+}
