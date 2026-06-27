@@ -79,6 +79,7 @@ const quickPrompts = [
   "El CRM no me gusta. Analízalo y dime cómo podríamos hacerlo más limpio, visual y fácil de usar.",
   "Revisa el panel del cliente y dime qué partes están mezcladas con herramientas internas de desarrollo.",
   "Quiero mejorar el rendimiento general del panel sin romper ninguna ruta actual.",
+  "El último Pull Request no compila. Revisa el error de build y prepara una corrección sobre la misma rama.",
 ];
 
 const commandCenterLinks = [
@@ -87,6 +88,7 @@ const commandCenterLinks = [
   { label: "Memoria", desc: "Knowledge: documentación viva y contexto técnico.", href: "/docs", icon: MemoryStick },
   { label: "Project Graph", desc: "Mapa técnico del proyecto, rutas y dependencias.", href: "/os/project-graph", icon: Network },
   { label: "Executor V3", desc: "Motor que crea ramas y Pull Requests seguros.", href: "/os/executor-v3", icon: Rocket },
+  { label: "QA Agent", desc: "Revisa PRs fallidos y corrige builds en la misma rama.", href: "/os/qa", icon: ShieldCheck },
   { label: "GitHub", desc: "Conexión segura con repositorio y PRs.", href: "/os/github", icon: Github },
   { label: "Studio", desc: "Editor visual de blueprints y módulos.", href: "/studio/v2", icon: Boxes },
   { label: "Crear módulos", desc: "Asistente simple para diseñar proyectos nuevos.", href: "/crear", icon: Wand2 },

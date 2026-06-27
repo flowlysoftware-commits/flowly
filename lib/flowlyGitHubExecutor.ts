@@ -134,7 +134,7 @@ async function getAuthToken(config: GitHubExecutorConfig) {
   throw new Error(`GitHub Executor no está configurado. Faltan: ${config.missing.join(" | ")}`);
 }
 
-async function githubFetch<T>(path: string, init: RequestInit = {}) {
+export async function githubFetch<T>(path: string, init: RequestInit = {}) {
   const config = getGitHubExecutorConfig();
   const token = await getAuthToken(config);
   const response = await fetch(`https://api.github.com${path}`, {
@@ -322,6 +322,78 @@ export async function createExecutorPullRequest(input: ExecutorPullRequestInput)
     };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error), branch, mode: config.authMode };
+  }
+}
+
+export type GitHubPullRequestQuality = {
+  pullRequest: {
+    number: number;
+    title: string;
+    state: string;
+    html_url: string;
+    head: { ref: string; sha: string };
+    base: { ref: string; sha: string };
+  };
+  checks: Array<{ name: string; status?: string; conclusion?: string; url?: string }>;
+};
+
+export async function listPullRequestQuality(prNumber: number): Promise<GitHubPullRequestQuality> {
+  const config = getGitHubExecutorConfig();
+  if (!config.hasCredentials) {
+    throw new Error(`GitHub Executor no configurado. Faltan: ${config.missing.join(" | ")}`);
+  }
+
+  const pullRequest = await githubFetch<GitHubPullRequestQuality["pullRequest"]>(`/repos/${config.owner}/${config.repo}/pulls/${prNumber}`);
+  const sha = pullRequest.head.sha;
+  const checksData = await githubFetch<{ check_runs?: Array<{ name: string; status?: string; conclusion?: string; html_url?: string }> }>(
+    `/repos/${config.owner}/${config.repo}/commits/${sha}/check-runs`,
+  ).catch(() => ({ check_runs: [] }));
+  const statusesData = await githubFetch<Array<{ context: string; state: string; target_url?: string }>>(
+    `/repos/${config.owner}/${config.repo}/commits/${sha}/statuses`,
+  ).catch(() => []);
+
+  const checks = [
+    ...(checksData.check_runs || []).map((check) => ({
+      name: check.name,
+      status: check.status,
+      conclusion: check.conclusion,
+      url: check.html_url,
+    })),
+    ...statusesData.map((status) => ({
+      name: status.context,
+      status: "completed",
+      conclusion: status.state === "success" ? "success" : status.state === "failure" || status.state === "error" ? "failure" : "pending",
+      url: status.target_url,
+    })),
+  ];
+
+  return { pullRequest, checks };
+}
+
+export async function listPullRequestFiles(prNumber: number) {
+  const config = getGitHubExecutorConfig();
+  if (!config.hasCredentials) {
+    throw new Error(`GitHub Executor no configurado. Faltan: ${config.missing.join(" | ")}`);
+  }
+
+  return githubFetch<Array<{ filename: string; status?: string; additions?: number; deletions?: number; changes?: number }>>(
+    `/repos/${config.owner}/${config.repo}/pulls/${prNumber}/files?per_page=100`,
+  );
+}
+
+export async function commitFilesToBranch(input: { branch: string; files: ExecutorFileChange[]; message: string }) {
+  const config = getGitHubExecutorConfig();
+  if (!config.hasCredentials) {
+    return { ok: false, error: `GitHub Executor no configurado. Faltan: ${config.missing.join(" | ")}` };
+  }
+
+  try {
+    for (const file of input.files) {
+      await upsertFile(config.owner, config.repo, input.branch, file, file.message || input.message);
+    }
+    return { ok: true, files: input.files.map((file) => file.path), branch: input.branch };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error), branch: input.branch };
   }
 }
 
