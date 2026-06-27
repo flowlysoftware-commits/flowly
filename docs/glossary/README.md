@@ -1,3 +1,4 @@
 # Glossary
 
-Sección preparada para documentar Glossary dentro de Flowly Docs.
+Diccionario oficial de términos de Flowly OS.
+
