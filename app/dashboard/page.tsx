@@ -1452,6 +1452,7 @@ export default function DashboardPage() {
             {navItems.map(({ id, label, Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "menu-active" : "menu-item"}><Icon size={17} /> {label}</button>)}
             <Link href="/docs" className="menu-item"><BookOpen size={17} /> Flowly Docs</Link>
             <Link href="/studio" className="menu-item"><Sparkles size={17} /> Flowly Studio</Link>
+            <Link href="/studio/generator" className="menu-item"><Workflow size={17} /> Flowly Generator</Link>
           </nav>
 
           {activeModules.length > 0 && (
