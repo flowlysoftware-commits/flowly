@@ -48,6 +48,16 @@ export default function FlowlyDocsPage() {
     });
   }, [query]);
 
+  const searchResults = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+    return flowlyDocSections.flatMap((section) =>
+      section.chapters
+        .filter((chapter) => [section.title, chapter.title, chapter.summary].join(" ").toLowerCase().includes(normalized))
+        .map((chapter) => ({ section, chapter }))
+    ).slice(0, 12);
+  }, [query]);
+
   const activeSection = flowlyDocSections.find((section) => section.slug === activeSlug) || flowlyDocSections[0];
 
   return (
@@ -122,6 +132,21 @@ export default function FlowlyDocsPage() {
           </aside>
 
           <section className="grid gap-6">
+            {searchResults.length > 0 && (
+              <div className="rounded-[2rem] border border-cyan-300/20 bg-cyan-300/[0.07] p-5 backdrop-blur-2xl">
+                <p className="mb-4 text-sm font-semibold text-cyan-100">Resultados rápidos</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {searchResults.map(({ section, chapter }) => (
+                    <Link key={`${section.slug}-${chapter.slug}`} href={`/docs/${section.slug}/${chapter.slug}`} className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:bg-white/[0.06]">
+                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">{section.title}</p>
+                      <h3 className="mt-2 font-semibold text-white">{chapter.title}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-white/55">{chapter.summary}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className={`rounded-[2rem] border border-white/10 bg-gradient-to-br ${activeSection.color} p-6 shadow-2xl shadow-black/20`}>
               <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -141,7 +166,7 @@ export default function FlowlyDocsPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               {activeSection.chapters.map((chapter) => (
-                <article key={chapter.title} className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/[0.075]">
+                <Link key={chapter.title} href={`/docs/${activeSection.slug}/${chapter.slug}`} className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/[0.075]">
                   <div className="flex items-start justify-between gap-3">
                     <FileText className="mt-1 text-cyan-100" size={20} />
                     <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusStyles[chapter.status]}`}>
@@ -150,7 +175,8 @@ export default function FlowlyDocsPage() {
                   </div>
                   <h3 className="mt-4 text-xl font-semibold">{chapter.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-white/55">{chapter.summary}</p>
-                </article>
+                  <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-cyan-100/80">Abrir capítulo <ArrowRight size={15} /></span>
+                </Link>
               ))}
             </div>
 
