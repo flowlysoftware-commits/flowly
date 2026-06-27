@@ -1,3 +1,4 @@
-# Sdk
+# SDK Specification
 
-Sección preparada para documentar Sdk dentro de Flowly Docs.
+Cómo se construirán SDKs oficiales de Flowly.
+
