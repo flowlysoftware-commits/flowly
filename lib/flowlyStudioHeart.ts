@@ -210,6 +210,15 @@ export function generateModuleFromArtifacts(moduleName: string, artifacts: Flowl
 
 export function buildSeedModuleSuggestion(prompt: string) {
   const normalized = prompt.toLowerCase();
+  if (normalized.includes("assistant") || normalized.includes("companion") || normalized.includes("mascota") || normalized.includes("recompensa") || normalized.includes("misiones") || normalized.includes("avatar")) {
+    return {
+      moduleName: "IA Assistant",
+      businessObjects: ["CompanionProfile", "CompanionAvatar", "CompanionGoal", "CompanionMission", "CompanionReward", "CompanionAchievement", "CompanionLevel", "CompanionExperience", "CompanionMood", "CompanionActivity", "CompanionMemoryLink"],
+      capabilities: ["CreateCompanionGoal", "UpdateCompanionGoalProgress", "CompleteCompanionGoal", "GenerateDailyMissions", "GenerateWeeklyMission", "UnlockCompanionReward", "ClaimCompanionReward", "CalculateCompanionExperience", "LevelUpCompanion", "UpdateCompanionMood", "RegisterCompanionActivity", "RenderCompanionSummary"],
+      workflows: ["Objetivo completado suma experiencia", "Experiencia suficiente sube nivel", "Misión completada desbloquea recompensa", "Generar misiones diarias", "Generar misión semanal", "Baja actividad sugiere objetivo", "Logro desbloqueado notifica usuario"],
+      policies: ["Solo administradores editan recompensas globales", "Solo se reclaman recompensas desbloqueadas", "Misiones completadas no se editan", "Objetivos críticos requieren aprobación humana", "Recompensas no conceden permisos reales automáticamente"],
+    };
+  }
   if (normalized.includes("veh") || normalized.includes("coche") || normalized.includes("alquiler")) {
     return {
       moduleName: "Vehicle Rental",

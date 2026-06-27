@@ -105,6 +105,7 @@ const artifactIcons: Record<string, ReactNode> = {
 };
 
 const projectTypes: Array<{ id: FlowlyProjectType; label: string }> = [
+  { id: "ia_assistant", label: "IA Assistant / Companion" },
   { id: "libre", label: "Libre" },
   { id: "rrhh", label: "Recursos Humanos" },
   { id: "crm", label: "CRM" },
@@ -212,7 +213,7 @@ export default function FlowlyStudioV2Page() {
   const [projectName, setProjectName] = useState("IA Assistant");
   const [projectDescription, setProjectDescription] = useState("Módulo del Companion con objetivos, misiones, recompensas, niveles, experiencia, avatar y gamificación.");
   const [projectPrompt, setProjectPrompt] = useState("Quiero crear el módulo IA Assistant: Companion de Flowly con mascota, objetivos, recompensas, misiones diarias, niveles, experiencia, estado de ánimo y avatar.");
-  const [projectType, setProjectType] = useState<FlowlyProjectType>("libre");
+  const [projectType, setProjectType] = useState<FlowlyProjectType>("ia_assistant");
   const [moduleName, setModuleName] = useState("IA Assistant");
   const [review, setReview] = useState<ReviewReport | null>(null);
   const [consoleLines, setConsoleLines] = useState<string[]>(["Studio V2 preparado. Crea o selecciona un proyecto para empezar."]);
@@ -278,7 +279,7 @@ export default function FlowlyStudioV2Page() {
         description: projectDescription,
         type: projectType,
         prompt: projectPrompt,
-        modules: ["IA", "Companion", "Objetivos", "Recompensas", "Documentos"],
+        modules: ["Companion", "Objetivos", "Misiones", "Recompensas", "Gamificación", "Avatar"],
         createArtifacts: true,
       });
       setMessage(`Proyecto ${data.project.name} creado con ${data.artifacts.length} piezas iniciales.`);
@@ -288,6 +289,25 @@ export default function FlowlyStudioV2Page() {
       await loadStudio();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear el proyecto.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+
+  async function createIaAssistantSeed() {
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const data = await postJson<{ project: ProjectRow; blueprint: FlowlyStudioProjectBlueprint; artifacts: ArtifactRow[] }>("/api/studio/projects/ia-assistant", {});
+      setMessage(`IA Assistant creado con ${data.artifacts.length} piezas listas.`);
+      setModuleName("IA Assistant");
+      setSelected({ type: "project", item: data.project });
+      pushConsole(`IA Assistant diseñado por Project Generator Engine: ${data.artifacts.length} piezas.`);
+      await loadStudio();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear IA Assistant.");
     } finally {
       setLoading(false);
     }
@@ -450,7 +470,7 @@ export default function FlowlyStudioV2Page() {
                   <label className="grid gap-2 text-sm text-white/65">Tipo<select value={projectType} onChange={(event) => setProjectType(event.target.value as FlowlyProjectType)} className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-white outline-none">{projectTypes.map((item) => <option key={item.id} value={item.id} className="bg-slate-950">{item.label}</option>)}</select></label>
                 </div>
                 <label className="grid gap-2 text-sm text-white/65">Descripción<textarea value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} rows={3} className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-white outline-none" /></label>
-                <div className="flex flex-wrap gap-2"><SmallButton tone="primary" onClick={createProject} disabled={loading}>{loading ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Crear proyecto completo</SmallButton><SmallButton onClick={() => { setProjectName("IA Assistant"); setProjectType("libre"); }}>Restaurar IA Assistant</SmallButton></div>
+                <div className="flex flex-wrap gap-2"><SmallButton tone="primary" onClick={createProject} disabled={loading}>{loading ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Diseñar proyecto con IA</SmallButton><SmallButton onClick={createIaAssistantSeed} disabled={loading}><Bot size={14} /> Crear IA Assistant listo</SmallButton><SmallButton onClick={() => { setProjectName("IA Assistant"); setProjectType("ia_assistant"); setProjectDescription("Módulo del Companion con objetivos, misiones, recompensas, niveles, experiencia, avatar y gamificación."); setProjectPrompt("Quiero crear el módulo IA Assistant: Companion de Flowly con mascota, objetivos, recompensas, misiones diarias, niveles, experiencia, estado de ánimo y avatar."); }}>Restaurar IA Assistant</SmallButton></div>
               </div>
             ) : null}
 

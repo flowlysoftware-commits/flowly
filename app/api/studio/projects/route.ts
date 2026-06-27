@@ -6,7 +6,7 @@ function dbReady() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-const validTypes = new Set(["erp", "crm", "rrhh", "hotel", "clinica", "logistica", "taller", "vehiculos", "libre"]);
+const validTypes = new Set(["erp", "crm", "rrhh", "hotel", "clinica", "logistica", "taller", "vehiculos", "libre", "ia_assistant"]);
 
 function normalizeBody(body: Record<string, unknown>) {
   const type = String(body.type || "libre") as FlowlyProjectType;
