@@ -7,6 +7,7 @@ import { ChevronDown, Code2, MessageCircle, Minimize2, Send, ShieldCheck, Sparkl
 import EvolutionaryCompanionAvatar from "@/components/EvolutionaryCompanionAvatar";
 import { companionMissions, companionRewards, companionStats, getCompanionContext } from "@/lib/flowlyCompanionRuntime";
 import { getFlowlyRuntimeMode } from "@/lib/flowlyProductModes";
+import { buildCompanionReply } from "@/lib/flowlyContextEngine";
 
 const HIDDEN_PREFIXES = ["/login", "/registro", "/reservas", "/demo/login"];
 
@@ -15,22 +16,6 @@ function shouldHide(pathname: string) {
   return HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
-function looksLikeBuilderRequest(message: string) {
-  const text = message.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return ["crea", "crear", "modifica", "modificar", "programa", "codigo", "studio", "builder", "kernel", "api", "sql", "modulo", "módulo"].some((word) => text.includes(word));
-}
-
-function buildCustomerReply(message: string, area: string) {
-  if (looksLikeBuilderRequest(message)) {
-    return "Eso pertenece al Flowly OS de desarrollo. En este panel de cliente puedo ayudarte a usar el negocio: tareas, clientes, facturas, objetivos, WhatsApp, recordatorios y recomendaciones. No crearé ni modificaré módulos desde aquí.";
-  }
-
-  if (message.trim().length < 3) {
-    return "Dime qué necesitas hacer en el panel y te ayudo paso a paso.";
-  }
-
-  return `Estoy en modo cliente y te ayudaré con ${area}. Puedo convertirlo en una tarea, un objetivo o una recomendación dentro del panel sin tocar la arquitectura interna.`;
-}
 
 export default function FlowlyCompanionRuntime() {
   const pathname = usePathname() || "/";
@@ -42,7 +27,7 @@ export default function FlowlyCompanionRuntime() {
   const isArchitect = mode === "arquitecto";
   const xpPercent = Math.round((companionStats.xp / companionStats.nextLevelXp) * 100);
   const [conversation, setConversation] = useState<{ role: "assistant" | "user"; content: string }[]>([
-    { role: "assistant", content: "Hola. Soy el Companion del panel. Te ayudaré sin mostrarte herramientas técnicas." },
+    { role: "assistant", content: isArchitect ? "Hola. Soy el Companion Arquitecto. Puedo ayudarte a analizar Flowly OS sin mezclarlo con el panel de clientes." : "Hola. Soy el Companion del panel. Puedo ayudarte con clientes, tareas, objetivos, facturas, WhatsApp y recomendaciones sin mostrarte herramientas técnicas." },
   ]);
 
   if (shouldHide(pathname)) return null;
@@ -53,19 +38,10 @@ export default function FlowlyCompanionRuntime() {
     if (!clean) return;
     setMessage("");
 
-    if (isArchitect) {
-      setConversation((current) => [
-        ...current,
-        { role: "user", content: clean },
-        { role: "assistant", content: "Esta petición es de arquitectura. Ábrela en el Asistente Arquitecto para analizarla con Analyzer, Studio y Builder." },
-      ]);
-      return;
-    }
-
     setConversation((current) => [
       ...current,
       { role: "user", content: clean },
-      { role: "assistant", content: buildCustomerReply(clean, context.area) },
+      { role: "assistant", content: buildCompanionReply(clean, pathname) },
     ]);
   };
 
