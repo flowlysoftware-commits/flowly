@@ -258,6 +258,249 @@ function artifactSummary(artifact: ArtifactRow) {
   return counters.slice(0, 3);
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function readArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function getItemTitle(value: unknown, fallback: string) {
+  const record = asRecord(value);
+  return String(record.label ?? record.name ?? record.target ?? record.subject ?? record.condition ?? fallback);
+}
+
+function getItemSubtitle(value: unknown) {
+  const record = asRecord(value);
+  return String(record.description ?? record.type ?? record.effect ?? record.target ?? "");
+}
+
+function projectArchitectureMetrics(project: ProjectRow | null, runtimeArtifacts: ArtifactRow[]) {
+  const businessObjects = runtimeArtifacts.filter((artifact) => artifact.kind === "business_object");
+  const capabilities = runtimeArtifacts.filter((artifact) => artifact.kind === "capability");
+  const workflows = runtimeArtifacts.filter((artifact) => artifact.kind === "workflow");
+  const policies = runtimeArtifacts.filter((artifact) => artifact.kind === "policy");
+  const apps = runtimeArtifacts.filter((artifact) => artifact.kind === "app");
+  const relationships = businessObjects.reduce((total, artifact) => total + readArray(asRecord(artifact.definition).relationships).length, 0);
+  const fields = businessObjects.reduce((total, artifact) => total + readArray(asRecord(artifact.definition).fields).length, 0);
+  const generatedFiles = runtimeArtifacts.length * 6;
+  const tests = runtimeArtifacts.length + capabilities.length + workflows.length;
+  const score = Math.min(98, 70 + Math.floor(runtimeArtifacts.length / 2) + (relationships > 0 ? 6 : 0) + (capabilities.length > 0 ? 6 : 0) + (workflows.length > 0 ? 5 : 0));
+  return { projectName: project?.name || "Proyecto", businessObjects, capabilities, workflows, policies, apps, relationships, fields, generatedFiles, tests, score };
+}
+
+function Pill({ children, tone = "default" }: { children: ReactNode; tone?: "default" | "cyan" | "green" | "amber" }) {
+  return (
+    <span className={cx(
+      "inline-flex items-center rounded-full border px-3 py-1 text-xs",
+      tone === "cyan" && "border-cyan-300/20 bg-cyan-300/10 text-cyan-50",
+      tone === "green" && "border-emerald-300/20 bg-emerald-300/10 text-emerald-50",
+      tone === "amber" && "border-amber-300/20 bg-amber-300/10 text-amber-50",
+      tone === "default" && "border-white/10 bg-white/[0.06] text-white/55",
+    )}>{children}</span>
+  );
+}
+
+function ProjectArchitectureOverview({ project, runtimeArtifacts, onSelectArtifact }: { project: ProjectRow; runtimeArtifacts: ArtifactRow[]; onSelectArtifact: (artifact: ArtifactRow) => void }) {
+  const metrics = projectArchitectureMetrics(project, runtimeArtifacts);
+  const blocks = [
+    ["Objetos de negocio", metrics.businessObjects.length, <Boxes key="bo" size={16} />],
+    ["Capacidades", metrics.capabilities.length, <Sparkles key="cap" size={16} />],
+    ["Flujos de trabajo", metrics.workflows.length, <Workflow key="flow" size={16} />],
+    ["Políticas", metrics.policies.length, <ShieldCheck key="pol" size={16} />],
+    ["Aplicaciones", metrics.apps.length, <LayoutDashboard key="app" size={16} />],
+    ["Relaciones", metrics.relationships, <GitBranch key="rel" size={16} />],
+    ["Archivos generables", metrics.generatedFiles, <Code2 key="code" size={16} />],
+    ["Tests previstos", metrics.tests, <CheckCircle2 key="tests" size={16} />],
+  ] as const;
+
+  return (
+    <div className="grid gap-4">
+      <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">Vista de arquitectura</p>
+            <h2 className="mt-2 text-4xl font-semibold">{project.name}</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">{project.description}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-right">
+            <p className="text-xs uppercase tracking-[0.18em] text-white/35">Calidad arquitectónica</p>
+            <p className="mt-2 text-3xl font-semibold text-cyan-50">{metrics.score}/100</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">{project.modules?.map((item) => <Pill key={item} tone="cyan">{item}</Pill>)}</div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {blocks.map(([label, value, icon]) => (
+          <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-center justify-between gap-3 text-white/45"><span className="text-xs uppercase tracking-[0.18em]">{label}</span>{icon}</div>
+            <p className="mt-3 text-3xl font-semibold">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {Object.entries(artifactLabels).map(([kind, label]) => {
+          const items = runtimeArtifacts.filter((artifact) => artifact.kind === kind);
+          if (!items.length) return null;
+          return (
+            <div key={kind} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-cyan-100">{artifactIcons[kind]} {label}</p>
+              <div className="grid gap-2">
+                {items.slice(0, 10).map((artifact) => (
+                  <button key={`${artifact.kind}-${artifact.slug}`} onClick={() => onSelectArtifact(artifact)} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-left text-xs text-white/60 hover:border-cyan-300/30 hover:bg-cyan-300/10">
+                    <span className="block font-semibold text-white/80">{artifact.name}</span>
+                    <span className="mt-1 block truncate text-white/35">{artifact.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <details className="rounded-2xl border border-white/10 bg-black/30 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Blueprint completo</summary>
+        <pre className="mt-3 max-h-80 overflow-auto text-xs leading-5 text-white/60">{JSON.stringify(project.blueprint, null, 2)}</pre>
+      </details>
+    </div>
+  );
+}
+
+function DynamicListSection({ title, items, open = false }: { title: string; items: unknown[]; open?: boolean }) {
+  if (!items.length) return null;
+  return (
+    <details open={open} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <summary className="cursor-pointer text-sm font-semibold text-cyan-100">{title} ({items.length})</summary>
+      <div className="mt-3 grid gap-2">
+        {items.map((entry, index) => (
+          <div key={`${title}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs text-white/55">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <strong className="text-white/80">{getItemTitle(entry, `Elemento ${index + 1}`)}</strong>
+              {getItemSubtitle(entry) ? <span className="rounded-full bg-black/25 px-2 py-1 text-white/35">{getItemSubtitle(entry)}</span> : null}
+            </div>
+            {asRecord(entry).description ? <p className="mt-2 leading-5 text-white/40">{String(asRecord(entry).description)}</p> : null}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function DynamicArtifactEditor({ artifact, runtimeArtifacts }: { artifact: ArtifactRow; runtimeArtifacts: ArtifactRow[] }) {
+  const definition = asRecord(artifact.definition);
+  const fields = readArray(definition.fields);
+  const states = readArray(definition.states);
+  const relationships = readArray(definition.relationships);
+  const commands = readArray(definition.commands);
+  const queries = readArray(definition.queries);
+  const events = readArray(definition.events);
+  const policies = readArray(definition.policies);
+  const capabilities = readArray(definition.capabilities);
+  const steps = readArray(definition.steps);
+  const rules = readArray(definition.rules);
+  const inputs = readArray(definition.inputs);
+  const outputs = readArray(definition.outputs);
+  const navigation = readArray(definition.navigation);
+  const widgets = readArray(definition.widgets);
+  const relatedNames = new Set([...relationships.map((item) => String(asRecord(item).target || "")), ...readArray(definition.businessObjects).map(String), ...capabilities.map((item) => getItemTitle(item, ""))].filter(Boolean));
+  const relatedArtifacts = runtimeArtifacts.filter((item) => relatedNames.has(item.name) || relatedNames.has(item.slug));
+
+  return (
+    <div className="grid gap-4">
+      <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08] p-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">Editor dinámico · {artifactLabels[artifact.kind] || artifact.kind}</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-[1fr,220px]">
+          <div>
+            <label className="text-xs uppercase tracking-[0.16em] text-white/35">Nombre</label>
+            <input readOnly value={artifact.name} className="mt-2 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-3 text-2xl font-semibold text-white outline-none" />
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-[0.16em] text-white/35">Estado</label>
+            <input readOnly value={artifact.status || "draft"} className="mt-2 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-3 text-white outline-none" />
+          </div>
+        </div>
+        <label className="mt-3 block text-xs uppercase tracking-[0.16em] text-white/35">Descripción</label>
+        <textarea readOnly value={artifact.description} rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-3 text-sm leading-6 text-white/70 outline-none" />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Campos", fields.length], ["Estados", states.length], ["Relaciones", relationships.length], ["Capabilities", capabilities.length || readArray(definition.capabilities).length],
+          ["Commands", commands.length], ["Queries", queries.length], ["Eventos", events.length], ["Políticas", policies.length || rules.length],
+        ].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><p className="text-xs uppercase tracking-[0.18em] text-white/35">{label}</p><p className="mt-2 text-2xl font-semibold">{String(value)}</p></div>)}
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3">
+          <DynamicListSection title="Campos" items={fields} open />
+          <DynamicListSection title="Estados" items={states} open />
+          <DynamicListSection title="Relaciones" items={relationships} />
+          <DynamicListSection title="Entradas" items={inputs} />
+          <DynamicListSection title="Salidas" items={outputs} />
+          <DynamicListSection title="Pasos del flujo" items={steps} open={artifact.kind === "workflow"} />
+          <DynamicListSection title="Reglas" items={rules} open={artifact.kind === "policy"} />
+        </div>
+        <div className="grid gap-3">
+          <DynamicListSection title="Commands" items={commands} />
+          <DynamicListSection title="Queries" items={queries} />
+          <DynamicListSection title="Eventos" items={events} />
+          <DynamicListSection title="Políticas vinculadas" items={policies} />
+          <DynamicListSection title="Capacidades vinculadas" items={capabilities} />
+          <DynamicListSection title="Navegación" items={navigation} open={artifact.kind === "app"} />
+          <DynamicListSection title="Widgets" items={widgets} />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <p className="mb-3 text-sm font-semibold text-cyan-100">Relaciones visuales</p>
+        {relationships.length || relatedArtifacts.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {relationships.map((relation, index) => {
+              const record = asRecord(relation);
+              return <div key={`rel-${index}`} className="rounded-2xl border border-white/10 bg-white/[0.035] p-3 text-xs"><p className="text-white/75">{artifact.name}</p><p className="my-2 text-cyan-100">──── {String(record.type || "relación")} →</p><p className="font-semibold text-white">{String(record.target || "Destino")}</p><p className="mt-1 text-white/35">{String(record.cardinality || "")}</p></div>;
+            })}
+            {relatedArtifacts.slice(0, 6).map((related) => <div key={related.id} className="rounded-2xl border border-white/10 bg-white/[0.035] p-3 text-xs"><p className="text-white/75">{artifact.name}</p><p className="my-2 text-cyan-100">──── usa →</p><p className="font-semibold text-white">{related.name}</p><p className="mt-1 text-white/35">{artifactLabels[related.kind] || related.kind}</p></div>)}
+          </div>
+        ) : <p className="text-sm text-white/40">Sin relaciones detectadas en el Blueprint.</p>}
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <details open className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">SQL generado</summary><pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs text-white/55">{artifact.generated_sql || "Pendiente"}</pre></details>
+        <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">TypeScript generado</summary><pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs text-white/55">{artifact.generated_typescript || "Pendiente"}</pre></details>
+        <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">API generada</summary><pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs text-white/55">{artifact.generated_api || "Pendiente"}</pre></details>
+        <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">Markdown generado</summary><pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs text-white/55">{artifact.generated_markdown || "Pendiente"}</pre></details>
+      </div>
+    </div>
+  );
+}
+
+function GeneratorProgress({ runtimeArtifacts, review }: { runtimeArtifacts: ArtifactRow[]; review: ReviewReport | null }) {
+  const metrics = projectArchitectureMetrics(null, runtimeArtifacts);
+  const steps = [
+    ["Blueprint", runtimeArtifacts.length > 0, `${runtimeArtifacts.length} piezas detectadas`],
+    ["SQL", runtimeArtifacts.some((item) => item.generated_sql), `${metrics.businessObjects.length} tablas previstas`],
+    ["TypeScript", runtimeArtifacts.some((item) => item.generated_typescript), `${runtimeArtifacts.length} tipos/servicios`],
+    ["API", runtimeArtifacts.some((item) => item.generated_api), `${runtimeArtifacts.length} rutas candidatas`],
+    ["SDK", runtimeArtifacts.some((item) => item.generated_sdk), "Clientes preparados"],
+    ["Docs", runtimeArtifacts.some((item) => item.generated_markdown), "Markdown generado"],
+    ["Tests", runtimeArtifacts.some((item) => item.generated_tests), `${metrics.tests} pruebas previstas`],
+    ["Revisión", Boolean(review), review ? `${review.score}/100` : "Pendiente"],
+  ] as const;
+  return (
+    <div className="grid gap-2 md:grid-cols-4">
+      {steps.map(([label, done, detail]) => (
+        <div key={label} className={cx("rounded-xl border p-3", done ? "border-emerald-300/20 bg-emerald-300/10" : "border-white/10 bg-black/20")}>
+          <p className={cx("flex items-center gap-2 text-xs font-semibold", done ? "text-emerald-100" : "text-white/45")}>{done ? <CheckCircle2 size={14} /> : <Loader2 size={14} />} {label}</p>
+          <p className="mt-1 text-xs text-white/35">{detail}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function FlowlyStudioV2Page() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactRow[]>([]);
@@ -546,86 +789,14 @@ export default function FlowlyStudioV2Page() {
             ) : null}
 
             {selectedProject ? (
-              <div className="grid gap-4">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">Proyecto activo</p>
-                  <h2 className="mt-2 text-4xl font-semibold">{selectedProject.name}</h2>
-                  <p className="mt-3 text-sm leading-6 text-white/55">{selectedProject.description}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">{selectedProject.modules?.map((item) => <span key={item} className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/55">{item}</span>)}</div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {Object.entries(selectedProject.blueprint || {}).filter(([, value]) => Array.isArray(value)).map(([key, value]) => (
-                    <div key={key} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">{blueprintLabels[key] || key}</p>
-                      <p className="mt-2 text-2xl font-semibold">{(value as unknown[]).length}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid gap-3 lg:grid-cols-2">
-                  {Object.entries(artifactLabels).map(([kind, label]) => {
-                    const items = runtimeArtifacts.filter((artifact) => artifact.kind === kind);
-                    if (!items.length) return null;
-                    return (
-                      <div key={kind} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-cyan-100">{artifactIcons[kind]} {label}</p>
-                        <div className="grid gap-2">
-                          {items.slice(0, 8).map((artifact) => (
-                            <button key={`${artifact.kind}-${artifact.slug}`} onClick={() => setSelected({ type: "artifact", item: artifact })} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-left text-xs text-white/60 hover:bg-white/[0.07]">
-                              <span className="block font-semibold text-white/75">{artifact.name}</span>
-                              <span className="mt-1 block text-white/35">{artifact.description}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <details className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                  <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Blueprint completo</summary>
-                  <pre className="mt-3 max-h-80 overflow-auto text-xs leading-5 text-white/60">{JSON.stringify(selectedProject.blueprint, null, 2)}</pre>
-                </details>
-              </div>
+              <ProjectArchitectureOverview
+                project={selectedProject}
+                runtimeArtifacts={runtimeArtifacts}
+                onSelectArtifact={(artifact) => setSelected({ type: "artifact", item: artifact })}
+              />
             ) : null}
 
-            {selectedArtifact ? (
-              <div className="grid gap-4">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">{artifactLabels[selectedArtifact.kind] || selectedArtifact.kind}</p>
-                  <h2 className="mt-2 text-4xl font-semibold">{selectedArtifact.name}</h2>
-                  <p className="mt-3 text-sm leading-6 text-white/55">{selectedArtifact.description}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">{artifactSummary(selectedArtifact).map(([label, value]) => <span key={label} className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/55">{label}: {value}</span>)}</div>
-                </div>
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <div className="grid gap-3">
-                    {["fields", "states", "businessObjects", "capabilities", "steps", "rules", "events", "policies"].map((key) => {
-                      const value = (selectedArtifact.definition as unknown as Record<string, unknown>)[key];
-                      if (!Array.isArray(value) || !value.length) return null;
-                      return (
-                        <details key={key} open={key === "fields" || key === "states"} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                          <summary className="cursor-pointer text-sm font-semibold text-cyan-100">{blueprintLabels[key] || key} ({value.length})</summary>
-                          <div className="mt-3 grid gap-2">
-                            {value.slice(0, 12).map((entry, index) => {
-                              const record: Record<string, unknown> = typeof entry === "object" && entry !== null ? entry as Record<string, unknown> : { name: entry };
-                              const itemTitle = record.label ?? record.name ?? record.target ?? `Elemento ${index + 1}`;
-                              const itemType = record.type;
-                              const itemDescription = record.description;
-                              return <div key={`${key}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-white/55"><strong className="text-white/75">{String(itemTitle)}</strong>{itemType ? <span className="ml-2 text-white/35">{String(itemType)}</span> : null}{itemDescription ? <p className="mt-1 text-white/35">{String(itemDescription)}</p> : null}</div>;
-                            })}
-                          </div>
-                        </details>
-                      );
-                    })}
-                    <details className="rounded-2xl border border-white/10 bg-black/30 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">JSON del elemento</summary><pre className="mt-3 max-h-96 overflow-auto text-xs leading-5 text-white/60">{JSON.stringify(selectedArtifact.definition, null, 2)}</pre></details>
-                  </div>
-                  <div className="grid gap-3">
-                    <details open className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">SQL generado</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_sql || "Pendiente"}</pre></details>
-                    <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">TypeScript generado</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_typescript || "Pendiente"}</pre></details>
-                    <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">API generada</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_api || "Pendiente"}</pre></details>
-                    <details className="rounded-2xl border border-white/10 bg-black/20 p-4"><summary className="cursor-pointer text-sm font-semibold text-cyan-100">Markdown generado</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-white/55">{selectedArtifact.generated_markdown || "Pendiente"}</pre></details>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            {selectedArtifact ? <DynamicArtifactEditor artifact={selectedArtifact} runtimeArtifacts={runtimeArtifacts} /> : null}
           </Panel>
 
           <Panel title="Inspector" icon={<TerminalSquare size={18} />} className="min-h-[620px]">
@@ -683,9 +854,12 @@ export default function FlowlyStudioV2Page() {
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/35">Consola</p>
-              <div className="space-y-1 text-xs leading-5 text-white/55">{consoleLines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div>
+            <div className="grid gap-3">
+              <GeneratorProgress runtimeArtifacts={runtimeArtifacts} review={review} />
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/35">Consola</p>
+                <div className="space-y-1 text-xs leading-5 text-white/55">{consoleLines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div>
+              </div>
             </div>
           </div>
         </footer>
