@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   ArrowLeft,
   Boxes,
+  BrainCircuit,
   Braces,
   CheckCircle2,
   Code2,
@@ -13,35 +15,52 @@ import {
   FileCode2,
   GitBranch,
   Layers3,
+  LayoutDashboard,
+  Network,
   Plus,
   Rocket,
   Save,
   ScrollText,
+  Search,
+  ShieldCheck,
   Sparkles,
-  Trash2,
   Workflow,
 } from "lucide-react";
 import {
   createStudioId,
+  initialAppDefinition,
+  initialArchitectBlueprint,
   initialBusinessObjectDefinition,
+  initialCapabilityDefinition,
+  initialPolicyDefinition,
+  initialWorkflowDefinition,
   slugifyStudio,
+  studioDomains,
+  type FlowlyAppDefinition,
+  type FlowlyArchitectBlueprint,
   type FlowlyBusinessObjectDefinition,
-  type FlowlyGeneratedBusinessObjectArtifacts,
+  type FlowlyCapabilityDefinition,
+  type FlowlyGeneratedArtifacts,
+  type FlowlyPolicyDefinition,
+  type FlowlyStudioArtifactKind,
+  type FlowlyStudioDefinition,
   type FlowlyStudioField,
   type FlowlyStudioFieldType,
   type FlowlyStudioNamedItem,
   type FlowlyStudioRelationship,
   type FlowlyStudioState,
+  type FlowlyWorkflowDefinition,
 } from "@/lib/flowlyStudio";
 
-type StudioBusinessObjectRow = {
+type StudioArtifactRow = {
   id: string;
+  kind: FlowlyStudioArtifactKind;
   name: string;
   slug: string;
   domain: string;
   description: string;
   status: string;
-  definition: FlowlyBusinessObjectDefinition;
+  definition: FlowlyStudioDefinition;
   generated_sql?: string | null;
   generated_typescript?: string | null;
   generated_api?: string | null;
@@ -50,9 +69,19 @@ type StudioBusinessObjectRow = {
   generated_sdk?: string | null;
 };
 
+type BuilderType = "business_object" | "capability" | "workflow" | "policy" | "app";
+type StudioMode = "builder" | "architect";
+type StudioTab = "designer" | "generator" | "library";
+
 const fieldTypes: FlowlyStudioFieldType[] = ["text", "long_text", "number", "boolean", "date", "datetime", "email", "phone", "currency", "relation", "file", "json", "ai"];
-const domains = ["sales", "finance", "projects", "people", "marketing", "support", "organization", "operations", "system", "custom"];
 const relationshipTypes: FlowlyStudioRelationship["type"][] = ["ownership", "reference", "composition", "association", "dependency", "collaboration", "hierarchy", "temporal"];
+const builderLabels: Record<BuilderType, string> = {
+  business_object: "Business Object",
+  capability: "Capability",
+  workflow: "Workflow",
+  policy: "Policy",
+  app: "App",
+};
 
 function FieldInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) {
   return (
@@ -63,11 +92,11 @@ function FieldInput({ label, value, onChange, placeholder }: { label: string; va
   );
 }
 
-function TextAreaInput({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) {
+function TextAreaInput({ label, value, onChange, rows = 4, placeholder }: { label: string; value: string; onChange: (value: string) => void; rows?: number; placeholder?: string }) {
   return (
     <label className="grid gap-2 text-sm text-white/65">
       <span>{label}</span>
-      <textarea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30 focus:border-cyan-200/45" />
+      <textarea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30 focus:border-cyan-200/45" />
     </label>
   );
 }
@@ -83,7 +112,7 @@ function SelectInput({ label, value, options, onChange }: { label: string; value
   );
 }
 
-function StudioCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function StudioCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
     <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl">
       <div className="mb-4 flex items-center gap-3">
@@ -97,7 +126,7 @@ function StudioCard({ icon, title, children }: { icon: React.ReactNode; title: s
 
 function ArtifactBlock({ title, value }: { title: string; value: string }) {
   return (
-    <details className="rounded-2xl border border-white/10 bg-black/25 p-4">
+    <details className="rounded-2xl border border-white/10 bg-black/25 p-4" open>
       <summary className="cursor-pointer text-sm font-semibold text-cyan-100">{title}</summary>
       <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-xl bg-black/35 p-4 text-xs leading-5 text-white/70">{value || "Pendiente de generar."}</pre>
     </details>
@@ -105,86 +134,72 @@ function ArtifactBlock({ title, value }: { title: string; value: string }) {
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Error inesperado");
   return data as T;
 }
 
+function lines(value: string) {
+  return value.split("\n").map((item) => item.trim()).filter(Boolean);
+}
+
+function namedItemsFromLines(value: string): FlowlyStudioNamedItem[] {
+  return lines(value).map((name) => ({ id: createStudioId("item"), name }));
+}
+
+function asLines(items: string[] | FlowlyStudioNamedItem[] | undefined) {
+  if (!items) return "";
+  return items.map((item) => (typeof item === "string" ? item : item.name)).join("\n");
+}
+
+function rowArtifacts(row: StudioArtifactRow): FlowlyGeneratedArtifacts {
+  return {
+    sql: row.generated_sql || "",
+    typescript: row.generated_typescript || "",
+    apiRoute: row.generated_api || "",
+    markdown: row.generated_markdown || "",
+    testPlan: row.generated_tests || "",
+    sdk: row.generated_sdk || "",
+  };
+}
+
 export default function FlowlyStudioPage() {
-  const [definition, setDefinition] = useState<FlowlyBusinessObjectDefinition>(initialBusinessObjectDefinition);
-  const [businessObjects, setBusinessObjects] = useState<StudioBusinessObjectRow[]>([]);
-  const [artifacts, setArtifacts] = useState<FlowlyGeneratedBusinessObjectArtifacts | null>(null);
-  const [activeTab, setActiveTab] = useState<"designer" | "generator" | "library">("designer");
+  const [mode, setMode] = useState<StudioMode>("builder");
+  const [builderType, setBuilderType] = useState<BuilderType>("business_object");
+  const [activeTab, setActiveTab] = useState<StudioTab>("designer");
+  const [businessObject, setBusinessObject] = useState<FlowlyBusinessObjectDefinition>(initialBusinessObjectDefinition);
+  const [capability, setCapability] = useState<FlowlyCapabilityDefinition>(initialCapabilityDefinition);
+  const [workflow, setWorkflow] = useState<FlowlyWorkflowDefinition>(initialWorkflowDefinition);
+  const [policy, setPolicy] = useState<FlowlyPolicyDefinition>(initialPolicyDefinition);
+  const [appDefinition, setAppDefinition] = useState<FlowlyAppDefinition>(initialAppDefinition);
+  const [blueprint, setBlueprint] = useState<FlowlyArchitectBlueprint>(initialArchitectBlueprint);
+  const [artifacts, setArtifacts] = useState<FlowlyGeneratedArtifacts | null>(null);
+  const [library, setLibrary] = useState<StudioArtifactRow[]>([]);
+  const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const jsonPreview = useMemo(() => JSON.stringify(definition, null, 2), [definition]);
-  const tabs: { id: typeof activeTab; label: string; Icon: typeof Boxes }[] = [
-    { id: "designer", label: "Business Object Designer", Icon: Boxes },
-    { id: "generator", label: "Generator Preview", Icon: Code2 },
-    { id: "library", label: "Biblioteca", Icon: Layers3 },
-  ];
 
-  function updateDefinition(partial: Partial<FlowlyBusinessObjectDefinition>) {
-    setDefinition((current) => ({ ...current, ...partial }));
+  const currentDefinition: FlowlyStudioDefinition = mode === "architect" ? blueprint : builderType === "capability" ? capability : builderType === "workflow" ? workflow : builderType === "policy" ? policy : builderType === "app" ? appDefinition : businessObject;
+  const currentKind = (currentDefinition.kind || "business_object") as FlowlyStudioArtifactKind;
+  const jsonPreview = useMemo(() => JSON.stringify(currentDefinition, null, 2), [currentDefinition]);
+
+  useEffect(() => {
+    loadLibrary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function updateCommon(patch: Partial<FlowlyStudioDefinition>) {
+    if (mode === "architect") return setBlueprint((current) => ({ ...current, ...patch } as FlowlyArchitectBlueprint));
+    if (builderType === "capability") return setCapability((current) => ({ ...current, ...patch } as FlowlyCapabilityDefinition));
+    if (builderType === "workflow") return setWorkflow((current) => ({ ...current, ...patch } as FlowlyWorkflowDefinition));
+    if (builderType === "policy") return setPolicy((current) => ({ ...current, ...patch } as FlowlyPolicyDefinition));
+    if (builderType === "app") return setAppDefinition((current) => ({ ...current, ...patch } as FlowlyAppDefinition));
+    return setBusinessObject((current) => ({ ...current, ...patch } as FlowlyBusinessObjectDefinition));
   }
 
-  function renameObject(name: string) {
-    updateDefinition({ name, slug: slugifyStudio(name) });
-  }
-
-  function addField() {
-    updateDefinition({
-      fields: [...definition.fields, { id: createStudioId("field"), name: "new_field", label: "Nuevo campo", type: "text", required: false }],
-    });
-  }
-
-  function updateField(id: string, patch: Partial<FlowlyStudioField>) {
-    updateDefinition({ fields: definition.fields.map((field) => field.id === id ? { ...field, ...patch } : field) });
-  }
-
-  function removeField(id: string) {
-    updateDefinition({ fields: definition.fields.filter((field) => field.id !== id) });
-  }
-
-  function addState() {
-    updateDefinition({ states: [...definition.states, { id: createStudioId("state"), name: "new_state", label: "Nuevo estado" }] });
-  }
-
-  function updateState(id: string, patch: Partial<FlowlyStudioState>) {
-    updateDefinition({ states: definition.states.map((state) => state.id === id ? { ...state, ...patch } : patch.isInitial ? { ...state, isInitial: false } : state) });
-  }
-
-  function removeState(id: string) {
-    updateDefinition({ states: definition.states.filter((state) => state.id !== id) });
-  }
-
-  function addNamedItem(key: "commands" | "queries" | "events" | "policies" | "capabilities", prefix: string) {
-    updateDefinition({ [key]: [...definition[key], { id: createStudioId(key), name: prefix, description: "" }] } as Partial<FlowlyBusinessObjectDefinition>);
-  }
-
-  function updateNamedItem(key: "commands" | "queries" | "events" | "policies" | "capabilities", id: string, patch: Partial<FlowlyStudioNamedItem>) {
-    updateDefinition({ [key]: definition[key].map((item) => item.id === id ? { ...item, ...patch } : item) } as Partial<FlowlyBusinessObjectDefinition>);
-  }
-
-  function removeNamedItem(key: "commands" | "queries" | "events" | "policies" | "capabilities", id: string) {
-    updateDefinition({ [key]: definition[key].filter((item) => item.id !== id) } as Partial<FlowlyBusinessObjectDefinition>);
-  }
-
-  function addRelationship() {
-    updateDefinition({ relationships: [...definition.relationships, { id: createStudioId("relationship"), target: "Company", type: "reference", description: "" }] });
-  }
-
-  function updateRelationship(id: string, patch: Partial<FlowlyStudioRelationship>) {
-    updateDefinition({ relationships: definition.relationships.map((relationship) => relationship.id === id ? { ...relationship, ...patch } : relationship) });
-  }
-
-  function removeRelationship(id: string) {
-    updateDefinition({ relationships: definition.relationships.filter((relationship) => relationship.id !== id) });
+  function rename(name: string) {
+    updateCommon({ name, slug: slugifyStudio(name) } as Partial<FlowlyStudioDefinition>);
   }
 
   async function saveDefinition(event?: FormEvent) {
@@ -192,10 +207,10 @@ export default function FlowlyStudioPage() {
     setError("");
     setMessage("");
     try {
-      const data = await postJson<{ businessObject: StudioBusinessObjectRow; artifacts: FlowlyGeneratedBusinessObjectArtifacts }>("/api/studio/business-objects", definition);
+      const data = await postJson<{ artifact: StudioArtifactRow; artifacts: FlowlyGeneratedArtifacts }>("/api/studio/artifacts", currentDefinition);
       setArtifacts(data.artifacts);
-      setMessage(`Business Object guardado: ${data.businessObject.name}`);
-      await loadBusinessObjects();
+      setMessage(`Guardado en Studio: ${data.artifact.name}`);
+      await loadLibrary();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar.");
     }
@@ -205,7 +220,7 @@ export default function FlowlyStudioPage() {
     setError("");
     setMessage("");
     try {
-      const data = await postJson<{ artifacts: FlowlyGeneratedBusinessObjectArtifacts }>("/api/studio/generate/business-object", definition);
+      const data = await postJson<{ artifacts: FlowlyGeneratedArtifacts }>("/api/studio/generate/artifact", currentDefinition);
       setArtifacts(data.artifacts);
       setActiveTab("generator");
       setMessage("Artefactos generados sin guardar.");
@@ -214,16 +229,37 @@ export default function FlowlyStudioPage() {
     }
   }
 
-  async function loadBusinessObjects() {
+  async function loadLibrary() {
     setError("");
     try {
-      const response = await fetch("/api/studio/business-objects");
+      const params = new URLSearchParams();
+      if (search) params.set("q", search);
+      const response = await fetch(`/api/studio/artifacts?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudo cargar la biblioteca.");
-      setBusinessObjects(data.businessObjects || []);
+      setLibrary(data.artifacts || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la biblioteca.");
     }
+  }
+
+  function loadRow(row: StudioArtifactRow) {
+    const definition = row.definition;
+    if (row.kind === "architect_blueprint") {
+      setMode("architect");
+      setBlueprint(definition as FlowlyArchitectBlueprint);
+    } else {
+      setMode("builder");
+      setBuilderType(row.kind as BuilderType);
+      if (row.kind === "capability") setCapability(definition as FlowlyCapabilityDefinition);
+      if (row.kind === "workflow") setWorkflow(definition as FlowlyWorkflowDefinition);
+      if (row.kind === "policy") setPolicy(definition as FlowlyPolicyDefinition);
+      if (row.kind === "app") setAppDefinition(definition as FlowlyAppDefinition);
+      if (row.kind === "business_object") setBusinessObject(definition as FlowlyBusinessObjectDefinition);
+    }
+    setArtifacts(rowArtifacts(row));
+    setActiveTab("designer");
+    setMessage(`Cargado: ${row.name}`);
   }
 
   function downloadJson() {
@@ -231,23 +267,17 @@ export default function FlowlyStudioPage() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${definition.slug || "business-object"}.business-object.json`;
+    anchor.download = `${currentDefinition.slug || "flowly-artifact"}.${currentKind}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
 
-  function loadRow(row: StudioBusinessObjectRow) {
-    setDefinition(row.definition);
-    setArtifacts({
-      sql: row.generated_sql || "",
-      typescript: row.generated_typescript || "",
-      apiRoute: row.generated_api || "",
-      markdown: row.generated_markdown || "",
-      testPlan: row.generated_tests || "",
-      sdk: row.generated_sdk || "",
-    });
-    setActiveTab("designer");
-    setMessage(`Cargado: ${row.name}`);
+  function updateField(id: string, patch: Partial<FlowlyStudioField>) {
+    setBusinessObject((current) => ({ ...current, fields: current.fields.map((field) => field.id === id ? { ...field, ...patch } : field) }));
+  }
+
+  function updateState(id: string, patch: Partial<FlowlyStudioState>) {
+    setBusinessObject((current) => ({ ...current, states: current.states.map((state) => state.id === id ? { ...state, ...patch } : patch.isInitial ? { ...state, isInitial: false } : state) }));
   }
 
   return (
@@ -257,15 +287,23 @@ export default function FlowlyStudioPage() {
 
         <header className="mt-6 overflow-hidden rounded-[2.2rem] border border-white/10 bg-white/[0.06] p-8 backdrop-blur-2xl md:p-10">
           <span className="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">Flowly Studio</span>
-          <div className="mt-6 grid gap-8 lg:grid-cols-[1.1fr,0.9fr] lg:items-end">
+          <div className="mt-6 grid gap-8 lg:grid-cols-[1.15fr,0.85fr] lg:items-end">
             <div>
-              <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">La fábrica que construye Flowly OS</h1>
-              <p className="mt-5 max-w-3xl text-base leading-8 text-white/62">Primer bloque funcional: Business Object Designer con guardado en Supabase, exportación JSON y generación inicial de SQL, TypeScript, API, SDK, tests y documentación.</p>
+              <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">Builder Mode + Architect Mode</h1>
+              <p className="mt-5 max-w-3xl text-base leading-8 text-white/62">El Studio ya no solo diseña Business Objects. Ahora prepara Capabilities, Workflows, Policies, Apps y Blueprints de Architect AI con Generator Preview y biblioteca unificada.</p>
             </div>
             <div className="rounded-[1.5rem] border border-white/10 bg-black/25 p-5">
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4"><div className="text-3xl font-semibold">{definition.fields.length}</div><div className="text-xs text-white/45">Campos</div></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4"><div className="text-3xl font-semibold">{definition.commands.length + definition.queries.length}</div><div className="text-xs text-white/45">Commands/Queries</div></div>
+                <button onClick={() => setMode("builder")} className={`rounded-2xl border px-4 py-4 text-left transition ${mode === "builder" ? "border-cyan-200/35 bg-cyan-100 text-slate-950" : "border-white/10 bg-white/[0.05] text-white"}`}>
+                  <LayoutDashboard className="mb-3" size={20} />
+                  <div className="font-semibold">Builder Mode</div>
+                  <div className="mt-1 text-xs opacity-70">Diseño manual guiado.</div>
+                </button>
+                <button onClick={() => setMode("architect")} className={`rounded-2xl border px-4 py-4 text-left transition ${mode === "architect" ? "border-cyan-200/35 bg-cyan-100 text-slate-950" : "border-white/10 bg-white/[0.05] text-white"}`}>
+                  <BrainCircuit className="mb-3" size={20} />
+                  <div className="font-semibold">Architect Mode</div>
+                  <div className="mt-1 text-xs opacity-70">Blueprints asistidos.</div>
+                </button>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button onClick={saveDefinition} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-slate-950"><Save size={16} /> Guardar</button>
@@ -278,8 +316,20 @@ export default function FlowlyStudioPage() {
         </header>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          {tabs.map(({ id, label, Icon }) => (
-            <button key={id} onClick={() => { setActiveTab(id); if (id === "library") loadBusinessObjects(); }} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${activeTab === id ? "bg-cyan-100 text-slate-950" : "border border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]"}`}>
+          {mode === "builder" ? (Object.keys(builderLabels) as BuilderType[]).map((type) => (
+            <button key={type} onClick={() => { setBuilderType(type); setActiveTab("designer"); }} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${builderType === type ? "bg-cyan-100 text-slate-950" : "border border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]"}`}>
+              {type === "business_object" ? <Boxes size={16} /> : type === "capability" ? <Braces size={16} /> : type === "workflow" ? <Workflow size={16} /> : type === "policy" ? <ShieldCheck size={16} /> : <LayoutDashboard size={16} />} {builderLabels[type]}
+            </button>
+          )) : null}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {([
+            ["designer", "Designer", Boxes],
+            ["generator", "Generator Preview", Code2],
+            ["library", "Biblioteca", Layers3],
+          ] as const).map(([id, label, Icon]) => (
+            <button key={id} onClick={() => { setActiveTab(id); if (id === "library") loadLibrary(); }} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${activeTab === id ? "bg-white text-slate-950" : "border border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]"}`}>
               <Icon size={16} /> {label}
             </button>
           ))}
@@ -287,84 +337,103 @@ export default function FlowlyStudioPage() {
 
         {activeTab === "designer" && (
           <form onSubmit={saveDefinition} className="mt-6 grid gap-5">
-            <StudioCard icon={<Boxes size={18} />} title="1. Identidad del Business Object">
+            <StudioCard icon={mode === "architect" ? <BrainCircuit size={18} /> : <Boxes size={18} />} title={mode === "architect" ? "Architect Blueprint" : `${builderLabels[builderType]} Designer`}>
               <div className="grid gap-4 md:grid-cols-2">
-                <FieldInput label="Nombre" value={definition.name} onChange={renameObject} />
-                <FieldInput label="Slug" value={definition.slug} onChange={(slug) => updateDefinition({ slug: slugifyStudio(slug) })} />
-                <SelectInput label="Dominio" value={definition.domain} options={domains} onChange={(domain) => updateDefinition({ domain })} />
-                <SelectInput label="Estado del diseño" value={definition.status} options={["draft", "review", "stable"]} onChange={(status) => updateDefinition({ status: status as FlowlyBusinessObjectDefinition["status"] })} />
+                <FieldInput label="Nombre" value={currentDefinition.name} onChange={rename} />
+                <FieldInput label="Slug" value={currentDefinition.slug} onChange={(slug) => updateCommon({ slug: slugifyStudio(slug) } as Partial<FlowlyStudioDefinition>)} />
+                <SelectInput label="Dominio" value={currentDefinition.domain} options={studioDomains} onChange={(domain) => updateCommon({ domain } as Partial<FlowlyStudioDefinition>)} />
+                <SelectInput label="Estado" value={currentDefinition.status} options={["draft", "review", "stable"]} onChange={(status) => updateCommon({ status } as Partial<FlowlyStudioDefinition>)} />
               </div>
-              <div className="mt-4"><TextAreaInput label="Descripción" value={definition.description} onChange={(description) => updateDefinition({ description })} rows={3} /></div>
+              <div className="mt-4"><TextAreaInput label="Descripción" value={currentDefinition.description} onChange={(description) => updateCommon({ description } as Partial<FlowlyStudioDefinition>)} rows={3} /></div>
             </StudioCard>
 
-            <StudioCard icon={<Database size={18} />} title="2. Campos">
-              <div className="grid gap-3">
-                {definition.fields.map((field) => (
-                  <div key={field.id} className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 lg:grid-cols-[1fr,1fr,0.8fr,0.5fr,auto] lg:items-end">
-                    <FieldInput label="Nombre técnico" value={field.name} onChange={(name) => updateField(field.id, { name: slugifyStudio(name).replace(/-/g, "_") })} />
-                    <FieldInput label="Etiqueta" value={field.label} onChange={(label) => updateField(field.id, { label })} />
-                    <SelectInput label="Tipo" value={field.type} options={fieldTypes} onChange={(type) => updateField(field.id, { type: type as FlowlyStudioFieldType })} />
-                    <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65"><input type="checkbox" checked={field.required} onChange={(event) => updateField(field.id, { required: event.target.checked })} /> Obligatorio</label>
-                    <button type="button" onClick={() => removeField(field.id)} className="grid h-12 w-12 place-items-center rounded-2xl border border-red-300/20 bg-red-400/10 text-red-100"><Trash2 size={16} /></button>
-                    {field.type === "relation" ? <FieldInput label="Relaciona con" value={field.relationTo || ""} onChange={(relationTo) => updateField(field.id, { relationTo })} /> : null}
-                    <div className="lg:col-span-4"><FieldInput label="Descripción" value={field.description || ""} onChange={(description) => updateField(field.id, { description })} /></div>
-                  </div>
-                ))}
-              </div>
-              <button type="button" onClick={addField} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><Plus size={16} /> Añadir campo</button>
-            </StudioCard>
-
-            <StudioCard icon={<Workflow size={18} />} title="3. Estados">
-              <div className="grid gap-3 md:grid-cols-2">
-                {definition.states.map((state) => (
-                  <div key={state.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <FieldInput label="Nombre" value={state.name} onChange={(name) => updateState(state.id, { name: slugifyStudio(name).replace(/-/g, "_") })} />
-                      <FieldInput label="Etiqueta" value={state.label} onChange={(label) => updateState(state.id, { label })} />
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <label className="flex items-center gap-2 text-sm text-white/60"><input type="checkbox" checked={Boolean(state.isInitial)} onChange={(event) => updateState(state.id, { isInitial: event.target.checked })} /> Estado inicial</label>
-                      <button type="button" onClick={() => removeState(state.id)} className="text-sm text-red-100/80">Eliminar</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button type="button" onClick={addState} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><Plus size={16} /> Añadir estado</button>
-            </StudioCard>
-
-            <div className="grid gap-5 lg:grid-cols-2">
-              {(["commands", "queries", "events", "policies", "capabilities"] as const).map((key) => (
-                <StudioCard key={key} icon={<Braces size={18} />} title={key.charAt(0).toUpperCase() + key.slice(1)}>
+            {mode === "builder" && builderType === "business_object" ? (
+              <>
+                <StudioCard icon={<Database size={18} />} title="Campos del Business Object">
                   <div className="grid gap-3">
-                    {definition[key].map((item) => (
-                      <div key={item.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <FieldInput label="Nombre" value={item.name} onChange={(name) => updateNamedItem(key, item.id, { name })} />
-                        <div className="mt-3"><FieldInput label="Descripción" value={item.description || ""} onChange={(description) => updateNamedItem(key, item.id, { description })} /></div>
-                        <button type="button" onClick={() => removeNamedItem(key, item.id)} className="mt-3 text-sm text-red-100/80">Eliminar</button>
+                    {businessObject.fields.map((field) => (
+                      <div key={field.id} className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 lg:grid-cols-[1fr,1fr,0.8fr,0.5fr] lg:items-end">
+                        <FieldInput label="Nombre técnico" value={field.name} onChange={(name) => updateField(field.id, { name: slugifyStudio(name).replace(/-/g, "_") })} />
+                        <FieldInput label="Etiqueta" value={field.label} onChange={(label) => updateField(field.id, { label })} />
+                        <SelectInput label="Tipo" value={field.type} options={fieldTypes} onChange={(type) => updateField(field.id, { type: type as FlowlyStudioFieldType })} />
+                        <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65"><input type="checkbox" checked={field.required} onChange={(event) => updateField(field.id, { required: event.target.checked })} /> Obligatorio</label>
                       </div>
                     ))}
                   </div>
-                  <button type="button" onClick={() => addNamedItem(key, `${key === "queries" ? "Get" : key === "events" ? definition.name + "Updated" : key === "policies" ? "NewPolicy" : key === "capabilities" ? definition.name + "Capability" : "Create" + definition.name}`)} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><Plus size={16} /> Añadir</button>
+                  <button type="button" onClick={() => setBusinessObject((current) => ({ ...current, fields: [...current.fields, { id: createStudioId("field"), name: "new_field", label: "Nuevo campo", type: "text", required: false }] }))} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><Plus size={16} /> Añadir campo</button>
                 </StudioCard>
-              ))}
-            </div>
-
-            <StudioCard icon={<GitBranch size={18} />} title="4. Relaciones">
-              <div className="grid gap-3">
-                {definition.relationships.map((relationship) => (
-                  <div key={relationship.id} className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr,1fr,1.4fr,auto] md:items-end">
-                    <FieldInput label="Objeto destino" value={relationship.target} onChange={(target) => updateRelationship(relationship.id, { target })} />
-                    <SelectInput label="Tipo" value={relationship.type} options={relationshipTypes} onChange={(type) => updateRelationship(relationship.id, { type: type as FlowlyStudioRelationship["type"] })} />
-                    <FieldInput label="Descripción" value={relationship.description || ""} onChange={(description) => updateRelationship(relationship.id, { description })} />
-                    <button type="button" onClick={() => removeRelationship(relationship.id)} className="grid h-12 w-12 place-items-center rounded-2xl border border-red-300/20 bg-red-400/10 text-red-100"><Trash2 size={16} /></button>
+                <StudioCard icon={<Workflow size={18} />} title="Estados">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {businessObject.states.map((state) => (
+                      <div key={state.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="grid gap-3 md:grid-cols-2"><FieldInput label="Nombre" value={state.name} onChange={(name) => updateState(state.id, { name: slugifyStudio(name).replace(/-/g, "_") })} /><FieldInput label="Etiqueta" value={state.label} onChange={(label) => updateState(state.id, { label })} /></div>
+                        <label className="mt-3 flex items-center gap-2 text-sm text-white/60"><input type="checkbox" checked={Boolean(state.isInitial)} onChange={(event) => updateState(state.id, { isInitial: event.target.checked })} /> Estado inicial</label>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <button type="button" onClick={addRelationship} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><Plus size={16} /> Añadir relación</button>
-            </StudioCard>
+                  <button type="button" onClick={() => setBusinessObject((current) => ({ ...current, states: [...current.states, { id: createStudioId("state"), name: "new_state", label: "Nuevo estado" }] }))} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><Plus size={16} /> Añadir estado</button>
+                </StudioCard>
+                <StudioCard icon={<GitBranch size={18} />} title="Commands, Queries, Events, Policies, Capabilities y Relationships">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <TextAreaInput label="Commands" value={asLines(businessObject.commands)} onChange={(value) => setBusinessObject((current) => ({ ...current, commands: namedItemsFromLines(value) }))} />
+                    <TextAreaInput label="Queries" value={asLines(businessObject.queries)} onChange={(value) => setBusinessObject((current) => ({ ...current, queries: namedItemsFromLines(value) }))} />
+                    <TextAreaInput label="Events" value={asLines(businessObject.events)} onChange={(value) => setBusinessObject((current) => ({ ...current, events: namedItemsFromLines(value) }))} />
+                    <TextAreaInput label="Policies" value={asLines(businessObject.policies)} onChange={(value) => setBusinessObject((current) => ({ ...current, policies: namedItemsFromLines(value) }))} />
+                    <TextAreaInput label="Capabilities" value={asLines(businessObject.capabilities)} onChange={(value) => setBusinessObject((current) => ({ ...current, capabilities: namedItemsFromLines(value) }))} />
+                    <TextAreaInput label="Relationships (uno por línea: Object:type)" value={businessObject.relationships.map((rel) => `${rel.target}:${rel.type}`).join("\n")} onChange={(value) => setBusinessObject((current) => ({ ...current, relationships: lines(value).map((line) => { const [target, type] = line.split(":"); return { id: createStudioId("rel"), target: target || "Object", type: (relationshipTypes.includes(type as FlowlyStudioRelationship["type"]) ? type : "reference") as FlowlyStudioRelationship["type"] }; }) }))} />
+                  </div>
+                </StudioCard>
+              </>
+            ) : null}
 
-            <StudioCard icon={<ScrollText size={18} />} title="5. Notas y JSON">
-              <TextAreaInput label="Notas de arquitectura" value={definition.notes || ""} onChange={(notes) => updateDefinition({ notes })} rows={3} />
+            {mode === "builder" && builderType === "capability" ? (
+              <StudioCard icon={<Braces size={18} />} title="Capability Contract">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TextAreaInput label="Business Objects" value={asLines(capability.businessObjects)} onChange={(value) => setCapability((current) => ({ ...current, businessObjects: lines(value) }))} />
+                  <TextAreaInput label="Inputs" value={capability.inputs.map((input) => input.name).join("\n")} onChange={(value) => setCapability((current) => ({ ...current, inputs: lines(value).map((name) => ({ id: createStudioId("input"), name, type: "text", required: true })) }))} />
+                  <TextAreaInput label="Outputs" value={capability.outputs.map((output) => output.name).join("\n")} onChange={(value) => setCapability((current) => ({ ...current, outputs: lines(value).map((name) => ({ id: createStudioId("output"), name, type: "text", required: true })) }))} />
+                  <TextAreaInput label="Commands" value={asLines(capability.commands)} onChange={(value) => setCapability((current) => ({ ...current, commands: namedItemsFromLines(value) }))} />
+                  <TextAreaInput label="Queries" value={asLines(capability.queries)} onChange={(value) => setCapability((current) => ({ ...current, queries: namedItemsFromLines(value) }))} />
+                  <TextAreaInput label="Policies" value={asLines(capability.policies)} onChange={(value) => setCapability((current) => ({ ...current, policies: namedItemsFromLines(value) }))} />
+                  <TextAreaInput label="Events" value={asLines(capability.events)} onChange={(value) => setCapability((current) => ({ ...current, events: namedItemsFromLines(value) }))} />
+                  <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65"><input type="checkbox" checked={capability.usesAI} onChange={(event) => setCapability((current) => ({ ...current, usesAI: event.target.checked }))} /> Usa AI Runtime</label>
+                </div>
+              </StudioCard>
+            ) : null}
+
+            {mode === "builder" && builderType === "workflow" ? (
+              <StudioCard icon={<Workflow size={18} />} title="Workflow Designer">
+                <div className="grid gap-4 md:grid-cols-2"><FieldInput label="Trigger" value={workflow.trigger} onChange={(trigger) => setWorkflow((current) => ({ ...current, trigger }))} /><TextAreaInput label="Steps" value={workflow.steps.map((step) => `${step.name}:${step.type}`).join("\n")} onChange={(value) => setWorkflow((current) => ({ ...current, steps: lines(value).map((line) => { const [name, type] = line.split(":"); return { id: createStudioId("step"), name: name || "Step", type: (type || "capability") as FlowlyWorkflowDefinition["steps"][number]["type"] }; }) }))} /><TextAreaInput label="Events" value={asLines(workflow.events)} onChange={(value) => setWorkflow((current) => ({ ...current, events: namedItemsFromLines(value) }))} /><TextAreaInput label="Policies" value={asLines(workflow.policies)} onChange={(value) => setWorkflow((current) => ({ ...current, policies: namedItemsFromLines(value) }))} /></div>
+              </StudioCard>
+            ) : null}
+
+            {mode === "builder" && builderType === "policy" ? (
+              <StudioCard icon={<ShieldCheck size={18} />} title="Policy Designer">
+                <div className="grid gap-4 md:grid-cols-2"><SelectInput label="Scope" value={policy.scope} options={["organization", "workspace", "business_object", "capability", "workflow"]} onChange={(scope) => setPolicy((current) => ({ ...current, scope: scope as FlowlyPolicyDefinition["scope"] }))} /><TextAreaInput label="Rules (Subject | condition | effect)" rows={8} value={policy.rules.map((rule) => `${rule.subject} | ${rule.condition} | ${rule.effect}`).join("\n")} onChange={(value) => setPolicy((current) => ({ ...current, rules: lines(value).map((line) => { const [subject, condition, effect] = line.split("|").map((part) => part.trim()); return { id: createStudioId("rule"), subject: subject || "Resource", condition: condition || "true", effect: (effect || "allow") as FlowlyPolicyDefinition["rules"][number]["effect"] }; }) }))} /></div>
+              </StudioCard>
+            ) : null}
+
+            {mode === "builder" && builderType === "app" ? (
+              <StudioCard icon={<LayoutDashboard size={18} />} title="App Designer">
+                <div className="grid gap-4 md:grid-cols-2"><TextAreaInput label="Business Objects" value={asLines(appDefinition.businessObjects)} onChange={(value) => setAppDefinition((current) => ({ ...current, businessObjects: lines(value) }))} /><TextAreaInput label="Capabilities" value={asLines(appDefinition.capabilities)} onChange={(value) => setAppDefinition((current) => ({ ...current, capabilities: lines(value) }))} /><TextAreaInput label="Navigation" value={asLines(appDefinition.navigation)} onChange={(value) => setAppDefinition((current) => ({ ...current, navigation: namedItemsFromLines(value) }))} /><TextAreaInput label="Widgets" value={asLines(appDefinition.widgets)} onChange={(value) => setAppDefinition((current) => ({ ...current, widgets: namedItemsFromLines(value) }))} /></div>
+              </StudioCard>
+            ) : null}
+
+            {mode === "architect" ? (
+              <StudioCard icon={<BrainCircuit size={18} />} title="Architect AI Blueprint">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TextAreaInput label="Objetivo" value={blueprint.goal} onChange={(goal) => setBlueprint((current) => ({ ...current, goal }))} rows={4} />
+                  <TextAreaInput label="Business Objects propuestos" value={asLines(blueprint.businessObjects)} onChange={(value) => setBlueprint((current) => ({ ...current, businessObjects: lines(value) }))} />
+                  <TextAreaInput label="Capabilities propuestas" value={asLines(blueprint.capabilities)} onChange={(value) => setBlueprint((current) => ({ ...current, capabilities: lines(value) }))} />
+                  <TextAreaInput label="Workflows propuestos" value={asLines(blueprint.workflows)} onChange={(value) => setBlueprint((current) => ({ ...current, workflows: lines(value) }))} />
+                  <TextAreaInput label="Policies propuestas" value={asLines(blueprint.policies)} onChange={(value) => setBlueprint((current) => ({ ...current, policies: lines(value) }))} />
+                  <TextAreaInput label="Riesgos / revisiones" value={asLines(blueprint.risks)} onChange={(value) => setBlueprint((current) => ({ ...current, risks: lines(value) }))} />
+                </div>
+              </StudioCard>
+            ) : null}
+
+            <StudioCard icon={<ScrollText size={18} />} title="Notas, JSON y acciones">
+              <TextAreaInput label="Notas" value={(currentDefinition as { notes?: string }).notes || ""} onChange={(notes) => updateCommon({ notes } as Partial<FlowlyStudioDefinition>)} rows={3} />
               <pre className="mt-4 max-h-96 overflow-auto rounded-2xl border border-white/10 bg-black/30 p-4 text-xs leading-5 text-white/65">{jsonPreview}</pre>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="submit" className="inline-flex items-center gap-2 rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-slate-950"><Save size={16} /> Guardar en Supabase</button>
@@ -378,41 +447,29 @@ export default function FlowlyStudioPage() {
         {activeTab === "generator" && (
           <section className="mt-6 grid gap-5 lg:grid-cols-2">
             <StudioCard icon={<Database size={18} />} title="SQL Supabase"><ArtifactBlock title="Migration SQL" value={artifacts?.sql || ""} /></StudioCard>
-            <StudioCard icon={<Code2 size={18} />} title="TypeScript"><ArtifactBlock title="Types" value={artifacts?.typescript || ""} /></StudioCard>
-            <StudioCard icon={<FileCode2 size={18} />} title="API"><ArtifactBlock title="Next.js Route" value={artifacts?.apiRoute || ""} /></StudioCard>
+            <StudioCard icon={<Code2 size={18} />} title="TypeScript"><ArtifactBlock title="Types / Contract" value={artifacts?.typescript || ""} /></StudioCard>
+            <StudioCard icon={<FileCode2 size={18} />} title="API / Runtime"><ArtifactBlock title="Route / Runtime note" value={artifacts?.apiRoute || ""} /></StudioCard>
             <StudioCard icon={<ScrollText size={18} />} title="Documentación"><ArtifactBlock title="README Markdown" value={artifacts?.markdown || ""} /></StudioCard>
             <StudioCard icon={<CheckCircle2 size={18} />} title="Tests"><ArtifactBlock title="Test Plan" value={artifacts?.testPlan || ""} /></StudioCard>
-            <StudioCard icon={<GitBranch size={18} />} title="SDK"><ArtifactBlock title="SDK Function" value={artifacts?.sdk || ""} /></StudioCard>
+            <StudioCard icon={<Network size={18} />} title="SDK"><ArtifactBlock title="SDK Function" value={artifacts?.sdk || ""} /></StudioCard>
           </section>
         )}
 
         {activeTab === "library" && (
           <section className="mt-6 rounded-[1.7rem] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">Biblioteca de Business Objects</h2>
-                <p className="mt-1 text-sm text-white/50">Diseños guardados en Supabase y listos para el Generator.</p>
-              </div>
-              <button onClick={loadBusinessObjects} className="rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-slate-950">Actualizar</button>
+              <div><h2 className="text-xl font-semibold">Biblioteca unificada de Flowly Studio</h2><p className="mt-1 text-sm text-white/50">Business Objects, Capabilities, Workflows, Policies, Apps y Blueprints guardados.</p></div>
+              <div className="flex flex-wrap gap-2"><div className="relative"><Search className="pointer-events-none absolute left-3 top-3.5 text-white/35" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} className="rounded-2xl border border-white/10 bg-black/25 py-3 pl-9 pr-4 text-sm text-white outline-none" placeholder="Buscar..." /></div><button onClick={loadLibrary} className="rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-slate-950">Actualizar</button></div>
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {businessObjects.map((row) => (
+              {library.map((row) => (
                 <article key={row.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{row.name}</h3>
-                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyan-100/70">{row.domain} · {row.status}</p>
-                    </div>
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/45">{row.slug}</span>
-                  </div>
+                  <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{row.name}</h3><p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyan-100/70">{row.kind} · {row.domain} · {row.status}</p></div><span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/45">{row.slug}</span></div>
                   <p className="mt-3 min-h-14 text-sm leading-6 text-white/55">{row.description}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => loadRow(row)} className="rounded-xl bg-cyan-100 px-3 py-2 text-xs font-semibold text-slate-950">Editar</button>
-                    <a href={`/api/studio/export/business-object?slug=${encodeURIComponent(row.slug)}`} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">JSON</a>
-                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2"><button onClick={() => loadRow(row)} className="rounded-xl bg-cyan-100 px-3 py-2 text-xs font-semibold text-slate-950">Editar</button><a href={`/api/studio/export/artifact?kind=${encodeURIComponent(row.kind)}&slug=${encodeURIComponent(row.slug)}`} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">JSON</a></div>
                 </article>
               ))}
-              {!businessObjects.length ? <p className="text-sm text-white/45">Todavía no hay Business Objects guardados o Supabase no está configurado.</p> : null}
+              {!library.length ? <p className="text-sm text-white/45">Todavía no hay diseños guardados o Supabase no está configurado.</p> : null}
             </div>
           </section>
         )}
