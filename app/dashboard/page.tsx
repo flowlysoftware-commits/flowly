@@ -1715,7 +1715,7 @@ export default function DashboardPage() {
 
           <DashboardFooter />
 
-          {businessAvatar && <FloatingAvatarAssistant
+          {false && businessAvatar && <FloatingAvatarAssistant
             businessAvatar={businessAvatar}
             businessName={business.name}
             open={assistantOpen}

@@ -1432,3 +1432,251 @@ input[type="date"].input-dark { color-scheme: dark; }
   .flowly-companion-panel { right: 0; bottom: 9.7rem; width: calc(100vw - .8rem); }
   .flowly-companion-rewards > div { grid-template-columns: 1fr; }
 }
+
+/* Flowly Companion Runtime V2 - avatar evolutivo vivo, sin GLB antiguo */
+.flowly-companion-avatar-shell {
+  width: 12rem;
+  height: 15.2rem;
+  display: grid;
+  place-items: center;
+}
+.flowly-companion-status-avatar {
+  width: 4.2rem;
+  height: 4.2rem;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.evo-companion {
+  --skin: #ffd8b8;
+  --hair-a: #67e8f9;
+  --hair-b: #7c3aed;
+  --suit-a: #e8fbff;
+  --suit-b: #0ea5e9;
+  --accent: #67e8f9;
+  --accent-2: #a78bfa;
+  position: relative;
+  width: 10.8rem;
+  height: 13.4rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  isolation: isolate;
+  animation: evo-float 4.2s ease-in-out infinite;
+}
+.evo-companion-compact {
+  width: 4.1rem;
+  height: 4.1rem;
+  animation: evo-breathe 3.2s ease-in-out infinite;
+}
+.evo-companion-growing { --hair-a: #5eead4; --hair-b: #2563eb; --accent: #5eead4; }
+.evo-companion-evolved { --hair-a: #93c5fd; --hair-b: #a855f7; --accent: #93c5fd; --accent-2: #f0abfc; }
+.evo-companion-legendary { --hair-a: #fde68a; --hair-b: #f97316; --accent: #fde68a; --accent-2: #fb7185; }
+.evo-aura {
+  position: absolute;
+  inset: 10% 4% 2%;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 24%, color-mix(in srgb, var(--accent) 42%, transparent), transparent 42%), radial-gradient(circle at 50% 88%, rgba(167,139,250,.3), transparent 48%);
+  filter: blur(14px);
+  opacity: .72;
+  z-index: -2;
+  animation: evo-aura 3.8s ease-in-out infinite;
+}
+.evo-aura-two { inset: 0 0 20%; opacity: .35; animation-delay: -1.3s; }
+.evo-spark {
+  position: absolute;
+  width: .38rem;
+  height: .38rem;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 18px var(--accent);
+  opacity: .75;
+  animation: evo-spark 2.7s ease-in-out infinite;
+}
+.evo-spark-a { left: 18%; top: 24%; }
+.evo-spark-b { right: 12%; top: 34%; animation-delay: -.8s; }
+.evo-spark-c { left: 32%; bottom: 22%; animation-delay: -1.6s; }
+.evo-body {
+  position: absolute;
+  left: 50%;
+  bottom: 2.6rem;
+  width: 6.6rem;
+  height: 10.4rem;
+  translate: -50% 0;
+  transform-origin: 50% 88%;
+  animation: evo-body-idle 3.6s ease-in-out infinite;
+}
+.evo-companion-compact .evo-body { width: 3rem; height: 3.8rem; bottom: .1rem; }
+.evo-head {
+  position: absolute;
+  left: 50%;
+  top: .82rem;
+  width: 4.2rem;
+  height: 4.45rem;
+  translate: -50% 0;
+  border-radius: 46% 46% 48% 48%;
+  background: linear-gradient(155deg, #ffe5cc, var(--skin));
+  box-shadow: inset 0 -.35rem .85rem rgba(153,84,43,.16), 0 .8rem 1.6rem rgba(0,0,0,.18);
+  z-index: 3;
+  animation: evo-head-look 5.8s ease-in-out infinite;
+}
+.evo-companion-compact .evo-head { width: 2.55rem; height: 2.65rem; top: .2rem; }
+.evo-hair {
+  position: absolute;
+  background: linear-gradient(145deg, var(--hair-a), var(--hair-b));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--hair-a) 45%, transparent);
+}
+.evo-hair-a { left: -.3rem; top: -.34rem; width: 4.6rem; height: 1.7rem; border-radius: 70% 60% 36% 48%; rotate: -5deg; }
+.evo-hair-b { right: -.22rem; top: .22rem; width: 2rem; height: 1.65rem; border-radius: 60% 70% 38% 52%; rotate: 26deg; }
+.evo-hair-c { left: .65rem; top: -.72rem; width: 2.05rem; height: 1.65rem; border-radius: 80% 20% 80% 24%; rotate: -18deg; }
+.evo-ear { position: absolute; top: 2rem; width: .42rem; height: .72rem; border-radius: 999px; background: var(--skin); z-index: -1; }
+.evo-ear-left { left: -.24rem; }
+.evo-ear-right { right: -.24rem; }
+.evo-eye {
+  position: absolute;
+  top: 2.14rem;
+  width: .54rem;
+  height: .68rem;
+  border-radius: 999px;
+  background: radial-gradient(circle at 38% 28%, #fff 0 .08rem, transparent .09rem), linear-gradient(#075985, #0f172a);
+  animation: evo-blink 5.2s infinite;
+}
+.evo-eye-left { left: 1.16rem; }
+.evo-eye-right { right: 1.16rem; }
+.evo-cheek { position: absolute; top: 2.92rem; width: .58rem; height: .22rem; border-radius: 999px; background: rgba(251,113,133,.22); }
+.evo-cheek-left { left: .78rem; }
+.evo-cheek-right { right: .78rem; }
+.evo-mouth {
+  position: absolute;
+  left: 50%;
+  top: 3.08rem;
+  width: .78rem;
+  height: .34rem;
+  translate: -50% 0;
+  border-bottom: .15rem solid #7f1d1d;
+  border-radius: 0 0 999px 999px;
+}
+.evo-torso {
+  position: absolute;
+  left: 50%;
+  top: 5.05rem;
+  width: 4.6rem;
+  height: 4.35rem;
+  translate: -50% 0;
+  border-radius: 1.45rem 1.45rem 1.2rem 1.2rem;
+  background: linear-gradient(140deg, var(--suit-a), #dff7ff 34%, var(--suit-b) 35%, #172554 100%);
+  box-shadow: inset 0 0 0 .12rem rgba(255,255,255,.4), 0 1.1rem 2rem rgba(0,0,0,.18);
+  z-index: 2;
+}
+.evo-companion-compact .evo-torso { display: none; }
+.evo-hood {
+  position: absolute;
+  left: 50%;
+  top: 4.78rem;
+  width: 5.3rem;
+  height: 2.1rem;
+  translate: -50% 0;
+  border-radius: 999px 999px .8rem .8rem;
+  background: linear-gradient(90deg, rgba(14,165,233,.85), rgba(124,58,237,.65));
+  z-index: 1;
+}
+.evo-core {
+  position: absolute;
+  left: 50%;
+  top: 1.34rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: radial-gradient(circle, #fff, var(--accent));
+  box-shadow: 0 0 24px var(--accent);
+  animation: evo-core 1.7s ease-in-out infinite;
+}
+.evo-badge { position: absolute; right: .58rem; top: .76rem; width: .72rem; height: .72rem; border-radius: .26rem; background: #fff; box-shadow: inset 0 0 0 .14rem var(--accent); }
+.evo-arm {
+  position: absolute;
+  top: 5.72rem;
+  width: 1.1rem;
+  height: 3.6rem;
+  border-radius: 999px;
+  background: linear-gradient(#dff7ff, #0ea5e9);
+  transform-origin: 50% .35rem;
+  z-index: 1;
+}
+.evo-arm span { position: absolute; bottom: -.25rem; left: 50%; width: .86rem; height: .86rem; translate: -50% 0; border-radius: 999px; background: var(--skin); }
+.evo-arm-left { left: .25rem; rotate: 9deg; animation: evo-arm-left 3.2s ease-in-out infinite; }
+.evo-arm-right { right: .25rem; rotate: -9deg; animation: evo-arm-right 3.2s ease-in-out infinite; }
+.evo-leg { position: absolute; top: 8.95rem; width: 1.15rem; height: 2.35rem; border-radius: 999px; background: linear-gradient(#172554, #020617); z-index: 0; transform-origin: 50% 0; }
+.evo-leg-left { left: 2.05rem; }
+.evo-leg-right { right: 2.05rem; }
+.evo-shadow { position: absolute; left: 50%; bottom: 2.22rem; width: 5.8rem; height: 1rem; translate: -50% 0; border-radius: 999px; background: rgba(0,0,0,.32); filter: blur(8px); animation: evo-shadow 4.2s ease-in-out infinite; }
+.evo-card {
+  position: absolute;
+  left: 50%;
+  bottom: .15rem;
+  min-width: 8.9rem;
+  translate: -50% 0;
+  border: 1px solid rgba(103,232,249,.3);
+  border-radius: 1rem;
+  background: rgba(3,7,18,.78);
+  padding: .5rem .65rem;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 42px rgba(0,0,0,.32);
+}
+.evo-card strong { display:block; font-size:.76rem; color:#fff; }
+.evo-card small { display:block; margin-top:.08rem; color:rgba(255,255,255,.62); font-size:.58rem; }
+.evo-xp { display:block; height:.22rem; margin-top:.38rem; border-radius:999px; background:rgba(255,255,255,.14); overflow:hidden; }
+.evo-xp i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.evo-companion-talking .evo-mouth { height:.42rem; border:0; background:#7f1d1d; border-radius:999px; animation:evo-talk-mouth .34s ease-in-out infinite; }
+.evo-companion-talking .evo-arm-left { animation:evo-talk-arm-left .9s ease-in-out infinite; }
+.evo-companion-talking .evo-arm-right { animation:evo-talk-arm-right .9s ease-in-out infinite; }
+.evo-companion-thinking .evo-head { animation:evo-think 2.2s ease-in-out infinite; }
+.evo-companion-celebrating .evo-body { animation:evo-celebrate .72s ease-in-out infinite; }
+.evo-companion-celebrating .evo-arm-left { rotate:-125deg; animation:evo-celebrate-arm-left .72s ease-in-out infinite; }
+.evo-companion-celebrating .evo-arm-right { rotate:125deg; animation:evo-celebrate-arm-right .72s ease-in-out infinite; }
+.evo-companion-working .evo-head { animation:evo-working-head 1.6s ease-in-out infinite; }
+.evo-companion-walking .evo-body { animation:evo-walk-body .62s ease-in-out infinite; }
+.evo-companion-walking .evo-leg-left { animation:evo-walk-leg-a .62s ease-in-out infinite; }
+.evo-companion-walking .evo-leg-right { animation:evo-walk-leg-b .62s ease-in-out infinite; }
+.evo-companion-sleeping { animation:evo-sleep 4s ease-in-out infinite; opacity:.82; }
+.evo-companion-sleeping .evo-eye { height:.08rem; top:2.45rem; background:#0f172a; }
+.evo-companion-compact .evo-card, .evo-companion-compact .evo-hood, .evo-companion-compact .evo-arm, .evo-companion-compact .evo-leg, .evo-companion-compact .evo-shadow, .evo-companion-compact .evo-spark { display:none; }
+.evo-companion-compact .evo-aura { inset:0; }
+.evo-companion-compact .evo-hair-a { width:2.75rem; height:1rem; }
+.evo-companion-compact .evo-hair-b { width:1.15rem; height:1rem; }
+.evo-companion-compact .evo-hair-c { width:1.2rem; height:1rem; }
+.evo-companion-compact .evo-eye { top:1.28rem; width:.34rem; height:.42rem; }
+.evo-companion-compact .evo-eye-left { left:.72rem; }
+.evo-companion-compact .evo-eye-right { right:.72rem; }
+.evo-companion-compact .evo-cheek { top:1.78rem; width:.35rem; }
+.evo-companion-compact .evo-mouth { top:1.9rem; width:.5rem; }
+@keyframes evo-float { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
+@keyframes evo-breathe { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.04) } }
+@keyframes evo-aura { 0%,100%{ opacity:.52; transform:scale(.96) } 50%{ opacity:.82; transform:scale(1.05) } }
+@keyframes evo-spark { 0%,100%{ transform:translateY(0) scale(.8); opacity:.25 } 50%{ transform:translateY(-14px) scale(1.18); opacity:.9 } }
+@keyframes evo-body-idle { 0%,100%{ transform:rotate(-1deg) } 50%{ transform:rotate(1.2deg) } }
+@keyframes evo-head-look { 0%,100%{ transform:translateX(0) rotate(0) } 25%{ transform:translateX(-2px) rotate(-2deg) } 65%{ transform:translateX(2px) rotate(2deg) } }
+@keyframes evo-blink { 0%,92%,100%{ transform:scaleY(1) } 95%{ transform:scaleY(.08) } }
+@keyframes evo-core { 0%,100%{ opacity:.75; transform:scale(.9) } 50%{ opacity:1; transform:scale(1.15) } }
+@keyframes evo-arm-left { 0%,100%{ rotate:9deg } 50%{ rotate:18deg } }
+@keyframes evo-arm-right { 0%,100%{ rotate:-9deg } 50%{ rotate:-18deg } }
+@keyframes evo-shadow { 0%,100%{ transform:scale(1); opacity:.32 } 50%{ transform:scale(.86); opacity:.22 } }
+@keyframes evo-talk-mouth { 0%,100%{ transform:translateX(-50%) scaleY(.62) } 50%{ transform:translateX(-50%) scaleY(1.15) } }
+@keyframes evo-talk-arm-left { 0%,100%{ rotate:18deg } 50%{ rotate:42deg } }
+@keyframes evo-talk-arm-right { 0%,100%{ rotate:-18deg } 50%{ rotate:-42deg } }
+@keyframes evo-think { 0%,100%{ transform:translateX(0) rotate(0) } 50%{ transform:translateX(-3px) rotate(-7deg) } }
+@keyframes evo-celebrate { 0%,100%{ transform:translateY(0) scale(1) } 50%{ transform:translateY(-10px) scale(1.04) } }
+@keyframes evo-celebrate-arm-left { 0%,100%{ rotate:-115deg } 50%{ rotate:-145deg } }
+@keyframes evo-celebrate-arm-right { 0%,100%{ rotate:115deg } 50%{ rotate:145deg } }
+@keyframes evo-working-head { 0%,100%{ transform:translateY(0) rotate(-2deg) } 50%{ transform:translateY(3px) rotate(2deg) } }
+@keyframes evo-walk-body { 0%,100%{ transform:translateY(0) rotate(-3deg) } 50%{ transform:translateY(-4px) rotate(3deg) } }
+@keyframes evo-walk-leg-a { 0%,100%{ rotate:14deg } 50%{ rotate:-18deg } }
+@keyframes evo-walk-leg-b { 0%,100%{ rotate:-14deg } 50%{ rotate:18deg } }
+@keyframes evo-sleep { 0%,100%{ transform:translateY(0) rotate(-2deg) } 50%{ transform:translateY(4px) rotate(2deg) } }
+@media (max-width: 820px) {
+  .flowly-companion-avatar-shell { width: 8.2rem; height: 11.2rem; }
+  .evo-companion { width: 7.4rem; height: 10.4rem; transform-origin: bottom center; }
+  .evo-body { scale: .76; bottom: 1.5rem; }
+  .evo-card { scale: .88; bottom: .1rem; }
+}

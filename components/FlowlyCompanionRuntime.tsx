@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, ChevronDown, MessageCircle, Minimize2, Sparkles, Target, Trophy, X, Zap } from "lucide-react";
-import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
+import { ChevronDown, MessageCircle, Minimize2, Sparkles, Target, Trophy, X, Zap } from "lucide-react";
+import EvolutionaryCompanionAvatar from "@/components/EvolutionaryCompanionAvatar";
 import { companionMissions, companionRewards, companionStats, getCompanionContext } from "@/lib/flowlyCompanionRuntime";
 
 const HIDDEN_PREFIXES = ["/login", "/registro", "/reservas", "/demo/login"];
@@ -34,7 +34,7 @@ export default function FlowlyCompanionRuntime() {
       )}
 
       <div className="flowly-companion-avatar-shell">
-        <FlowlyAssistant3D mode={context.mode} facing="left" onClick={() => setOpen((value) => !value)} />
+        <EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={context.mode} onClick={() => setOpen((value) => !value)} />
         <button type="button" className="flowly-companion-avatar-cta" onClick={() => setOpen((value) => !value)}>
           <MessageCircle size={15} />
           Hablar
@@ -59,7 +59,7 @@ export default function FlowlyCompanionRuntime() {
           </header>
 
           <section className="flowly-companion-status-card">
-            <div className="flowly-companion-status-icon"><Bot size={22} /></div>
+            <div className="flowly-companion-status-avatar"><EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={context.mode} compact /></div>
             <div>
               <strong>Nivel {companionStats.level}</strong>
               <p>Ánimo: {context.mood} · Energía {companionStats.energy}%</p>
