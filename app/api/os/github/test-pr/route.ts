@@ -24,14 +24,18 @@ export async function POST(request: NextRequest) {
       files: [buildExecutorTestFile(instruction)],
     });
 
-    await supabaseAdmin.from("flowly_executor_runs").insert({
-      kind: "github_test_pr",
-      status: result.ok ? "completed" : "failed",
-      instruction,
-      branch: result.branch || null,
-      pull_request_url: result.pullRequestUrl || null,
-      details: result,
-    }).then(() => undefined).catch(() => undefined);
+    try {
+      await supabaseAdmin.from("flowly_executor_runs").insert({
+        kind: "github_test_pr",
+        status: result.ok ? "completed" : "failed",
+        instruction,
+        branch: result.branch || null,
+        pull_request_url: result.pullRequestUrl || null,
+        details: result,
+      });
+    } catch {
+      // El registro en Supabase no debe bloquear la creación del Pull Request.
+    }
 
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {
