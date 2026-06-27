@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, BookOpen, Code2, Cpu, Hammer, Layers3, Plus, ShieldCheck, Sparkles } from "lucide-react";
+import { Bot, BookOpen, Code2, Cpu, GitBranch, Hammer, Layers3, Plus, ShieldCheck, Sparkles } from "lucide-react";
 
 const tools = [
   { href: "/asistente", title: "Asistente Arquitecto", description: "Habla con el Companion técnico para crear, analizar o modificar Flowly.", icon: Bot },
@@ -8,6 +8,7 @@ const tools = [
   { href: "/studio/generator", title: "Builder / Generator", description: "Fabricación de módulos desde blueprints y artefactos.", icon: Hammer },
   { href: "/kernel", title: "Kernel", description: "Registro interno, runtimes, event bus y estado operativo.", icon: Cpu },
   { href: "/docs", title: "Flowly Docs", description: "Documentación viva de arquitectura, ingeniería y producto.", icon: BookOpen },
+  { href: "/os/migration", title: "Migration Blueprint", description: "Auditoría del panel actual, registro Kernel y plan de migración a Flowly OS.", icon: GitBranch },
 ];
 
 export default function FlowlyOsPage() {
