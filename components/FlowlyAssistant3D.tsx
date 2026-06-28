@@ -160,7 +160,7 @@ function Model({
   const activeMode = normalizeMode(mode);
   const mixer = useMemo(() => new THREE.AnimationMixer(scene), [scene]);
   const clips = gltf.animations || [];
-  const hasNativeAnimations = clips.length > 0;
+  const hasNativeAnimations = false; // Flow se mueve como personaje completo; evitamos clips que giraban piernas/brazos.
 
   useEffect(() => {
     if (!hasNativeAnimations) return;
@@ -224,11 +224,11 @@ function Model({
     // Movimiento del personaje completo. Las piernas no se fuerzan: el Runtime mueve el cuerpo por pantalla.
     group.current.position.set(Math.sin(t * 0.38) * 0.012, -1.1 + bodyBreath, 0);
     group.current.rotation.set(attentiveLean, baseYaw + looking, slow * 0.004);
-    group.current.scale.setScalar(1.42);
+    group.current.scale.setScalar(1.28);
   });
 
   return (
-    <group ref={group} position={[0, -1.1, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.42}>
+    <group ref={group} position={[0, -1.1, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.28}>
       <primitive object={scene} />
     </group>
   );
@@ -251,7 +251,7 @@ export default function FlowlyAssistant3D({
 }: FlowlyAssistant3DProps) {
   return (
     <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
-      <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 1.12, 4.9], fov: 32 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
+      <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 1.08, 5.25], fov: 34 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
         <ambientLight intensity={1.35} />
         <directionalLight position={[2.4, 4, 3]} intensity={2.05} castShadow />
         <pointLight position={[-2.2, 2.8, 2]} intensity={1.05} color="#8b5cf6" />
