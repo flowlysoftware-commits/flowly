@@ -1241,8 +1241,8 @@ input[type="date"].input-dark { color-scheme: dark; }
 /* Flowly Companion Runtime - global virtual avatar */
 .flowly-companion-runtime {
   position: fixed;
-  right: 1.15rem;
-  bottom: 1rem;
+  right: 1.6rem;
+  bottom: .85rem;
   z-index: 70;
   pointer-events: none;
   color: #fff;
@@ -1251,8 +1251,8 @@ input[type="date"].input-dark { color-scheme: dark; }
 .flowly-companion-runtime * { box-sizing: border-box; }
 .flowly-companion-avatar-shell {
   position: relative;
-  width: 10rem;
-  height: 14rem;
+  width: clamp(14rem, 16vw, 19rem);
+  height: clamp(20rem, 25vw, 28rem);
   pointer-events: auto;
   filter: drop-shadow(0 22px 50px rgba(34, 211, 238, .2));
 }
@@ -1283,8 +1283,8 @@ input[type="date"].input-dark { color-scheme: dark; }
 }
 .flowly-companion-bubble {
   position: absolute;
-  right: 8.4rem;
-  bottom: 9.4rem;
+  right: 13.5rem;
+  bottom: 14.5rem;
   width: min(20rem, calc(100vw - 12rem));
   border: 1px solid rgba(103, 232, 249, .28);
   border-radius: 1.25rem 1.25rem .25rem 1.25rem;
@@ -1309,7 +1309,7 @@ input[type="date"].input-dark { color-scheme: dark; }
 .flowly-companion-panel {
   position: absolute;
   right: .25rem;
-  bottom: 13rem;
+  bottom: 21rem;
   width: min(25rem, calc(100vw - 2rem));
   max-height: min(43rem, calc(100vh - 2rem));
   overflow: auto;
@@ -1359,6 +1359,37 @@ input[type="date"].input-dark { color-scheme: dark; }
   padding: .85rem;
 }
 .flowly-companion-status-card { gap: .75rem; }
+.flowly-companion-avatar-shell .evo-card-3d { display: none; }
+.flowly-companion-avatar-shell::before {
+  content: "";
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: 1.8rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: radial-gradient(ellipse, rgba(103,232,249,.32), transparent 70%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+.flowly-companion-avatar-shell::after {
+  content: "Misión activa · +XP";
+  position: absolute;
+  left: 50%;
+  bottom: .15rem;
+  translate: -50% 0;
+  white-space: nowrap;
+  border: 1px solid rgba(103,232,249,.28);
+  border-radius: 999px;
+  background: rgba(3,7,18,.82);
+  color: #cffafe;
+  padding: .34rem .7rem;
+  font-size: .62rem;
+  font-weight: 1000;
+  letter-spacing: .04em;
+  box-shadow: 0 14px 40px rgba(0,0,0,.32);
+  pointer-events: none;
+}
 .flowly-companion-status-icon {
   display: grid;
   place-items: center;
@@ -1427,7 +1458,7 @@ input[type="date"].input-dark { color-scheme: dark; }
 @keyframes companionPanelIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 820px) {
   .flowly-companion-runtime { right: .4rem; bottom: .25rem; }
-  .flowly-companion-avatar-shell { width: 7.4rem; height: 10.4rem; }
+  .flowly-companion-avatar-shell { width: 8.8rem; height: 12.8rem; }
   .flowly-companion-bubble { display: none; }
   .flowly-companion-panel { right: 0; bottom: 9.7rem; width: calc(100vw - .8rem); }
   .flowly-companion-rewards > div { grid-template-columns: 1fr; }
@@ -1441,8 +1472,8 @@ input[type="date"].input-dark { color-scheme: dark; }
   place-items: center;
 }
 .flowly-companion-status-avatar {
-  width: 4.2rem;
-  height: 4.2rem;
+  width: 4.5rem;
+  height: 5rem;
   display: grid;
   place-items: center;
   flex: none;
@@ -1741,16 +1772,16 @@ input[type="date"].input-dark { color-scheme: dark; }
 /* Flowly Companion 3D GLB Runtime - avatar real conectado al Companion */
 .evo-companion-3d {
   position: relative;
-  width: 10.9rem;
-  height: 14.8rem;
+  width: 100%;
+  height: 100%;
   display: grid;
   place-items: center;
   isolation: isolate;
   animation: evo-3d-float 4.8s ease-in-out infinite;
 }
 .evo-companion-3d-compact {
-  width: 4.2rem;
-  height: 4.2rem;
+  width: 4.5rem;
+  height: 5rem;
 }
 .evo-companion-3d .flowly-3d-stage {
   width: 100%;
@@ -1758,8 +1789,8 @@ input[type="date"].input-dark { color-scheme: dark; }
   filter: drop-shadow(0 22px 48px rgba(34, 211, 238, .24));
 }
 .evo-companion-3d-compact .flowly-3d-stage {
-  width: 4.2rem;
-  height: 4.2rem;
+  width: 4.5rem;
+  height: 5rem;
 }
 .evo-3d-aura,
 .evo-3d-pulse {
@@ -1844,3 +1875,15 @@ input[type="date"].input-dark { color-scheme: dark; }
 @keyframes evo-3d-aura { 0%,100% { transform: scale(.96); opacity: .66; } 50% { transform: scale(1.05); opacity: .95; } }
 @keyframes evo-3d-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes evo-3d-shadow-pulse { 0%,100% { transform: scaleX(.92); opacity: .5; } 50% { transform: scaleX(1.18); opacity: .86; } }
+
+
+/* Companion unificado: evita duplicados visuales y da presencia real al avatar 3D */
+.flowly-companion-runtime[data-open="false"] .flowly-companion-panel { display: none; }
+.flowly-companion-runtime[data-minimized="true"] .flowly-companion-bubble { display: none; }
+.flowly-companion-avatar-shell .flowly-3d-stage canvas { opacity: .98; }
+.flowly-companion-avatar-shell:hover .evo-companion-3d { animation-duration: 2.8s; }
+@media (max-width: 1100px) {
+  .flowly-companion-avatar-shell { width: 10rem; height: 14rem; }
+  .flowly-companion-bubble { right: 8.4rem; bottom: 9.4rem; }
+  .flowly-companion-panel { bottom: 13rem; }
+}

@@ -60,10 +60,10 @@ function getRig(scene: THREE.Object3D): RigBones {
     spine2: getObject(scene, "mixamorig:Spine2", "mixamorigSpine2", "Spine2", "Spine02"),
     neck: getObject(scene, "mixamorig:Neck", "mixamorigNeck", "Neck", "NeckTwist01", "NeckTwist02"),
     head: getObject(scene, "mixamorig:Head", "mixamorigHead", "Head"),
-    leftArm: getObject(scene, "mixamorig:LeftArm", "mixamorigLeftArm", "LeftArm", "L_Upperarm", "L_Clavicle"),
+    leftArm: getObject(scene, "mixamorig:LeftArm", "mixamorigLeftArm", "LeftArm", "L_Upperarm", "L_Clavicle", "L_UpperarmTwist01", "L_UpperarmTwist02"),
     leftForeArm: getObject(scene, "mixamorig:LeftForeArm", "mixamorigLeftForeArm", "LeftForeArm", "L_Forearm"),
     leftHand: getObject(scene, "mixamorig:LeftHand", "mixamorigLeftHand", "LeftHand", "L_Hand"),
-    rightArm: getObject(scene, "mixamorig:RightArm", "mixamorigRightArm", "RightArm", "R_Upperarm", "R_Clavicle"),
+    rightArm: getObject(scene, "mixamorig:RightArm", "mixamorigRightArm", "RightArm", "R_Upperarm", "R_Clavicle", "R_UpperarmTwist01", "R_UpperarmTwist02"),
     rightForeArm: getObject(scene, "mixamorig:RightForeArm", "mixamorigRightForeArm", "RightForeArm", "R_Forearm"),
     rightHand: getObject(scene, "mixamorig:RightHand", "mixamorigRightHand", "RightHand", "R_Hand"),
     leftUpLeg: getObject(scene, "mixamorig:LeftUpLeg", "mixamorigLeftUpLeg", "LeftUpLeg", "L_Thigh"),
@@ -198,14 +198,51 @@ function Model({
     const isWaving = activeMode === "wave";
     const isPointing = activeMode === "point";
 
+    const poseArmsSafely = () => {
+      scene.updateMatrixWorld(true);
+      const down = targetVec.set(0, -1, 0);
+      const up = targetVec2.set(0, 1, 0);
+      const forward = targetVec3.set(0, 0, 1);
+      const leftSide = getRestSideDirection(rig.leftArm, rig.leftForeArm);
+      const rightSide = getRestSideDirection(rig.rightArm, rig.rightForeArm);
+      const leftUpperTarget = leftSide.clone().multiplyScalar(0.2).add(down.clone().multiplyScalar(0.98)).normalize();
+      const rightUpperTarget = rightSide.clone().multiplyScalar(0.2).add(down.clone().multiplyScalar(0.98)).normalize();
+      const leftForeTarget = leftSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
+      const rightForeTarget = rightSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
+
+      if (isWalking) {
+        leftUpperTarget.add(forward.clone().multiplyScalar(walkOpposite * 0.22)).normalize();
+        rightUpperTarget.add(forward.clone().multiplyScalar(walkCycle * 0.22)).normalize();
+      }
+      if (isSpeaking) {
+        leftUpperTarget.add(forward.clone().multiplyScalar(0.11 + Math.sin(t * 3.1) * 0.06)).normalize();
+        rightUpperTarget.add(forward.clone().multiplyScalar(0.11 + Math.sin(t * 3.4 + 0.6) * 0.06)).normalize();
+      }
+      if (isWaving) {
+        rightUpperTarget.copy(rightSide).multiplyScalar(0.22).add(up.clone().multiplyScalar(0.96)).add(forward.clone().multiplyScalar(0.08)).normalize();
+        rightForeTarget.copy(rightSide).multiplyScalar(0.38 + Math.sin(t * 7.5) * 0.15).add(up.clone().multiplyScalar(0.64)).normalize();
+      }
+      if (isPointing) {
+        rightUpperTarget.copy(rightSide).multiplyScalar(0.72).add(forward.clone().multiplyScalar(0.46)).add(down.clone().multiplyScalar(0.18)).normalize();
+        rightForeTarget.copy(rightSide).multiplyScalar(0.95).add(forward.clone().multiplyScalar(0.34)).normalize();
+      }
+      aimBoneToWorldDirection(basePose, rig.leftArm, rig.leftForeArm, leftUpperTarget, 0.95);
+      aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm, rightUpperTarget, 0.95);
+      scene.updateMatrixWorld(true);
+      aimBoneToWorldDirection(basePose, rig.leftForeArm, rig.leftHand, leftForeTarget, 0.88);
+      aimBoneToWorldDirection(basePose, rig.rightForeArm, rig.rightHand, rightForeTarget, 0.88);
+    };
+
     if (hasNativeAnimations) {
       mixer.update(state.clock.getDelta());
-      const bodyBob = isWalking ? Math.abs(walkCycle) * 0.04 : breathe * 0.012;
-      applyOffset(basePose, rig.spine, breathe * 0.01, 0, slow * 0.006);
-      applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 8.0) * 0.02 : breathe * 0.01, slow * 0.018, 0);
-      group.current.position.set(0, -1.38 + bodyBob, 0);
-      group.current.rotation.set(0, facing === "right" ? 0.28 : -0.28, slow * 0.004);
-      group.current.scale.setScalar(1.14);
+      const bodyBob = isWalking ? Math.abs(walkCycle) * 0.055 : breathe * 0.018;
+      applyOffset(basePose, rig.spine, breathe * 0.018, 0, slow * 0.01);
+      applyOffset(basePose, rig.neck, isSpeaking ? Math.sin(t * 5.5) * 0.03 : slow * 0.015, slow * 0.016, 0);
+      applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 8.0) * 0.03 : breathe * 0.012, slow * 0.03, 0);
+      poseArmsSafely();
+      group.current.position.set(0, -1.05 + bodyBob, 0);
+      group.current.rotation.set(0, facing === "right" ? 0.22 : -0.22, slow * 0.008);
+      group.current.scale.setScalar(2.15);
       return;
     }
 
@@ -216,47 +253,7 @@ function Model({
       if (object && base) object.quaternion.copy(base);
     });
 
-    // Arms: use a bind-pose direction solver instead of hard-coded local axes.
-    // This fixes the forward/backward arm problem because it does not assume a Mixamo X/Y/Z axis.
-    scene.updateMatrixWorld(true);
-    const down = targetVec.set(0, -1, 0);
-    const up = targetVec2.set(0, 1, 0);
-    const forward = targetVec3.set(0, 0, 1);
-    const leftSide = getRestSideDirection(rig.leftArm, rig.leftForeArm);
-    const rightSide = getRestSideDirection(rig.rightArm, rig.rightForeArm);
-
-    const leftUpperTarget = leftSide.clone().multiplyScalar(0.18).add(down.clone().multiplyScalar(0.98)).normalize();
-    const rightUpperTarget = rightSide.clone().multiplyScalar(0.18).add(down.clone().multiplyScalar(0.98)).normalize();
-    const leftForeTarget = leftSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
-    const rightForeTarget = rightSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
-
-    if (isWalking) {
-      leftUpperTarget.add(forward.clone().multiplyScalar(walkOpposite * 0.18)).normalize();
-      rightUpperTarget.add(forward.clone().multiplyScalar(walkCycle * 0.18)).normalize();
-      leftForeTarget.add(forward.clone().multiplyScalar(walkOpposite * 0.08)).normalize();
-      rightForeTarget.add(forward.clone().multiplyScalar(walkCycle * 0.08)).normalize();
-    }
-
-    if (isSpeaking) {
-      leftUpperTarget.add(forward.clone().multiplyScalar(0.08 + Math.sin(t * 3.1) * 0.05)).normalize();
-      rightUpperTarget.add(forward.clone().multiplyScalar(0.08 + Math.sin(t * 3.4 + 0.6) * 0.05)).normalize();
-    }
-
-    if (isWaving) {
-      rightUpperTarget.copy(rightSide).multiplyScalar(0.2).add(up.clone().multiplyScalar(0.95)).add(forward.clone().multiplyScalar(0.05)).normalize();
-      rightForeTarget.copy(rightSide).multiplyScalar(0.35 + Math.sin(t * 7.5) * 0.12).add(up.clone().multiplyScalar(0.65)).normalize();
-    }
-
-    if (isPointing) {
-      rightUpperTarget.copy(rightSide).multiplyScalar(0.7).add(forward.clone().multiplyScalar(0.45)).add(down.clone().multiplyScalar(0.18)).normalize();
-      rightForeTarget.copy(rightSide).multiplyScalar(0.9).add(forward.clone().multiplyScalar(0.35)).normalize();
-    }
-
-    aimBoneToWorldDirection(basePose, rig.leftArm, rig.leftForeArm, leftUpperTarget, 0.94);
-    aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm, rightUpperTarget, 0.94);
-    scene.updateMatrixWorld(true);
-    aimBoneToWorldDirection(basePose, rig.leftForeArm, rig.leftHand, leftForeTarget, 0.86);
-    aimBoneToWorldDirection(basePose, rig.rightForeArm, rig.rightHand, rightForeTarget, 0.86);
+    poseArmsSafely();
 
     applyOffset(basePose, rig.leftHand, 0.02, 0, isWalking ? walkOpposite * 0.04 : 0);
     applyOffset(basePose, rig.rightHand, 0.02, 0, isWaving ? Math.sin(t * 9.5) * 0.18 : isWalking ? walkCycle * 0.04 : 0);
@@ -286,13 +283,13 @@ function Model({
     }
 
     const bodyBob = isWalking ? Math.abs(walkCycle) * 0.035 : breathe * 0.012;
-    group.current.position.set(0, -1.34 + bodyBob, 0);
-    group.current.rotation.set(0, facing === "right" ? 0.34 : -0.34, slow * 0.004);
-    group.current.scale.setScalar(1.18);
+    group.current.position.set(0, -1.05 + bodyBob, 0);
+    group.current.rotation.set(0, facing === "right" ? 0.22 : -0.22, slow * 0.008);
+    group.current.scale.setScalar(2.15);
   });
 
   return (
-    <group ref={group} position={[0, -1.34, 0]} rotation={[0, facing === "right" ? 0.34 : -0.34, 0]} scale={1.18}>
+    <group ref={group} position={[0, -1.05, 0]} rotation={[0, facing === "right" ? 0.22 : -0.22, 0]} scale={2.15}>
       <primitive object={scene} />
     </group>
   );
@@ -315,7 +312,7 @@ export default function FlowlyAssistant3D({
 }: FlowlyAssistant3DProps) {
   return (
     <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
-      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.08, 5.8], fov: 30 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
+      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.0, 4.2], fov: 28 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
         <ambientLight intensity={1.35} />
         <directionalLight position={[2.4, 4, 3]} intensity={2.15} castShadow />
         <pointLight position={[-2.2, 2.8, 2]} intensity={1.2} color="#8b5cf6" />
@@ -325,7 +322,7 @@ export default function FlowlyAssistant3D({
           <Environment preset="city" />
         </Suspense>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.25, 0]} receiveShadow>
-          <circleGeometry args={[1.05, 48]} />
+          <circleGeometry args={[1.45, 64]} />
           <meshStandardMaterial color="#020617" transparent opacity={0.18} />
         </mesh>
       </Canvas>
