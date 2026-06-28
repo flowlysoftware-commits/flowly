@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Code2, MessageCircle, Minimize2, Send, ShieldCheck, Sparkles, Target, Trophy, X, Zap } from "lucide-react";
+import { ChevronDown, Code2, MessageCircle, Mic, MicOff, Minimize2, Send, ShieldCheck, Sparkles, Target, Trophy, X, Zap } from "lucide-react";
 import EvolutionaryCompanionAvatar from "@/components/EvolutionaryCompanionAvatar";
 import { companionMissions, companionRewards, companionStats, getCompanionContext } from "@/lib/flowlyCompanionRuntime";
 import { getFlowlyRuntimeMode } from "@/lib/flowlyProductModes";
+import { useFlowlyVoiceRuntime } from "@/hooks/useFlowlyVoiceRuntime";
 
 const HIDDEN_PREFIXES = ["/login", "/registro", "/reservas", "/demo/login"];
 
@@ -25,6 +26,7 @@ export default function FlowlyCompanionRuntime() {
   const [lifeMode, setLifeMode] = useState<string | null>(null);
   const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
   const [avatarUrl, setAvatarUrl] = useState("/avatars/flowly.glb");
+  const [entranceState, setEntranceState] = useState<"intro" | "settled">("intro");
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
@@ -33,7 +35,70 @@ export default function FlowlyCompanionRuntime() {
   const [conversation, setConversation] = useState<{ role: "assistant" | "user"; content: string }[]>([
     { role: "assistant", content: isArchitect ? "Hola. Soy el Companion Arquitecto. Puedo ayudarte a analizar Flowly OS sin mezclarlo con el panel de clientes." : "Hola. Soy el Companion del panel. Puedo ayudarte con clientes, tareas, objetivos, facturas, WhatsApp y recomendaciones sin mostrarte herramientas técnicas." },
   ]);
+  const voiceSpeakRef = useRef<(text: string) => void>(() => undefined);
 
+
+  const speakCleanly = useCallback((text: string) => text.replace(/[#*_`>\[\]]/g, " ").replace(/\s+/g, " ").trim(), []);
+
+  const askCompanion = useCallback(async (clean: string, source: "text" | "voice" = "text") => {
+    if (!clean || thinking) return;
+    setThinking(true);
+    setLifeMode(source === "voice" ? "attention" : "talking");
+    setLifeLabel(source === "voice" ? "Escuchando tu voz" : "Pensando con Flowly Brain");
+
+    const nextConversation = [...conversation, { role: "user" as const, content: clean }];
+    setConversation(nextConversation);
+
+    try {
+      const response = await fetch("/api/companion/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: clean, pathname, conversation }),
+      });
+      const data = await response.json();
+      const answer = typeof data?.answer === "string"
+        ? data.answer
+        : "No he podido pensar bien la respuesta. Inténtalo otra vez en unos segundos.";
+      setConversation((current) => [...current, { role: "assistant", content: answer }]);
+      voiceSpeakRef.current(speakCleanly(answer));
+    } catch (error) {
+      console.error("Companion chat error", error);
+      const fallback = "Ahora mismo no puedo conectar con mi motor de IA. Puedo seguir ayudándote si lo intentas de nuevo.";
+      setConversation((current) => [...current, { role: "assistant", content: fallback }]);
+      voiceSpeakRef.current(fallback);
+    } finally {
+      setThinking(false);
+    }
+  }, [conversation, pathname, speakCleanly, thinking]);
+
+  const voice = useFlowlyVoiceRuntime({
+    wakeWord: "flow",
+    enabled: true,
+    onWake: () => {
+      setOpen(true);
+      setLifeMode("attention");
+      setLifeLabel("Flow te está escuchando");
+    },
+    onCommand: async (text) => {
+      await askCompanion(text, "voice");
+    },
+    onStatus: (status) => {
+      setLifeLabel(status);
+    },
+  });
+
+  useEffect(() => {
+    voiceSpeakRef.current = voice.speak;
+  }, [voice.speak]);
+
+  useEffect(() => {
+    const intro = window.setTimeout(() => {
+      setEntranceState("settled");
+      setLifeMode("wave");
+      setLifeLabel("Hola, estoy listo para ayudarte");
+    }, 2600);
+    return () => window.clearTimeout(intro);
+  }, []);
 
 
   useEffect(() => {
@@ -90,35 +155,11 @@ export default function FlowlyCompanionRuntime() {
     const clean = message.trim();
     if (!clean || thinking) return;
     setMessage("");
-    setThinking(true);
-
-    const nextConversation = [...conversation, { role: "user" as const, content: clean }];
-    setConversation(nextConversation);
-
-    try {
-      const response = await fetch("/api/companion/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: clean, pathname, conversation }),
-      });
-      const data = await response.json();
-      const answer = typeof data?.answer === "string"
-        ? data.answer
-        : "No he podido pensar bien la respuesta. Inténtalo otra vez en unos segundos.";
-      setConversation((current) => [...current, { role: "assistant", content: answer }]);
-    } catch (error) {
-      console.error("Companion chat error", error);
-      setConversation((current) => [
-        ...current,
-        { role: "assistant", content: "Ahora mismo no puedo conectar con mi motor de IA. Puedo seguir ayudándote si lo intentas de nuevo." },
-      ]);
-    } finally {
-      setThinking(false);
-    }
+    await askCompanion(clean, "text");
   };
 
   return (
-    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood}>
+    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood} data-entrance={entranceState} data-voice={voice.state}>
       {!minimized && (
         <div className="flowly-companion-bubble" role="status">
           <span className="flowly-companion-bubble-kicker">{isArchitect ? "Companion Arquitecto" : context.area}</span>
@@ -138,6 +179,15 @@ export default function FlowlyCompanionRuntime() {
         <button type="button" className="flowly-companion-avatar-cta" onClick={() => setOpen((value) => !value)}>
           <MessageCircle size={15} />
           Hablar
+        </button>
+        <button
+          type="button"
+          className="flowly-companion-voice-cta"
+          onClick={() => voice.active ? voice.deactivate() : voice.activate()}
+          aria-label={voice.active ? "Desactivar voz de Flow" : "Activar voz de Flow"}
+        >
+          {voice.active ? <Mic size={14} /> : <MicOff size={14} />}
+          {voice.active ? "Escucha Flow" : "Activar voz"}
         </button>
       </div>
 
@@ -172,6 +222,11 @@ export default function FlowlyCompanionRuntime() {
             <div className="flowly-companion-conversation">
               {conversation.slice(-5).map((item, index) => <p key={`${item.role}-${index}`} data-role={item.role}>{item.content}</p>)}
               {thinking && <p data-role="assistant">Estoy pensando con el contexto de Flowly...</p>}
+            </div>
+            <div className="flowly-companion-voice-card" data-active={voice.active}>
+              <span>{voice.active ? "Voz activa" : "Voz apagada"}</span>
+              <strong>{voice.active ? (voice.isAwake ? "Te escucho" : `Di "Flow" para llamarme`) : "Activa el micrófono una vez"}</strong>
+              {voice.transcript && <small>He oído: {voice.transcript}</small>}
             </div>
             <form className="flowly-companion-chat-input" onSubmit={sendMessage}>
               <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isArchitect ? "Describe el cambio técnico..." : "Pídeme ayuda sobre tu negocio..."} disabled={thinking} />

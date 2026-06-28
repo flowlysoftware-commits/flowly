@@ -2,7 +2,7 @@
 
 import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 
-type CompanionMood = "idle" | "happy" | "thinking" | "talking" | "celebrating" | "working" | "sleeping" | "walking" | "wave" | "point";
+type CompanionMood = "idle" | "happy" | "thinking" | "talking" | "celebrating" | "working" | "sleeping" | "walking" | "wave" | "point" | "attention";
 
 type EvolutionaryCompanionAvatarProps = {
   name?: string;
@@ -18,6 +18,7 @@ type EvolutionaryCompanionAvatarProps = {
 function normalizeMood(value?: CompanionMood | string): CompanionMood {
   const mood = String(value || "idle").toLowerCase();
   if (mood.includes("feliz") || mood.includes("happy")) return "happy";
+  if (mood.includes("atent") || mood.includes("attention")) return "attention";
   if (mood.includes("pens") || mood.includes("thinking")) return "thinking";
   if (mood.includes("habl") || mood.includes("talk")) return "talking";
   if (mood.includes("wave") || mood.includes("salud")) return "wave";
@@ -29,7 +30,8 @@ function normalizeMood(value?: CompanionMood | string): CompanionMood {
   return "idle";
 }
 
-function moodTo3DMode(mood: CompanionMood): "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" {
+function moodTo3DMode(mood: CompanionMood): "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" | "attention" {
+  if (mood === "attention") return "attention";
   if (mood === "talking") return "talk";
   if (mood === "walking") return "walk";
   if (mood === "wave") return "wave";
@@ -78,7 +80,7 @@ export default function EvolutionaryCompanionAvatar({
             Nivel {level} · Evolución {stage === "starter" ? "inicial" : stage === "growing" ? "creciendo" : stage === "evolved" ? "avanzada" : "legendaria"}
           </small>
           <span className="evo-status-strip">
-            <i>{normalizedMood === "talking" ? "Hablando" : normalizedMood === "thinking" ? "Pensando" : normalizedMood === "walking" ? "Explorando" : normalizedMood === "wave" ? "Saludando" : normalizedMood === "point" ? "Señalando" : normalizedMood === "celebrating" ? "Celebrando" : "Vivo"}</i>
+            <i>{normalizedMood === "talking" ? "Hablando" : normalizedMood === "thinking" ? "Pensando" : normalizedMood === "walking" ? "Explorando" : normalizedMood === "attention" ? "Escuchando" : normalizedMood === "wave" ? "Saludando" : normalizedMood === "point" ? "Señalando" : normalizedMood === "celebrating" ? "Celebrando" : "Vivo"}</i>
             {memory && <em>{memory}</em>}
           </span>
           <span className="evo-xp"><i style={{ width: `${safeXp}%` }} /></span>

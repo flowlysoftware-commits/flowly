@@ -6,7 +6,7 @@ import { Environment, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
-type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit";
+type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" | "attention";
 
 type FlowlyAssistant3DProps = {
   modelUrl?: string;
@@ -28,17 +28,11 @@ type RigBones = {
   rightArm?: THREE.Object3D;
   rightForeArm?: THREE.Object3D;
   rightHand?: THREE.Object3D;
-  leftUpLeg?: THREE.Object3D;
-  leftLeg?: THREE.Object3D;
-  leftFoot?: THREE.Object3D;
-  rightUpLeg?: THREE.Object3D;
-  rightLeg?: THREE.Object3D;
-  rightFoot?: THREE.Object3D;
   mouth?: THREE.Object3D;
 };
 
 function normalizeMode(mode: AssistantMode) {
-  if (mode === "thinking") return "idle";
+  if (mode === "thinking" || mode === "attention") return "idle";
   if (mode === "tour") return "point";
   if (mode === "sit") return "idle";
   return mode;
@@ -66,12 +60,6 @@ function getRig(scene: THREE.Object3D): RigBones {
     rightArm: getObject(scene, "mixamorig:RightArm", "mixamorigRightArm", "RightArm", "R_Upperarm", "R_Clavicle", "R_UpperarmTwist01", "R_UpperarmTwist02"),
     rightForeArm: getObject(scene, "mixamorig:RightForeArm", "mixamorigRightForeArm", "RightForeArm", "R_Forearm"),
     rightHand: getObject(scene, "mixamorig:RightHand", "mixamorigRightHand", "RightHand", "R_Hand"),
-    leftUpLeg: getObject(scene, "mixamorig:LeftUpLeg", "mixamorigLeftUpLeg", "LeftUpLeg", "L_Thigh"),
-    leftLeg: getObject(scene, "mixamorig:LeftLeg", "mixamorigLeftLeg", "LeftLeg", "L_Calf"),
-    leftFoot: getObject(scene, "mixamorig:LeftFoot", "mixamorigLeftFoot", "LeftFoot", "L_Foot"),
-    rightUpLeg: getObject(scene, "mixamorig:RightUpLeg", "mixamorigRightUpLeg", "RightUpLeg", "R_Thigh"),
-    rightLeg: getObject(scene, "mixamorig:RightLeg", "mixamorigRightLeg", "RightLeg", "R_Calf"),
-    rightFoot: getObject(scene, "mixamorig:RightFoot", "mixamorigRightFoot", "RightFoot", "R_Foot"),
     mouth: getObject(scene, "Fitness_Grandma_MouthAnimGeo", "Mouth", "mouth"),
   };
 }
@@ -86,6 +74,18 @@ function rememberBasePose(rig: RigBones) {
 
 const tempQuaternion = new THREE.Quaternion();
 const tempEuler = new THREE.Euler(0, 0, 0, "XYZ");
+const baseWorldA = new THREE.Vector3();
+const baseWorldB = new THREE.Vector3();
+const parentWorldQuat = new THREE.Quaternion();
+const parentWorldQuatInv = new THREE.Quaternion();
+const desiredLocalDir = new THREE.Vector3();
+const restAxisLocal = new THREE.Vector3();
+const restAxisAfterBase = new THREE.Vector3();
+const deltaQuat = new THREE.Quaternion();
+const finalQuat = new THREE.Quaternion();
+const leftTarget = new THREE.Vector3();
+const rightTarget = new THREE.Vector3();
+const downVector = new THREE.Vector3(0, -1, 0);
 
 function applyOffset(basePose: Map<string, THREE.Quaternion>, object: THREE.Object3D | undefined, x = 0, y = 0, z = 0) {
   if (!object) return;
@@ -96,25 +96,12 @@ function applyOffset(basePose: Map<string, THREE.Quaternion>, object: THREE.Obje
   object.quaternion.copy(base).multiply(tempQuaternion);
 }
 
-const targetVec = new THREE.Vector3();
-const targetVec2 = new THREE.Vector3();
-const targetVec3 = new THREE.Vector3();
-const parentWorldQuat = new THREE.Quaternion();
-const parentWorldQuatInv = new THREE.Quaternion();
-const desiredLocalDir = new THREE.Vector3();
-const restAxisLocal = new THREE.Vector3();
-const restAxisAfterBase = new THREE.Vector3();
-const deltaQuat = new THREE.Quaternion();
-const finalQuat = new THREE.Quaternion();
-const baseWorldA = new THREE.Vector3();
-const baseWorldB = new THREE.Vector3();
-
-function getRestSideDirection(bone: THREE.Object3D | undefined, child: THREE.Object3D | undefined) {
-  if (!bone || !child) return new THREE.Vector3(1, 0, 0);
+function getRestSideDirection(bone: THREE.Object3D | undefined, child: THREE.Object3D | undefined, fallback: -1 | 1) {
+  if (!bone || !child) return new THREE.Vector3(fallback, 0, 0);
   bone.getWorldPosition(baseWorldA);
   child.getWorldPosition(baseWorldB);
   const side = new THREE.Vector3().copy(baseWorldB).sub(baseWorldA).setY(0);
-  if (side.lengthSq() < 0.0001) side.set(1, 0, 0);
+  if (side.lengthSq() < 0.0001) side.set(fallback, 0, 0);
   return side.normalize();
 }
 
@@ -139,15 +126,24 @@ function aimBoneToWorldDirection(
   restAxisAfterBase.copy(restAxisLocal).applyQuaternion(base).normalize();
   deltaQuat.setFromUnitVectors(restAxisAfterBase, desiredLocalDir);
   finalQuat.copy(deltaQuat).multiply(base).normalize();
-
   bone.quaternion.copy(base).slerp(finalQuat, THREE.MathUtils.clamp(influence, 0, 1));
 }
 
+function softenTPose(basePose: Map<string, THREE.Quaternion>, rig: RigBones, mode: AssistantMode) {
+  // Corrección mínima de pose: baja los brazos abiertos del GLB sin animar extremidades como muñeco.
+  const influence = mode === "wave" || mode === "point" ? 0.28 : 0.72;
+  const leftSide = getRestSideDirection(rig.leftArm, rig.leftForeArm || rig.leftHand, -1);
+  const rightSide = getRestSideDirection(rig.rightArm, rig.rightForeArm || rig.rightHand, 1);
+  leftTarget.copy(leftSide).multiplyScalar(0.22).add(downVector).normalize();
+  rightTarget.copy(rightSide).multiplyScalar(0.22).add(downVector).normalize();
+  aimBoneToWorldDirection(basePose, rig.leftArm, rig.leftForeArm || rig.leftHand, leftTarget, influence);
+  aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm || rig.rightHand, rightTarget, influence);
+}
+
 function getFacingYaw(facing: Required<FlowlyAssistant3DProps>["facing"]) {
-  // El GLB optimizado llega mirando de lado. Este offset lo pone de frente a cámara.
   const modelForwardCorrection = -Math.PI / 2;
-  if (facing === "right") return modelForwardCorrection - 0.22;
-  if (facing === "left") return modelForwardCorrection + 0.22;
+  if (facing === "right") return modelForwardCorrection - 0.18;
+  if (facing === "left") return modelForwardCorrection + 0.18;
   return modelForwardCorrection;
 }
 
@@ -168,16 +164,15 @@ function Model({
 
   useEffect(() => {
     if (!hasNativeAnimations) return;
-    // Orden detectado en el GLB optimizado:
-    // 0 idle, 1 talking, 2 waving, 3 long/sitting, 4 pointing, 5 walking.
-    // Antes walk usaba el clip 1 y eso generaba saltos raros; ahora cada estado usa su clip real.
-    const clipIndex = activeMode === "walk" ? 5 : activeMode === "wave" ? 2 : activeMode === "talk" ? 1 : activeMode === "point" ? 4 : 0;
+    // La animación de caminar del archivo gira piernas en algunos exports. Para caminar por el panel
+    // dejamos el rig en idle y movemos el cuerpo completo desde CSS/runtime, como un personaje de juego.
+    const clipIndex = activeMode === "talk" ? 1 : activeMode === "wave" ? 2 : activeMode === "point" ? 4 : 0;
     const clip = clips[clipIndex] || clips[0];
     if (!clip) return;
     mixer.stopAllAction();
     const action = mixer.clipAction(clip);
-    action.reset().fadeIn(0.22).play();
-    return () => { action.fadeOut(0.18); };
+    action.reset().fadeIn(0.18).play();
+    return () => { action.fadeOut(0.16); };
   }, [activeMode, clips, hasNativeAnimations, mixer]);
 
   useEffect(() => {
@@ -188,9 +183,7 @@ function Model({
         mesh.receiveShadow = true;
         mesh.frustumCulled = false;
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        materials.filter(Boolean).forEach((material) => {
-          material.needsUpdate = true;
-        });
+        materials.filter(Boolean).forEach((material) => { material.needsUpdate = true; });
       }
     });
   }, [scene]);
@@ -199,11 +192,11 @@ function Model({
     if (!group.current) return;
 
     const t = state.clock.elapsedTime;
-    const slow = Math.sin(t * 0.75);
-    const breathe = Math.sin(t * 1.7);
-    const activeWalking = activeMode === "walk";
+    const slow = Math.sin(t * 0.68);
+    const breathe = Math.sin(t * 1.45);
     const activeSpeaking = activeMode === "talk";
     const activeThinking = mode === "thinking";
+    const activeAttention = mode === "attention";
 
     if (hasNativeAnimations) {
       mixer.update(delta);
@@ -212,28 +205,30 @@ function Model({
         const base = object ? basePose.get(object.uuid) : undefined;
         if (object && base) object.quaternion.copy(base);
       });
-      // Fallback procedural muy suave. No mueve extremidades de forma agresiva.
-      applyOffset(basePose, rig.spine, breathe * 0.018, 0, slow * 0.01);
-      applyOffset(basePose, rig.neck, slow * 0.016, slow * 0.018, 0);
-      applyOffset(basePose, rig.head, activeThinking ? -0.055 : breathe * 0.01, slow * 0.02, 0);
+      applyOffset(basePose, rig.spine, breathe * 0.014, 0, slow * 0.008);
+      applyOffset(basePose, rig.neck, slow * 0.012, slow * 0.014, 0);
+      applyOffset(basePose, rig.head, activeThinking ? -0.045 : breathe * 0.008, slow * 0.014, 0);
     }
+
+    softenTPose(basePose, rig, activeMode);
 
     if (rig.mouth) {
       rig.mouth.scale.y = activeSpeaking ? 1 + Math.abs(Math.sin(t * 10)) * 0.12 : 1;
     }
 
     const baseYaw = getFacingYaw(facing);
-    const looking = activeSpeaking ? Math.sin(t * 2.2) * 0.035 : Math.sin(t * 0.45) * 0.028;
-    const wholeBodyStep = activeWalking ? Math.sin(t * 1.15) * 0.1 : Math.sin(t * 0.35) * 0.018;
-    const bodyBreath = activeWalking ? 0 : breathe * 0.012;
+    const attentiveLean = activeAttention ? 0.045 : 0;
+    const looking = activeSpeaking ? Math.sin(t * 2.1) * 0.03 : Math.sin(t * 0.45) * 0.02;
+    const bodyBreath = breathe * 0.01;
 
-    // Vida del personaje = movimiento global completo, no extremidades rotas.
-    group.current.position.set(wholeBodyStep, -1.08 + bodyBreath, 0);
-    group.current.rotation.set(0, baseYaw + looking, slow * 0.006);
-    group.current.scale.setScalar(1.86);
+    // Movimiento del personaje completo. Las piernas no se fuerzan: el Runtime mueve el cuerpo por pantalla.
+    group.current.position.set(Math.sin(t * 0.38) * 0.018, -1.08 + bodyBreath, 0);
+    group.current.rotation.set(attentiveLean, baseYaw + looking, slow * 0.004);
+    group.current.scale.setScalar(1.6);
   });
+
   return (
-    <group ref={group} position={[0, -1.08, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.86}>
+    <group ref={group} position={[0, -1.08, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.6}>
       <primitive object={scene} />
     </group>
   );
@@ -256,18 +251,18 @@ export default function FlowlyAssistant3D({
 }: FlowlyAssistant3DProps) {
   return (
     <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
-      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.05, 4.65], fov: 30 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
-        <ambientLight intensity={1.4} />
-        <directionalLight position={[2.4, 4, 3]} intensity={2.15} castShadow />
-        <pointLight position={[-2.2, 2.8, 2]} intensity={1.2} color="#8b5cf6" />
-        <pointLight position={[2.4, 1.2, 2.6]} intensity={1.0} color="#22d3ee" />
+      <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 1.12, 4.9], fov: 32 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
+        <ambientLight intensity={1.35} />
+        <directionalLight position={[2.4, 4, 3]} intensity={2.05} castShadow />
+        <pointLight position={[-2.2, 2.8, 2]} intensity={1.05} color="#8b5cf6" />
+        <pointLight position={[2.4, 1.2, 2.6]} intensity={0.9} color="#22d3ee" />
         <Suspense fallback={<ModelFallback />}>
           <Model modelUrl={modelUrl} mode={mode} facing={facing} />
           <Environment preset="city" />
         </Suspense>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.32, 0]} receiveShadow>
-          <circleGeometry args={[1.65, 64]} />
-          <meshStandardMaterial color="#020617" transparent opacity={0.2} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.34, 0]} receiveShadow>
+          <circleGeometry args={[1.45, 64]} />
+          <meshStandardMaterial color="#020617" transparent opacity={0.18} />
         </mesh>
       </Canvas>
     </button>
