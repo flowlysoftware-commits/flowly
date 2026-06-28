@@ -142,6 +142,18 @@ function capabilityNameFromFile(file: CandidateFile) {
   return "Pieza existente";
 }
 
+function uniqueCapabilityItems(candidates: CandidateFile[]) {
+  const seen = new Set<string>();
+  const items: Array<{ label: string; file: CandidateFile }> = [];
+  for (const file of candidates) {
+    const label = capabilityNameFromFile(file);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    items.push({ label, file });
+  }
+  return items;
+}
+
 function explainPlan(plan: DeveloperPlan | null) {
   if (!plan?.ok) return null;
   const modules = plan.projectMap?.modules || [];
@@ -158,6 +170,7 @@ function explainPlan(plan: DeveloperPlan | null) {
     areas: meaningfulAreas.length ? meaningfulAreas : ["Arquitectura", "Interfaz", "Runtime"],
     candidates: candidates.slice(0, 10),
     proposedFiles: proposedFiles.slice(0, 8),
+    uniqueCapabilities: uniqueCapabilityItems(candidates).slice(0, 8),
     hasChanges,
     next: hasChanges
       ? "Si me das el OK, crearé una rama nueva, aplicaré los cambios y abriré un Pull Request para que puedas revisarlo antes de tocar producción."
@@ -380,16 +393,25 @@ export default function DeveloperControlCenterPage() {
                 </div>
 
                 <form onSubmit={analyze} className="mt-4">
-                  <textarea
-                    value={instruction}
-                    onChange={(event) => setInstruction(event.target.value)}
-                    placeholder="Ejemplo: Oye, ayúdame a mejorar el Companion. Quiero que sea más vivo, con avatar evolutivo, emociones y sin duplicar archivos."
-                    className="min-h-[120px] w-full rounded-3xl border border-white/10 bg-black/35 p-5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-cyan-200/50"
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={instruction}
+                      onChange={(event) => setInstruction(event.target.value)}
+                      placeholder="Ejemplo: Oye, ayúdame a mejorar el Companion. Quiero que sea más vivo, con avatar evolutivo, emociones y sin duplicar archivos."
+                      className="min-h-[120px] w-full rounded-3xl border border-white/10 bg-black/35 p-5 pr-28 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-cyan-200/50"
+                    />
+                    <button
+                      disabled={isBusy || !instruction.trim()}
+                      className="absolute bottom-4 right-4 inline-flex items-center gap-2 rounded-2xl bg-cyan-200 px-4 py-2.5 text-sm font-black text-slate-950 shadow-lg shadow-cyan-950/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {mode === "planning" ? <Loader2 className="animate-spin" size={16} /> : <ArrowRight size={16} />}
+                      Enviar
+                    </button>
+                  </div>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <button disabled={isBusy || !instruction.trim()} className="inline-flex items-center gap-2 rounded-2xl bg-cyan-200 px-5 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">
+                    <button type="submit" disabled={isBusy || !instruction.trim()} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-200/30 bg-cyan-200/10 px-5 py-3 text-sm font-black text-cyan-50 disabled:cursor-not-allowed disabled:opacity-50">
                       {mode === "planning" ? <Loader2 className="animate-spin" size={17} /> : <Search size={17} />}
-                      Investigar primero
+                      Investigar y preparar plan
                     </button>
                     <button type="button" onClick={approveAndRun} disabled={isBusy || !plan?.ok || !explanation?.hasChanges} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/30 bg-emerald-300/15 px-5 py-3 text-sm font-black text-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">
                       {mode === "running" ? <Loader2 className="animate-spin" size={17} /> : <Rocket size={17} />}
@@ -445,9 +467,9 @@ export default function DeveloperControlCenterPage() {
                   <div className="mt-5 grid gap-5 xl:grid-cols-2">
                     <PlanBox title="Funcionalidades sobre las que trabajaría" icon={<Sparkles size={18} />}>
                       <div className="space-y-2">
-                        {explanation.candidates.slice(0, 6).map((file) => (
+                        {explanation.uniqueCapabilities.map(({ label, file }) => (
                           <div key={file.path} className="rounded-xl border border-white/10 bg-black/25 p-3">
-                            <p className="text-sm font-black text-white">{capabilityNameFromFile(file)}</p>
+                            <p className="text-sm font-black text-white">{label}</p>
                             <p className="mt-1 text-xs text-white/45">Ya existe en el proyecto. La revisaré antes de crear nada nuevo.</p>
                           </div>
                         ))}
@@ -466,7 +488,7 @@ export default function DeveloperControlCenterPage() {
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm leading-6 text-amber-50">
-                          Todavía no tengo un cambio de código suficientemente seguro. No crearé PR falso ni documentación innecesaria.
+                          Todavía no tengo un cambio de código suficientemente seguro. Puedes responder arriba concretando qué quieres cambiar, o revisar los detalles técnicos. No crearé PR falso ni documentación innecesaria.
                         </div>
                       )}
                     </PlanBox>

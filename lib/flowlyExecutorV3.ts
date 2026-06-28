@@ -271,6 +271,123 @@ function fallbackFiles(_plan: Omit<ExecutorV3Plan, "proposedFiles">): ExecutorFi
   return [];
 }
 
+function isCompanionInstruction(instruction: string) {
+  return /(companion|avatar|mascota|asistente|assistant|personaje|emocion|emoci[oó]n|vivo|evolutivo|animaci[oó]n)/i.test(instruction);
+}
+
+function findCandidatePath(plan: Omit<ExecutorV3Plan, "proposedFiles">, pattern: RegExp) {
+  return plan.projectMap.candidates.find((file) => pattern.test(file.path))?.path;
+}
+
+function upgradeEvolutionaryAvatarContent(content: string) {
+  let next = content;
+
+  if (!next.includes("memory?: string")) {
+    next = next.replace(
+      "  onClick?: () => void;\n};",
+      "  onClick?: () => void;\n  memory?: string;\n  energy?: number;\n  autonomy?: boolean;\n};"
+    );
+  }
+
+  if (!next.includes("memory = \"Aprendiendo de la empresa\"")) {
+    next = next.replace(
+      "  compact = false,\n  onClick,\n}: EvolutionaryCompanionAvatarProps) {",
+      "  compact = false,\n  onClick,\n  memory = \"Aprendiendo de la empresa\",\n  energy = 82,\n  autonomy = true,\n}: EvolutionaryCompanionAvatarProps) {"
+    );
+  }
+
+  if (!next.includes("const safeEnergy")) {
+    next = next.replace(
+      "  const safeXp = Math.max(4, Math.min(100, xpPercent));",
+      "  const safeXp = Math.max(4, Math.min(100, xpPercent));\n  const safeEnergy = Math.max(0, Math.min(100, energy));"
+    );
+  }
+
+  if (!next.includes("evo-status-strip")) {
+    next = next.replace(
+      "          <span className="evo-xp"><i style={{ width: `${safeXp}%` }} /></span>\n        </span>",
+      "          <span className="evo-xp"><i style={{ width: `${safeXp}%` }} /></span>\n          <span className="evo-status-strip">\n            <small>Memoria: {memory}</small>\n            <small>Energía: {safeEnergy}% · {autonomy ? \"Autónomo\" : \"Guiado\"}</small>\n          </span>\n        </span>"
+    );
+  }
+
+  return next;
+}
+
+function upgradeCompanionCssContent(content: string) {
+  if (content.includes(".evo-status-strip")) return content;
+  return `${content}
+
+/* Flowly Companion: capa evolutiva de memoria, energía y vida visual */
+.evo-status-strip {
+  display: grid;
+  gap: .18rem;
+  margin-top: .42rem;
+  font-size: .58rem;
+  line-height: 1.15;
+  color: rgba(224,242,254,.72);
+}
+.evo-status-strip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.evo-companion::after {
+  content: "";
+  position: absolute;
+  inset: 10% 4% auto auto;
+  width: .55rem;
+  height: .55rem;
+  border-radius: 999px;
+  background: var(--accent, #67e8f9);
+  box-shadow: 0 0 18px var(--accent, #67e8f9);
+  opacity: .72;
+  animation: evo-life-pulse 2.4s ease-in-out infinite;
+}
+@keyframes evo-life-pulse {
+  0%, 100% { transform: scale(.72); opacity: .45; }
+  50% { transform: scale(1.14); opacity: .9; }
+}
+`;
+}
+
+async function buildDeterministicSafeFiles(plan: Omit<ExecutorV3Plan, "proposedFiles">): Promise<ExecutorFileChange[]> {
+  if (!isCompanionInstruction(plan.instruction)) return [];
+
+  const avatarPath = findCandidatePath(plan, /(^|\/)EvolutionaryCompanionAvatar\.tsx$/i) || "components/EvolutionaryCompanionAvatar.tsx";
+  const cssPath = findCandidatePath(plan, /(^|\/)globals\.css$/i) || "app/globals.css";
+  const files: ExecutorFileChange[] = [];
+
+  try {
+    const avatar = await readRepositoryFile(avatarPath);
+    const content = upgradeEvolutionaryAvatarContent(avatar.content);
+    if (content !== avatar.content) {
+      files.push({
+        path: avatar.path,
+        content,
+        message: "Mejorar el avatar existente con memoria, energía y comportamiento evolutivo sin duplicarlo.",
+      });
+    }
+  } catch {
+    // No crear archivos nuevos si no podemos leer el avatar existente.
+  }
+
+  try {
+    const css = await readRepositoryFile(cssPath);
+    const content = upgradeCompanionCssContent(css.content);
+    if (content !== css.content) {
+      files.push({
+        path: css.path,
+        content,
+        message: "Añadir microinteracciones visuales evolutivas al Companion existente.",
+      });
+    }
+  } catch {
+    // No bloquear si CSS no está disponible.
+  }
+
+  return files.slice(0, 3);
+}
+
 async function buildAIFiles(params: {
   plan: Omit<ExecutorV3Plan, "proposedFiles">;
   context: Array<{ path: string; content: string }>;
@@ -342,7 +459,7 @@ async function buildAIFiles(params: {
 
 export async function planExecutorV3(instruction: string): Promise<ExecutorV3Plan> {
   const clean = instruction.trim();
-  const { map } = await buildProjectMap(clean);
+  const { map, context } = await buildProjectMap(clean);
   const risk: ExecutorV3Risk = map.relatedFiles > 24 ? "medio" : "bajo";
   const reasoning = [
     `Se han analizado ${map.analyzedFiles} archivos del repositorio antes de proponer cambios.`,
@@ -373,7 +490,11 @@ export async function planExecutorV3(instruction: string): Promise<ExecutorV3Pla
     requiresApproval: true as const,
   };
 
-  return { ...planBase, proposedFiles: fallbackFiles(planBase) };
+  const aiFiles = await buildAIFiles({ plan: planBase, context });
+  const deterministicFiles = aiFiles?.length ? [] : await buildDeterministicSafeFiles(planBase);
+  const proposedFiles = (aiFiles?.length ? aiFiles : deterministicFiles).filter((file) => !normalize(file.path).startsWith("docs/executor/"));
+
+  return { ...planBase, proposedFiles: proposedFiles.length ? proposedFiles : fallbackFiles(planBase) };
 }
 
 export async function runExecutorV3(instruction: string, approved: boolean): Promise<ExecutorV3RunResult> {
@@ -382,7 +503,9 @@ export async function runExecutorV3(instruction: string, approved: boolean): Pro
 
   const { context } = await buildProjectMap(plan.instruction);
   const aiFiles = await buildAIFiles({ plan, context });
-  const files = (aiFiles || []).filter((file) => !normalize(file.path).startsWith("docs/executor/"));
+  const deterministicFiles = aiFiles?.length ? [] : await buildDeterministicSafeFiles(plan);
+  const candidateFiles = aiFiles?.length ? aiFiles : deterministicFiles.length ? deterministicFiles : plan.proposedFiles;
+  const files = (candidateFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
 
   if (!files.length) {
     return {
