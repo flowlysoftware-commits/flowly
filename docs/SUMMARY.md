@@ -2,6 +2,11 @@
 
 * [Flowly Docs](README.md)
 
+* [Agent Operating Protocol](agent-operating-protocol/README.md)
+  * [Codex Operating Protocol](agent-operating-protocol/01-codex-operating-protocol.md)
+  * [Companion Debug Protocol](agent-operating-protocol/02-companion-debug-protocol.md)
+  * [Voice Runtime Protocol](agent-operating-protocol/03-voice-runtime-protocol.md)
+
 * [Flowly Constitution](constitution/README.md)
   * [Purpose](constitution/01-purpose.md)
   * [Non-Negotiable Principles](constitution/02-non-negotiable-principles.md)
