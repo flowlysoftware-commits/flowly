@@ -31,7 +31,6 @@ export default function FlowlyCompanionRuntime() {
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
   const xpPercent = Math.round((companionStats.xp / companionStats.nextLevelXp) * 100);
-  const avatarMood = thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
   const [conversation, setConversation] = useState<{ role: "assistant" | "user"; content: string }[]>([
     { role: "assistant", content: isArchitect ? "Hola. Soy el Companion Arquitecto. Puedo ayudarte a analizar Flowly OS sin mezclarlo con el panel de clientes." : "Hola. Soy el Companion del panel. Puedo ayudarte con clientes, tareas, objetivos, facturas, WhatsApp y recomendaciones sin mostrarte herramientas técnicas." },
   ]);
@@ -86,6 +85,10 @@ export default function FlowlyCompanionRuntime() {
       setLifeLabel(status);
     },
   });
+
+
+  const voiceNeedsActivation = !isArchitect && !voice.active && voice.state !== "unsupported";
+  const avatarMood = voiceNeedsActivation ? "attention" : thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
 
   useEffect(() => {
     voiceSpeakRef.current = voice.speak;
@@ -159,12 +162,17 @@ export default function FlowlyCompanionRuntime() {
   };
 
   return (
-    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood} data-entrance={entranceState} data-voice={voice.state}>
+    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood} data-entrance={entranceState} data-voice={voice.state} data-voice-prompt={voiceNeedsActivation}>
       {!minimized && (
         <div className="flowly-companion-bubble" role="status">
-          <span className="flowly-companion-bubble-kicker">{isArchitect ? "Companion Arquitecto" : context.area}</span>
-          <strong>{isArchitect ? "Estoy en modo desarrollo" : context.title}</strong>
-          <p>{isArchitect ? "Aquí sí puedo ayudarte con Studio, Builder, Kernel y cambios internos." : context.message}</p>
+          <span className="flowly-companion-bubble-kicker">{voiceNeedsActivation ? "Flow por voz" : isArchitect ? "Companion Arquitecto" : context.area}</span>
+          <strong>{voiceNeedsActivation ? "Activa los permisos de voz para poder hablar conmigo" : isArchitect ? "Estoy en modo desarrollo" : context.title}</strong>
+          <p>{voiceNeedsActivation ? "Pulsa el botón y acepta el micrófono. Después solo tendrás que decir Flow y te escucharé." : isArchitect ? "Aquí sí puedo ayudarte con Studio, Builder, Kernel y cambios internos." : context.message}</p>
+          {voiceNeedsActivation && (
+            <button type="button" className="flowly-companion-voice-primary" onClick={() => voice.activate()}>
+              <Mic size={15} /> Activar voz
+            </button>
+          )}
         </div>
       )}
 
