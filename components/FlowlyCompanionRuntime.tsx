@@ -98,7 +98,7 @@ export default function FlowlyCompanionRuntime() {
       setLifeLabel(status);
     },
     onPhase: (phase) => {
-      if (phase === "listening") setLifeMode("attention");
+      if (phase === "listening" || phase === "waking") setLifeMode("attention");
       if (phase === "thinking") setLifeMode("thinking");
       if (phase === "speaking") setLifeMode("talking");
       if (phase === "passive") setLifeMode("idle");
@@ -399,6 +399,9 @@ export default function FlowlyCompanionRuntime() {
               <span>{voice.active ? "Voz activa" : "Voz apagada"}</span>
               <strong>{voice.active ? (voice.isAwake ? "Te escucho" : `Di "Flow" para llamarme`) : "Activa el micrófono una vez"}</strong>
               {voice.transcript && <small>He oído: {voice.transcript}</small>}
+              <small>Estado: {voice.state} · Grabaciones: {voice.debug.ticks} · Audio: {voice.debug.lastAudioKb} KB</small>
+              {voice.debug.lastTranscription && <small>Última transcripción: {voice.debug.lastTranscription}</small>}
+              {voice.debug.lastError && <small>Error voz: {voice.debug.lastError}</small>}
             </div>
             <form className="flowly-companion-chat-input" onSubmit={sendMessage}>
               <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isArchitect ? "Describe el cambio técnico..." : "Pídeme ayuda sobre tu negocio..."} disabled={thinking} />
