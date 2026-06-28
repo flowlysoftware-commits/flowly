@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveFlowlyMarket, stripeUnitAmount } from "@/lib/stripePricing";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_placeholder");
 
 const enterpriseAllowedModules = ["agenda", "crm", "voice", "whatsapp", "billing", "pos", "marketing", "ai", "analytics", "booking_premium", "time_tracking"];
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import FlowlyCompanionRuntime from "@/components/FlowlyCompanionRuntime";
 
@@ -33,9 +34,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es">
       <head>
-        <script async src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} />
-        <script dangerouslySetInnerHTML={{ __html: googleTagCode }} />
-        <script dangerouslySetInnerHTML={{ __html: metaPixelCode }} />
+        <Script async src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} />
+        <Script id="google-analytics" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: googleTagCode }} />
+        <Script id="meta-pixel" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: metaPixelCode }} />
       </head>
       <body>
         <noscript>

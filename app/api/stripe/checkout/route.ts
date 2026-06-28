@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { convertBasePrice, resolveFlowlyMarket, stripeUnitAmount } from "@/lib/stripePricing";
 import { getMarketingPlan } from "@/lib/marketingPlans";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_placeholder");
 
 const modularModules = [
   { id: "agenda", name: "Agenda PRO", price: 9.99 },
