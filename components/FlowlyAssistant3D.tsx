@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment, Html, useAnimations, useFBX, useGLTF } from "@react-three/drei";
+import { Environment, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
@@ -15,165 +15,236 @@ type FlowlyAssistant3DProps = {
   onClick?: () => void;
 };
 
-const FBX_ANIMATIONS: Record<string, string> = {
-  idle: "/avatars/Idle.fbx",
-  walk: "/avatars/Walking.fbx",
-  wave: "/avatars/Waving.fbx",
-  talk: "/avatars/Talking.fbx",
-  point: "/avatars/Pointing.fbx",
-  sit: "/avatars/Sitting Talking.fbx",
+type RigBones = {
+  hips?: THREE.Object3D;
+  spine?: THREE.Object3D;
+  spine1?: THREE.Object3D;
+  spine2?: THREE.Object3D;
+  neck?: THREE.Object3D;
+  head?: THREE.Object3D;
+  leftArm?: THREE.Object3D;
+  leftForeArm?: THREE.Object3D;
+  leftHand?: THREE.Object3D;
+  rightArm?: THREE.Object3D;
+  rightForeArm?: THREE.Object3D;
+  rightHand?: THREE.Object3D;
+  leftUpLeg?: THREE.Object3D;
+  leftLeg?: THREE.Object3D;
+  leftFoot?: THREE.Object3D;
+  rightUpLeg?: THREE.Object3D;
+  rightLeg?: THREE.Object3D;
+  rightFoot?: THREE.Object3D;
+  mouth?: THREE.Object3D;
 };
 
 function normalizeMode(mode: AssistantMode) {
   if (mode === "thinking") return "idle";
   if (mode === "tour") return "point";
+  if (mode === "sit") return "idle";
   return mode;
 }
 
-function getClipFromFbx(group: THREE.Group, name: string) {
-  const clip = group.animations?.[0];
-  if (!clip) return null;
-  const cloned = clip.clone();
-  cloned.name = name;
-  return cloned;
+function getObject(scene: THREE.Object3D, ...names: string[]) {
+  for (const name of names) {
+    const found = scene.getObjectByName(name);
+    if (found) return found;
+  }
+  return undefined;
 }
 
-function prepareAvatarScene(originalScene: THREE.Group) {
-  const scene = clone(originalScene) as THREE.Group;
+function getRig(scene: THREE.Object3D): RigBones {
+  return {
+    hips: getObject(scene, "mixamorig:Hips", "mixamorigHips", "Hips", "Hip", "Pelvis", "Root"),
+    spine: getObject(scene, "mixamorig:Spine", "mixamorigSpine", "Spine", "Waist", "Spine01"),
+    spine1: getObject(scene, "mixamorig:Spine1", "mixamorigSpine1", "Spine1", "Spine01", "Spine02"),
+    spine2: getObject(scene, "mixamorig:Spine2", "mixamorigSpine2", "Spine2", "Spine02"),
+    neck: getObject(scene, "mixamorig:Neck", "mixamorigNeck", "Neck", "NeckTwist01", "NeckTwist02"),
+    head: getObject(scene, "mixamorig:Head", "mixamorigHead", "Head"),
+    leftArm: getObject(scene, "mixamorig:LeftArm", "mixamorigLeftArm", "LeftArm", "L_Upperarm", "L_Clavicle", "L_UpperarmTwist01", "L_UpperarmTwist02"),
+    leftForeArm: getObject(scene, "mixamorig:LeftForeArm", "mixamorigLeftForeArm", "LeftForeArm", "L_Forearm"),
+    leftHand: getObject(scene, "mixamorig:LeftHand", "mixamorigLeftHand", "LeftHand", "L_Hand"),
+    rightArm: getObject(scene, "mixamorig:RightArm", "mixamorigRightArm", "RightArm", "R_Upperarm", "R_Clavicle", "R_UpperarmTwist01", "R_UpperarmTwist02"),
+    rightForeArm: getObject(scene, "mixamorig:RightForeArm", "mixamorigRightForeArm", "RightForeArm", "R_Forearm"),
+    rightHand: getObject(scene, "mixamorig:RightHand", "mixamorigRightHand", "RightHand", "R_Hand"),
+    leftUpLeg: getObject(scene, "mixamorig:LeftUpLeg", "mixamorigLeftUpLeg", "LeftUpLeg", "L_Thigh"),
+    leftLeg: getObject(scene, "mixamorig:LeftLeg", "mixamorigLeftLeg", "LeftLeg", "L_Calf"),
+    leftFoot: getObject(scene, "mixamorig:LeftFoot", "mixamorigLeftFoot", "LeftFoot", "L_Foot"),
+    rightUpLeg: getObject(scene, "mixamorig:RightUpLeg", "mixamorigRightUpLeg", "RightUpLeg", "R_Thigh"),
+    rightLeg: getObject(scene, "mixamorig:RightLeg", "mixamorigRightLeg", "RightLeg", "R_Calf"),
+    rightFoot: getObject(scene, "mixamorig:RightFoot", "mixamorigRightFoot", "RightFoot", "R_Foot"),
+    mouth: getObject(scene, "Fitness_Grandma_MouthAnimGeo", "Mouth", "mouth"),
+  };
+}
 
-  scene.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    if (mesh.isMesh) {
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = false;
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      materials.filter(Boolean).forEach((material) => {
-        material.needsUpdate = true;
-      });
-    }
+function rememberBasePose(rig: RigBones) {
+  const map = new Map<string, THREE.Quaternion>();
+  Object.values(rig).forEach((object) => {
+    if (object) map.set(object.uuid, object.quaternion.clone());
   });
-
-  const box = new THREE.Box3().setFromObject(scene);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
-  box.getSize(size);
-  box.getCenter(center);
-
-  const height = Math.max(size.y, 0.001);
-  const scale = THREE.MathUtils.clamp(2.75 / height, 1.35, 3.1);
-  scene.scale.setScalar(scale);
-  scene.position.set(-center.x * scale, -box.min.y * scale - 1.32, -center.z * scale);
-
-  return scene;
+  return map;
 }
 
-function getFallbackYaw(facing: Required<FlowlyAssistant3DProps>["facing"]) {
-  // El modelo optimizado llega ligeramente orientado de lado. Este offset lo pone mirando a cámara.
-  const frontCorrection = -Math.PI / 2;
-  if (facing === "left") return frontCorrection + 0.18;
-  if (facing === "right") return frontCorrection - 0.18;
-  return frontCorrection;
+const tempQuaternion = new THREE.Quaternion();
+const tempEuler = new THREE.Euler(0, 0, 0, "XYZ");
+
+function applyOffset(basePose: Map<string, THREE.Quaternion>, object: THREE.Object3D | undefined, x = 0, y = 0, z = 0) {
+  if (!object) return;
+  const base = basePose.get(object.uuid);
+  if (!base) return;
+  tempEuler.set(x, y, z, "XYZ");
+  tempQuaternion.setFromEuler(tempEuler);
+  object.quaternion.copy(base).multiply(tempQuaternion);
 }
 
-function AvatarModel({
-  modelUrl,
-  mode,
-  facing,
+const targetVec = new THREE.Vector3();
+const targetVec2 = new THREE.Vector3();
+const targetVec3 = new THREE.Vector3();
+const parentWorldQuat = new THREE.Quaternion();
+const parentWorldQuatInv = new THREE.Quaternion();
+const desiredLocalDir = new THREE.Vector3();
+const restAxisLocal = new THREE.Vector3();
+const restAxisAfterBase = new THREE.Vector3();
+const deltaQuat = new THREE.Quaternion();
+const finalQuat = new THREE.Quaternion();
+const baseWorldA = new THREE.Vector3();
+const baseWorldB = new THREE.Vector3();
+
+function getRestSideDirection(bone: THREE.Object3D | undefined, child: THREE.Object3D | undefined) {
+  if (!bone || !child) return new THREE.Vector3(1, 0, 0);
+  bone.getWorldPosition(baseWorldA);
+  child.getWorldPosition(baseWorldB);
+  const side = new THREE.Vector3().copy(baseWorldB).sub(baseWorldA).setY(0);
+  if (side.lengthSq() < 0.0001) side.set(1, 0, 0);
+  return side.normalize();
+}
+
+function aimBoneToWorldDirection(
+  basePose: Map<string, THREE.Quaternion>,
+  bone: THREE.Object3D | undefined,
+  child: THREE.Object3D | undefined,
+  targetWorldDirection: THREE.Vector3,
+  influence = 1,
+) {
+  if (!bone || !child || !bone.parent) return;
+  const base = basePose.get(bone.uuid);
+  if (!base) return;
+
+  restAxisLocal.copy(child.position).normalize();
+  if (restAxisLocal.lengthSq() < 0.0001) return;
+
+  bone.parent.getWorldQuaternion(parentWorldQuat);
+  parentWorldQuatInv.copy(parentWorldQuat).invert();
+  desiredLocalDir.copy(targetWorldDirection).normalize().applyQuaternion(parentWorldQuatInv).normalize();
+
+  restAxisAfterBase.copy(restAxisLocal).applyQuaternion(base).normalize();
+  deltaQuat.setFromUnitVectors(restAxisAfterBase, desiredLocalDir);
+  finalQuat.copy(deltaQuat).multiply(base).normalize();
+
+  bone.quaternion.copy(base).slerp(finalQuat, THREE.MathUtils.clamp(influence, 0, 1));
+}
+
+function getFacingYaw(facing: Required<FlowlyAssistant3DProps>["facing"]) {
+  // El GLB optimizado llega mirando de lado. Este offset lo pone de frente a cámara.
+  const modelForwardCorrection = -Math.PI / 2;
+  if (facing === "right") return modelForwardCorrection - 0.22;
+  if (facing === "left") return modelForwardCorrection + 0.22;
+  return modelForwardCorrection;
+}
+
+function Model({
+  modelUrl = "/avatars/flowly.glb",
+  mode = "idle",
+  facing = "front",
 }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing">>) {
-  const rootRef = useRef<THREE.Group>(null);
-  const avatarRef = useRef<THREE.Group>(null);
+  const group = useRef<THREE.Group>(null);
   const gltf = useGLTF(modelUrl) as unknown as { scene: THREE.Group; animations?: THREE.AnimationClip[] };
-  const idle = useFBX(FBX_ANIMATIONS.idle);
-  const walk = useFBX(FBX_ANIMATIONS.walk);
-  const wave = useFBX(FBX_ANIMATIONS.wave);
-  const talk = useFBX(FBX_ANIMATIONS.talk);
-  const point = useFBX(FBX_ANIMATIONS.point);
-  const sit = useFBX(FBX_ANIMATIONS.sit);
-
-  const scene = useMemo(() => prepareAvatarScene(gltf.scene), [gltf.scene]);
+  const scene = useMemo(() => clone(gltf.scene) as THREE.Group, [gltf.scene]);
+  const rig = useMemo(() => getRig(scene), [scene]);
+  const basePose = useMemo(() => rememberBasePose(rig), [rig]);
   const activeMode = normalizeMode(mode);
-
-  const clips = useMemo(() => {
-    const namedFbxClips = [
-      getClipFromFbx(idle, "idle"),
-      getClipFromFbx(walk, "walk"),
-      getClipFromFbx(wave, "wave"),
-      getClipFromFbx(talk, "talk"),
-      getClipFromFbx(point, "point"),
-      getClipFromFbx(sit, "sit"),
-    ].filter(Boolean) as THREE.AnimationClip[];
-
-    const nativeClips = (gltf.animations || []).map((clip, index) => {
-      const cloned = clip.clone();
-      cloned.name = cloned.name || `native-${index}`;
-      return cloned;
-    });
-
-    // Las animaciones FBX pequeñas son las principales. Si el GLB trae clips propios,
-    // quedan como reserva, pero nunca forzamos huesos manualmente.
-    return [...namedFbxClips, ...nativeClips];
-  }, [gltf.animations, idle, point, sit, talk, walk, wave]);
-
-  const { actions, mixer } = useAnimations(clips, scene);
+  const mixer = useMemo(() => new THREE.AnimationMixer(scene), [scene]);
+  const clips = gltf.animations || [];
+  const hasNativeAnimations = clips.length > 0;
 
   useEffect(() => {
-    const actionName = actions[activeMode] ? activeMode : actions.idle ? "idle" : Object.keys(actions)[0];
-    const action = actionName ? actions[actionName] : undefined;
-    if (!action) return;
+    if (!hasNativeAnimations) return;
+    // Orden detectado en el GLB optimizado:
+    // 0 idle, 1 talking, 2 waving, 3 long/sitting, 4 pointing, 5 walking.
+    // Antes walk usaba el clip 1 y eso generaba saltos raros; ahora cada estado usa su clip real.
+    const clipIndex = activeMode === "walk" ? 5 : activeMode === "wave" ? 2 : activeMode === "talk" ? 1 : activeMode === "point" ? 4 : 0;
+    const clip = clips[clipIndex] || clips[0];
+    if (!clip) return;
+    mixer.stopAllAction();
+    const action = mixer.clipAction(clip);
+    action.reset().fadeIn(0.22).play();
+    return () => { action.fadeOut(0.18); };
+  }, [activeMode, clips, hasNativeAnimations, mixer]);
 
-    Object.values(actions).forEach((candidate) => {
-      if (candidate && candidate !== action) candidate.fadeOut(0.22);
+  useEffect(() => {
+    scene.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.frustumCulled = false;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.filter(Boolean).forEach((material) => {
+          material.needsUpdate = true;
+        });
+      }
     });
-
-    action.reset();
-    action.enabled = true;
-    action.setLoop(THREE.LoopRepeat, Infinity);
-    action.clampWhenFinished = false;
-    action.timeScale = activeMode === "walk" ? 0.9 : activeMode === "talk" ? 1.05 : activeMode === "wave" ? 0.85 : 0.75;
-    action.fadeIn(0.24).play();
-
-    return () => {
-      action.fadeOut(0.18);
-    };
-  }, [actions, activeMode]);
+  }, [scene]);
 
   useFrame((state, delta) => {
-    const root = rootRef.current;
-    const avatar = avatarRef.current;
-    if (!root || !avatar) return;
-
-    mixer.update(delta);
+    if (!group.current) return;
 
     const t = state.clock.elapsedTime;
-    const yaw = getFallbackYaw(facing);
-    const isWalking = activeMode === "walk";
-    const isTalking = activeMode === "talk";
-    const isPointing = activeMode === "point";
+    const slow = Math.sin(t * 0.75);
+    const breathe = Math.sin(t * 1.7);
+    const activeWalking = activeMode === "walk";
+    const activeSpeaking = activeMode === "talk";
+    const activeThinking = mode === "thinking";
 
-    // Vida global del personaje: se mueve completo, no se rompen huesos/extremidades.
-    root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, yaw + Math.sin(t * 0.7) * 0.035, 0.07);
-    root.position.y = Math.sin(t * (isWalking ? 4.6 : 1.8)) * (isWalking ? 0.035 : 0.018);
-    root.position.x = Math.sin(t * 0.55) * (isWalking ? 0.05 : 0.018);
+    if (hasNativeAnimations) {
+      mixer.update(delta);
+    } else {
+      Object.values(rig).forEach((object) => {
+        const base = object ? basePose.get(object.uuid) : undefined;
+        if (object && base) object.quaternion.copy(base);
+      });
+      // Fallback procedural muy suave. No mueve extremidades de forma agresiva.
+      applyOffset(basePose, rig.spine, breathe * 0.018, 0, slow * 0.01);
+      applyOffset(basePose, rig.neck, slow * 0.016, slow * 0.018, 0);
+      applyOffset(basePose, rig.head, activeThinking ? -0.055 : breathe * 0.01, slow * 0.02, 0);
+    }
 
-    avatar.rotation.z = Math.sin(t * (isTalking ? 2.8 : 1.4)) * (isTalking ? 0.018 : 0.01);
-    avatar.rotation.x = Math.sin(t * (isPointing ? 1.1 : 0.9)) * 0.012;
+    if (rig.mouth) {
+      rig.mouth.scale.y = activeSpeaking ? 1 + Math.abs(Math.sin(t * 10)) * 0.12 : 1;
+    }
+
+    const baseYaw = getFacingYaw(facing);
+    const looking = activeSpeaking ? Math.sin(t * 2.2) * 0.035 : Math.sin(t * 0.45) * 0.028;
+    const wholeBodyStep = activeWalking ? Math.sin(t * 1.15) * 0.1 : Math.sin(t * 0.35) * 0.018;
+    const bodyBreath = activeWalking ? 0 : breathe * 0.012;
+
+    // Vida del personaje = movimiento global completo, no extremidades rotas.
+    group.current.position.set(wholeBodyStep, -1.08 + bodyBreath, 0);
+    group.current.rotation.set(0, baseYaw + looking, slow * 0.006);
+    group.current.scale.setScalar(1.86);
   });
-
   return (
-    <group ref={rootRef}>
-      <primitive ref={avatarRef} object={scene} />
+    <group ref={group} position={[0, -1.08, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.86}>
+      <primitive object={scene} />
     </group>
   );
 }
 
-function AvatarFallback() {
+function ModelFallback() {
   return (
-    <Html center>
-      <div style={{ color: "#a5f3fc", fontSize: 12, fontWeight: 900, textAlign: "center", whiteSpace: "nowrap" }}>
-        Cargando Flowly…
-      </div>
-    </Html>
+    <mesh position={[0, 0, 0]}>
+      <capsuleGeometry args={[0.42, 1.35, 8, 16]} />
+      <meshStandardMaterial color="#22d3ee" metalness={0.55} roughness={0.2} />
+    </mesh>
   );
 }
 
@@ -184,25 +255,23 @@ export default function FlowlyAssistant3D({
   onClick,
 }: FlowlyAssistant3DProps) {
   return (
-    <div className="flowly-3d-stage" onClick={onClick} role="button" tabIndex={0} aria-label="Flowly Companion 3D">
-      <Canvas
-        shadows
-        dpr={[1, 1.75]}
-        camera={{ position: [0, 0.55, 6.2], fov: 30, near: 0.1, far: 100 }}
-        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
-      >
-        <ambientLight intensity={1.25} />
-        <directionalLight position={[2.8, 4, 5]} intensity={2.1} castShadow />
-        <pointLight position={[-2.2, 2.4, 2.2]} intensity={1.2} color="#a78bfa" />
-        <pointLight position={[2.4, 1.1, 1.4]} intensity={0.75} color="#22d3ee" />
-        <Suspense fallback={<AvatarFallback />}>
-          <AvatarModel modelUrl={modelUrl} mode={mode} facing={facing} />
+    <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
+      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.05, 4.65], fov: 30 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
+        <ambientLight intensity={1.4} />
+        <directionalLight position={[2.4, 4, 3]} intensity={2.15} castShadow />
+        <pointLight position={[-2.2, 2.8, 2]} intensity={1.2} color="#8b5cf6" />
+        <pointLight position={[2.4, 1.2, 2.6]} intensity={1.0} color="#22d3ee" />
+        <Suspense fallback={<ModelFallback />}>
+          <Model modelUrl={modelUrl} mode={mode} facing={facing} />
           <Environment preset="city" />
         </Suspense>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.32, 0]} receiveShadow>
+          <circleGeometry args={[1.65, 64]} />
+          <meshStandardMaterial color="#020617" transparent opacity={0.2} />
+        </mesh>
       </Canvas>
-    </div>
+    </button>
   );
 }
 
 useGLTF.preload("/avatars/flowly.glb");
-Object.values(FBX_ANIMATIONS).forEach((path) => useFBX.preload(path));

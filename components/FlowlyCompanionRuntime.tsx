@@ -25,7 +25,6 @@ export default function FlowlyCompanionRuntime() {
   const [lifeMode, setLifeMode] = useState<string | null>(null);
   const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
   const [avatarUrl, setAvatarUrl] = useState("/avatars/flowly.glb");
-  const [wander, setWander] = useState({ x: 0, y: 0 });
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
@@ -71,27 +70,6 @@ export default function FlowlyCompanionRuntime() {
     const interval = window.setInterval(applyBehaviour, open ? 9000 : 5200);
     return () => window.clearInterval(interval);
   }, [context.message, context.mission, context.mode, isArchitect, open, thinking]);
-
-  useEffect(() => {
-    if (open || minimized) {
-      setWander({ x: 0, y: 0 });
-      return;
-    }
-
-    const move = () => {
-      const walking = String(avatarMood).includes("walk");
-      const maxLeft = walking ? 220 : 58;
-      const maxUp = walking ? 54 : 24;
-      setWander({
-        x: -Math.round(18 + Math.random() * maxLeft),
-        y: -Math.round(Math.random() * maxUp),
-      });
-    };
-
-    move();
-    const interval = window.setInterval(move, String(avatarMood).includes("walk") ? 5200 : 8400);
-    return () => window.clearInterval(interval);
-  }, [avatarMood, minimized, open]);
 
   useEffect(() => {
     let mounted = true;
@@ -140,7 +118,7 @@ export default function FlowlyCompanionRuntime() {
   };
 
   return (
-    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode}>
+    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood}>
       {!minimized && (
         <div className="flowly-companion-bubble" role="status">
           <span className="flowly-companion-bubble-kicker">{isArchitect ? "Companion Arquitecto" : context.area}</span>
@@ -149,7 +127,7 @@ export default function FlowlyCompanionRuntime() {
         </div>
       )}
 
-      <div className="flowly-companion-avatar-shell" data-life={avatarMood} style={{ transform: `translate3d(${wander.x}px, ${wander.y}px, 0)` }}>
+      <div className="flowly-companion-avatar-shell">
         <EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={avatarMood} memory={lifeLabel} modelUrl={avatarUrl} onClick={() => setOpen((value) => !value)} />
         <div className="flowly-companion-life-hud" aria-hidden="true">
           <span className="flowly-life-dot" />
