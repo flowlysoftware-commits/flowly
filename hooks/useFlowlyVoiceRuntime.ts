@@ -22,35 +22,16 @@ type VoiceRuntimeOptions = {
   onPhase?: (phase: VoiceRuntimeState) => void;
 };
 
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives?: number;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-};
-
-type SpeechRecognitionEventLike = {
-  resultIndex: number;
-  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+type RecorderResult = {
+  blob: Blob;
+  durationMs: number;
+  hadVoice: boolean;
 };
 
 declare global {
   interface Window {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitAudioContext?: typeof AudioContext;
   }
-}
-
-function getSpeechRecognitionConstructor() {
-  if (typeof window === "undefined") return null;
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
 function cleanText(value: string) {
@@ -87,19 +68,37 @@ function removeWakeWord(value: string, wakeWord: string) {
   return cleanText(value).replace(wakeRegex(wakeWord), " ").replace(/\s+/g, " ").trim();
 }
 
-function transcriptFromEvent(event: SpeechRecognitionEventLike) {
-  const pieces: string[] = [];
-  for (let index = 0; index < event.results.length; index += 1) {
-    const phrase = event.results[index]?.[0]?.transcript;
-    if (phrase) pieces.push(phrase);
-  }
-  return cleanText(pieces.join(" "));
-}
-
 function commandLooksComplete(value: string) {
   const clean = cleanText(value);
   const words = clean.split(/\s+/).filter(Boolean);
   return clean.length >= 8 || words.length >= 2;
+}
+
+function bestMimeType() {
+  if (typeof MediaRecorder === "undefined") return "";
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+async function transcribeAudio(blob: Blob) {
+  if (!blob.size) return "";
+
+  const form = new FormData();
+  const extension = blob.type.includes("mp4") ? "m4a" : "webm";
+  form.append("audio", blob, `flowly-voice.${extension}`);
+
+  const response = await fetch("/api/companion/transcribe", {
+    method: "POST",
+    body: form,
+  });
+
+  if (!response.ok) return "";
+  const data = await response.json().catch(() => null);
+  return cleanText(typeof data?.text === "string" ? data.text : "");
 }
 
 export function useFlowlyVoiceRuntime({
@@ -110,20 +109,18 @@ export function useFlowlyVoiceRuntime({
   onStatus,
   onPhase,
 }: VoiceRuntimeOptions = {}) {
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const enabledRef = useRef(enabled);
   const activeRef = useRef(false);
   const awakeRef = useRef(false);
-  const startingRef = useRef(false);
   const speakingRef = useRef(false);
   const processingRef = useRef(false);
-  const manuallyStoppedRef = useRef(false);
-  const currentCommandRef = useRef("");
+  const manualStopRef = useRef(false);
+  const loopRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
   const lastCommandRef = useRef("");
   const lastCommandAtRef = useRef(0);
-  const silenceTimerRef = useRef<number | null>(null);
-  const restartTimerRef = useRef<number | null>(null);
-  const awakeTimeoutRef = useRef<number | null>(null);
 
   const [supported, setSupported] = useState(true);
   const [active, setActive] = useState(false);
@@ -134,11 +131,6 @@ export function useFlowlyVoiceRuntime({
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
-
-  const clearTimer = useCallback((timer: { current: number | null }) => {
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = null;
-  }, []);
 
   const setPhase = useCallback((next: VoiceRuntimeState, label?: string) => {
     setState(next);
@@ -151,61 +143,151 @@ export function useFlowlyVoiceRuntime({
     setIsAwake(value);
   }, []);
 
-  const resetCommand = useCallback(() => {
-    currentCommandRef.current = "";
-    setTranscript("");
-    clearTimer(silenceTimerRef);
-    clearTimer(awakeTimeoutRef);
-  }, [clearTimer]);
+  const clearLoopTimer = useCallback(() => {
+    if (loopRef.current) window.clearTimeout(loopRef.current);
+    loopRef.current = null;
+  }, []);
 
-  const safeStart = useCallback(() => {
-    const recognition = recognitionRef.current;
-    if (!recognition || !enabledRef.current || manuallyStoppedRef.current || speakingRef.current || startingRef.current) return;
-    startingRef.current = true;
-    try {
-      recognition.start();
-    } catch {
-      // Chrome lanza excepción si ya está iniciado. En ese caso lo tratamos como activo.
-      activeRef.current = true;
-      setActive(true);
-      setPhase(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Voz activa. Di Flow para llamarme");
-    } finally {
-      window.setTimeout(() => {
-        startingRef.current = false;
-      }, 450);
+  const getAudioLevel = useCallback(() => {
+    const analyser = analyserRef.current;
+    if (!analyser) return 0;
+    const buffer = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(buffer);
+    let sum = 0;
+    for (const value of buffer) {
+      const normalized = (value - 128) / 128;
+      sum += normalized * normalized;
     }
+    return Math.sqrt(sum / buffer.length);
+  }, []);
+
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    try { void audioContextRef.current?.close(); } catch { /* noop */ }
+    audioContextRef.current = null;
+    analyserRef.current = null;
+  }, []);
+
+  const ensureAudio = useCallback(async () => {
+    if (streamRef.current && streamRef.current.active) return streamRef.current;
+
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined" || !AudioContextCtor) {
+      setSupported(false);
+      setPhase("unsupported", "Tu navegador no soporta voz avanzada");
+      return null;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+
+    const audioContext = new AudioContextCtor();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.82;
+    source.connect(analyser);
+
+    streamRef.current = stream;
+    audioContextRef.current = audioContext;
+    analyserRef.current = analyser;
+    return stream;
   }, [setPhase]);
 
-  const restartListening = useCallback((delay = 420) => {
-    clearTimer(restartTimerRef);
-    if (!enabledRef.current || manuallyStoppedRef.current || speakingRef.current) return;
-    restartTimerRef.current = window.setTimeout(() => safeStart(), delay);
-  }, [clearTimer, safeStart]);
+  const recordSegment = useCallback(async ({
+    maxMs,
+    minMs = 800,
+    stopOnSilence = false,
+    silenceMs = 1300,
+    voiceThreshold = 0.018,
+  }: {
+    maxMs: number;
+    minMs?: number;
+    stopOnSilence?: boolean;
+    silenceMs?: number;
+    voiceThreshold?: number;
+  }): Promise<RecorderResult | null> => {
+    const stream = await ensureAudio();
+    if (!stream) return null;
+
+    const mimeType = bestMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks: BlobPart[] = [];
+    let hadVoice = false;
+    let voiceStarted = false;
+    let lastVoiceAt = Date.now();
+    const startedAt = Date.now();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let monitor: number | null = null;
+      let hardStop: number | null = null;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (monitor) window.clearInterval(monitor);
+        if (hardStop) window.clearTimeout(hardStop);
+        const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+        resolve({ blob, durationMs: Date.now() - startedAt, hadVoice });
+      };
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size) chunks.push(event.data);
+      };
+      recorder.onerror = () => finish();
+      recorder.onstop = () => finish();
+
+      recorder.start();
+
+      monitor = window.setInterval(() => {
+        const elapsed = Date.now() - startedAt;
+        const level = getAudioLevel();
+        if (level > voiceThreshold) {
+          hadVoice = true;
+          voiceStarted = true;
+          lastVoiceAt = Date.now();
+        }
+
+        if (stopOnSilence && elapsed >= minMs && voiceStarted && Date.now() - lastVoiceAt >= silenceMs) {
+          try { recorder.stop(); } catch { finish(); }
+        }
+      }, 100);
+
+      hardStop = window.setTimeout(() => {
+        try { recorder.stop(); } catch { finish(); }
+      }, maxMs);
+    });
+  }, [ensureAudio, getAudioLevel]);
 
   const goPassive = useCallback(() => {
     setAwake(false);
-    resetCommand();
+    setTranscript("");
     if (activeRef.current) setPhase("passive", "Voz activa. Di Flow para llamarme");
-  }, [resetCommand, setAwake, setPhase]);
+  }, [setAwake, setPhase]);
 
   const processCommand = useCallback(async (raw: string) => {
     const command = cleanText(removeWakeWord(raw, wakeWord));
     if (!commandLooksComplete(command)) {
-      // Evita enviar solo "que", "hola", etc. Mantiene a Flow despierto un poco más.
       setTranscript(command);
-      setPhase("listening", "Te escucho. Termina la frase");
-      clearTimer(awakeTimeoutRef);
-      awakeTimeoutRef.current = window.setTimeout(goPassive, 6500);
+      setPhase("passive", "No he entendido la frase completa. Di Flow y repítelo.");
+      goPassive();
       return;
     }
 
     const now = Date.now();
     if (command === lastCommandRef.current && now - lastCommandAtRef.current < 4500) return;
-
     lastCommandRef.current = command;
     lastCommandAtRef.current = now;
+
     processingRef.current = true;
-    resetCommand();
+    setTranscript(command);
     setPhase("thinking", "Pensando con Flowly Brain");
 
     try {
@@ -213,140 +295,78 @@ export function useFlowlyVoiceRuntime({
     } finally {
       processingRef.current = false;
       setAwake(false);
-      if (!speakingRef.current) {
-        setPhase("passive", "Voz activa. Di Flow para llamarme");
-        restartListening(500);
-      }
     }
-  }, [clearTimer, goPassive, onCommand, resetCommand, restartListening, setAwake, setPhase, wakeWord]);
+  }, [goPassive, onCommand, setAwake, setPhase, wakeWord]);
 
-  const scheduleCommand = useCallback(() => {
-    clearTimer(silenceTimerRef);
-    silenceTimerRef.current = window.setTimeout(() => {
-      const command = currentCommandRef.current;
-      if (!processingRef.current && !speakingRef.current) void processCommand(command);
-    }, 2300);
-  }, [clearTimer, processCommand]);
+  const captureCommandAfterWake = useCallback(async () => {
+    if (!activeRef.current || speakingRef.current || processingRef.current) return;
+    setPhase("listening", "Te escucho");
+    setTranscript("");
 
-  const createRecognition = useCallback(() => {
-    const Recognition = getSpeechRecognitionConstructor();
-    if (!Recognition) return null;
+    const segment = await recordSegment({ maxMs: 9000, minMs: 1200, stopOnSilence: true, silenceMs: 1600 });
+    if (!segment || !activeRef.current) return;
 
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "es-ES";
-    recognition.maxAlternatives = 1;
+    const text = await transcribeAudio(segment.blob);
+    const command = removeWakeWord(text, wakeWord);
+    setTranscript(command || text);
 
-    recognition.onstart = () => {
-      activeRef.current = true;
-      setActive(true);
-      setPhase(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Voz activa. Di Flow para llamarme");
-    };
+    if (commandLooksComplete(command)) {
+      await processCommand(command);
+    } else {
+      goPassive();
+    }
+  }, [goPassive, processCommand, recordSegment, setPhase, wakeWord]);
 
-    recognition.onerror = (event) => {
-      const error = event.error || "unknown";
-      if (error === "aborted") return;
+  const passiveLoop = useCallback(async () => {
+    if (!activeRef.current || manualStopRef.current || !enabledRef.current) return;
+    if (speakingRef.current || processingRef.current) {
+      loopRef.current = window.setTimeout(passiveLoop, 700);
+      return;
+    }
 
-      if (error === "not-allowed" || error === "service-not-allowed") {
-        activeRef.current = false;
-        setActive(false);
-        setAwake(false);
-        setPhase("error", "Permiso de micrófono bloqueado");
-        return;
-      }
+    setPhase("passive", "Voz activa. Di Flow para llamarme");
+    const segment = await recordSegment({ maxMs: 2600, minMs: 1200, stopOnSilence: false });
+    if (!segment || !activeRef.current || manualStopRef.current) return;
 
-      if (["no-speech", "audio-capture", "network"].includes(error)) {
-        if (activeRef.current && !speakingRef.current) restartListening(750);
-        return;
-      }
+    if (segment.hadVoice) {
+      const text = await transcribeAudio(segment.blob);
+      if (text) setTranscript(text);
 
-      setPhase("error", `Error de voz: ${error}`);
-      if (activeRef.current && !speakingRef.current) restartListening(900);
-    };
-
-    recognition.onend = () => {
-      if (!enabledRef.current || manuallyStoppedRef.current) return;
-
-      if (awakeRef.current && commandLooksComplete(currentCommandRef.current) && !processingRef.current && !speakingRef.current) {
-        void processCommand(currentCommandRef.current);
-        return;
-      }
-
-      if (!speakingRef.current) restartListening(450);
-    };
-
-    recognition.onresult = (event) => {
-      if (speakingRef.current || processingRef.current) return;
-
-      const heard = transcriptFromEvent(event);
-      if (!heard) return;
-
-      if (!awakeRef.current) {
-        setTranscript(heard);
-        if (!containsWakeWord(heard, wakeWord)) return;
-
-        const afterWake = removeWakeWord(heard, wakeWord);
+      if (containsWakeWord(text, wakeWord)) {
+        const afterWake = removeWakeWord(text, wakeWord);
         setAwake(true);
-        currentCommandRef.current = afterWake;
-        setTranscript(afterWake);
         onWake?.();
 
         if (commandLooksComplete(afterWake)) {
-          setPhase("listening", "Te escucho");
-          scheduleCommand();
+          await processCommand(afterWake);
         } else {
           setPhase("waking", "Te escucho. Dime qué necesitas");
-          clearTimer(awakeTimeoutRef);
-          awakeTimeoutRef.current = window.setTimeout(goPassive, 8500);
+          await captureCommandAfterWake();
         }
-        return;
       }
-
-      const cleanHeard = removeWakeWord(heard, wakeWord);
-      if (cleanHeard) {
-        currentCommandRef.current = cleanHeard;
-        setTranscript(cleanHeard);
-      }
-
-      setPhase("listening", "Te escucho");
-      scheduleCommand();
-    };
-
-    return recognition;
-  }, [clearTimer, goPassive, onWake, processCommand, restartListening, scheduleCommand, setAwake, setPhase, wakeWord]);
-
-  const activate = useCallback(async () => {
-    const Recognition = getSpeechRecognitionConstructor();
-    if (!Recognition) {
-      setSupported(false);
-      setPhase("unsupported", "Tu navegador no soporta escucha por voz");
-      return false;
     }
 
+    if (activeRef.current && !manualStopRef.current) {
+      loopRef.current = window.setTimeout(passiveLoop, 250);
+    }
+  }, [captureCommandAfterWake, onWake, processCommand, recordSegment, setAwake, setPhase, wakeWord]);
+
+  const activate = useCallback(async () => {
+    if (activeRef.current) return true;
+    setPhase("permission", "Solicitando permiso de micrófono");
+
     try {
-      setPhase("permission", "Solicitando permiso de micrófono");
+      const stream = await ensureAudio();
+      if (!stream) return false;
 
-      if (navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        });
-        stream.getTracks().forEach((track) => track.stop());
-      }
-
-      try { recognitionRef.current?.abort(); } catch { /* noop */ }
-
-      manuallyStoppedRef.current = false;
-      speakingRef.current = false;
-      processingRef.current = false;
+      manualStopRef.current = false;
       activeRef.current = true;
       setActive(true);
       setAwake(false);
-      resetCommand();
-
-      recognitionRef.current = createRecognition();
+      setTranscript("");
       setPhase("passive", "Voz activa. Di Flow para llamarme");
-      window.setTimeout(() => safeStart(), 120);
+      clearLoopTimer();
+      loopRef.current = window.setTimeout(passiveLoop, 350);
       return true;
     } catch (error) {
       console.error("Flowly voice runtime error", error);
@@ -356,31 +376,33 @@ export function useFlowlyVoiceRuntime({
       setPhase("error", "No he podido activar el micrófono. Revisa permisos del navegador.");
       return false;
     }
-  }, [createRecognition, resetCommand, safeStart, setAwake, setPhase]);
+  }, [clearLoopTimer, ensureAudio, passiveLoop, setAwake, setPhase]);
 
   const deactivate = useCallback(() => {
-    manuallyStoppedRef.current = true;
+    manualStopRef.current = true;
     activeRef.current = false;
     speakingRef.current = false;
     processingRef.current = false;
+    clearLoopTimer();
+    stopStream();
     setActive(false);
     setAwake(false);
-    resetCommand();
-    clearTimer(restartTimerRef);
-    try { recognitionRef.current?.abort(); } catch { /* noop */ }
+    setTranscript("");
     setPhase("disabled", "Voz desactivada");
-  }, [clearTimer, resetCommand, setAwake, setPhase]);
+  }, [clearLoopTimer, setAwake, setPhase, stopStream]);
 
   const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) {
+      goPassive();
+      if (activeRef.current && !manualStopRef.current) loopRef.current = window.setTimeout(passiveLoop, 700);
+      return;
+    }
 
     const shortText = text.replace(/[#*_`>\[\]]/g, " ").replace(/\s+/g, " ").slice(0, 520);
     window.speechSynthesis.cancel();
 
     speakingRef.current = true;
-    clearTimer(silenceTimerRef);
-    clearTimer(awakeTimeoutRef);
-    try { recognitionRef.current?.abort(); } catch { /* noop */ }
+    clearLoopTimer();
 
     const utterance = new SpeechSynthesisUtterance(shortText);
     utterance.lang = "es-ES";
@@ -392,31 +414,28 @@ export function useFlowlyVoiceRuntime({
     utterance.onend = () => {
       speakingRef.current = false;
       goPassive();
-      restartListening(650);
+      if (activeRef.current && !manualStopRef.current) loopRef.current = window.setTimeout(passiveLoop, 900);
     };
     utterance.onerror = () => {
       speakingRef.current = false;
       goPassive();
-      restartListening(650);
+      if (activeRef.current && !manualStopRef.current) loopRef.current = window.setTimeout(passiveLoop, 900);
     };
 
     window.speechSynthesis.speak(utterance);
-  }, [clearTimer, goPassive, restartListening, setPhase]);
+  }, [clearLoopTimer, goPassive, passiveLoop, setPhase]);
 
   useEffect(() => {
-    const Recognition = getSpeechRecognitionConstructor();
-    setSupported(Boolean(Recognition));
-    if (!Recognition) setPhase("unsupported", "Tu navegador no soporta escucha por voz");
-
+    const ok = typeof window !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined";
+    setSupported(ok);
+    if (!ok) setPhase("unsupported", "Tu navegador no soporta voz avanzada");
     return () => {
-      manuallyStoppedRef.current = true;
-      clearTimer(silenceTimerRef);
-      clearTimer(restartTimerRef);
-      clearTimer(awakeTimeoutRef);
-      try { recognitionRef.current?.abort(); } catch { /* noop */ }
+      manualStopRef.current = true;
+      clearLoopTimer();
+      stopStream();
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
-  }, [clearTimer, setPhase]);
+  }, [clearLoopTimer, setPhase, stopStream]);
 
   return { supported, active, isAwake, state, transcript, activate, deactivate, speak };
 }
