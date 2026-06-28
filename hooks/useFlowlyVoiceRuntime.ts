@@ -10,7 +10,15 @@ type VoiceRuntimeOptions = {
   onStatus?: (status: string) => void;
 };
 
-type VoiceRuntimeState = "unsupported" | "disabled" | "permission" | "listening" | "awake" | "thinking" | "speaking" | "error";
+type VoiceRuntimeState =
+  | "unsupported"
+  | "disabled"
+  | "permission"
+  | "listening"
+  | "awake"
+  | "thinking"
+  | "speaking"
+  | "error";
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -43,12 +51,25 @@ function getSpeechRecognitionConstructor() {
 }
 
 function cleanText(value: string) {
-  return value.replace(/[.,!?¿¡]/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,!?¿¡;:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getWakeRegex(wakeWord: string) {
+  const escaped = wakeWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|\\s)(hola\\s+)?${escaped}(\\s|$)`, "i");
+}
+
+function containsWakeWord(value: string, wakeWord: string) {
+  return getWakeRegex(wakeWord).test(cleanText(value).toLowerCase());
 }
 
 function removeWakeWord(value: string, wakeWord: string) {
-  const expression = new RegExp(`(^|\\s)${wakeWord}(\\s|$)`, "i");
-  return cleanText(value.replace(expression, " "));
+  return cleanText(value.replace(getWakeRegex(wakeWord), " "));
 }
 
 export function useFlowlyVoiceRuntime({
@@ -59,10 +80,16 @@ export function useFlowlyVoiceRuntime({
   onStatus,
 }: VoiceRuntimeOptions = {}) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const activeRef = useRef(false);
+  const manuallyStoppedRef = useRef(false);
+  const startingRef = useRef(false);
   const awakeRef = useRef(false);
   const processingRef = useRef(false);
   const lastCommandRef = useRef("");
+  const lastCommandAtRef = useRef(0);
   const idleTimeoutRef = useRef<number | null>(null);
+  const restartTimeoutRef = useRef<number | null>(null);
+
   const [supported, setSupported] = useState(true);
   const [active, setActive] = useState(false);
   const [state, setState] = useState<VoiceRuntimeState>("disabled");
@@ -78,32 +105,99 @@ export function useFlowlyVoiceRuntime({
     idleTimeoutRef.current = null;
   }, []);
 
+  const clearRestartTimeout = useCallback(() => {
+    if (restartTimeoutRef.current) window.clearTimeout(restartTimeoutRef.current);
+    restartTimeoutRef.current = null;
+  }, []);
+
   const goToSleep = useCallback(() => {
     clearIdleTimeout();
     awakeRef.current = false;
     setTranscript("");
-    if (active) updateStatus("listening", "Escuchando la palabra Flow");
-  }, [active, clearIdleTimeout, updateStatus]);
+    if (activeRef.current) updateStatus("listening", "Escuchando la palabra Flow");
+  }, [clearIdleTimeout, updateStatus]);
 
   const scheduleSleep = useCallback(() => {
     clearIdleTimeout();
     idleTimeoutRef.current = window.setTimeout(goToSleep, 9500);
   }, [clearIdleTimeout, goToSleep]);
 
+  const safeStart = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition || !enabled || manuallyStoppedRef.current || startingRef.current) return;
+    startingRef.current = true;
+    try {
+      recognition.start();
+    } catch {
+      // Chrome lanza excepción si ya está escuchando. Lo tratamos como activo.
+      setActive(true);
+      activeRef.current = true;
+      updateStatus(awakeRef.current ? "awake" : "listening", awakeRef.current ? "Flow sigue atento" : "Di Flow para llamarme");
+    } finally {
+      window.setTimeout(() => {
+        startingRef.current = false;
+      }, 300);
+    }
+  }, [enabled, updateStatus]);
+
+  const restartListening = useCallback((delay = 450) => {
+    clearRestartTimeout();
+    if (!enabled || manuallyStoppedRef.current) return;
+    restartTimeoutRef.current = window.setTimeout(() => safeStart(), delay);
+  }, [clearRestartTimeout, enabled, safeStart]);
+
+  const pauseRecognitionForSpeech = useCallback(() => {
+    try { recognitionRef.current?.stop(); } catch { /* noop */ }
+  }, []);
+
   const speak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
+
+    const shortText = text.slice(0, 320);
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text.slice(0, 260));
+
+    // Evita que el micro transcriba la propia voz de Flow.
+    pauseRecognitionForSpeech();
+
+    const utterance = new SpeechSynthesisUtterance(shortText);
     utterance.lang = "es-ES";
     utterance.rate = 1.02;
     utterance.pitch = 1.08;
     utterance.volume = 0.92;
+
     utterance.onstart = () => updateStatus("speaking", "Flow está hablando");
     utterance.onend = () => {
-      if (active) updateStatus(awakeRef.current ? "awake" : "listening", awakeRef.current ? "Flow sigue atento" : "Escuchando la palabra Flow");
+      if (activeRef.current) {
+        updateStatus(awakeRef.current ? "awake" : "listening", awakeRef.current ? "Flow sigue atento" : "Escuchando la palabra Flow");
+        restartListening(350);
+      }
     };
+    utterance.onerror = () => {
+      if (activeRef.current) restartListening(350);
+    };
+
     window.speechSynthesis.speak(utterance);
-  }, [active, updateStatus]);
+  }, [pauseRecognitionForSpeech, restartListening, updateStatus]);
+
+  const processCommand = useCallback(async (rawCommand: string) => {
+    const command = cleanText(rawCommand);
+    if (!command || command.length < 3) return;
+
+    const now = Date.now();
+    if (command === lastCommandRef.current && now - lastCommandAtRef.current < 2500) return;
+
+    lastCommandRef.current = command;
+    lastCommandAtRef.current = now;
+    processingRef.current = true;
+    updateStatus("thinking", "Pensando con Flowly Brain");
+
+    try {
+      await onCommand?.(command);
+    } finally {
+      processingRef.current = false;
+      scheduleSleep();
+    }
+  }, [onCommand, scheduleSleep, updateStatus]);
 
   const activate = useCallback(async () => {
     const Recognition = getSpeechRecognitionConstructor();
@@ -115,11 +209,21 @@ export function useFlowlyVoiceRuntime({
 
     try {
       updateStatus("permission", "Solicitando permiso de micrófono");
+
       if (navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
         stream.getTracks().forEach((track) => track.stop());
       }
 
+      try { recognitionRef.current?.abort(); } catch { /* noop */ }
+
+      manuallyStoppedRef.current = false;
       const recognition = new Recognition();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -127,23 +231,31 @@ export function useFlowlyVoiceRuntime({
 
       recognition.onstart = () => {
         setActive(true);
-        updateStatus("listening", "Di Flow para llamarme");
+        activeRef.current = true;
+        updateStatus(awakeRef.current ? "awake" : "listening", awakeRef.current ? "Flow sigue atento" : "Di Flow para llamarme");
       };
 
       recognition.onerror = (event) => {
-        updateStatus("error", event.error ? `Error de voz: ${event.error}` : "Error de voz");
+        const error = event.error || "unknown";
+        if (error === "no-speech" || error === "audio-capture" || error === "network") {
+          if (activeRef.current) restartListening(700);
+          return;
+        }
+        if (error === "aborted") return;
+        setActive(false);
+        activeRef.current = false;
+        updateStatus("error", error === "not-allowed" ? "Permiso de micrófono bloqueado" : `Error de voz: ${error}`);
       };
 
       recognition.onend = () => {
-        if (!enabled) return;
-        window.setTimeout(() => {
-          try { recognition.start(); } catch { /* El navegador ya puede estar escuchando. */ }
-        }, 550);
+        if (!enabled || manuallyStoppedRef.current) return;
+        if (activeRef.current) restartListening(450);
       };
 
       recognition.onresult = async (event) => {
         let finalText = "";
         let interimText = "";
+
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const result = event.results[index];
           const phrase = result[0]?.transcript || "";
@@ -153,53 +265,58 @@ export function useFlowlyVoiceRuntime({
 
         const heard = cleanText(finalText || interimText).toLowerCase();
         if (!heard) return;
+
         setTranscript(heard);
 
+        const hasWake = containsWakeWord(heard, wakeWord);
         if (!awakeRef.current) {
-          if (heard.includes(wakeWord.toLowerCase())) {
-            awakeRef.current = true;
-            onWake?.();
-            updateStatus("awake", "Te escucho");
+          if (!hasWake) return;
+
+          awakeRef.current = true;
+          onWake?.();
+          updateStatus("awake", "Te escucho");
+          scheduleSleep();
+
+          const inlineCommand = removeWakeWord(finalText || heard, wakeWord);
+          if (finalText && inlineCommand.length >= 3 && !processingRef.current) {
+            await processCommand(inlineCommand);
+          } else {
             speak("Te escucho");
-            scheduleSleep();
           }
           return;
         }
 
         scheduleSleep();
+
         if (!finalText || processingRef.current) return;
         const command = removeWakeWord(finalText, wakeWord);
-        if (!command || command.length < 3 || command === lastCommandRef.current) return;
-
-        lastCommandRef.current = command;
-        processingRef.current = true;
-        updateStatus("thinking", "Pensando con Flowly Brain");
-        try {
-          await onCommand?.(command);
-        } finally {
-          processingRef.current = false;
-          scheduleSleep();
-        }
+        await processCommand(command);
       };
 
       recognitionRef.current = recognition;
-      recognition.start();
+      safeStart();
       return true;
     } catch (error) {
       console.error("Flowly voice runtime error", error);
+      setActive(false);
+      activeRef.current = false;
       updateStatus("error", "No he podido activar el micrófono");
       return false;
     }
-  }, [enabled, onCommand, onWake, scheduleSleep, speak, updateStatus, wakeWord]);
+  }, [enabled, onWake, processCommand, restartListening, safeStart, scheduleSleep, speak, updateStatus, wakeWord]);
 
   const deactivate = useCallback(() => {
     clearIdleTimeout();
+    clearRestartTimeout();
+    manuallyStoppedRef.current = true;
     awakeRef.current = false;
+    activeRef.current = false;
     setActive(false);
+    setTranscript("");
     updateStatus("disabled", "Voz desactivada");
     try { recognitionRef.current?.abort(); } catch { /* noop */ }
     recognitionRef.current = null;
-  }, [clearIdleTimeout, updateStatus]);
+  }, [clearIdleTimeout, clearRestartTimeout, updateStatus]);
 
   useEffect(() => {
     setSupported(Boolean(getSpeechRecognitionConstructor()));
