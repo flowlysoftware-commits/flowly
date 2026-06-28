@@ -23,6 +23,16 @@ type VoiceRuntimeOptions = {
   onPhase?: (phase: VoiceRuntimeState) => void;
 };
 
+type VoiceDebugSnapshot = {
+  ticks: number;
+  lastAudioKb: number;
+  lastTranscription: string;
+  lastError: string;
+  lastEvent: string;
+  isRecording: boolean;
+  loopActive: boolean;
+};
+
 export function useFlowlyVoiceRuntime({
   enabled = true,
   onWake,
@@ -40,13 +50,16 @@ export function useFlowlyVoiceRuntime({
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<number | null>(null);
   const speechTimeoutRef = useRef<number | null>(null);
-  const [debug, setDebug] = useState({
+  const debugRef = useRef<VoiceDebugSnapshot>({
     ticks: 0,
     lastAudioKb: 0,
     lastTranscription: "",
     lastError: "",
     lastEvent: "Inicializando voz",
+    isRecording: false,
+    loopActive: false,
   });
+  const [debug, setDebug] = useState<VoiceDebugSnapshot>(debugRef.current);
   const lastCommandRef = useRef("");
   const lastCommandAtRef = useRef(0);
   const lastWakeAtRef = useRef(0);
@@ -61,19 +74,28 @@ export function useFlowlyVoiceRuntime({
     enabledRef.current = enabled;
   }, [enabled]);
 
+  const syncDebug = useCallback((patch: Partial<VoiceDebugSnapshot>) => {
+    debugRef.current = { ...debugRef.current, ...patch };
+  }, []);
+
+  const refreshDebug = useCallback(() => {
+    setDebug({ ...debugRef.current });
+  }, []);
+
   const setPhase = useCallback((next: VoiceRuntimeState, label?: string) => {
     setState(next);
     onPhase?.(next);
     if (label) {
       onStatus?.(label);
-      setDebug((current) => ({ ...current, lastEvent: label }));
+      syncDebug({ lastEvent: label });
     }
-  }, [onPhase, onStatus]);
+  }, [onPhase, onStatus, syncDebug]);
 
   const clearLoop = useCallback(() => {
     if (intervalRef.current) window.clearInterval(intervalRef.current);
     intervalRef.current = null;
-  }, []);
+    syncDebug({ loopActive: false });
+  }, [syncDebug]);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -104,7 +126,7 @@ export function useFlowlyVoiceRuntime({
     if (!text) return;
 
     setTranscript(text);
-    setDebug((current) => ({ ...current, lastTranscription: text, lastError: "" }));
+    syncDebug({ lastTranscription: text, lastError: "" });
 
     const wake = hasWakeWord(text, wakeWord);
     if (wake) {
@@ -129,7 +151,7 @@ export function useFlowlyVoiceRuntime({
     lastCommandRef.current = commandKey;
     lastCommandAtRef.current = now;
     processingRef.current = true;
-    setDebug((current) => ({ ...current, lastEvent: `Enviando al Brain: ${command}` }));
+    syncDebug({ lastEvent: `Enviando al Brain: ${command}` });
     setIsAwake(true);
     setTranscript(command);
     setPhase("thinking", "Pensando con Flowly Brain");
@@ -151,6 +173,7 @@ export function useFlowlyVoiceRuntime({
     if (!stream) return;
 
     recordingRef.current = true;
+    syncDebug({ isRecording: true });
     setPhase("listening", "Escuchando audio...");
 
     try {
@@ -158,19 +181,27 @@ export function useFlowlyVoiceRuntime({
       if (!activeRef.current || manualStopRef.current || speakingRef.current) return;
 
       if (!blob || blob.size < 1024) {
-        setDebug((current) => ({ ...current, ticks: current.ticks + 1, lastAudioKb: blob ? Math.round(blob.size / 1024) : 0, lastEvent: "Audio demasiado pequeño" }));
+        syncDebug({
+          ticks: debugRef.current.ticks + 1,
+          lastAudioKb: blob ? Math.round(blob.size / 1024) : 0,
+          lastEvent: "Audio demasiado pequeño",
+        });
         setPhase("passive", "Voz activa. No he recibido suficiente audio");
         return;
       }
 
       const kb = Math.round(blob.size / 1024);
-      setDebug((current) => ({ ...current, ticks: current.ticks + 1, lastAudioKb: kb, lastEvent: `Audio capturado: ${kb} KB` }));
+      syncDebug({
+        ticks: debugRef.current.ticks + 1,
+        lastAudioKb: kb,
+        lastEvent: `Audio capturado: ${kb} KB`,
+      });
       setPhase("listening", `Procesando ${kb} KB de audio`);
       const result = await requestTranscription(blob);
 
       if (result.error && !result.text) {
         setTranscript(result.error);
-        setDebug((current) => ({ ...current, lastError: result.error || "Error de transcripción" }));
+        syncDebug({ lastError: result.error || "Error de transcripción" });
         setPhase("passive", `No pude transcribir: ${result.error}`);
         return;
       }
@@ -179,11 +210,13 @@ export function useFlowlyVoiceRuntime({
       else setPhase("passive", "Voz activa. No he oído una frase clara");
     } finally {
       recordingRef.current = false;
+      syncDebug({ isRecording: false });
     }
-  }, [ensureStream, processTranscribedText, setPhase]);
+  }, [ensureStream, processTranscribedText, setPhase, syncDebug]);
 
   const startLoop = useCallback(() => {
     clearLoop();
+    syncDebug({ loopActive: true });
     void captureAndTranscribe();
     intervalRef.current = window.setInterval(() => {
       void captureAndTranscribe();
@@ -274,5 +307,5 @@ export function useFlowlyVoiceRuntime({
     };
   }, [clearLoop, setPhase, stopStream]);
 
-  return { supported, active, isAwake, state, transcript, debug, activate, deactivate, speak };
+  return { supported, active, isAwake, state, transcript, debug, refreshDebug, activate, deactivate, speak };
 }
