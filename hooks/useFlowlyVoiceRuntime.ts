@@ -26,6 +26,12 @@ type RecorderResult = {
   blob: Blob;
   durationMs: number;
   hadVoice: boolean;
+  size: number;
+};
+
+type TranscriptionResult = {
+  text: string;
+  error?: string;
 };
 
 declare global {
@@ -53,7 +59,7 @@ function escapeRegExp(value: string) {
 
 function wakeAliases(wakeWord: string) {
   const base = escapeRegExp(normalizeForWake(wakeWord || "flow"));
-  return [base, "flowly", "flou", "flo", "flor", "flow li", "floui"].filter(Boolean);
+  return [base, "flowly", "flou", "flo", "flor", "flow li", "floui", "fluy", "floe"].filter(Boolean);
 }
 
 function wakeRegex(wakeWord: string) {
@@ -71,7 +77,7 @@ function removeWakeWord(value: string, wakeWord: string) {
 function commandLooksComplete(value: string) {
   const clean = cleanText(value);
   const words = clean.split(/\s+/).filter(Boolean);
-  return clean.length >= 8 || words.length >= 2;
+  return clean.length >= 6 || words.length >= 2;
 }
 
 function bestMimeType() {
@@ -84,21 +90,30 @@ function bestMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
 }
 
-async function transcribeAudio(blob: Blob) {
-  if (!blob.size) return "";
+async function requestTranscription(blob: Blob): Promise<TranscriptionResult> {
+  if (!blob.size || blob.size < 512) return { text: "", error: "Audio demasiado corto" };
 
   const form = new FormData();
   const extension = blob.type.includes("mp4") ? "m4a" : "webm";
   form.append("audio", blob, `flowly-voice.${extension}`);
 
-  const response = await fetch("/api/companion/transcribe", {
-    method: "POST",
-    body: form,
-  });
+  try {
+    const response = await fetch("/api/companion/transcribe", {
+      method: "POST",
+      body: form,
+    });
 
-  if (!response.ok) return "";
-  const data = await response.json().catch(() => null);
-  return cleanText(typeof data?.text === "string" ? data.text : "");
+    const data = await response.json().catch(() => null);
+    const text = cleanText(typeof data?.text === "string" ? data.text : "");
+    const error = typeof data?.error === "string" ? data.error : undefined;
+    const detail = typeof data?.detail === "string" ? data.detail : undefined;
+
+    if (!response.ok) return { text, error: error || `Error HTTP ${response.status}` };
+    if (error && !text) return { text: "", error: detail ? `${error}: ${detail}` : error };
+    return { text };
+  } catch (error) {
+    return { text: "", error: error instanceof Error ? error.message : "Error transcribiendo audio" };
+  }
 }
 
 export function useFlowlyVoiceRuntime({
@@ -115,12 +130,14 @@ export function useFlowlyVoiceRuntime({
   const speakingRef = useRef(false);
   const processingRef = useRef(false);
   const manualStopRef = useRef(false);
-  const loopRef = useRef<number | null>(null);
+  const loopTimerRef = useRef<number | null>(null);
+  const loopRunningRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lastCommandRef = useRef("");
   const lastCommandAtRef = useRef(0);
+  const passiveLoopRef = useRef<() => Promise<void>>(async () => undefined);
 
   const [supported, setSupported] = useState(true);
   const [active, setActive] = useState(false);
@@ -144,8 +161,8 @@ export function useFlowlyVoiceRuntime({
   }, []);
 
   const clearLoopTimer = useCallback(() => {
-    if (loopRef.current) window.clearTimeout(loopRef.current);
-    loopRef.current = null;
+    if (loopTimerRef.current) window.clearTimeout(loopTimerRef.current);
+    loopTimerRef.current = null;
   }, []);
 
   const getAudioLevel = useCallback(() => {
@@ -170,7 +187,12 @@ export function useFlowlyVoiceRuntime({
   }, []);
 
   const ensureAudio = useCallback(async () => {
-    if (streamRef.current && streamRef.current.active) return streamRef.current;
+    if (streamRef.current && streamRef.current.active) {
+      if (audioContextRef.current?.state === "suspended") {
+        await audioContextRef.current.resume().catch(() => undefined);
+      }
+      return streamRef.current;
+    }
 
     const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined" || !AudioContextCtor) {
@@ -188,10 +210,11 @@ export function useFlowlyVoiceRuntime({
     });
 
     const audioContext = new AudioContextCtor();
+    await audioContext.resume().catch(() => undefined);
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.82;
+    analyser.smoothingTimeConstant = 0.72;
     source.connect(analyser);
 
     streamRef.current = stream;
@@ -202,10 +225,10 @@ export function useFlowlyVoiceRuntime({
 
   const recordSegment = useCallback(async ({
     maxMs,
-    minMs = 800,
+    minMs = 900,
     stopOnSilence = false,
-    silenceMs = 1300,
-    voiceThreshold = 0.018,
+    silenceMs = 1200,
+    voiceThreshold = 0.006,
   }: {
     maxMs: number;
     minMs?: number;
@@ -235,7 +258,7 @@ export function useFlowlyVoiceRuntime({
         if (monitor) window.clearInterval(monitor);
         if (hardStop) window.clearTimeout(hardStop);
         const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
-        resolve({ blob, durationMs: Date.now() - startedAt, hadVoice });
+        resolve({ blob, durationMs: Date.now() - startedAt, hadVoice, size: blob.size });
       };
 
       recorder.ondataavailable = (event) => {
@@ -244,7 +267,12 @@ export function useFlowlyVoiceRuntime({
       recorder.onerror = () => finish();
       recorder.onstop = () => finish();
 
-      recorder.start();
+      try {
+        recorder.start(250);
+      } catch {
+        finish();
+        return;
+      }
 
       monitor = window.setInterval(() => {
         const elapsed = Date.now() - startedAt;
@@ -258,7 +286,7 @@ export function useFlowlyVoiceRuntime({
         if (stopOnSilence && elapsed >= minMs && voiceStarted && Date.now() - lastVoiceAt >= silenceMs) {
           try { recorder.stop(); } catch { finish(); }
         }
-      }, 100);
+      }, 90);
 
       hardStop = window.setTimeout(() => {
         try { recorder.stop(); } catch { finish(); }
@@ -266,16 +294,26 @@ export function useFlowlyVoiceRuntime({
     });
   }, [ensureAudio, getAudioLevel]);
 
+  const schedulePassiveLoop = useCallback((delay = 450) => {
+    clearLoopTimer();
+    if (!activeRef.current || manualStopRef.current || !enabledRef.current) return;
+    loopTimerRef.current = window.setTimeout(() => {
+      void passiveLoopRef.current();
+    }, delay);
+  }, [clearLoopTimer]);
+
   const goPassive = useCallback(() => {
     setAwake(false);
-    setTranscript("");
-    if (activeRef.current) setPhase("passive", "Voz activa. Di Flow para llamarme");
-  }, [setAwake, setPhase]);
+    if (activeRef.current && !manualStopRef.current) {
+      setPhase("passive", "Voz activa. Di Flow para llamarme");
+      schedulePassiveLoop(550);
+    }
+  }, [schedulePassiveLoop, setAwake, setPhase]);
 
   const processCommand = useCallback(async (raw: string) => {
     const command = cleanText(removeWakeWord(raw, wakeWord));
     if (!commandLooksComplete(command)) {
-      setTranscript(command);
+      setTranscript(command || raw);
       setPhase("passive", "No he entendido la frase completa. Di Flow y repítelo.");
       goPassive();
       return;
@@ -287,6 +325,7 @@ export function useFlowlyVoiceRuntime({
     lastCommandAtRef.current = now;
 
     processingRef.current = true;
+    clearLoopTimer();
     setTranscript(command);
     setPhase("thinking", "Pensando con Flowly Brain");
 
@@ -296,17 +335,22 @@ export function useFlowlyVoiceRuntime({
       processingRef.current = false;
       setAwake(false);
     }
-  }, [goPassive, onCommand, setAwake, setPhase, wakeWord]);
+  }, [clearLoopTimer, goPassive, onCommand, setAwake, setPhase, wakeWord]);
 
   const captureCommandAfterWake = useCallback(async () => {
     if (!activeRef.current || speakingRef.current || processingRef.current) return;
-    setPhase("listening", "Te escucho");
+    clearLoopTimer();
+    setPhase("listening", "Te escucho. Habla normal y espera un segundo al terminar.");
     setTranscript("");
 
-    const segment = await recordSegment({ maxMs: 9000, minMs: 1200, stopOnSilence: true, silenceMs: 1600 });
+    const segment = await recordSegment({ maxMs: 9500, minMs: 1400, stopOnSilence: true, silenceMs: 1450, voiceThreshold: 0.005 });
     if (!segment || !activeRef.current) return;
 
-    const text = await transcribeAudio(segment.blob);
+    setPhase("listening", `Procesando tu frase (${Math.round(segment.size / 1024)} KB)`);
+    const result = await requestTranscription(segment.blob);
+    if (result.error) setPhase("listening", `Transcripción: ${result.error}`);
+
+    const text = result.text;
     const command = removeWakeWord(text, wakeWord);
     setTranscript(command || text);
 
@@ -315,41 +359,56 @@ export function useFlowlyVoiceRuntime({
     } else {
       goPassive();
     }
-  }, [goPassive, processCommand, recordSegment, setPhase, wakeWord]);
+  }, [clearLoopTimer, goPassive, processCommand, recordSegment, setPhase, wakeWord]);
 
-  const passiveLoop = useCallback(async () => {
+  passiveLoopRef.current = useCallback(async () => {
     if (!activeRef.current || manualStopRef.current || !enabledRef.current) return;
+    if (loopRunningRef.current) return;
+
     if (speakingRef.current || processingRef.current) {
-      loopRef.current = window.setTimeout(passiveLoop, 700);
+      schedulePassiveLoop(700);
       return;
     }
 
-    setPhase("passive", "Voz activa. Di Flow para llamarme");
-    const segment = await recordSegment({ maxMs: 2600, minMs: 1200, stopOnSilence: false });
-    if (!segment || !activeRef.current || manualStopRef.current) return;
+    loopRunningRef.current = true;
+    try {
+      setPhase("passive", "Voz activa. Di Flow para llamarme");
+      const segment = await recordSegment({ maxMs: 4200, minMs: 1800, stopOnSilence: false, voiceThreshold: 0.005 });
+      if (!segment || !activeRef.current || manualStopRef.current) return;
 
-    if (segment.hadVoice) {
-      const text = await transcribeAudio(segment.blob);
-      if (text) setTranscript(text);
+      // Importante: transcribimos aunque el medidor no haya detectado voz.
+      // Algunos micros/WebAudio dan niveles muy bajos aunque el audio sí llegue bien al blob.
+      if (segment.size > 1024) {
+        setPhase("passive", `Escuchando audio (${Math.round(segment.size / 1024)} KB)`);
+        const result = await requestTranscription(segment.blob);
+        if (result.error) {
+          setTranscript(result.error);
+          setPhase("passive", `Voz activa, pero no pude transcribir: ${result.error}`);
+        }
 
-      if (containsWakeWord(text, wakeWord)) {
-        const afterWake = removeWakeWord(text, wakeWord);
-        setAwake(true);
-        onWake?.();
+        const text = result.text;
+        if (text) setTranscript(text);
 
-        if (commandLooksComplete(afterWake)) {
-          await processCommand(afterWake);
-        } else {
-          setPhase("waking", "Te escucho. Dime qué necesitas");
-          await captureCommandAfterWake();
+        if (text && containsWakeWord(text, wakeWord)) {
+          const afterWake = removeWakeWord(text, wakeWord);
+          setAwake(true);
+          onWake?.();
+
+          if (commandLooksComplete(afterWake)) {
+            await processCommand(afterWake);
+          } else {
+            setPhase("waking", "Te escucho. Dime qué necesitas.");
+            await captureCommandAfterWake();
+          }
         }
       }
+    } finally {
+      loopRunningRef.current = false;
+      if (activeRef.current && !manualStopRef.current && !speakingRef.current && !processingRef.current) {
+        schedulePassiveLoop(350);
+      }
     }
-
-    if (activeRef.current && !manualStopRef.current) {
-      loopRef.current = window.setTimeout(passiveLoop, 250);
-    }
-  }, [captureCommandAfterWake, onWake, processCommand, recordSegment, setAwake, setPhase, wakeWord]);
+  }, [captureCommandAfterWake, onWake, processCommand, recordSegment, schedulePassiveLoop, setAwake, setPhase, wakeWord]);
 
   const activate = useCallback(async () => {
     if (activeRef.current) return true;
@@ -365,8 +424,7 @@ export function useFlowlyVoiceRuntime({
       setAwake(false);
       setTranscript("");
       setPhase("passive", "Voz activa. Di Flow para llamarme");
-      clearLoopTimer();
-      loopRef.current = window.setTimeout(passiveLoop, 350);
+      schedulePassiveLoop(400);
       return true;
     } catch (error) {
       console.error("Flowly voice runtime error", error);
@@ -376,13 +434,14 @@ export function useFlowlyVoiceRuntime({
       setPhase("error", "No he podido activar el micrófono. Revisa permisos del navegador.");
       return false;
     }
-  }, [clearLoopTimer, ensureAudio, passiveLoop, setAwake, setPhase]);
+  }, [ensureAudio, schedulePassiveLoop, setAwake, setPhase]);
 
   const deactivate = useCallback(() => {
     manualStopRef.current = true;
     activeRef.current = false;
     speakingRef.current = false;
     processingRef.current = false;
+    loopRunningRef.current = false;
     clearLoopTimer();
     stopStream();
     setActive(false);
@@ -394,7 +453,6 @@ export function useFlowlyVoiceRuntime({
   const speak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) {
       goPassive();
-      if (activeRef.current && !manualStopRef.current) loopRef.current = window.setTimeout(passiveLoop, 700);
       return;
     }
 
@@ -414,16 +472,14 @@ export function useFlowlyVoiceRuntime({
     utterance.onend = () => {
       speakingRef.current = false;
       goPassive();
-      if (activeRef.current && !manualStopRef.current) loopRef.current = window.setTimeout(passiveLoop, 900);
     };
     utterance.onerror = () => {
       speakingRef.current = false;
       goPassive();
-      if (activeRef.current && !manualStopRef.current) loopRef.current = window.setTimeout(passiveLoop, 900);
     };
 
     window.speechSynthesis.speak(utterance);
-  }, [clearLoopTimer, goPassive, passiveLoop, setPhase]);
+  }, [clearLoopTimer, goPassive, setPhase]);
 
   useEffect(() => {
     const ok = typeof window !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined";
@@ -431,6 +487,8 @@ export function useFlowlyVoiceRuntime({
     if (!ok) setPhase("unsupported", "Tu navegador no soporta voz avanzada");
     return () => {
       manualStopRef.current = true;
+      activeRef.current = false;
+      loopRunningRef.current = false;
       clearLoopTimer();
       stopStream();
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
