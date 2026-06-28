@@ -54,7 +54,12 @@ export default function VoiceTestPage() {
 
   const supported = useMemo(() => {
     if (typeof window === "undefined") return true;
-    return Boolean(navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined");
+
+    const hasMediaRecorder = "MediaRecorder" in window;
+    const hasMediaDevices = "mediaDevices" in navigator && Boolean(navigator.mediaDevices);
+    const hasGetUserMedia = hasMediaDevices && "getUserMedia" in navigator.mediaDevices;
+
+    return hasMediaRecorder && hasGetUserMedia;
   }, []);
 
   const reset = () => {
