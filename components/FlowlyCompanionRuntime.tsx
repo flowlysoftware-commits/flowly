@@ -29,8 +29,6 @@ export default function FlowlyCompanionRuntime() {
   const [entranceState, setEntranceState] = useState<"intro" | "settled">("intro");
   const [voiceIntroResolved, setVoiceIntroResolved] = useState(false);
   const [travel, setTravel] = useState({ x: 0, y: 0, moving: false, label: "dock" });
-  const [lastBrainRequest, setLastBrainRequest] = useState("");
-  const [lastBrainResponse, setLastBrainResponse] = useState("");
   const lastTravelTargetRef = useRef("dock");
   const hasAutoVoiceStartedRef = useRef(false);
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
@@ -49,8 +47,6 @@ export default function FlowlyCompanionRuntime() {
   const askCompanion = useCallback(async (clean: string, source: "text" | "voice" = "text") => {
     if (!clean || thinking) return;
     setThinking(true);
-    setLastBrainRequest(clean);
-    setLastBrainResponse("");
     setLifeMode(source === "voice" ? "attention" : "talking");
     setLifeLabel(source === "voice" ? "Escuchando tu voz" : "Pensando con Flowly Brain");
 
@@ -75,13 +71,11 @@ export default function FlowlyCompanionRuntime() {
       const answer = typeof data?.answer === "string"
         ? data.answer
         : "No he podido pensar bien la respuesta. Inténtalo otra vez en unos segundos.";
-      setLastBrainResponse(answer);
       setConversation((current) => [...current, { role: "assistant", content: answer }]);
       voiceSpeakRef.current(speakCleanly(answer));
     } catch (error) {
       console.error("Companion chat error", error);
       const fallback = "Ahora mismo no puedo conectar con mi motor de IA. Puedo seguir ayudándote si lo intentas de nuevo.";
-      setLastBrainResponse(fallback);
       setConversation((current) => [...current, { role: "assistant", content: fallback }]);
       voiceSpeakRef.current(fallback);
     } finally {
@@ -408,21 +402,6 @@ export default function FlowlyCompanionRuntime() {
               <small>Estado: {voice.state} · Grabaciones: {voice.debug.ticks} · Audio: {voice.debug.lastAudioKb} KB</small>
               {voice.debug.lastTranscription && <small>Última transcripción: {voice.debug.lastTranscription}</small>}
               {voice.debug.lastError && <small>Error voz: {voice.debug.lastError}</small>}
-            </div>
-
-            <div className="flowly-companion-voice-card" data-active={voice.active} style={{ display: "grid", gap: "0.45rem", fontSize: "0.76rem" }}>
-              <span>Debug de voz</span>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.35rem" }}>
-                <div><strong>Enabled:</strong> {voice.active ? "true" : "false"}</div>
-                <div><strong>Phase:</strong> {voice.state}</div>
-                <div><strong>Recording:</strong> {voice.debug.isRecording ? "true" : "false"}</div>
-                <div><strong>Loop active:</strong> {voice.debug.loopActive ? "true" : "false"}</div>
-                <div><strong>Last audio:</strong> {voice.debug.lastAudioKb} KB</div>
-                <div><strong>Last transcript:</strong> {voice.debug.lastTranscription || "—"}</div>
-                <div><strong>Last error:</strong> {voice.debug.lastError || "—"}</div>
-                <div><strong>Last brain req:</strong> {lastBrainRequest || "—"}</div>
-                <div><strong>Last brain res:</strong> {lastBrainResponse || "—"}</div>
-              </div>
             </div>
             <form className="flowly-companion-chat-input" onSubmit={sendMessage}>
               <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isArchitect ? "Describe el cambio técnico..." : "Pídeme ayuda sobre tu negocio..."} disabled={thinking} />

@@ -46,8 +46,6 @@ export function useFlowlyVoiceRuntime({
     lastTranscription: "",
     lastError: "",
     lastEvent: "Inicializando voz",
-    isRecording: false,
-    loopActive: false,
   });
   const lastCommandRef = useRef("");
   const lastCommandAtRef = useRef(0);
@@ -75,7 +73,6 @@ export function useFlowlyVoiceRuntime({
   const clearLoop = useCallback(() => {
     if (intervalRef.current) window.clearInterval(intervalRef.current);
     intervalRef.current = null;
-    setDebug((current) => ({ ...current, loopActive: false }));
   }, []);
 
   const stopStream = useCallback(() => {
@@ -154,7 +151,6 @@ export function useFlowlyVoiceRuntime({
     if (!stream) return;
 
     recordingRef.current = true;
-    setDebug((current) => ({ ...current, isRecording: true }));
     setPhase("listening", "Escuchando audio...");
 
     try {
@@ -183,13 +179,11 @@ export function useFlowlyVoiceRuntime({
       else setPhase("passive", "Voz activa. No he oído una frase clara");
     } finally {
       recordingRef.current = false;
-      setDebug((current) => ({ ...current, isRecording: false }));
     }
   }, [ensureStream, processTranscribedText, setPhase]);
 
   const startLoop = useCallback(() => {
     clearLoop();
-    setDebug((current) => ({ ...current, loopActive: true }));
     void captureAndTranscribe();
     intervalRef.current = window.setInterval(() => {
       void captureAndTranscribe();
