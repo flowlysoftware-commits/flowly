@@ -23,12 +23,13 @@ export default function FlowlyCompanionRuntime() {
   const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
   const [lifeMode, setLifeMode] = useState<string | null>(null);
+  const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
   const [avatarUrl, setAvatarUrl] = useState("/avatars/flowly.glb");
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
   const xpPercent = Math.round((companionStats.xp / companionStats.nextLevelXp) * 100);
-  const avatarMood = thinking ? "talking" : isArchitect ? "thinking" : lifeMode || context.mode;
+  const avatarMood = thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
   const [conversation, setConversation] = useState<{ role: "assistant" | "user"; content: string }[]>([
     { role: "assistant", content: isArchitect ? "Hola. Soy el Companion Arquitecto. Puedo ayudarte a analizar Flowly OS sin mezclarlo con el panel de clientes." : "Hola. Soy el Companion del panel. Puedo ayudarte con clientes, tareas, objetivos, facturas, WhatsApp y recomendaciones sin mostrarte herramientas técnicas." },
   ]);
@@ -36,19 +37,39 @@ export default function FlowlyCompanionRuntime() {
 
 
   useEffect(() => {
-    if (thinking || open) {
-      setLifeMode(null);
+    if (thinking) {
+      setLifeMode("talking");
+      setLifeLabel("Respondiendo con el Brain");
       return;
     }
-    const modes = ["idle", "wave", "walking", "thinking", context.mode];
+
+    const behaviours = isArchitect
+      ? [
+          { mode: "thinking", label: "Conectado a Brain" },
+          { mode: "walking", label: "Explorando el OS" },
+          { mode: "point", label: "Listo para ejecutar" },
+          { mode: "wave", label: "Esperando instrucciones" },
+        ]
+      : [
+          { mode: "idle", label: context.mission },
+          { mode: "walking", label: "Buscando oportunidades" },
+          { mode: "wave", label: "Saludando al equipo" },
+          { mode: "thinking", label: "Pensando objetivos" },
+          { mode: context.mode, label: context.message },
+        ];
+
     let index = 0;
-    const interval = window.setInterval(() => {
-      index = (index + 1) % modes.length;
-      setLifeMode(modes[index] || "idle");
-      window.setTimeout(() => setLifeMode(null), 4200);
-    }, 15000);
+    const applyBehaviour = () => {
+      const behaviour = behaviours[index % behaviours.length];
+      setLifeMode(behaviour.mode);
+      setLifeLabel(behaviour.label);
+      index += 1;
+    };
+
+    applyBehaviour();
+    const interval = window.setInterval(applyBehaviour, open ? 9000 : 5200);
     return () => window.clearInterval(interval);
-  }, [context.mode, open, thinking]);
+  }, [context.message, context.mission, context.mode, isArchitect, open, thinking]);
 
   useEffect(() => {
     let mounted = true;
@@ -107,7 +128,13 @@ export default function FlowlyCompanionRuntime() {
       )}
 
       <div className="flowly-companion-avatar-shell">
-        <EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={avatarMood} memory={context.mission} modelUrl={avatarUrl} onClick={() => setOpen((value) => !value)} />
+        <EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={avatarMood} memory={lifeLabel} modelUrl={avatarUrl} onClick={() => setOpen((value) => !value)} />
+        <div className="flowly-companion-life-hud" aria-hidden="true">
+          <span className="flowly-life-dot" />
+          <strong>{isArchitect ? "OS vivo" : "Misión activa"}</strong>
+          <small>{lifeLabel}</small>
+          <i><span style={{ width: `${xpPercent}%` }} /></i>
+        </div>
         <button type="button" className="flowly-companion-avatar-cta" onClick={() => setOpen((value) => !value)}>
           <MessageCircle size={15} />
           Hablar

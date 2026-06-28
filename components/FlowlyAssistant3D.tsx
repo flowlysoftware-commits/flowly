@@ -11,7 +11,7 @@ type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | 
 type FlowlyAssistant3DProps = {
   modelUrl?: string;
   mode?: AssistantMode;
-  facing?: "left" | "right";
+  facing?: "left" | "right" | "front";
   onClick?: () => void;
 };
 
@@ -72,7 +72,7 @@ function getRig(scene: THREE.Object3D): RigBones {
     rightUpLeg: getObject(scene, "mixamorig:RightUpLeg", "mixamorigRightUpLeg", "RightUpLeg", "R_Thigh"),
     rightLeg: getObject(scene, "mixamorig:RightLeg", "mixamorigRightLeg", "RightLeg", "R_Calf"),
     rightFoot: getObject(scene, "mixamorig:RightFoot", "mixamorigRightFoot", "RightFoot", "R_Foot"),
-    mouth: getObject(scene, "Fitness_Grandma_MouthAnimGeo"),
+    mouth: getObject(scene, "Fitness_Grandma_MouthAnimGeo", "Mouth", "mouth"),
   };
 }
 
@@ -143,10 +143,18 @@ function aimBoneToWorldDirection(
   bone.quaternion.copy(base).slerp(finalQuat, THREE.MathUtils.clamp(influence, 0, 1));
 }
 
+function getFacingYaw(facing: Required<FlowlyAssistant3DProps>["facing"]) {
+  // El GLB optimizado llega mirando de lado. Este offset lo pone de frente a cámara.
+  const modelForwardCorrection = -Math.PI / 2;
+  if (facing === "right") return modelForwardCorrection - 0.22;
+  if (facing === "left") return modelForwardCorrection + 0.22;
+  return modelForwardCorrection;
+}
+
 function Model({
   modelUrl = "/avatars/flowly.glb",
   mode = "idle",
-  facing = "left",
+  facing = "front",
 }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing">>) {
   const group = useRef<THREE.Group>(null);
   const gltf = useGLTF(modelUrl) as unknown as { scene: THREE.Group; animations?: THREE.AnimationClip[] };
@@ -160,7 +168,7 @@ function Model({
 
   useEffect(() => {
     if (!hasNativeAnimations) return;
-    const clipIndex = activeMode === "walk" ? 1 : activeMode === "wave" ? 2 : activeMode === "talk" ? 3 : activeMode === "point" ? 4 : activeMode === "idle" ? 0 : 0;
+    const clipIndex = activeMode === "walk" ? 1 : activeMode === "wave" ? 2 : activeMode === "talk" ? 3 : activeMode === "point" ? 4 : 0;
     const clip = clips[clipIndex] || clips[0];
     if (!clip) return;
     mixer.stopAllAction();
@@ -184,7 +192,7 @@ function Model({
     });
   }, [scene]);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!group.current) return;
 
     const t = state.clock.elapsedTime;
@@ -197,6 +205,7 @@ function Model({
     const isSpeaking = activeMode === "talk";
     const isWaving = activeMode === "wave";
     const isPointing = activeMode === "point";
+    const isThinking = mode === "thinking";
 
     const poseArmsSafely = () => {
       scene.updateMatrixWorld(true);
@@ -205,18 +214,18 @@ function Model({
       const forward = targetVec3.set(0, 0, 1);
       const leftSide = getRestSideDirection(rig.leftArm, rig.leftForeArm);
       const rightSide = getRestSideDirection(rig.rightArm, rig.rightForeArm);
-      const leftUpperTarget = leftSide.clone().multiplyScalar(0.2).add(down.clone().multiplyScalar(0.98)).normalize();
-      const rightUpperTarget = rightSide.clone().multiplyScalar(0.2).add(down.clone().multiplyScalar(0.98)).normalize();
-      const leftForeTarget = leftSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
-      const rightForeTarget = rightSide.clone().multiplyScalar(0.08).add(down.clone().multiplyScalar(1)).normalize();
+      const leftUpperTarget = leftSide.clone().multiplyScalar(0.16).add(down.clone().multiplyScalar(0.99)).normalize();
+      const rightUpperTarget = rightSide.clone().multiplyScalar(0.16).add(down.clone().multiplyScalar(0.99)).normalize();
+      const leftForeTarget = leftSide.clone().multiplyScalar(0.05).add(down.clone().multiplyScalar(1)).normalize();
+      const rightForeTarget = rightSide.clone().multiplyScalar(0.05).add(down.clone().multiplyScalar(1)).normalize();
 
       if (isWalking) {
-        leftUpperTarget.add(forward.clone().multiplyScalar(walkOpposite * 0.22)).normalize();
-        rightUpperTarget.add(forward.clone().multiplyScalar(walkCycle * 0.22)).normalize();
+        leftUpperTarget.add(forward.clone().multiplyScalar(walkOpposite * 0.28)).normalize();
+        rightUpperTarget.add(forward.clone().multiplyScalar(walkCycle * 0.28)).normalize();
       }
       if (isSpeaking) {
-        leftUpperTarget.add(forward.clone().multiplyScalar(0.11 + Math.sin(t * 3.1) * 0.06)).normalize();
-        rightUpperTarget.add(forward.clone().multiplyScalar(0.11 + Math.sin(t * 3.4 + 0.6) * 0.06)).normalize();
+        leftUpperTarget.add(forward.clone().multiplyScalar(0.16 + Math.sin(t * 3.1) * 0.08)).normalize();
+        rightUpperTarget.add(forward.clone().multiplyScalar(0.16 + Math.sin(t * 3.4 + 0.6) * 0.08)).normalize();
       }
       if (isWaving) {
         rightUpperTarget.copy(rightSide).multiplyScalar(0.22).add(up.clone().multiplyScalar(0.96)).add(forward.clone().multiplyScalar(0.08)).normalize();
@@ -226,43 +235,37 @@ function Model({
         rightUpperTarget.copy(rightSide).multiplyScalar(0.72).add(forward.clone().multiplyScalar(0.46)).add(down.clone().multiplyScalar(0.18)).normalize();
         rightForeTarget.copy(rightSide).multiplyScalar(0.95).add(forward.clone().multiplyScalar(0.34)).normalize();
       }
+      if (isThinking) {
+        rightForeTarget.add(up.clone().multiplyScalar(0.12)).normalize();
+      }
+
       aimBoneToWorldDirection(basePose, rig.leftArm, rig.leftForeArm, leftUpperTarget, 0.95);
       aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm, rightUpperTarget, 0.95);
       scene.updateMatrixWorld(true);
-      aimBoneToWorldDirection(basePose, rig.leftForeArm, rig.leftHand, leftForeTarget, 0.88);
-      aimBoneToWorldDirection(basePose, rig.rightForeArm, rig.rightHand, rightForeTarget, 0.88);
+      aimBoneToWorldDirection(basePose, rig.leftForeArm, rig.leftHand, leftForeTarget, 0.9);
+      aimBoneToWorldDirection(basePose, rig.rightForeArm, rig.rightHand, rightForeTarget, 0.9);
     };
 
     if (hasNativeAnimations) {
-      mixer.update(state.clock.getDelta());
-      const bodyBob = isWalking ? Math.abs(walkCycle) * 0.055 : breathe * 0.018;
-      applyOffset(basePose, rig.spine, breathe * 0.018, 0, slow * 0.01);
-      applyOffset(basePose, rig.neck, isSpeaking ? Math.sin(t * 5.5) * 0.03 : slow * 0.015, slow * 0.016, 0);
-      applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 8.0) * 0.03 : breathe * 0.012, slow * 0.03, 0);
-      poseArmsSafely();
-      group.current.position.set(0, -1.05 + bodyBob, 0);
-      group.current.rotation.set(0, facing === "right" ? 0.22 : -0.22, slow * 0.008);
-      group.current.scale.setScalar(2.15);
-      return;
+      mixer.update(delta);
+    } else {
+      // Reset every frame to the GLB rest pose, then layer a safe procedural pose.
+      Object.values(rig).forEach((object) => {
+        const base = object ? basePose.get(object.uuid) : undefined;
+        if (object && base) object.quaternion.copy(base);
+      });
     }
-
-    // Reset every frame to the GLB rest pose, then layer a safe procedural pose.
-    // This avoids the broken FBX retargeting that made the character fall or keep its arms in T-pose.
-    Object.values(rig).forEach((object) => {
-      const base = object ? basePose.get(object.uuid) : undefined;
-      if (object && base) object.quaternion.copy(base);
-    });
 
     poseArmsSafely();
 
     applyOffset(basePose, rig.leftHand, 0.02, 0, isWalking ? walkOpposite * 0.04 : 0);
     applyOffset(basePose, rig.rightHand, 0.02, 0, isWaving ? Math.sin(t * 9.5) * 0.18 : isWalking ? walkCycle * 0.04 : 0);
 
-    applyOffset(basePose, rig.spine, breathe * 0.018 + (isWalking ? Math.abs(walkCycle) * 0.025 : 0), 0, slow * 0.012);
-    applyOffset(basePose, rig.spine1, breathe * 0.014, 0, slow * 0.01);
-    applyOffset(basePose, rig.spine2, breathe * 0.012, 0, slow * 0.008);
-    applyOffset(basePose, rig.neck, isSpeaking ? Math.sin(t * 5.5) * 0.03 : slow * 0.015, slow * 0.018, 0);
-    applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 8.0) * 0.035 : breathe * 0.012, slow * 0.025, 0);
+    applyOffset(basePose, rig.spine, breathe * 0.022 + (isWalking ? Math.abs(walkCycle) * 0.03 : 0), 0, slow * 0.015);
+    applyOffset(basePose, rig.spine1, breathe * 0.016, 0, slow * 0.012);
+    applyOffset(basePose, rig.spine2, breathe * 0.014, 0, slow * 0.01);
+    applyOffset(basePose, rig.neck, isSpeaking ? Math.sin(t * 5.5) * 0.035 : slow * 0.018, slow * 0.022, 0);
+    applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 8.0) * 0.04 : isThinking ? -0.08 + breathe * 0.014 : breathe * 0.014, slow * 0.032, 0);
 
     if (isWalking) {
       applyOffset(basePose, rig.leftUpLeg, walkCycle * 0.38, 0, 0.035);
@@ -279,17 +282,20 @@ function Model({
     }
 
     if (rig.mouth) {
-      rig.mouth.scale.y = isSpeaking ? 1 + Math.abs(Math.sin(t * 12)) * 0.12 : 1;
+      rig.mouth.scale.y = isSpeaking ? 1 + Math.abs(Math.sin(t * 12)) * 0.14 : 1;
     }
 
-    const bodyBob = isWalking ? Math.abs(walkCycle) * 0.035 : breathe * 0.012;
-    group.current.position.set(0, -1.05 + bodyBob, 0);
-    group.current.rotation.set(0, facing === "right" ? 0.22 : -0.22, slow * 0.008);
-    group.current.scale.setScalar(2.15);
+    const bodyBob = isWalking ? Math.abs(walkCycle) * 0.045 : breathe * 0.018;
+    const roamX = isWalking ? Math.sin(t * 0.8) * 0.18 : slow * 0.025;
+    const baseYaw = getFacingYaw(facing);
+    const lookAround = isSpeaking ? Math.sin(t * 3.1) * 0.035 : Math.sin(t * 0.7) * 0.045;
+    group.current.position.set(roamX, -1.12 + bodyBob, 0);
+    group.current.rotation.set(0, baseYaw + lookAround, slow * 0.01);
+    group.current.scale.setScalar(2.42);
   });
 
   return (
-    <group ref={group} position={[0, -1.05, 0]} rotation={[0, facing === "right" ? 0.22 : -0.22, 0]} scale={2.15}>
+    <group ref={group} position={[0, -1.12, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={2.42}>
       <primitive object={scene} />
     </group>
   );
@@ -307,13 +313,13 @@ function ModelFallback() {
 export default function FlowlyAssistant3D({
   modelUrl = "/avatars/flowly.glb",
   mode = "idle",
-  facing = "left",
+  facing = "front",
   onClick,
 }: FlowlyAssistant3DProps) {
   return (
     <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
-      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 1.0, 4.2], fov: 28 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
-        <ambientLight intensity={1.35} />
+      <Canvas shadows dpr={[1, 1.8]} camera={{ position: [0, 0.95, 4.0], fov: 25 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
+        <ambientLight intensity={1.4} />
         <directionalLight position={[2.4, 4, 3]} intensity={2.15} castShadow />
         <pointLight position={[-2.2, 2.8, 2]} intensity={1.2} color="#8b5cf6" />
         <pointLight position={[2.4, 1.2, 2.6]} intensity={1.0} color="#22d3ee" />
@@ -321,9 +327,9 @@ export default function FlowlyAssistant3D({
           <Model modelUrl={modelUrl} mode={mode} facing={facing} />
           <Environment preset="city" />
         </Suspense>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.25, 0]} receiveShadow>
-          <circleGeometry args={[1.45, 64]} />
-          <meshStandardMaterial color="#020617" transparent opacity={0.18} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.28, 0]} receiveShadow>
+          <circleGeometry args={[1.65, 64]} />
+          <meshStandardMaterial color="#020617" transparent opacity={0.2} />
         </mesh>
       </Canvas>
     </button>

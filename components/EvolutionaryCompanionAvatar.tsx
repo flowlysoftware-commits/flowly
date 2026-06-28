@@ -68,7 +68,7 @@ export default function EvolutionaryCompanionAvatar({
       <FlowlyAssistant3D
         modelUrl={modelUrl}
         mode={mode}
-        facing="left"
+        facing="front"
         onClick={onClick}
       />
       {!compact && (

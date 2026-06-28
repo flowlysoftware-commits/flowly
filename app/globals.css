@@ -1887,3 +1887,155 @@ input[type="date"].input-dark { color-scheme: dark; }
   .flowly-companion-bubble { right: 8.4rem; bottom: 9.4rem; }
   .flowly-companion-panel { bottom: 13rem; }
 }
+
+/* Companion real integrado con Flowly OS: presencia, vida, misiones y sin duplicados */
+.flowly-companion-runtime {
+  right: clamp(1rem, 2vw, 2.2rem);
+  bottom: .75rem;
+  z-index: 90;
+}
+.flowly-companion-avatar-shell {
+  width: clamp(17rem, 18vw, 22rem) !important;
+  height: clamp(24rem, 30vw, 34rem) !important;
+  animation: flowly-companion-roam 12s ease-in-out infinite;
+}
+.flowly-companion-avatar-shell .evo-card-3d {
+  display: none !important;
+}
+.flowly-companion-avatar-shell .flowly-3d-stage {
+  width: 100% !important;
+  height: 100% !important;
+}
+.flowly-companion-avatar-shell .flowly-3d-stage canvas {
+  opacity: 1;
+  transform: translateY(-.35rem) scale(1.08);
+}
+.flowly-companion-avatar-cta {
+  bottom: .45rem;
+  z-index: 5;
+  background: linear-gradient(135deg, rgba(8, 47, 73, .92), rgba(49, 46, 129, .9));
+  border-color: rgba(103, 232, 249, .48);
+  box-shadow: 0 18px 60px rgba(34, 211, 238, .18), 0 0 0 1px rgba(255,255,255,.04) inset;
+}
+.flowly-companion-life-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 2.65rem;
+  translate: -50% 0;
+  width: min(13.5rem, 94%);
+  border: 1px solid rgba(103, 232, 249, .34);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(2, 6, 23, .84), rgba(15, 23, 42, .68));
+  padding: .58rem .7rem .62rem;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 55px rgba(0,0,0,.42), 0 0 36px rgba(34,211,238,.12);
+  pointer-events: none;
+  z-index: 4;
+}
+.flowly-companion-life-hud .flowly-life-dot {
+  display: inline-block;
+  width: .42rem;
+  height: .42rem;
+  margin-right: .42rem;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 18px #22c55e;
+  animation: flowly-life-dot 1.5s ease-in-out infinite;
+}
+.flowly-companion-life-hud strong {
+  color: #e0f2fe;
+  font-size: .68rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.flowly-companion-life-hud small {
+  display: block;
+  margin-top: .22rem;
+  color: rgba(255,255,255,.7);
+  font-size: .66rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flowly-companion-life-hud i {
+  display: block;
+  height: .24rem;
+  margin-top: .45rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  overflow: hidden;
+}
+.flowly-companion-life-hud i span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #a78bfa, #22c55e);
+}
+.flowly-companion-bubble {
+  right: clamp(13rem, 16vw, 18rem);
+  bottom: clamp(17rem, 22vw, 25rem);
+  width: min(22rem, calc(100vw - 19rem));
+}
+.evo-companion-3d {
+  animation: evo-3d-float 4.2s ease-in-out infinite, flowly-companion-subtle-look 9s ease-in-out infinite;
+}
+.evo-companion-3d .evo-3d-aura-one {
+  inset: 8% -4% 0;
+  opacity: .95;
+}
+.evo-companion-3d .evo-3d-aura-two {
+  inset: 16% 10% 10%;
+}
+.evo-companion-3d-walking .flowly-3d-stage {
+  animation: flowly-3d-walk-stage .7s ease-in-out infinite;
+}
+.evo-companion-3d-wave .flowly-3d-stage,
+.evo-companion-3d-happy .flowly-3d-stage,
+.evo-companion-3d-celebrating .flowly-3d-stage {
+  animation: flowly-3d-greet-stage 1.1s ease-in-out infinite;
+}
+.evo-companion-3d-talking .flowly-3d-stage {
+  animation: flowly-3d-talk .62s ease-in-out infinite;
+}
+.evo-companion-3d-thinking .flowly-3d-stage {
+  animation: flowly-3d-think-stage 2.2s ease-in-out infinite;
+}
+.flowly-companion-panel .flowly-companion-status-card .evo-companion-3d-compact,
+.flowly-companion-status-avatar .evo-companion-3d-compact {
+  width: 5.4rem;
+  height: 6.2rem;
+}
+@keyframes flowly-companion-roam {
+  0%, 100% { transform: translateX(0); }
+  22% { transform: translateX(-.32rem); }
+  48% { transform: translateX(.22rem); }
+  72% { transform: translateX(-.12rem); }
+}
+@keyframes flowly-companion-subtle-look {
+  0%, 100% { filter: drop-shadow(0 22px 48px rgba(34, 211, 238, .22)); }
+  50% { filter: drop-shadow(0 28px 60px rgba(168, 85, 247, .28)); }
+}
+@keyframes flowly-3d-walk-stage {
+  0%, 100% { transform: translateY(0) translateX(-1px); }
+  50% { transform: translateY(-5px) translateX(1px); }
+}
+@keyframes flowly-3d-greet-stage {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(1.5deg); }
+}
+@keyframes flowly-3d-think-stage {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(2px) rotate(-1.2deg); }
+}
+@keyframes flowly-life-dot {
+  0%, 100% { opacity: .55; transform: scale(.85); }
+  50% { opacity: 1; transform: scale(1.18); }
+}
+@media (max-width: 1100px) {
+  .flowly-companion-avatar-shell {
+    width: 11rem !important;
+    height: 16rem !important;
+  }
+  .flowly-companion-life-hud { display: none; }
+}
