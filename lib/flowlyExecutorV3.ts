@@ -305,8 +305,8 @@ function upgradeEvolutionaryAvatarContent(content: string) {
 
   if (!next.includes("evo-status-strip")) {
     next = next.replace(
-      "          <span className="evo-xp"><i style={{ width: `${safeXp}%` }} /></span>\n        </span>",
-      "          <span className="evo-xp"><i style={{ width: `${safeXp}%` }} /></span>\n          <span className="evo-status-strip">\n            <small>Memoria: {memory}</small>\n            <small>Energía: {safeEnergy}% · {autonomy ? \"Autónomo\" : \"Guiado\"}</small>\n          </span>\n        </span>"
+      `          <span className="evo-xp"><i style={{ width: \`\${safeXp}%\` }} /></span>\n        </span>`,
+      `          <span className="evo-xp"><i style={{ width: \`\${safeXp}%\` }} /></span>\n          <span className="evo-status-strip">\n            <small>Memoria: {memory}</small>\n            <small>Energía: {safeEnergy}% · {autonomy ? "Autónomo" : "Guiado"}</small>\n          </span>\n        </span>`
     );
   }
 
