@@ -2304,3 +2304,85 @@ input[type="date"].input-dark { color-scheme: dark; }
 @media (max-width: 820px) {
   .flowly-companion-voice-cta { display: none; }
 }
+
+
+/* Flowly Voice Gate FIX - Flow no desaparece y el permiso no bloquea el panel */
+.flowly-companion-runtime[data-voice-prompt="true"] {
+  right: 50% !important;
+  bottom: 1.25rem !important;
+  transform: translateX(50%) !important;
+  display: block !important;
+  grid-template-columns: none !important;
+  width: auto !important;
+  max-width: min(34rem, calc(100vw - 1.5rem)) !important;
+  z-index: 96 !important;
+  animation: flowlyVoiceGentleEntrance .55s cubic-bezier(.2,.9,.2,1) both !important;
+}
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-avatar-shell {
+  display: grid !important;
+  grid-column: auto !important;
+  width: clamp(11rem, 15vw, 14rem) !important;
+  height: clamp(14rem, 20vw, 18rem) !important;
+  margin: 0 auto !important;
+  filter: drop-shadow(0 24px 70px rgba(34, 211, 238, .32)) !important;
+}
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-avatar-shell .flowly-3d-stage {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-bubble {
+  display: block !important;
+  position: absolute !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: calc(100% - 1.2rem) !important;
+  transform: translateX(-50%) !important;
+  width: min(30rem, calc(100vw - 1.5rem)) !important;
+  grid-column: auto !important;
+  border-radius: 1.35rem 1.35rem 1.35rem .45rem !important;
+  padding: 1rem 1.15rem !important;
+  background: radial-gradient(circle at 20% 0%, rgba(34,211,238,.2), transparent 34%), linear-gradient(145deg, rgba(6, 12, 26, .96), rgba(12, 8, 24, .92)) !important;
+  box-shadow: 0 28px 100px rgba(0,0,0,.55), 0 0 0 1px rgba(103,232,249,.12) inset !important;
+}
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -.6rem;
+  width: 1rem;
+  height: 1rem;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(6, 12, 26, .96);
+  border-right: 1px solid rgba(103,232,249,.14);
+  border-bottom: 1px solid rgba(103,232,249,.14);
+}
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-bubble strong {
+  font-size: 1rem !important;
+  line-height: 1.25 !important;
+}
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-bubble p {
+  font-size: .8rem !important;
+  color: rgba(255,255,255,.72) !important;
+}
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-avatar-cta,
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-voice-cta,
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-life-hud,
+.flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-panel {
+  display: none !important;
+}
+@keyframes flowlyVoiceGentleEntrance {
+  from { opacity: 0; transform: translateX(50%) translateY(18px) scale(.96); }
+  to { opacity: 1; transform: translateX(50%) translateY(0) scale(1); }
+}
+@media (max-width: 820px) {
+  .flowly-companion-runtime[data-voice-prompt="true"] {
+    right: 50% !important;
+    bottom: .6rem !important;
+    width: calc(100vw - 1rem) !important;
+  }
+  .flowly-companion-runtime[data-voice-prompt="true"] .flowly-companion-bubble {
+    bottom: calc(100% - .5rem) !important;
+    width: calc(100vw - 1rem) !important;
+  }
+}

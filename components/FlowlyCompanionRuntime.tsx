@@ -27,6 +27,7 @@ export default function FlowlyCompanionRuntime() {
   const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
   const [avatarUrl, setAvatarUrl] = useState("/avatars/flowly.glb");
   const [entranceState, setEntranceState] = useState<"intro" | "settled">("intro");
+  const [voiceIntroResolved, setVoiceIntroResolved] = useState(false);
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
@@ -87,12 +88,36 @@ export default function FlowlyCompanionRuntime() {
   });
 
 
-  const voiceNeedsActivation = !isArchitect && !voice.active && voice.state !== "unsupported";
+  const voiceNeedsActivation = !isArchitect && !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
   const avatarMood = voiceNeedsActivation ? "attention" : thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
 
   useEffect(() => {
     voiceSpeakRef.current = voice.speak;
   }, [voice.speak]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setVoiceIntroResolved(window.localStorage.getItem("flowly_voice_intro_resolved") === "true");
+  }, []);
+
+  useEffect(() => {
+    if (!voice.active || typeof window === "undefined") return;
+    window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+    setVoiceIntroResolved(true);
+  }, [voice.active]);
+
+  const activateVoiceFromIntro = useCallback(async () => {
+    const activated = await voice.activate();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+    }
+    setVoiceIntroResolved(true);
+    setLifeMode(activated ? "wave" : "idle");
+    setLifeLabel(activated ? "Voz activada. Di Flow cuando quieras hablar." : "Puedes seguir escribiendo. La voz se puede activar luego.");
+    if (activated) {
+      voiceSpeakRef.current("Perfecto. Ya podemos hablar cuando quieras. Solo di Flow y te escucharé.");
+    }
+  }, [voice]);
 
   useEffect(() => {
     const intro = window.setTimeout(() => {
@@ -169,7 +194,7 @@ export default function FlowlyCompanionRuntime() {
           <strong>{voiceNeedsActivation ? "Activa los permisos de voz para poder hablar conmigo" : isArchitect ? "Estoy en modo desarrollo" : context.title}</strong>
           <p>{voiceNeedsActivation ? "Pulsa el botón y acepta el micrófono. Después solo tendrás que decir Flow y te escucharé." : isArchitect ? "Aquí sí puedo ayudarte con Studio, Builder, Kernel y cambios internos." : context.message}</p>
           {voiceNeedsActivation && (
-            <button type="button" className="flowly-companion-voice-primary" onClick={() => voice.activate()}>
+            <button type="button" className="flowly-companion-voice-primary" onClick={activateVoiceFromIntro}>
               <Mic size={15} /> Activar voz
             </button>
           )}
