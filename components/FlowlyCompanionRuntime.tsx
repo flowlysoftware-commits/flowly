@@ -98,7 +98,7 @@ export default function FlowlyCompanionRuntime() {
       setLifeLabel(status);
     },
     onPhase: (phase) => {
-      if (phase === "listening" || phase === "waking") setLifeMode("attention");
+      if (phase === "listening") setLifeMode("attention");
       if (phase === "thinking") setLifeMode("thinking");
       if (phase === "speaking") setLifeMode("talking");
       if (phase === "passive") setLifeMode("idle");
