@@ -264,15 +264,11 @@ function buildPlanDoc(plan: Omit<ExecutorV3Plan, "proposedFiles">) {
   ].join("\n");
 }
 
-function fallbackFiles(plan: Omit<ExecutorV3Plan, "proposedFiles">): ExecutorFileChange[] {
-  const name = slug(plan.instruction);
-  return [
-    {
-      path: `docs/executor/v3/${name}-plan.md`,
-      content: buildPlanDoc(plan),
-      message: "Executor V3: registrar plan inteligente",
-    },
-  ];
+function fallbackFiles(_plan: Omit<ExecutorV3Plan, "proposedFiles">): ExecutorFileChange[] {
+  // El Executor ya no convierte conversaciones/prompts en archivos Markdown.
+  // Los planes se guardan como datos estructurados en Supabase desde las APIs de ejecución.
+  // Si la IA no puede proponer un cambio seguro sobre archivos reales, no se crea Pull Request.
+  return [];
 }
 
 async function buildAIFiles(params: {
@@ -292,10 +288,11 @@ async function buildAIFiles(params: {
     "- No elimines archivos.",
     "- No añadas dependencias nuevas al package.json.",
     "- Mantén cambios pequeños, revisables y compatibles con TypeScript estricto.",
-    "- Si no puedes estar seguro, crea solo documentación en docs/executor/v3/ y explica el plan.",
+    "- Si no puedes estar seguro, devuelve {\"files\":[]} y NO crees documentación ni archivos de plan.",
     "- Usa projectGraph e impact para decidir. Si impact.avoidCreating contiene archivos, revisa esos archivos antes de crear otros.",
     "- Si existe un componente equivalente, devuélvelo modificado completo; no crees una versión paralela.",
     "- No expongas secretos ni variables privadas.",
+    "- Nunca crees archivos dentro de docs/executor/ a partir del texto del usuario. Las conversaciones van a Brain Memory, no al repositorio.",
   ].join("\n");
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -334,6 +331,7 @@ async function buildAIFiles(params: {
     const safe = parsed.files
       .filter((file) => typeof file.path === "string" && typeof file.content === "string")
       .filter((file) => !file.path.includes("..") && !file.path.startsWith("/") && isEditablePath(file.path))
+      .filter((file) => !normalize(file.path).startsWith("docs/executor/"))
       .slice(0, 5)
       .map((file) => ({ path: file.path, content: file.content, message: file.message || "Executor V3: cambio inteligente" }));
     return safe.length ? safe : null;
@@ -384,8 +382,17 @@ export async function runExecutorV3(instruction: string, approved: boolean): Pro
 
   const { context } = await buildProjectMap(plan.instruction);
   const aiFiles = await buildAIFiles({ plan, context });
-  const planDoc = fallbackFiles(plan)[0];
-  const files = aiFiles?.length ? [planDoc, ...aiFiles] : [planDoc];
+  const files = (aiFiles || []).filter((file) => !normalize(file.path).startsWith("docs/executor/"));
+
+  if (!files.length) {
+    return {
+      ...plan,
+      status: "planned",
+      proposedFiles: [],
+      error: "Executor V3 no ha encontrado cambios de código seguros para aplicar. No crearé documentación falsa ni archivos duplicados. Revisa el plan, concreta mejor la petición o selecciona archivos existentes desde Project Graph.",
+    };
+  }
+
   const title = `Flowly Executor V3: ${plan.instruction.slice(0, 72)}`;
   const pr = await createExecutorPullRequest({
     title,

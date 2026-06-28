@@ -120,7 +120,9 @@ function explainPlan(plan: DeveloperPlan | null) {
     modules: modules.length ? modules : ["Flowly OS"],
     candidates: candidates.slice(0, 8),
     proposedFiles: proposedFiles.slice(0, 8),
-    next: "Si me das el OK, crearé una rama nueva, aplicaré los cambios y abriré un Pull Request para que puedas revisarlo antes de tocar producción.",
+    next: proposedFiles.length
+      ? "Si me das el OK, crearé una rama nueva, aplicaré los cambios y abriré un Pull Request para que puedas revisarlo antes de tocar producción."
+      : "Todavía no voy a tocar archivos. Primero necesito una propuesta segura sobre archivos reales existentes; no crearé documentos falsos ni planes dentro del repositorio.",
   };
 }
 
@@ -396,7 +398,7 @@ export default function DeveloperControlCenterPage() {
                       </div>
                     </PlanBox>
 
-                    <PlanBox title="Archivos que prepararía" icon={<GitPullRequest size={18} />}>
+                    <PlanBox title="Cambios reales que prepararía" icon={<GitPullRequest size={18} />}>
                       <div className="space-y-2">
                         {explanation.proposedFiles.map((file) => (
                           <div key={file.path} className="rounded-xl border border-white/10 bg-black/25 p-3">
@@ -404,7 +406,7 @@ export default function DeveloperControlCenterPage() {
                             <p className="mt-1 text-[11px] text-white/45">{file.message || "Cambio propuesto por Executor."}</p>
                           </div>
                         ))}
-                        {!explanation.proposedFiles.length && <p className="text-sm text-white/50">Todavía no hay archivos propuestos.</p>}
+                        {!explanation.proposedFiles.length && <p className="text-sm leading-6 text-white/50">Aún no hay cambios seguros para crear Pull Request. El plan se guardará en la memoria del Brain, no como archivo dentro de <code className="rounded bg-black/30 px-1 text-cyan-100">docs/executor</code>.</p>}
                       </div>
                     </PlanBox>
                   </div>
