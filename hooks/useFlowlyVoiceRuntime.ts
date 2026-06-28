@@ -62,9 +62,14 @@ function cleanText(value: string) {
     .trim();
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function wakePattern(wakeWord: string) {
-  const escaped = cleanText(wakeWord).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|\\s)(hola\\s+|oye\\s+|hey\\s+|buenas\\s+)?${escaped}(\\s|$)`, "i");
+  const base = escapeRegExp(cleanText(wakeWord));
+  const aliases = [base, "flowly", "flou", "flo", "flor", "floki"].filter(Boolean).join("|");
+  return new RegExp(`(^|\\s)(hola\\s+|oye\\s+|hey\\s+|buenas\\s+)?(${aliases})(\\s|$)`, "i");
 }
 
 function containsWakeWord(value: string, wakeWord: string) {
@@ -175,7 +180,7 @@ export function useFlowlyVoiceRuntime({
     } catch {
       activeRef.current = true;
       setActive(true);
-      updateStatus(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Di Flow para llamarme");
+      updateStatus(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Escucha activa. Di Flow para llamarme");
     } finally {
       window.setTimeout(() => {
         startingRef.current = false;
@@ -216,7 +221,7 @@ export function useFlowlyVoiceRuntime({
     silenceTimerRef.current = window.setTimeout(() => {
       const phrase = cleanText(`${commandBufferRef.current} ${interimBufferRef.current}`);
       if (phrase && !processingRef.current && !speakingRef.current) void processCommand(phrase);
-    }, 1400);
+    }, 2100);
   }, [clearTimer, processCommand]);
 
   const pauseRecognitionForSpeech = useCallback(() => {
@@ -242,7 +247,7 @@ export function useFlowlyVoiceRuntime({
     utterance.onend = () => {
       speakingRef.current = false;
       if (activeRef.current) {
-        updateStatus(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Di Flow para llamarme");
+        updateStatus(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Escucha activa. Di Flow para llamarme");
         restartListening(450);
       }
     };
@@ -267,7 +272,7 @@ export function useFlowlyVoiceRuntime({
     recognition.onstart = () => {
       activeRef.current = true;
       setActive(true);
-      updateStatus(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Di Flow para llamarme");
+      updateStatus(awakeRef.current ? "listening" : "passive", awakeRef.current ? "Te escucho" : "Escucha activa. Di Flow para llamarme");
     };
 
     recognition.onerror = (event) => {
@@ -374,13 +379,16 @@ export function useFlowlyVoiceRuntime({
       setAwake(false);
 
       recognitionRef.current = createRecognition();
+      activeRef.current = true;
+      setActive(true);
+      updateStatus("passive", "Escucha activa. Di Flow para llamarme");
       safeStart();
       return true;
     } catch (error) {
       console.error("Flowly voice runtime error", error);
       activeRef.current = false;
       setActive(false);
-      updateStatus("error", "No he podido activar el micrófono");
+      updateStatus("error", "No he podido activar el micrófono. Revisa permisos del navegador.");
       return false;
     }
   }, [createRecognition, resetCapture, safeStart, setAwake, updateStatus]);

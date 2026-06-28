@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Code2, MessageCircle, Mic, MicOff, Minimize2, Send, ShieldCheck, Sparkles, Target, Trophy, X, Zap } from "lucide-react";
@@ -28,6 +28,9 @@ export default function FlowlyCompanionRuntime() {
   const [avatarUrl, setAvatarUrl] = useState("/avatars/flowly.glb");
   const [entranceState, setEntranceState] = useState<"intro" | "settled">("intro");
   const [voiceIntroResolved, setVoiceIntroResolved] = useState(false);
+  const [travel, setTravel] = useState({ x: 0, y: 0, moving: false, label: "dock" });
+  const lastTravelTargetRef = useRef("dock");
+  const hasAutoVoiceStartedRef = useRef(false);
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
@@ -103,8 +106,97 @@ export default function FlowlyCompanionRuntime() {
   });
 
 
+  const moveFlowTo = useCallback((target: "dock" | "center" | "left" | "right" | "lowerCenter") => {
+    if (typeof window === "undefined") return;
+    const avatarWidth = Math.min(220, Math.max(150, window.innerWidth * 0.14));
+    const avatarHeight = Math.min(290, Math.max(190, window.innerHeight * 0.26));
+    const margin = 22;
+    const maxX = Math.max(margin, window.innerWidth - avatarWidth - margin);
+    const maxY = Math.max(margin, window.innerHeight - avatarHeight - margin);
+    const positions: Record<typeof target, { x: number; y: number }> = {
+      dock: { x: maxX, y: maxY },
+      center: { x: Math.max(margin, (window.innerWidth - avatarWidth) / 2), y: Math.max(margin, (window.innerHeight - avatarHeight) / 2) },
+      lowerCenter: { x: Math.max(margin, (window.innerWidth - avatarWidth) / 2), y: Math.min(maxY, window.innerHeight - avatarHeight - 36) },
+      left: { x: margin, y: Math.min(maxY, Math.max(margin, window.innerHeight * 0.58)) },
+      right: { x: maxX, y: Math.min(maxY, Math.max(margin, window.innerHeight * 0.38)) },
+    };
+    const next = positions[target];
+    lastTravelTargetRef.current = target;
+    setTravel({ ...next, moving: true, label: target });
+    window.setTimeout(() => {
+      setTravel((current) => current.label === target ? { ...current, moving: false } : current);
+    }, 1700);
+  }, []);
+
   const voiceNeedsActivation = !isArchitect && !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
-  const avatarMood = voiceNeedsActivation ? "attention" : voice.isAwake ? "attention" : thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
+  const avatarMood = travel.moving ? "walking" : voiceNeedsActivation ? "attention" : voice.isAwake ? "attention" : thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
+  const companionRuntimeStyle = { "--flow-x": `${travel.x}px`, "--flow-y": `${travel.y}px` } as CSSProperties;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const initial = window.localStorage.getItem("flowly_voice_intro_resolved") === "true" ? "dock" : "center";
+    moveFlowTo(initial);
+    const onResize = () => moveFlowTo(lastTravelTargetRef.current as "dock" | "center" | "left" | "right" | "lowerCenter");
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [moveFlowTo]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isArchitect || voice.state === "unsupported" || hasAutoVoiceStartedRef.current) return;
+    const shouldAutoStart = window.localStorage.getItem("flowly_voice_enabled") === "true" || window.localStorage.getItem("flowly_voice_intro_resolved") === "true";
+    const tryStart = async () => {
+      const permissionsApi = navigator.permissions?.query;
+      try {
+        const status = permissionsApi ? await permissionsApi.call(navigator.permissions, { name: "microphone" as PermissionName }) : null;
+        if (status?.state === "granted" || shouldAutoStart) {
+          hasAutoVoiceStartedRef.current = true;
+          const activated = await voice.activate();
+          if (activated) {
+            window.localStorage.setItem("flowly_voice_enabled", "true");
+            window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+            setVoiceIntroResolved(true);
+          } else {
+            hasAutoVoiceStartedRef.current = false;
+          }
+        }
+      } catch {
+        if (shouldAutoStart) {
+          hasAutoVoiceStartedRef.current = true;
+          const activated = await voice.activate();
+          if (activated) {
+            window.localStorage.setItem("flowly_voice_enabled", "true");
+            window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+            setVoiceIntroResolved(true);
+          } else {
+            hasAutoVoiceStartedRef.current = false;
+          }
+        }
+      }
+    };
+    void tryStart();
+  }, [isArchitect, voice, voice.state]);
+
+  useEffect(() => {
+    if (voiceNeedsActivation) {
+      moveFlowTo("center");
+      return;
+    }
+    if (voice.isAwake || thinking || open) {
+      moveFlowTo("lowerCenter");
+      return;
+    }
+  }, [moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
+
+  useEffect(() => {
+    if (voiceNeedsActivation || open || thinking || voice.isAwake) return;
+    const path: Array<"dock" | "left" | "center" | "right" | "lowerCenter"> = ["dock", "left", "lowerCenter", "right", "dock"];
+    let index = 0;
+    const interval = window.setInterval(() => {
+      index = (index + 1) % path.length;
+      moveFlowTo(path[index]);
+    }, 12000);
+    return () => window.clearInterval(interval);
+  }, [moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
 
   useEffect(() => {
     voiceSpeakRef.current = voice.speak;
@@ -142,14 +234,16 @@ export default function FlowlyCompanionRuntime() {
     const activated = await voice.activate();
     if (typeof window !== "undefined") {
       window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+      if (activated) window.localStorage.setItem("flowly_voice_enabled", "true");
     }
     setVoiceIntroResolved(true);
+    if (activated) moveFlowTo("dock");
     setLifeMode(activated ? "wave" : "idle");
     setLifeLabel(activated ? "Voz activada. Di Flow cuando quieras hablar." : "Puedes seguir escribiendo. La voz se puede activar luego.");
     if (activated) {
       voiceSpeakRef.current("Perfecto. Ya podemos hablar cuando quieras. Solo di Flow y te escucharé.");
     }
-  }, [voice]);
+  }, [moveFlowTo, voice]);
 
   useEffect(() => {
     const intro = window.setTimeout(() => {
@@ -219,7 +313,7 @@ export default function FlowlyCompanionRuntime() {
   };
 
   return (
-    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood} data-entrance={entranceState} data-voice={voice.state} data-voice-awake={voice.isAwake} data-voice-prompt={voiceNeedsActivation}>
+    <div className="flowly-companion-runtime" style={companionRuntimeStyle} data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood} data-entrance={entranceState} data-voice={voice.state} data-voice-awake={voice.isAwake} data-voice-prompt={voiceNeedsActivation} data-travel={travel.moving ? "moving" : travel.label}>
       {!minimized && (
         <div className="flowly-companion-bubble" role="status">
           <span className="flowly-companion-bubble-kicker">{voiceNeedsActivation ? "Flow por voz" : isArchitect ? "Companion Arquitecto" : context.area}</span>
@@ -251,12 +345,15 @@ export default function FlowlyCompanionRuntime() {
           onClick={async () => {
             if (voice.active) {
               voice.deactivate();
+              if (typeof window !== "undefined") window.localStorage.removeItem("flowly_voice_enabled");
               return;
             }
             const activated = await voice.activate();
             if (activated && typeof window !== "undefined") {
               window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+              window.localStorage.setItem("flowly_voice_enabled", "true");
               setVoiceIntroResolved(true);
+              moveFlowTo("dock");
             }
           }}
           aria-label={voice.active ? "Desactivar voz de Flow" : "Activar voz de Flow"}
