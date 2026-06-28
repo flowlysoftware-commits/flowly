@@ -100,6 +100,7 @@ const commandCenterLinks = [
   { label: "Memoria", desc: "Knowledge: documentación viva y contexto técnico.", href: "/docs", icon: MemoryStick },
   { label: "Mapa del proyecto", desc: "Project Graph: rutas, APIs, componentes y dependencias.", href: "/os/project-graph", icon: Network },
   { label: "Executor V3", desc: "Agente que crea ramas y Pull Requests seguros.", href: "/os/executor-v3", icon: Rocket },
+  { label: "Avatar Runtime", desc: "Sistema de avatares 3D del Companion global.", href: "/os/avatars", icon: Bot },
   { label: "QA Agent", desc: "Revisa PRs fallidos y corrige builds.", href: "/os/qa", icon: ShieldCheck },
   { label: "GitHub", desc: "Conexión segura con repositorio y PRs.", href: "/os/github", icon: Github },
   { label: "Studio", desc: "Editor visual de blueprints y módulos.", href: "/studio/v2", icon: Boxes },

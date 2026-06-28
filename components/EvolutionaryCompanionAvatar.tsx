@@ -12,6 +12,7 @@ type EvolutionaryCompanionAvatarProps = {
   compact?: boolean;
   onClick?: () => void;
   memory?: string;
+  modelUrl?: string;
 };
 
 function normalizeMood(value?: CompanionMood | string): CompanionMood {
@@ -44,6 +45,7 @@ export default function EvolutionaryCompanionAvatar({
   compact = false,
   onClick,
   memory,
+  modelUrl = "/avatars/flowly.glb",
 }: EvolutionaryCompanionAvatarProps) {
   const normalizedMood = normalizeMood(mood);
   const stage = level >= 20 ? "legendary" : level >= 10 ? "evolved" : level >= 5 ? "growing" : "starter";
@@ -60,7 +62,7 @@ export default function EvolutionaryCompanionAvatar({
       <span className="evo-3d-aura evo-3d-aura-two" />
       <span className="evo-3d-pulse" />
       <FlowlyAssistant3D
-        modelUrl="/avatars/flowly-companion.glb"
+        modelUrl={modelUrl}
         mode={mode}
         facing="left"
         onClick={onClick}

@@ -13,6 +13,7 @@ const tools = [
   { href: "/os/migration", title: "Migration Blueprint", description: "Auditoría del panel actual, registro Kernel y plan de migración a Flowly OS.", icon: GitBranch },
   { href: "/os/github", title: "GitHub Executor", description: "Conecta Flowly Brain con GitHub para crear ramas y Pull Requests seguros.", icon: Github },
   { href: "/os/executor-v3", title: "Executor V3", description: "Agente de ingeniería: mapa profundo, dependencias, edición inteligente y Pull Requests seguros.", icon: Rocket },
+  { href: "/os/avatars", title: "Avatar Runtime", description: "Gestión del avatar 3D global, modelo GLB, estados y animaciones del Companion.", icon: Bot },
   { href: "/os/executor", title: "Executor V2", description: "Versión anterior del desarrollador autónomo por Pull Request.", icon: Wrench },
 ];
 

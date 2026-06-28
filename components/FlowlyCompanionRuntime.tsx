@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Code2, MessageCircle, Minimize2, Send, ShieldCheck, Sparkles, Target, Trophy, X, Zap } from "lucide-react";
@@ -22,6 +22,7 @@ export default function FlowlyCompanionRuntime() {
   const [minimized, setMinimized] = useState(false);
   const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState("/avatars/flowly.glb");
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
   const isArchitect = mode === "arquitecto";
@@ -29,6 +30,19 @@ export default function FlowlyCompanionRuntime() {
   const [conversation, setConversation] = useState<{ role: "assistant" | "user"; content: string }[]>([
     { role: "assistant", content: isArchitect ? "Hola. Soy el Companion Arquitecto. Puedo ayudarte a analizar Flowly OS sin mezclarlo con el panel de clientes." : "Hola. Soy el Companion del panel. Puedo ayudarte con clientes, tareas, objetivos, facturas, WhatsApp y recomendaciones sin mostrarte herramientas técnicas." },
   ]);
+
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/avatar/config", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        const url = typeof data?.avatar?.modelUrl === "string" ? data.avatar.modelUrl : null;
+        if (mounted && url) setAvatarUrl(url);
+      })
+      .catch(() => undefined);
+    return () => { mounted = false; };
+  }, []);
 
   if (shouldHide(pathname)) return null;
 
@@ -75,7 +89,7 @@ export default function FlowlyCompanionRuntime() {
       )}
 
       <div className="flowly-companion-avatar-shell">
-        <EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={isArchitect ? "thinking" : context.mode} onClick={() => setOpen((value) => !value)} />
+        <EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={isArchitect ? "thinking" : context.mode} modelUrl={avatarUrl} onClick={() => setOpen((value) => !value)} />
         <button type="button" className="flowly-companion-avatar-cta" onClick={() => setOpen((value) => !value)}>
           <MessageCircle size={15} />
           Hablar
@@ -100,7 +114,7 @@ export default function FlowlyCompanionRuntime() {
           </header>
 
           <section className="flowly-companion-status-card">
-            <div className="flowly-companion-status-avatar"><EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={isArchitect ? "thinking" : context.mode} compact /></div>
+            <div className="flowly-companion-status-avatar"><EvolutionaryCompanionAvatar name={companionStats.name} level={companionStats.level} xpPercent={xpPercent} mood={isArchitect ? "thinking" : context.mode} modelUrl={avatarUrl} compact /></div>
             <div>
               <strong>{isArchitect ? "Modo arquitecto" : `Nivel ${companionStats.level}`}</strong>
               <p>{isArchitect ? "Puede abrir herramientas internas. No aparece en paneles de clientes." : `Ánimo: ${context.mood} · Energía ${companionStats.energy}%`}</p>

@@ -144,7 +144,7 @@ function aimBoneToWorldDirection(
 }
 
 function Model({
-  modelUrl = "/avatars/flowly-companion.glb",
+  modelUrl = "/avatars/flowly.glb",
   mode = "idle",
   facing = "left",
 }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing">>) {
@@ -308,7 +308,7 @@ function ModelFallback() {
 }
 
 export default function FlowlyAssistant3D({
-  modelUrl = "/avatars/flowly-companion.glb",
+  modelUrl = "/avatars/flowly.glb",
   mode = "idle",
   facing = "left",
   onClick,
@@ -333,4 +333,4 @@ export default function FlowlyAssistant3D({
   );
 }
 
-useGLTF.preload("/avatars/flowly-companion.glb");
+useGLTF.preload("/avatars/flowly.glb");
