@@ -15,7 +15,7 @@ const initialLogs: LogItem[] = [
   { label: "Grabación MediaRecorder", state: "idle" },
   { label: "Audio recibido", state: "idle" },
   { label: "Transcripción OpenAI", state: "idle" },
-  { label: "Wake word Flow", state: "idle" },
+  { label: "Activación inteligente", state: "idle" },
   { label: "Brain", state: "idle" },
 ];
 
@@ -116,10 +116,12 @@ export default function VoiceTestPage() {
       setLogs((prev) => updateLog(prev, "Transcripción OpenAI", text ? "ok" : "error", text || "OpenAI no devolvió texto."));
 
       const normalized = text.toLowerCase();
-      const hasWakeWord = /\b(hola\s+flow|oye\s+flow|flowly|flow|flou)\b/i.test(normalized);
-      setLogs((prev) => updateLog(prev, "Wake word Flow", hasWakeWord ? "ok" : "error", hasWakeWord ? "Detectada." : "No detectada en la transcripción."));
+      const words = normalized.split(/\s+/).filter(Boolean);
+      const hasWakeWord = /\b(hola\s+flow|oye\s+flow|flowly|flow|flou|flo|flor)\b/i.test(normalized);
+      const looksDirected = hasWakeWord || words.length >= 3 || /\b(que|como|ayuda|abre|crea|muestra|dime|tengo|hacer|cliente|clientes|venta|ventas|factura|facturas|crm|whatsapp|objetivo|objetivos|tarea|tareas)\b/i.test(normalized);
+      setLogs((prev) => updateLog(prev, "Activación inteligente", looksDirected ? "ok" : "error", looksDirected ? (hasWakeWord ? "Flow detectado." : "No dijo Flow, pero parece una petición válida para el Companion.") : "No parece una frase dirigida al Companion."));
 
-      if (text) await runBrain(text);
+      if (text && looksDirected) await runBrain(text);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido transcribiendo.";
       setLastError(message);
@@ -184,7 +186,7 @@ export default function VoiceTestPage() {
           <p className="text-xs font-bold uppercase tracking-[0.35em] text-cyan-200/70">Flowly OS · Diagnóstico de voz</p>
           <h1 className="mt-3 text-4xl font-black tracking-tight">Prueba limpia del micrófono</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">
-            Esta pantalla no usa el Companion. Graba 5 segundos, envía el audio a OpenAI, detecta la palabra Flow y prueba el Brain. Sirve para saber exactamente dónde se corta la voz.
+            Esta pantalla no usa el Companion. Graba 5 segundos, envía el audio a OpenAI, detecta si es una frase para Flow y prueba el Brain. Sirve para saber exactamente dónde se corta la voz.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">

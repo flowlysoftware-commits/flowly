@@ -80,6 +80,13 @@ function commandLooksComplete(value: string) {
   return clean.length >= 6 || words.length >= 2;
 }
 
+function looksLikeDirectedCommand(value: string) {
+  const clean = normalizeForWake(value);
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 4) return true;
+  return /\b(que|como|ayuda|abre|crea|muestra|dime|tengo|hacer|cliente|clientes|venta|ventas|factura|facturas|crm|whatsapp|objetivo|objetivos|tarea|tareas)\b/i.test(clean) && words.length >= 2;
+}
+
 function bestMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
   const candidates = [
@@ -137,6 +144,7 @@ export function useFlowlyVoiceRuntime({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lastCommandRef = useRef("");
   const lastCommandAtRef = useRef(0);
+  const lastAwakeAtRef = useRef(0);
   const passiveLoopRef = useRef<() => Promise<void>>(async () => undefined);
 
   const [supported, setSupported] = useState(true);
@@ -157,6 +165,7 @@ export function useFlowlyVoiceRuntime({
 
   const setAwake = useCallback((value: boolean) => {
     awakeRef.current = value;
+    if (value) lastAwakeAtRef.current = Date.now();
     setIsAwake(value);
   }, []);
 
@@ -305,7 +314,7 @@ export function useFlowlyVoiceRuntime({
   const goPassive = useCallback(() => {
     setAwake(false);
     if (activeRef.current && !manualStopRef.current) {
-      setPhase("passive", "Voz activa. Di Flow para llamarme");
+      setPhase("passive", "Voz activa. Puedes decir Flow o hablarme directamente");
       schedulePassiveLoop(550);
     }
   }, [schedulePassiveLoop, setAwake, setPhase]);
@@ -351,12 +360,13 @@ export function useFlowlyVoiceRuntime({
     if (result.error) setPhase("listening", `Transcripción: ${result.error}`);
 
     const text = result.text;
-    const command = removeWakeWord(text, wakeWord);
+    const command = removeWakeWord(text, wakeWord) || text;
     setTranscript(command || text);
 
     if (commandLooksComplete(command)) {
       await processCommand(command);
     } else {
+      setPhase("passive", "No he captado la frase completa. Puedes hablarme de nuevo.");
       goPassive();
     }
   }, [clearLoopTimer, goPassive, processCommand, recordSegment, setPhase, wakeWord]);
@@ -372,7 +382,7 @@ export function useFlowlyVoiceRuntime({
 
     loopRunningRef.current = true;
     try {
-      setPhase("passive", "Voz activa. Di Flow para llamarme");
+      setPhase("passive", "Voz activa. Puedes decir Flow o hablarme directamente");
       const segment = await recordSegment({ maxMs: 4200, minMs: 1800, stopOnSilence: false, voiceThreshold: 0.005 });
       if (!segment || !activeRef.current || manualStopRef.current) return;
 
@@ -389,16 +399,25 @@ export function useFlowlyVoiceRuntime({
         const text = result.text;
         if (text) setTranscript(text);
 
-        if (text && containsWakeWord(text, wakeWord)) {
+        if (text) {
+          const hasWake = containsWakeWord(text, wakeWord);
           const afterWake = removeWakeWord(text, wakeWord);
-          setAwake(true);
-          onWake?.();
+          const recentlyAwake = Date.now() - lastAwakeAtRef.current < 18000;
+          const shouldTreatAsCommand = hasWake || recentlyAwake || looksLikeDirectedCommand(text);
 
-          if (commandLooksComplete(afterWake)) {
-            await processCommand(afterWake);
-          } else {
+          if (hasWake) {
+            setAwake(true);
+            onWake?.();
+          }
+
+          if (shouldTreatAsCommand && commandLooksComplete(afterWake || text)) {
+            setAwake(true);
+            await processCommand(afterWake || text);
+          } else if (hasWake) {
             setPhase("waking", "Te escucho. Dime qué necesitas.");
             await captureCommandAfterWake();
+          } else {
+            setPhase("passive", "Voz activa. Estoy escuchando el panel.");
           }
         }
       }
@@ -423,7 +442,7 @@ export function useFlowlyVoiceRuntime({
       setActive(true);
       setAwake(false);
       setTranscript("");
-      setPhase("passive", "Voz activa. Di Flow para llamarme");
+      setPhase("passive", "Voz activa. Puedes decir Flow o hablarme directamente");
       schedulePassiveLoop(400);
       return true;
     } catch (error) {
