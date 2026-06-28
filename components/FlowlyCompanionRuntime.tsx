@@ -36,6 +36,7 @@ export default function FlowlyCompanionRuntime() {
     { role: "assistant", content: isArchitect ? "Hola. Soy el Companion Arquitecto. Puedo ayudarte a analizar Flowly OS sin mezclarlo con el panel de clientes." : "Hola. Soy el Companion del panel. Puedo ayudarte con clientes, tareas, objetivos, facturas, WhatsApp y recomendaciones sin mostrarte herramientas técnicas." },
   ]);
   const voiceSpeakRef = useRef<(text: string) => void>(() => undefined);
+  const companionLiveContextRef = useRef<Record<string, unknown>>({});
 
 
   const speakCleanly = useCallback((text: string) => text.replace(/[#*_`>\[\]]/g, " ").replace(/\s+/g, " ").trim(), []);
@@ -53,7 +54,15 @@ export default function FlowlyCompanionRuntime() {
       const response = await fetch("/api/companion/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: clean, pathname, conversation }),
+        body: JSON.stringify({
+          message: clean,
+          pathname,
+          conversation,
+          extraContext: {
+            source,
+            companion: companionLiveContextRef.current,
+          },
+        }),
       });
       const data = await response.json();
       const answer = typeof data?.answer === "string"
@@ -85,6 +94,12 @@ export default function FlowlyCompanionRuntime() {
     onStatus: (status) => {
       setLifeLabel(status);
     },
+    onPhase: (phase) => {
+      if (phase === "listening" || phase === "waking") setLifeMode("attention");
+      if (phase === "thinking") setLifeMode("thinking");
+      if (phase === "speaking") setLifeMode("talking");
+      if (phase === "passive") setLifeMode("idle");
+    },
   });
 
 
@@ -94,6 +109,23 @@ export default function FlowlyCompanionRuntime() {
   useEffect(() => {
     voiceSpeakRef.current = voice.speak;
   }, [voice.speak]);
+
+  useEffect(() => {
+    companionLiveContextRef.current = {
+      mood: avatarMood,
+      lifeLabel,
+      xp: companionStats.xp,
+      level: companionStats.level,
+      energy: companionStats.energy,
+      contextArea: context.area,
+      contextMission: context.mission,
+      voiceState: voice.state,
+      voiceActive: voice.active,
+      voiceAwake: voice.isAwake,
+      runtimeMode: mode,
+    };
+  }, [avatarMood, context.area, context.mission, lifeLabel, mode, voice.active, voice.isAwake, voice.state]);
+
 
   useEffect(() => {
     if (typeof window === "undefined") return;

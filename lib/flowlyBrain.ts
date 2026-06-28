@@ -386,8 +386,9 @@ function buildSystemPrompt(params: {
   snapshot: FlowlyContextSnapshot;
   intent: FlowlyBrainResponse["intent"];
   tools: FlowlyBrainToolResult[];
+  extraContext?: Record<string, unknown>;
 }) {
-  const { mode, snapshot, intent, tools } = params;
+  const { mode, snapshot, intent, tools, extraContext } = params;
   return [
     mode === "arquitecto"
       ? "Eres Flowly Brain en modo Arquitecto. Ayudas al fundador/desarrollador a analizar, diseñar, modificar y construir Flowly con aprobación."
@@ -404,6 +405,8 @@ function buildSystemPrompt(params: {
     JSON.stringify(snapshot),
     "Herramientas ejecutadas:",
     JSON.stringify(tools.map((tool) => ({ id: tool.id, label: tool.label, summary: tool.summary, data: tool.data })).slice(0, 7)),
+    "Estado vivo del Companion / voz / memoria:",
+    JSON.stringify(extraContext || {}),
   ].join("\n");
 }
 
@@ -414,6 +417,7 @@ async function callLLM(params: {
   intent: FlowlyBrainResponse["intent"];
   tools: FlowlyBrainToolResult[];
   conversation: FlowlyBrainMessage[];
+  extraContext?: Record<string, unknown>;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -489,6 +493,7 @@ export async function runFlowlyBrain(request: FlowlyBrainRequest): Promise<Flowl
     intent,
     tools,
     conversation: request.conversation || [],
+    extraContext: request.extraContext,
   });
 
   const answer = aiAnswer || (mode === "arquitecto"
