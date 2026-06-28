@@ -1,5 +1,7 @@
 "use client";
 
+import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
+
 type CompanionMood = "idle" | "happy" | "thinking" | "talking" | "celebrating" | "working" | "sleeping" | "walking";
 
 type EvolutionaryCompanionAvatarProps = {
@@ -9,6 +11,7 @@ type EvolutionaryCompanionAvatarProps = {
   mood?: CompanionMood | string;
   compact?: boolean;
   onClick?: () => void;
+  memory?: string;
 };
 
 function normalizeMood(value?: CompanionMood | string): CompanionMood {
@@ -23,63 +26,58 @@ function normalizeMood(value?: CompanionMood | string): CompanionMood {
   return "idle";
 }
 
+function moodTo3DMode(mood: CompanionMood): "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" {
+  if (mood === "talking") return "talk";
+  if (mood === "walking") return "walk";
+  if (mood === "happy" || mood === "celebrating") return "wave";
+  if (mood === "working") return "point";
+  if (mood === "sleeping") return "sit";
+  if (mood === "thinking") return "thinking";
+  return "idle";
+}
+
 export default function EvolutionaryCompanionAvatar({
-  name = "Nova",
+  name = "Flowly",
   level = 1,
   xpPercent = 28,
   mood = "idle",
   compact = false,
   onClick,
+  memory,
 }: EvolutionaryCompanionAvatarProps) {
   const normalizedMood = normalizeMood(mood);
   const stage = level >= 20 ? "legendary" : level >= 10 ? "evolved" : level >= 5 ? "growing" : "starter";
   const safeXp = Math.max(4, Math.min(100, xpPercent));
+  const mode = moodTo3DMode(normalizedMood);
 
   return (
-    <button
-      type="button"
-      className={`evo-companion evo-companion-${stage} evo-companion-${normalizedMood} ${compact ? "evo-companion-compact" : ""}`}
-      onClick={onClick}
-      aria-label={`Hablar con ${name}`}
+    <div
+      className={`evo-companion-3d evo-companion-3d-${stage} evo-companion-3d-${normalizedMood} ${compact ? "evo-companion-3d-compact" : ""}`}
+      data-mood={normalizedMood}
+      data-stage={stage}
     >
-      <span className="evo-aura evo-aura-one" />
-      <span className="evo-aura evo-aura-two" />
-      <span className="evo-spark evo-spark-a" />
-      <span className="evo-spark evo-spark-b" />
-      <span className="evo-spark evo-spark-c" />
-
-      <span className="evo-body">
-        <span className="evo-hood" />
-        <span className="evo-head">
-          <span className="evo-hair evo-hair-a" />
-          <span className="evo-hair evo-hair-b" />
-          <span className="evo-hair evo-hair-c" />
-          <span className="evo-ear evo-ear-left" />
-          <span className="evo-ear evo-ear-right" />
-          <span className="evo-eye evo-eye-left" />
-          <span className="evo-eye evo-eye-right" />
-          <span className="evo-cheek evo-cheek-left" />
-          <span className="evo-cheek evo-cheek-right" />
-          <span className="evo-mouth" />
-        </span>
-        <span className="evo-torso">
-          <span className="evo-core" />
-          <span className="evo-badge" />
-        </span>
-        <span className="evo-arm evo-arm-left"><span /></span>
-        <span className="evo-arm evo-arm-right"><span /></span>
-        <span className="evo-leg evo-leg-left" />
-        <span className="evo-leg evo-leg-right" />
-      </span>
-
-      <span className="evo-shadow" />
+      <span className="evo-3d-aura evo-3d-aura-one" />
+      <span className="evo-3d-aura evo-3d-aura-two" />
+      <span className="evo-3d-pulse" />
+      <FlowlyAssistant3D
+        modelUrl="/avatars/flowly-companion.glb"
+        mode={mode}
+        facing="left"
+        onClick={onClick}
+      />
       {!compact && (
-        <span className="evo-card">
+        <span className="evo-card evo-card-3d">
           <strong>{name}</strong>
-          <small>Nivel {level} · Evolución {stage === "starter" ? "inicial" : stage === "growing" ? "creciendo" : stage === "evolved" ? "avanzada" : "legendaria"}</small>
+          <small>
+            Nivel {level} · Evolución {stage === "starter" ? "inicial" : stage === "growing" ? "creciendo" : stage === "evolved" ? "avanzada" : "legendaria"}
+          </small>
+          <span className="evo-status-strip">
+            <i>{normalizedMood === "talking" ? "Hablando" : normalizedMood === "thinking" ? "Pensando" : normalizedMood === "walking" ? "Explorando" : normalizedMood === "celebrating" ? "Celebrando" : "Vivo"}</i>
+            {memory && <em>{memory}</em>}
+          </span>
           <span className="evo-xp"><i style={{ width: `${safeXp}%` }} /></span>
         </span>
       )}
-    </button>
+    </div>
   );
 }

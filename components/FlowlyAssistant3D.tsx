@@ -54,24 +54,24 @@ function getObject(scene: THREE.Object3D, ...names: string[]) {
 
 function getRig(scene: THREE.Object3D): RigBones {
   return {
-    hips: getObject(scene, "mixamorig:Hips", "mixamorigHips", "Hips"),
-    spine: getObject(scene, "mixamorig:Spine", "mixamorigSpine", "Spine"),
-    spine1: getObject(scene, "mixamorig:Spine1", "mixamorigSpine1", "Spine1"),
-    spine2: getObject(scene, "mixamorig:Spine2", "mixamorigSpine2", "Spine2"),
-    neck: getObject(scene, "mixamorig:Neck", "mixamorigNeck", "Neck"),
+    hips: getObject(scene, "mixamorig:Hips", "mixamorigHips", "Hips", "Hip", "Pelvis", "Root"),
+    spine: getObject(scene, "mixamorig:Spine", "mixamorigSpine", "Spine", "Waist", "Spine01"),
+    spine1: getObject(scene, "mixamorig:Spine1", "mixamorigSpine1", "Spine1", "Spine01", "Spine02"),
+    spine2: getObject(scene, "mixamorig:Spine2", "mixamorigSpine2", "Spine2", "Spine02"),
+    neck: getObject(scene, "mixamorig:Neck", "mixamorigNeck", "Neck", "NeckTwist01", "NeckTwist02"),
     head: getObject(scene, "mixamorig:Head", "mixamorigHead", "Head"),
-    leftArm: getObject(scene, "mixamorig:LeftArm", "mixamorigLeftArm", "LeftArm"),
-    leftForeArm: getObject(scene, "mixamorig:LeftForeArm", "mixamorigLeftForeArm", "LeftForeArm"),
-    leftHand: getObject(scene, "mixamorig:LeftHand", "mixamorigLeftHand", "LeftHand"),
-    rightArm: getObject(scene, "mixamorig:RightArm", "mixamorigRightArm", "RightArm"),
-    rightForeArm: getObject(scene, "mixamorig:RightForeArm", "mixamorigRightForeArm", "RightForeArm"),
-    rightHand: getObject(scene, "mixamorig:RightHand", "mixamorigRightHand", "RightHand"),
-    leftUpLeg: getObject(scene, "mixamorig:LeftUpLeg", "mixamorigLeftUpLeg", "LeftUpLeg"),
-    leftLeg: getObject(scene, "mixamorig:LeftLeg", "mixamorigLeftLeg", "LeftLeg"),
-    leftFoot: getObject(scene, "mixamorig:LeftFoot", "mixamorigLeftFoot", "LeftFoot"),
-    rightUpLeg: getObject(scene, "mixamorig:RightUpLeg", "mixamorigRightUpLeg", "RightUpLeg"),
-    rightLeg: getObject(scene, "mixamorig:RightLeg", "mixamorigRightLeg", "RightLeg"),
-    rightFoot: getObject(scene, "mixamorig:RightFoot", "mixamorigRightFoot", "RightFoot"),
+    leftArm: getObject(scene, "mixamorig:LeftArm", "mixamorigLeftArm", "LeftArm", "L_Upperarm", "L_Clavicle"),
+    leftForeArm: getObject(scene, "mixamorig:LeftForeArm", "mixamorigLeftForeArm", "LeftForeArm", "L_Forearm"),
+    leftHand: getObject(scene, "mixamorig:LeftHand", "mixamorigLeftHand", "LeftHand", "L_Hand"),
+    rightArm: getObject(scene, "mixamorig:RightArm", "mixamorigRightArm", "RightArm", "R_Upperarm", "R_Clavicle"),
+    rightForeArm: getObject(scene, "mixamorig:RightForeArm", "mixamorigRightForeArm", "RightForeArm", "R_Forearm"),
+    rightHand: getObject(scene, "mixamorig:RightHand", "mixamorigRightHand", "RightHand", "R_Hand"),
+    leftUpLeg: getObject(scene, "mixamorig:LeftUpLeg", "mixamorigLeftUpLeg", "LeftUpLeg", "L_Thigh"),
+    leftLeg: getObject(scene, "mixamorig:LeftLeg", "mixamorigLeftLeg", "LeftLeg", "L_Calf"),
+    leftFoot: getObject(scene, "mixamorig:LeftFoot", "mixamorigLeftFoot", "LeftFoot", "L_Foot"),
+    rightUpLeg: getObject(scene, "mixamorig:RightUpLeg", "mixamorigRightUpLeg", "RightUpLeg", "R_Thigh"),
+    rightLeg: getObject(scene, "mixamorig:RightLeg", "mixamorigRightLeg", "RightLeg", "R_Calf"),
+    rightFoot: getObject(scene, "mixamorig:RightFoot", "mixamorigRightFoot", "RightFoot", "R_Foot"),
     mouth: getObject(scene, "Fitness_Grandma_MouthAnimGeo"),
   };
 }
@@ -144,16 +144,30 @@ function aimBoneToWorldDirection(
 }
 
 function Model({
-  modelUrl = "/avatars/flowly-grandma.glb",
+  modelUrl = "/avatars/flowly-companion.glb",
   mode = "idle",
   facing = "left",
 }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing">>) {
   const group = useRef<THREE.Group>(null);
-  const gltf = useGLTF(modelUrl) as unknown as { scene: THREE.Group };
+  const gltf = useGLTF(modelUrl) as unknown as { scene: THREE.Group; animations?: THREE.AnimationClip[] };
   const scene = useMemo(() => clone(gltf.scene) as THREE.Group, [gltf.scene]);
   const rig = useMemo(() => getRig(scene), [scene]);
   const basePose = useMemo(() => rememberBasePose(rig), [rig]);
   const activeMode = normalizeMode(mode);
+  const mixer = useMemo(() => new THREE.AnimationMixer(scene), [scene]);
+  const clips = gltf.animations || [];
+  const hasNativeAnimations = clips.length > 0;
+
+  useEffect(() => {
+    if (!hasNativeAnimations) return;
+    const clipIndex = activeMode === "walk" ? 1 : activeMode === "wave" ? 2 : activeMode === "talk" ? 3 : activeMode === "point" ? 4 : activeMode === "idle" ? 0 : 0;
+    const clip = clips[clipIndex] || clips[0];
+    if (!clip) return;
+    mixer.stopAllAction();
+    const action = mixer.clipAction(clip);
+    action.reset().fadeIn(0.22).play();
+    return () => { action.fadeOut(0.18); };
+  }, [activeMode, clips, hasNativeAnimations, mixer]);
 
   useEffect(() => {
     scene.traverse((object) => {
@@ -183,6 +197,17 @@ function Model({
     const isSpeaking = activeMode === "talk";
     const isWaving = activeMode === "wave";
     const isPointing = activeMode === "point";
+
+    if (hasNativeAnimations) {
+      mixer.update(state.clock.getDelta());
+      const bodyBob = isWalking ? Math.abs(walkCycle) * 0.04 : breathe * 0.012;
+      applyOffset(basePose, rig.spine, breathe * 0.01, 0, slow * 0.006);
+      applyOffset(basePose, rig.head, isSpeaking ? Math.sin(t * 8.0) * 0.02 : breathe * 0.01, slow * 0.018, 0);
+      group.current.position.set(0, -1.38 + bodyBob, 0);
+      group.current.rotation.set(0, facing === "right" ? 0.28 : -0.28, slow * 0.004);
+      group.current.scale.setScalar(1.14);
+      return;
+    }
 
     // Reset every frame to the GLB rest pose, then layer a safe procedural pose.
     // This avoids the broken FBX retargeting that made the character fall or keep its arms in T-pose.
@@ -283,7 +308,7 @@ function ModelFallback() {
 }
 
 export default function FlowlyAssistant3D({
-  modelUrl = "/avatars/flowly-grandma.glb",
+  modelUrl = "/avatars/flowly-companion.glb",
   mode = "idle",
   facing = "left",
   onClick,
@@ -308,4 +333,4 @@ export default function FlowlyAssistant3D({
   );
 }
 
-useGLTF.preload("/avatars/flowly-grandma.glb");
+useGLTF.preload("/avatars/flowly-companion.glb");
