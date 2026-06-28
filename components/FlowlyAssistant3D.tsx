@@ -131,11 +131,11 @@ function aimBoneToWorldDirection(
 
 function softenTPose(basePose: Map<string, THREE.Quaternion>, rig: RigBones, mode: AssistantMode) {
   // Corrección mínima de pose: baja los brazos abiertos del GLB sin animar extremidades como muñeco.
-  const influence = mode === "wave" || mode === "point" ? 0.28 : 0.72;
+  const influence = 0.92;
   const leftSide = getRestSideDirection(rig.leftArm, rig.leftForeArm || rig.leftHand, -1);
   const rightSide = getRestSideDirection(rig.rightArm, rig.rightForeArm || rig.rightHand, 1);
-  leftTarget.copy(leftSide).multiplyScalar(0.22).add(downVector).normalize();
-  rightTarget.copy(rightSide).multiplyScalar(0.22).add(downVector).normalize();
+  leftTarget.copy(leftSide).multiplyScalar(0.06).add(downVector).normalize();
+  rightTarget.copy(rightSide).multiplyScalar(0.06).add(downVector).normalize();
   aimBoneToWorldDirection(basePose, rig.leftArm, rig.leftForeArm || rig.leftHand, leftTarget, influence);
   aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm || rig.rightHand, rightTarget, influence);
 }
@@ -164,9 +164,9 @@ function Model({
 
   useEffect(() => {
     if (!hasNativeAnimations) return;
-    // La animación de caminar del archivo gira piernas en algunos exports. Para caminar por el panel
-    // dejamos el rig en idle y movemos el cuerpo completo desde CSS/runtime, como un personaje de juego.
-    const clipIndex = activeMode === "talk" ? 1 : activeMode === "wave" ? 2 : activeMode === "point" ? 4 : 0;
+    // Evitamos clips problemáticos de caminar o extremidades si el GLB viene mal riggeado.
+    // El movimiento "vivo" ocurre moviendo el personaje completo desde el Runtime, no retorciendo huesos.
+    const clipIndex = activeMode === "talk" ? 1 : 0;
     const clip = clips[clipIndex] || clips[0];
     if (!clip) return;
     mixer.stopAllAction();
@@ -222,13 +222,13 @@ function Model({
     const bodyBreath = breathe * 0.01;
 
     // Movimiento del personaje completo. Las piernas no se fuerzan: el Runtime mueve el cuerpo por pantalla.
-    group.current.position.set(Math.sin(t * 0.38) * 0.018, -1.08 + bodyBreath, 0);
+    group.current.position.set(Math.sin(t * 0.38) * 0.012, -1.1 + bodyBreath, 0);
     group.current.rotation.set(attentiveLean, baseYaw + looking, slow * 0.004);
-    group.current.scale.setScalar(1.6);
+    group.current.scale.setScalar(1.42);
   });
 
   return (
-    <group ref={group} position={[0, -1.08, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.6}>
+    <group ref={group} position={[0, -1.1, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.42}>
       <primitive object={scene} />
     </group>
   );

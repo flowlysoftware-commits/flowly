@@ -2386,3 +2386,126 @@ input[type="date"].input-dark { color-scheme: dark; }
     width: calc(100vw - 1rem) !important;
   }
 }
+
+
+/* Flowly Companion - runtime de personaje natural y voz robusta */
+.flowly-companion-runtime {
+  right: clamp(.55rem, 2vw, 1.15rem);
+  bottom: clamp(.35rem, 1.6vw, .9rem);
+  max-width: calc(100vw - 1rem);
+  will-change: transform;
+}
+.flowly-companion-runtime:not([data-voice-prompt="true"]):not([data-open="true"])[data-life-mode="walking"] {
+  animation: flowlyCompanionWholeWalk 18s ease-in-out infinite;
+}
+.flowly-companion-runtime:not([data-voice-prompt="true"]):not([data-open="true"])[data-life-mode="attention"],
+.flowly-companion-runtime:not([data-voice-prompt="true"]):not([data-open="true"])[data-voice-awake="true"] {
+  animation: flowlyCompanionApproach 1.15s cubic-bezier(.18,.9,.2,1) both;
+}
+.flowly-companion-avatar-shell {
+  width: clamp(10.2rem, 11.5vw, 13.6rem);
+  height: clamp(14rem, 17vw, 18.4rem);
+  transform-origin: 50% 100%;
+  overflow: visible;
+}
+.flowly-companion-avatar-shell .flowly-3d-stage {
+  overflow: visible;
+}
+.flowly-companion-avatar-shell .evo-companion-3d,
+.flowly-companion-avatar-shell .evo-companion {
+  transform-origin: 50% 100%;
+}
+.flowly-companion-runtime[data-life-mode="idle"] .flowly-companion-avatar-shell,
+.flowly-companion-runtime[data-life-mode="thinking"] .flowly-companion-avatar-shell {
+  animation: flowlyCompanionBreathing 4.8s ease-in-out infinite;
+}
+.flowly-companion-runtime[data-life-mode="talking"] .flowly-companion-avatar-shell,
+.flowly-companion-runtime[data-voice="speaking"] .flowly-companion-avatar-shell {
+  animation: flowlyCompanionSpeaking 1.4s ease-in-out infinite;
+}
+.flowly-companion-runtime[data-voice-awake="true"] .flowly-companion-avatar-shell::after {
+  content: "Te escucho";
+  color: #ecfeff;
+  border-color: rgba(34,211,238,.5);
+  background: rgba(8, 47, 73, .88);
+}
+.flowly-companion-voice-card {
+  margin-top: .65rem;
+  border: 1px solid rgba(103,232,249,.18);
+  border-radius: .95rem;
+  background: rgba(8,47,73,.22);
+  padding: .65rem .75rem;
+}
+.flowly-companion-voice-card span {
+  display: block;
+  color: #67e8f9;
+  font-size: .62rem;
+  font-weight: 1000;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.flowly-companion-voice-card strong {
+  display: block;
+  margin-top: .15rem;
+  font-size: .76rem;
+}
+.flowly-companion-voice-card small {
+  display: block;
+  margin-top: .25rem;
+  color: rgba(255,255,255,.62);
+  font-size: .68rem;
+}
+.flowly-companion-voice-cta {
+  position: absolute;
+  right: .2rem;
+  bottom: 2.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .32rem;
+  border: 1px solid rgba(167,139,250,.38);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .82);
+  color: #ddd6fe;
+  padding: .42rem .62rem;
+  font-size: .68rem;
+  font-weight: 900;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 14px 40px rgba(0,0,0,.28);
+}
+@keyframes flowlyCompanionWholeWalk {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  18% { transform: translate3d(-7vw, -6px, 0) scale(1.01); }
+  36% { transform: translate3d(-17vw, 3px, 0) scale(1); }
+  58% { transform: translate3d(-23vw, -9px, 0) scale(1.01); }
+  78% { transform: translate3d(-10vw, -3px, 0) scale(1); }
+}
+@keyframes flowlyCompanionApproach {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-8vw, -10px, 0) scale(1.03); }
+}
+@keyframes flowlyCompanionBreathing {
+  0%, 100% { transform: translateY(0) rotate(.2deg); }
+  50% { transform: translateY(-5px) rotate(-.2deg); }
+}
+@keyframes flowlyCompanionSpeaking {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-4px) scale(1.012); }
+  70% { transform: translateY(-1px) scale(.998); }
+}
+@media (max-width: 900px) {
+  .flowly-companion-runtime {
+    right: .25rem;
+    bottom: .15rem;
+  }
+  .flowly-companion-avatar-shell {
+    width: 9rem;
+    height: 12.2rem;
+  }
+  .flowly-companion-runtime:not([data-voice-prompt="true"]):not([data-open="true"])[data-life-mode="walking"] {
+    animation: flowlyCompanionMobileWalk 14s ease-in-out infinite;
+  }
+}
+@keyframes flowlyCompanionMobileWalk {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-16vw, -6px, 0); }
+}

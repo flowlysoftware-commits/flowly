@@ -89,7 +89,7 @@ export default function FlowlyCompanionRuntime() {
 
 
   const voiceNeedsActivation = !isArchitect && !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
-  const avatarMood = voiceNeedsActivation ? "attention" : thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
+  const avatarMood = voiceNeedsActivation ? "attention" : voice.isAwake ? "attention" : thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
 
   useEffect(() => {
     voiceSpeakRef.current = voice.speak;
@@ -187,7 +187,7 @@ export default function FlowlyCompanionRuntime() {
   };
 
   return (
-    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood} data-entrance={entranceState} data-voice={voice.state} data-voice-prompt={voiceNeedsActivation}>
+    <div className="flowly-companion-runtime" data-open={open} data-minimized={minimized} data-mode={mode} data-life-mode={avatarMood} data-entrance={entranceState} data-voice={voice.state} data-voice-awake={voice.isAwake} data-voice-prompt={voiceNeedsActivation}>
       {!minimized && (
         <div className="flowly-companion-bubble" role="status">
           <span className="flowly-companion-bubble-kicker">{voiceNeedsActivation ? "Flow por voz" : isArchitect ? "Companion Arquitecto" : context.area}</span>
@@ -216,7 +216,17 @@ export default function FlowlyCompanionRuntime() {
         <button
           type="button"
           className="flowly-companion-voice-cta"
-          onClick={() => voice.active ? voice.deactivate() : voice.activate()}
+          onClick={async () => {
+            if (voice.active) {
+              voice.deactivate();
+              return;
+            }
+            const activated = await voice.activate();
+            if (activated && typeof window !== "undefined") {
+              window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+              setVoiceIntroResolved(true);
+            }
+          }}
           aria-label={voice.active ? "Desactivar voz de Flow" : "Activar voz de Flow"}
         >
           {voice.active ? <Mic size={14} /> : <MicOff size={14} />}
