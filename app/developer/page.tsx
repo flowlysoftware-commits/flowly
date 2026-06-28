@@ -9,6 +9,8 @@ import {
   Boxes,
   BrainCircuit,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Cpu,
   Database,
   FileCode2,
@@ -20,7 +22,6 @@ import {
   Network,
   Rocket,
   Search,
-  SendHorizontal,
   ShieldCheck,
   Sparkles,
   TerminalSquare,
@@ -64,6 +65,10 @@ type DeveloperPlan = {
       edges?: number;
       routes?: number;
     };
+    impact?: {
+      avoidCreating?: string[];
+      targetModule?: string;
+    };
   };
 };
 
@@ -74,21 +79,28 @@ type DeveloperRun = DeveloperPlan & {
   branch?: string;
 };
 
+type WorkStepStatus = "done" | "active" | "waiting" | "error";
+
+type WorkStep = {
+  label: string;
+  status: WorkStepStatus;
+};
+
 const quickPrompts = [
-  "Analiza el Companion y propón cómo hacerlo más vivo, evolutivo y expresivo sin crear archivos duplicados.",
-  "El CRM no me gusta. Analízalo y dime cómo podríamos hacerlo más limpio, visual y fácil de usar.",
-  "Revisa el panel del cliente y dime qué partes están mezcladas con herramientas internas de desarrollo.",
+  "Oye, ayúdame a mejorar el Companion. Quiero que sea más vivo, evolutivo y expresivo, pero sin crear archivos duplicados.",
+  "El CRM no me gusta. Investígalo y dime cómo podríamos hacerlo más limpio, visual y fácil de usar.",
+  "Revisa el panel del cliente y dime qué partes siguen mezcladas con herramientas internas de desarrollo.",
   "Quiero mejorar el rendimiento general del panel sin romper ninguna ruta actual.",
   "El último Pull Request no compila. Revisa el error de build y prepara una corrección sobre la misma rama.",
 ];
 
 const commandCenterLinks = [
-  { label: "Cerebro", desc: "Brain: piensa, consulta contexto y decide planes.", href: "/os/brain", icon: BrainCircuit },
+  { label: "Cerebro", desc: "Brain: entiende, razona y coordina cambios.", href: "/os/brain", icon: BrainCircuit },
   { label: "Corazón", desc: "Kernel: registro central, eventos y gobierno.", href: "/kernel", icon: HeartPulse },
   { label: "Memoria", desc: "Knowledge: documentación viva y contexto técnico.", href: "/docs", icon: MemoryStick },
-  { label: "Project Graph", desc: "Mapa técnico del proyecto, rutas y dependencias.", href: "/os/project-graph", icon: Network },
-  { label: "Executor V3", desc: "Motor que crea ramas y Pull Requests seguros.", href: "/os/executor-v3", icon: Rocket },
-  { label: "QA Agent", desc: "Revisa PRs fallidos y corrige builds en la misma rama.", href: "/os/qa", icon: ShieldCheck },
+  { label: "Mapa del proyecto", desc: "Project Graph: rutas, APIs, componentes y dependencias.", href: "/os/project-graph", icon: Network },
+  { label: "Executor V3", desc: "Agente que crea ramas y Pull Requests seguros.", href: "/os/executor-v3", icon: Rocket },
+  { label: "QA Agent", desc: "Revisa PRs fallidos y corrige builds.", href: "/os/qa", icon: ShieldCheck },
   { label: "GitHub", desc: "Conexión segura con repositorio y PRs.", href: "/os/github", icon: Github },
   { label: "Studio", desc: "Editor visual de blueprints y módulos.", href: "/studio/v2", icon: Boxes },
   { label: "Crear módulos", desc: "Asistente simple para diseñar proyectos nuevos.", href: "/crear", icon: Wand2 },
@@ -109,21 +121,60 @@ function normalizeRisk(risk?: string) {
   return risk;
 }
 
+function moduleLabel(module?: string) {
+  if (!module) return "Flowly OS";
+  if (module.toLowerCase().includes("companion")) return "Companion";
+  if (module.toLowerCase().includes("crm")) return "CRM";
+  if (module.toLowerCase().includes("fact")) return "Facturación";
+  return module;
+}
+
+function capabilityNameFromFile(file: CandidateFile) {
+  const path = file.path.toLowerCase();
+  if (path.includes("avatar")) return "Avatar";
+  if (path.includes("chat") || path.includes("assistant")) return "Conversación";
+  if (path.includes("memory") || path.includes("docs") || path.includes("knowledge")) return "Memoria";
+  if (path.includes("api")) return "API";
+  if (path.includes("crm") || path.includes("cliente")) return "CRM";
+  if (path.includes("page.tsx")) return "Pantalla";
+  if (path.includes("runtime")) return "Runtime";
+  if (path.includes("style") || path.includes("css")) return "Estilos";
+  return "Pieza existente";
+}
+
 function explainPlan(plan: DeveloperPlan | null) {
   if (!plan?.ok) return null;
   const modules = plan.projectMap?.modules || [];
   const candidates = plan.projectMap?.candidates || [];
   const proposedFiles = plan.proposedFiles || [];
+  const target = moduleLabel(modules[0] || plan.projectMap?.impact?.targetModule);
+  const meaningfulAreas = Array.from(new Set(candidates.slice(0, 12).map(capabilityNameFromFile))).slice(0, 6);
+
+  const hasChanges = proposedFiles.length > 0;
   return {
-    title: "Perfecto, he investigado el proyecto.",
-    intro: `He analizado ${plan.projectMap?.analyzedFiles || plan.projectMap?.projectGraph?.totalFiles || 0} archivos y he encontrado ${plan.projectMap?.relatedFiles || candidates.length} piezas relacionadas con lo que pides.`,
-    modules: modules.length ? modules : ["Flowly OS"],
-    candidates: candidates.slice(0, 8),
+    title: "Perfecto, ya he investigado Flowly.",
+    naturalIntro: `He entendido que quieres trabajar sobre ${target}. He revisado el mapa del proyecto, he localizado las piezas relacionadas y he preparado una propuesta segura antes de tocar nada.`,
+    target,
+    areas: meaningfulAreas.length ? meaningfulAreas : ["Arquitectura", "Interfaz", "Runtime"],
+    candidates: candidates.slice(0, 10),
     proposedFiles: proposedFiles.slice(0, 8),
-    next: proposedFiles.length
+    hasChanges,
+    next: hasChanges
       ? "Si me das el OK, crearé una rama nueva, aplicaré los cambios y abriré un Pull Request para que puedas revisarlo antes de tocar producción."
-      : "Todavía no voy a tocar archivos. Primero necesito una propuesta segura sobre archivos reales existentes; no crearé documentos falsos ni planes dentro del repositorio.",
+      : "Aún no he encontrado un cambio de código suficientemente seguro. No crearé archivos falsos ni duplicados; puedo seguir investigando o puedes concretar un poco más qué parte quieres mejorar.",
   };
+}
+
+function buildTimeline(mode: string, plan: DeveloperPlan | null, run: DeveloperRun | null, error: string | null): WorkStep[] {
+  return [
+    { label: "Entender lo que quieres", status: mode === "idle" ? "waiting" : "done" },
+    { label: "Investigar Flowly", status: mode === "planning" ? "active" : plan?.ok || run ? "done" : "waiting" },
+    { label: "Preparar propuesta clara", status: mode === "planned" || mode === "running" || mode === "done" ? "done" : mode === "planning" ? "waiting" : "waiting" },
+    { label: "Esperar tu aprobación", status: mode === "planned" ? "active" : mode === "running" || mode === "done" ? "done" : "waiting" },
+    { label: "Aplicar cambios en rama segura", status: mode === "running" ? "active" : mode === "done" ? "done" : "waiting" },
+    { label: "Crear Pull Request", status: mode === "done" && run?.pullRequestUrl ? "done" : mode === "running" ? "waiting" : "waiting" },
+    { label: error ? "Revisar error" : "Esperar revisión humana", status: error ? "error" : mode === "done" ? "active" : "waiting" },
+  ];
 }
 
 export default function DeveloperControlCenterPage() {
@@ -132,15 +183,18 @@ export default function DeveloperControlCenterPage() {
   const [run, setRun] = useState<DeveloperRun | null>(null);
   const [mode, setMode] = useState<"idle" | "planning" | "planned" | "running" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [showTech, setShowTech] = useState(false);
   const [history, setHistory] = useState<Array<{ role: "user" | "brain"; text: string }>>([
     {
       role: "brain",
       text:
-        "Hola Ricky. Soy el centro de desarrollo de Flowly. Escríbeme normal: “quiero mejorar el CRM”, “haz el Companion más vivo” o “revisa este módulo”. Primero investigaré, luego te enseñaré el plan y solo si me das el OK crearé un Pull Request.",
+        "Hola Ricky. Dime qué quieres mejorar con palabras normales. Primero investigaré el proyecto, después te explicaré qué he encontrado y solo si me das permiso crearé un Pull Request seguro.",
     },
   ]);
 
   const explanation = useMemo(() => explainPlan(plan), [plan]);
+  const timeline = useMemo(() => buildTimeline(mode, plan, run, error), [mode, plan, run, error]);
+  const isBusy = mode === "planning" || mode === "running";
 
   async function analyze(event?: FormEvent) {
     event?.preventDefault();
@@ -154,7 +208,7 @@ export default function DeveloperControlCenterPage() {
     setHistory((items) => [
       ...items,
       { role: "user", text: clean },
-      { role: "brain", text: "Perfecto. Voy a investigar el proyecto antes de tocar nada. Buscaré módulos, archivos relacionados, dependencias y posibles riesgos." },
+      { role: "brain", text: "Perfecto. Voy a investigar Flowly antes de tocar nada. Buscaré qué parte existe ya, qué conviene reutilizar y qué riesgos hay." },
     ]);
 
     try {
@@ -168,13 +222,15 @@ export default function DeveloperControlCenterPage() {
 
       setPlan(data);
       setMode("planned");
+      const explained = explainPlan(data);
       setHistory((items) => [
         ...items,
         {
           role: "brain",
           text:
-            `He terminado de investigar. Riesgo ${normalizeRisk(data.risk)}. ` +
-            `He encontrado ${data.projectMap?.relatedFiles || 0} archivos relacionados y prepararé ${data.proposedFiles?.length || 0} cambio(s) iniciales. Revisa el plan y pulsa “OK, hazlo” si estás de acuerdo.`,
+            explained?.hasChanges
+              ? `He terminado. ${explained.naturalIntro} Veo una forma segura de hacerlo. Revisa la propuesta y, si te parece bien, pulsa “Aplicar cambios”.`
+              : `He terminado. ${explained?.naturalIntro || "He revisado el proyecto."} De momento no haré cambios automáticos porque no quiero crear archivos duplicados ni tocar código sin seguridad.`,
         },
       ]);
     } catch (err) {
@@ -192,7 +248,7 @@ export default function DeveloperControlCenterPage() {
     setError(null);
     setHistory((items) => [
       ...items,
-      { role: "brain", text: "OK recibido. Ahora voy a crear una rama segura, aplicar los cambios y abrir un Pull Request. No tocaré la rama principal." },
+      { role: "brain", text: "OK recibido. Voy a trabajar en una rama segura. Si algo falla, no tocaré producción." },
     ]);
 
     try {
@@ -212,7 +268,7 @@ export default function DeveloperControlCenterPage() {
           role: "brain",
           text: data.pullRequestUrl
             ? `Hecho. He creado la rama ${data.branch || "nueva"} y el Pull Request #${data.pullRequestNumber || ""}. Revísalo antes de hacer merge.`
-            : "He preparado el plan, pero no se ha recibido URL del Pull Request.",
+            : "He preparado el trabajo, pero no he recibido URL del Pull Request.",
         },
       ]);
     } catch (err) {
@@ -223,14 +279,12 @@ export default function DeveloperControlCenterPage() {
     }
   }
 
-  const isBusy = mode === "planning" || mode === "running";
-
   return (
     <main className="min-h-screen overflow-hidden bg-[#02040b] text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(124,58,237,.24),transparent_28%),radial-gradient(circle_at_82%_16%,rgba(34,211,238,.2),transparent_26%),radial-gradient(circle_at_50%_90%,rgba(236,72,153,.12),transparent_28%)]" />
-      <div className="pointer-events-none fixed inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(255,255,255,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.08)_1px,transparent_1px)] [background-size:44px_44px]" />
+      <div className="pointer-events-none fixed inset-0 opacity-[0.14] [background-image:linear-gradient(rgba(255,255,255,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.08)_1px,transparent_1px)] [background-size:44px_44px]" />
 
-      <section className="relative mx-auto flex min-h-screen max-w-[1720px] gap-5 px-5 py-5">
+      <section className="relative mx-auto flex min-h-screen max-w-[1760px] gap-5 px-5 py-5">
         <aside className="hidden w-72 shrink-0 rounded-[2rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/40 backdrop-blur-xl xl:block">
           <div className="flex items-center gap-3 px-2 py-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-300 text-xl font-black shadow-lg shadow-violet-500/25">F</div>
@@ -250,12 +304,12 @@ export default function DeveloperControlCenterPage() {
             <MenuGroup title="Trabajo IA">
               <MenuItem href="/os/project-graph" icon={<Network size={17} />} label="Project Graph" highlight />
               <MenuItem href="/os/executor-v3" icon={<Rocket size={17} />} label="Executor V3" />
+              <MenuItem href="/os/qa" icon={<ShieldCheck size={17} />} label="QA Agent" />
               <MenuItem href="/os/github" icon={<Github size={17} />} label="GitHub" />
-              <MenuItem href="/studio/v2" icon={<Boxes size={17} />} label="Studio" />
             </MenuGroup>
             <MenuGroup title="Creación">
               <MenuItem href="/crear" icon={<Wand2 size={17} />} label="Crear módulos" />
-              <MenuItem href="/studio/generator" icon={<FileCode2 size={17} />} label="Generador" />
+              <MenuItem href="/studio/v2" icon={<Boxes size={17} />} label="Studio" />
               <MenuItem href="/os/migration" icon={<Network size={17} />} label="Migración OS" />
             </MenuGroup>
           </nav>
@@ -277,16 +331,16 @@ export default function DeveloperControlCenterPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-100/55">Flowly IA Developer</p>
-                <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">Habla con Flowly para desarrollarlo</h1>
+                <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">Desarrolla Flowly hablando</h1>
                 <p className="mt-2 max-w-4xl text-sm leading-6 text-white/58">
-                  Escribe lo que quieres mejorar con palabras normales. Brain investiga, Project Graph encuentra archivos, Executor prepara cambios y GitHub abre un Pull Request seguro. Nada toca producción sin tu aprobación.
+                  Escribe lo que quieres mejorar. Brain investiga, te explica la propuesta en lenguaje normal y solo si apruebas crea una rama y un Pull Request seguro.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                 <Badge label="Modo" value="Arquitecto" />
                 <Badge label="Executor" value="V3" />
                 <Badge label="GitHub" value="PR seguro" />
-                <Badge label="Rama" value="main" />
+                <Badge label="QA" value="Preparado" />
               </div>
             </div>
           </header>
@@ -296,8 +350,9 @@ export default function DeveloperControlCenterPage() {
               <div className="rounded-[2rem] border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 via-white/[0.045] to-purple-500/10 p-5 shadow-2xl shadow-cyan-950/20 backdrop-blur-xl">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100/55">Chat de desarrollo</p>
-                    <h2 className="mt-2 text-2xl font-black">Dime qué quieres cambiar</h2>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100/55">Arquitecto conversacional</p>
+                    <h2 className="mt-2 text-2xl font-black">¿Qué quieres mejorar?</h2>
+                    <p className="mt-1 text-sm text-white/55">No necesitas hablar en técnico. Dímelo como se lo dirías a una persona.</p>
                   </div>
                   <div className="flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-xs font-black text-emerald-100">
                     <span className="h-2 w-2 rounded-full bg-emerald-300" /> Listo para investigar
@@ -308,7 +363,7 @@ export default function DeveloperControlCenterPage() {
                   <div className="space-y-3">
                     {history.map((message, index) => (
                       <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[86%] rounded-2xl border px-4 py-3 text-sm leading-6 ${message.role === "user" ? "border-cyan-300/30 bg-cyan-300/15 text-cyan-50" : "border-white/10 bg-white/[0.06] text-white/80"}`}>
+                        <div className={`max-w-[88%] rounded-2xl border px-4 py-3 text-sm leading-6 ${message.role === "user" ? "border-cyan-300/30 bg-cyan-300/15 text-cyan-50" : "border-white/10 bg-white/[0.06] text-white/80"}`}>
                           <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">{message.role === "user" ? "Tú" : "Flowly Brain"}</p>
                           {message.text}
                         </div>
@@ -317,7 +372,7 @@ export default function DeveloperControlCenterPage() {
                     {isBusy && (
                       <div className="flex justify-start">
                         <div className="max-w-[86%] rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">
-                          <div className="flex items-center gap-2 font-bold"><Loader2 className="animate-spin" size={16} /> {mode === "planning" ? "Investigando proyecto..." : "Ejecutando cambios y creando PR..."}</div>
+                          <div className="flex items-center gap-2 font-bold"><Loader2 className="animate-spin" size={16} /> {mode === "planning" ? "Estoy investigando Flowly..." : "Estoy aplicando cambios en una rama segura..."}</div>
                         </div>
                       </div>
                     )}
@@ -334,11 +389,11 @@ export default function DeveloperControlCenterPage() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button disabled={isBusy || !instruction.trim()} className="inline-flex items-center gap-2 rounded-2xl bg-cyan-200 px-5 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">
                       {mode === "planning" ? <Loader2 className="animate-spin" size={17} /> : <Search size={17} />}
-                      Investigar y preparar plan
+                      Investigar primero
                     </button>
-                    <button type="button" onClick={approveAndRun} disabled={isBusy || !plan?.ok} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/30 bg-emerald-300/15 px-5 py-3 text-sm font-black text-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">
+                    <button type="button" onClick={approveAndRun} disabled={isBusy || !plan?.ok || !explanation?.hasChanges} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/30 bg-emerald-300/15 px-5 py-3 text-sm font-black text-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">
                       {mode === "running" ? <Loader2 className="animate-spin" size={17} /> : <Rocket size={17} />}
-                      OK, hazlo y crea Pull Request
+                      Aplicar cambios
                     </button>
                     <button type="button" onClick={() => { setInstruction(""); setPlan(null); setRun(null); setMode("idle"); setError(null); }} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-black text-white/70">
                       Limpiar
@@ -359,134 +414,125 @@ export default function DeveloperControlCenterPage() {
                 <section className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 backdrop-blur-xl">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100/55">Plan entendible</p>
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100/55">Propuesta de Brain</p>
                       <h2 className="mt-2 text-3xl font-black">{explanation.title}</h2>
-                      <p className="mt-2 max-w-4xl text-sm leading-6 text-white/60">{explanation.intro}</p>
+                      <p className="mt-3 max-w-4xl text-sm leading-7 text-white/68">{explanation.naturalIntro}</p>
                     </div>
                     <RiskBadge risk={plan.risk} />
                   </div>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-4">
-                    <Metric label="Archivos analizados" value={String(plan.projectMap?.analyzedFiles || 0)} />
-                    <Metric label="Relacionados" value={String(plan.projectMap?.relatedFiles || 0)} />
-                    <Metric label="Editables" value={String(plan.projectMap?.editableFiles || 0)} />
-                    <Metric label="Cambios PR" value={String(plan.proposedFiles?.length || 0)} />
-                  </div>
-
-                  <div className="mt-5 grid gap-5 xl:grid-cols-2">
-                    <PlanBox title="Lo que he detectado" icon={<BrainCircuit size={18} />}>
-                      <ul className="space-y-2 text-sm text-white/65">
-                        {explanation.modules.map((module) => <li key={module}>• Módulo relacionado: <b className="text-white">{module}</b></li>)}
-                        {(plan.reasoning || []).slice(0, 4).map((item) => <li key={item}>• {item}</li>)}
-                      </ul>
+                  <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
+                    <PlanBox title="Lo que he encontrado" icon={<BrainCircuit size={18} />}>
+                      <div className="space-y-3 text-sm leading-6 text-white/70">
+                        <p>El área principal es <b className="text-white">{explanation.target}</b>.</p>
+                        <p>He localizado piezas existentes que conviene reutilizar antes de crear nada nuevo:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {explanation.areas.map((area) => <span key={area} className="rounded-full border border-cyan-200/15 bg-cyan-200/10 px-3 py-1 text-xs font-bold text-cyan-100">{area}</span>)}
+                        </div>
+                      </div>
                     </PlanBox>
 
                     <PlanBox title="Lo que haré si apruebas" icon={<Rocket size={18} />}>
-                      <ul className="space-y-2 text-sm text-white/65">
-                        {(plan.proposedSteps || []).slice(0, 6).map((item) => <li key={item}>• {item}</li>)}
+                      <ul className="space-y-2 text-sm leading-6 text-white/70">
+                        <li>• Crearé una rama segura.</li>
+                        <li>• Modificaré solo archivos necesarios.</li>
+                        <li>• Evitaré duplicados y versiones paralelas.</li>
+                        <li>• Abriré un Pull Request para revisión.</li>
                       </ul>
                     </PlanBox>
+                  </div>
 
-                    <PlanBox title="Archivos que revisaré" icon={<FileCode2 size={18} />}>
+                  <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                    <PlanBox title="Funcionalidades sobre las que trabajaría" icon={<Sparkles size={18} />}>
                       <div className="space-y-2">
-                        {explanation.candidates.map((file) => (
+                        {explanation.candidates.slice(0, 6).map((file) => (
                           <div key={file.path} className="rounded-xl border border-white/10 bg-black/25 p-3">
-                            <p className="break-all text-xs font-black text-white">{file.path}</p>
-                            <p className="mt-1 text-[11px] text-white/45">{file.reason || "Relacionado con la petición."}</p>
+                            <p className="text-sm font-black text-white">{capabilityNameFromFile(file)}</p>
+                            <p className="mt-1 text-xs text-white/45">Ya existe en el proyecto. La revisaré antes de crear nada nuevo.</p>
                           </div>
                         ))}
                       </div>
                     </PlanBox>
 
-                    <PlanBox title="Cambios reales que prepararía" icon={<GitPullRequest size={18} />}>
-                      <div className="space-y-2">
-                        {explanation.proposedFiles.map((file) => (
-                          <div key={file.path} className="rounded-xl border border-white/10 bg-black/25 p-3">
-                            <p className="break-all text-xs font-black text-cyan-100">{file.path}</p>
-                            <p className="mt-1 text-[11px] text-white/45">{file.message || "Cambio propuesto por Executor."}</p>
-                          </div>
-                        ))}
-                        {!explanation.proposedFiles.length && <p className="text-sm leading-6 text-white/50">Aún no hay cambios seguros para crear Pull Request. El plan se guardará en la memoria del Brain, no como archivo dentro de <code className="rounded bg-black/30 px-1 text-cyan-100">docs/executor</code>.</p>}
-                      </div>
+                    <PlanBox title="Cambios concretos" icon={<GitPullRequest size={18} />}>
+                      {explanation.hasChanges ? (
+                        <div className="space-y-2">
+                          {explanation.proposedFiles.map((file) => (
+                            <div key={file.path} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                              <p className="break-all text-xs font-black text-cyan-100">{file.path}</p>
+                              <p className="mt-1 text-[11px] text-white/45">{file.message || "Cambio propuesto por Executor."}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm leading-6 text-amber-50">
+                          Todavía no tengo un cambio de código suficientemente seguro. No crearé PR falso ni documentación innecesaria.
+                        </div>
+                      )}
                     </PlanBox>
                   </div>
 
-                  <div className="mt-5 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-4">
-                    <p className="text-sm font-black text-emerald-100">Siguiente paso</p>
-                    <p className="mt-1 text-sm leading-6 text-white/65">{explanation.next}</p>
+                  <div className="mt-5 rounded-3xl border border-cyan-200/15 bg-cyan-200/10 p-4">
+                    <p className="text-sm leading-7 text-cyan-50">{explanation.next}</p>
                   </div>
-                </section>
-              )}
 
-              {run && (
-                <section className="rounded-[2rem] border border-emerald-300/25 bg-emerald-300/10 p-5 backdrop-blur-xl">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100/65">Resultado</p>
-                      <h2 className="mt-2 text-3xl font-black">Hecho</h2>
-                      <p className="mt-2 text-sm text-white/60">He preparado los cambios en una rama segura. Revisa el Pull Request antes de fusionarlo.</p>
+                  <button type="button" onClick={() => setShowTech((value) => !value)} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black text-white/70">
+                    {showTech ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    {showTech ? "Ocultar detalles técnicos" : "Ver detalles técnicos"}
+                  </button>
+
+                  {showTech && (
+                    <div className="mt-4 grid gap-4 md:grid-cols-4">
+                      <Metric label="Archivos analizados" value={String(plan.projectMap?.analyzedFiles || 0)} />
+                      <Metric label="Relacionados" value={String(plan.projectMap?.relatedFiles || 0)} />
+                      <Metric label="Editables" value={String(plan.projectMap?.editableFiles || 0)} />
+                      <Metric label="Cambios PR" value={String(plan.proposedFiles?.length || 0)} />
                     </div>
-                    <CheckCircle2 className="text-emerald-300" size={42} />
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <Metric label="Rama" value={run.branch || "Creada"} small />
-                    <Metric label="Pull Request" value={run.pullRequestNumber ? `#${run.pullRequestNumber}` : "Creado"} small />
-                    <Metric label="Estado" value={run.status || "Listo"} small />
-                  </div>
-                  {run.pullRequestUrl && (
-                    <a href={run.pullRequestUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950">
-                      Ver Pull Request <ArrowRight size={16} />
-                    </a>
                   )}
                 </section>
               )}
 
+              {run?.pullRequestUrl && (
+                <section className="rounded-[2rem] border border-emerald-300/20 bg-emerald-300/10 p-5 backdrop-blur-xl">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100/70">Trabajo terminado</p>
+                      <h2 className="mt-2 text-3xl font-black">Hecho. Pull Request creado.</h2>
+                      <p className="mt-2 text-sm text-emerald-50/75">Rama: {run.branch || "rama segura"}. Revísalo antes de hacer merge.</p>
+                    </div>
+                    <Link href={run.pullRequestUrl} target="_blank" className="inline-flex items-center gap-2 rounded-2xl bg-emerald-200 px-5 py-3 text-sm font-black text-slate-950">
+                      Ver Pull Request <ArrowRight size={17} />
+                    </Link>
+                  </div>
+                </section>
+              )}
+
               {error && (
-                <section className="rounded-[2rem] border border-rose-300/25 bg-rose-300/10 p-5 text-rose-50 backdrop-blur-xl">
-                  <div className="flex items-center gap-3"><XCircle /> <b>Algo ha fallado</b></div>
-                  <p className="mt-2 text-sm">{error}</p>
+                <section className="rounded-[2rem] border border-rose-300/20 bg-rose-300/10 p-5 text-rose-50">
+                  <div className="flex items-center gap-2 font-black"><XCircle size={18} /> Error</div>
+                  <p className="mt-2 text-sm leading-6">{error}</p>
                 </section>
               )}
             </div>
 
             <aside className="space-y-5">
-              <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 backdrop-blur-xl">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/35">Sistema</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
-                  {systemHealth.map(([name, status, pct]) => <SystemCard key={name} name={name} status={status} pct={pct} />)}
+              <Panel title="Línea de trabajo" icon={<Activity size={18} />}>
+                <div className="space-y-3">
+                  {timeline.map((step, index) => <TimelineStep key={step.label} index={index + 1} step={step} />)}
                 </div>
-              </div>
+              </Panel>
 
-              <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 backdrop-blur-xl">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/35">Centro de mando</p>
-                <div className="mt-4 grid gap-3">
-                  {commandCenterLinks.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Link key={item.href} href={item.href} className="group rounded-2xl border border-white/10 bg-black/25 p-4 transition hover:border-cyan-200/40 hover:bg-cyan-200/10">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-100"><Icon size={18} /></div>
-                          <div>
-                            <p className="font-black">{item.label}</p>
-                            <p className="mt-1 text-xs leading-5 text-white/45">{item.desc}</p>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
+              <Panel title="Centro de mando" icon={<Cpu size={18} />}>
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
+                  {commandCenterLinks.map((link) => <CommandCard key={link.href} {...link} />)}
                 </div>
-              </div>
+              </Panel>
 
-              <div className="rounded-[2rem] border border-purple-300/20 bg-purple-300/10 p-5 backdrop-blur-xl">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-purple-100/65">Cómo funciona</p>
-                <div className="mt-4 space-y-3 text-sm text-white/65">
-                  <Step n="1" text="Tú escribes lo que quieres mejorar." />
-                  <Step n="2" text="Brain investiga el proyecto y prepara un plan." />
-                  <Step n="3" text="Tú apruebas antes de tocar nada." />
-                  <Step n="4" text="Executor crea rama, cambios y Pull Request." />
-                  <Step n="5" text="Revisas el PR y decides si hacer merge." />
+              <Panel title="Estado del sistema" icon={<Database size={18} />}>
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
+                  {systemHealth.map(([name, status, pct]) => <HealthCard key={name} name={name} status={status} pct={pct} />)}
                 </div>
-              </div>
+              </Panel>
             </aside>
           </section>
         </div>
@@ -496,23 +542,31 @@ export default function DeveloperControlCenterPage() {
 }
 
 function MenuGroup({ title, children }: { title: string; children: ReactNode }) {
-  return <div><p className="mb-2 px-2 text-[11px] font-black uppercase tracking-[0.2em] text-white/30">{title}</p><div className="space-y-1">{children}</div></div>;
+  return <div><p className="mb-2 px-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">{title}</p><div className="space-y-1">{children}</div></div>;
 }
 
 function MenuItem({ href, icon, label, active, highlight }: { href: string; icon: ReactNode; label: string; active?: boolean; highlight?: boolean }) {
-  return <Link href={href} className={`flex items-center gap-3 rounded-2xl px-3 py-2 font-bold transition ${active ? "bg-cyan-300/15 text-cyan-50" : highlight ? "bg-purple-400/15 text-purple-50" : "text-white/62 hover:bg-white/10 hover:text-white"}`}>{icon}<span>{label}</span></Link>;
+  return <Link href={href} className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 transition ${active ? "bg-violet-500/25 text-white" : highlight ? "text-cyan-100 hover:bg-cyan-300/10" : "text-white/65 hover:bg-white/8 hover:text-white"}`}>{icon}<span>{label}</span></Link>;
 }
 
 function Badge({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">{label}</p><p className="mt-1 font-black text-white">{value}</p></div>;
+  return <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">{label}</p><p className="mt-1 font-black">{value}</p></div>;
 }
 
-function SystemCard({ name, status, pct }: { name: string; status: string; pct: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">{name}</p><p className="mt-2 text-lg font-black">{status}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-emerald-300" style={{ width: pct }} /></div><p className="mt-2 text-right text-xs font-black text-emerald-300">{pct}</p></div>;
+function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
+  return <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 backdrop-blur-xl"><div className="mb-4 flex items-center gap-2 text-cyan-100">{icon}<h3 className="font-black text-white">{title}</h3></div>{children}</div>;
 }
 
-function Metric({ label, value, small }: { label: string; value: string; small?: boolean }) {
-  return <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">{label}</p><p className={`mt-2 font-black ${small ? "break-all text-sm" : "text-3xl"}`}>{value}</p></div>;
+function CommandCard({ label, desc, href, icon: Icon }: { label: string; desc: string; href: string; icon: typeof BrainCircuit }) {
+  return <Link href={href} className="group rounded-2xl border border-white/10 bg-black/25 p-4 transition hover:border-cyan-200/40 hover:bg-cyan-200/10"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-100"><Icon size={18} /></div><div><p className="font-black">{label}</p><p className="mt-1 text-xs leading-5 text-white/45">{desc}</p></div></div><ArrowRight className="opacity-0 transition group-hover:opacity-100" size={16} /></div></Link>;
+}
+
+function HealthCard({ name, status, pct }: { name: string; status: string; pct: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">{name}</p><p className="mt-2 text-lg font-black">{status}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-emerald-300" style={{ width: pct }} /></div><p className="mt-2 text-right text-xs font-black text-emerald-300">{pct}</p></div>;
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>;
 }
 
 function PlanBox({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
@@ -525,6 +579,19 @@ function RiskBadge({ risk }: { risk?: string }) {
   return <div className={`rounded-2xl border px-4 py-3 ${color}`}><p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-70">Riesgo</p><p className="text-xl font-black">{value}</p></div>;
 }
 
-function Step({ n, text }: { n: string; text: string }) {
-  return <div className="flex gap-3 rounded-2xl border border-white/10 bg-black/20 p-3"><div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-200 text-xs font-black text-slate-950">{n}</div><p>{text}</p></div>;
+function TimelineStep({ index, step }: { index: number; step: WorkStep }) {
+  const statusClasses: Record<WorkStepStatus, string> = {
+    done: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
+    active: "border-cyan-300/30 bg-cyan-300/10 text-cyan-50",
+    waiting: "border-white/10 bg-black/20 text-white/45",
+    error: "border-rose-300/25 bg-rose-300/10 text-rose-100",
+  };
+  return (
+    <div className={`flex items-center gap-3 rounded-2xl border p-3 ${statusClasses[step.status]}`}>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-black">
+        {step.status === "done" ? <CheckCircle2 size={16} /> : step.status === "active" ? <Loader2 className="animate-spin" size={16} /> : index}
+      </div>
+      <p className="text-sm font-bold">{step.label}</p>
+    </div>
+  );
 }
