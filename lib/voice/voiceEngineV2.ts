@@ -9,6 +9,8 @@ export type VoiceEngineV2Snapshot = {
   recording: boolean;
   lastAudioKb: number;
   lastTranscript: string;
+  lastTranscriptionStatus: number | null;
+  lastTranscriptionRawResponse: string;
   wakeDetected: boolean;
   intentionDetected: boolean;
   lastBrainRequest: string;
@@ -63,6 +65,8 @@ export class VoiceEngineV2 {
   private recording = false;
   private lastAudioKb = 0;
   private lastTranscript = "";
+  private lastTranscriptionStatus: number | null = null;
+  private lastTranscriptionRawResponse = "";
   private wakeDetected = false;
   private intentionDetected = false;
   private lastBrainRequest = "";
@@ -117,6 +121,8 @@ export class VoiceEngineV2 {
       recording: this.recording,
       lastAudioKb: this.lastAudioKb,
       lastTranscript: this.lastTranscript,
+      lastTranscriptionStatus: this.lastTranscriptionStatus,
+      lastTranscriptionRawResponse: this.lastTranscriptionRawResponse,
       wakeDetected: this.wakeDetected,
       intentionDetected: this.intentionDetected,
       lastBrainRequest: this.lastBrainRequest,
@@ -198,9 +204,11 @@ export class VoiceEngineV2 {
     try {
       const transcription = await this.transcribe(blob);
       this.lastTranscript = transcription.text;
+      this.lastError = transcription.error || "";
+      this.publish();
+
       this.wakeDetected = detectWakeWord(transcription.text);
       this.intentionDetected = detectIntention(transcription.text, this.activeConversationMode);
-      this.lastError = transcription.error || "";
       this.phase = transcription.text ? "thinking" : "ready";
       this.publish();
 
@@ -280,15 +288,36 @@ export class VoiceEngineV2 {
         method: "POST",
         body: formData,
       });
-      const data = await response.json().catch(() => ({}));
+      const rawResponseText = await response.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = rawResponseText ? (JSON.parse(rawResponseText) as Record<string, unknown>) : {};
+      } catch {
+        data = { raw: rawResponseText };
+      }
+
+      this.lastTranscriptionStatus = response.status;
+      this.lastTranscriptionRawResponse = rawResponseText || JSON.stringify(data);
+
       if (!response.ok) {
         const message = typeof data?.error === "string" ? data.error : "No se pudo transcribir el audio.";
         return { text: "", error: message };
       }
-      const text = cleanText(typeof data?.text === "string" ? data.text : "");
+
+      const text = cleanText(
+        typeof data?.text === "string"
+          ? data.text
+          : typeof (data as Record<string, unknown>)?.transcript === "object" && (data as Record<string, unknown>).transcript && typeof (data as Record<string, unknown>).transcript === "object"
+            ? String(((data as Record<string, unknown>).transcript as Record<string, unknown>).text || "")
+            : typeof (data as Record<string, unknown>).raw === "string"
+              ? (data as Record<string, unknown>).raw
+              : ""
+      );
       return { text, error: "" };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al transcribir.";
+      this.lastTranscriptionStatus = null;
+      this.lastTranscriptionRawResponse = message;
       return { text: "", error: message };
     }
   }
@@ -374,6 +403,8 @@ export function getVoiceEngineV2DebugSummary(snapshot: VoiceEngineV2Snapshot) {
       `Grabando: ${snapshot.recording ? "sí" : "no"}`,
       `Audio: ${snapshot.lastAudioKb} KB`,
       `Transcripción: ${snapshot.lastTranscript || "—"}`,
+      `Estado de transcripción: ${snapshot.lastTranscriptionStatus ?? "—"}`,
+      `Respuesta de transcripción: ${snapshot.lastTranscriptionRawResponse || "—"}`,
       `Intención: ${snapshot.intentionDetected ? "sí" : "no"}`,
       `Brain: ${snapshot.lastBrainResponse || "—"}`,
       `Error: ${snapshot.lastError || "—"}`,

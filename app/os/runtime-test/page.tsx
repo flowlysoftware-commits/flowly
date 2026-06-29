@@ -54,10 +54,11 @@ export default function RuntimeTestPage() {
             <h2 className="font-black">Transcripción</h2>
             <div className="mt-3 space-y-2 text-sm text-white/70">
               <div><strong>Última transcripción:</strong> {snapshot.lastTranscript || "—"}</div>
-              <div><strong>Wake detectado:</strong> {snapshot.wakeDetected ? "sí" : "no"}</div>
-              <div><strong>Intención detectada:</strong> {snapshot.intentionDetected ? "sí" : "no"}</div>
-            </div>
-          </section>
+              <div><strong>Status:</strong> {snapshot.lastTranscriptionStatus ?? "—"}</div>
+              <div><strong>Respuesta completa:</strong></div>
+              <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-cyan-100">
+                {snapshot.lastTranscriptionRawResponse || "—"}
+              </pre>
 
           <section className="rounded-2xl border border-white/10 bg-black/20 p-5">
             <h2 className="font-black">Brain</h2>

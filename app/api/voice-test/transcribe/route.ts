@@ -6,13 +6,33 @@ export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "Falta OPENAI_API_KEY en variables de entorno." }, { status: 500 });
+      return NextResponse.json(
+        {
+          ok: false,
+          text: "",
+          error: "Falta OPENAI_API_KEY en variables de entorno.",
+          audioReceived: false,
+          audioSize: 0,
+          provider: "openai",
+        },
+        { status: 500 }
+      );
     }
 
     const formData = await request.formData();
     const audio = formData.get("audio");
     if (!(audio instanceof File)) {
-      return NextResponse.json({ error: "No se recibió ningún archivo de audio." }, { status: 400 });
+      return NextResponse.json(
+        {
+          ok: false,
+          text: "",
+          error: "No se recibió ningún archivo de audio.",
+          audioReceived: false,
+          audioSize: 0,
+          provider: "openai",
+        },
+        { status: 400 }
+      );
     }
 
     const openaiForm = new FormData();
@@ -30,11 +50,43 @@ export async function POST(request: Request) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      return NextResponse.json({ error: data?.error?.message || "OpenAI no pudo transcribir el audio.", details: data }, { status: response.status });
+      return NextResponse.json(
+        {
+          ok: false,
+          text: "",
+          error: data?.error?.message || "OpenAI no pudo transcribir el audio.",
+          details: data,
+          audioReceived: true,
+          audioSize: audio.size,
+          audioName: audio.name || "flowly-voice-test.webm",
+          provider: "openai",
+          status: response.status,
+        },
+        { status: response.status }
+      );
     }
 
-    return NextResponse.json({ text: data.text || "" });
+    return NextResponse.json({
+      ok: true,
+      text: data.text || "",
+      audioReceived: true,
+      audioSize: audio.size,
+      audioName: audio.name || "flowly-voice-test.webm",
+      provider: "openai",
+      status: response.status,
+      raw: data,
+    });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error inesperado transcribiendo audio." }, { status: 500 });
+    return NextResponse.json(
+      {
+        ok: false,
+        text: "",
+        error: error instanceof Error ? error.message : "Error inesperado transcribiendo audio.",
+        audioReceived: false,
+        audioSize: 0,
+        provider: "openai",
+      },
+      { status: 500 }
+    );
   }
 }
