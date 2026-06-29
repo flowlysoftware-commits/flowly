@@ -9,6 +9,8 @@ export function useVoiceEngineV2(activeConversationMode = true) {
     active: false,
     permissionState: "unknown",
     phase: "idle",
+    currentState: "idle",
+    previousState: null,
     recording: false,
     lastAudioKb: 0,
     lastTranscript: "",
@@ -19,6 +21,23 @@ export function useVoiceEngineV2(activeConversationMode = true) {
     lastBrainRequest: "",
     lastBrainResponse: "",
     lastError: "",
+    lastTransitionAt: null,
+    lastSilenceAt: null,
+    lastSpeechDetectedAt: null,
+    lastRecordingDurationMs: 0,
+    lastReason: "",
+    lastDebugEvents: [],
+    config: {
+      minRecordingMs: 900,
+      maxRecordingMs: 9000,
+      silenceTimeoutMs: 1150,
+      minAudioKb: 2,
+      debounceMs: 800,
+      speakingCooldownMs: 500,
+      speechThreshold: 0.045,
+      analyserPollMs: 90,
+      debugEventLimit: 18,
+    },
   });
 
   useEffect(() => {
