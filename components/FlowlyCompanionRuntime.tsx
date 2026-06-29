@@ -134,7 +134,7 @@ export default function FlowlyCompanionRuntime() {
     }, 1700);
   }, []);
 
-  const voiceNeedsActivation = !isArchitect && !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
+  const voiceNeedsActivation = !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
   const avatarMood = travel.moving ? "walking" : voiceNeedsActivation ? "attention" : voice.isAwake ? "attention" : thinking ? "talking" : lifeMode || (isArchitect ? "thinking" : context.mode);
   const companionRuntimeStyle = { "--flow-x": `${travel.x}px`, "--flow-y": `${travel.y}px` } as CSSProperties;
 
@@ -148,7 +148,7 @@ export default function FlowlyCompanionRuntime() {
   }, [moveFlowTo]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || isArchitect || voice.state === "unsupported" || hasAutoVoiceStartedRef.current) return;
+    if (typeof window === "undefined" || voice.state === "unsupported" || hasAutoVoiceStartedRef.current) return;
     const shouldAutoStart = window.localStorage.getItem("flowly_voice_enabled") === "true" || window.localStorage.getItem("flowly_voice_intro_resolved") === "true";
     const tryStart = async () => {
       const permissionsApi = navigator.permissions?.query;
@@ -180,7 +180,23 @@ export default function FlowlyCompanionRuntime() {
       }
     };
     void tryStart();
-  }, [isArchitect, voice, voice.state]);
+  }, [voice, voice.state]);
+
+  const toggleVoice = useCallback(async () => {
+    if (voice.active) {
+      voice.deactivate();
+      if (typeof window !== "undefined") window.localStorage.removeItem("flowly_voice_enabled");
+      return;
+    }
+
+    const activated = await voice.activate();
+    if (activated && typeof window !== "undefined") {
+      window.localStorage.setItem("flowly_voice_intro_resolved", "true");
+      window.localStorage.setItem("flowly_voice_enabled", "true");
+      setVoiceIntroResolved(true);
+      moveFlowTo("dock");
+    }
+  }, [moveFlowTo, voice]);
 
   useEffect(() => {
     if (voiceNeedsActivation) {
@@ -348,20 +364,7 @@ export default function FlowlyCompanionRuntime() {
         <button
           type="button"
           className="flowly-companion-voice-cta"
-          onClick={async () => {
-            if (voice.active) {
-              voice.deactivate();
-              if (typeof window !== "undefined") window.localStorage.removeItem("flowly_voice_enabled");
-              return;
-            }
-            const activated = await voice.activate();
-            if (activated && typeof window !== "undefined") {
-              window.localStorage.setItem("flowly_voice_intro_resolved", "true");
-              window.localStorage.setItem("flowly_voice_enabled", "true");
-              setVoiceIntroResolved(true);
-              moveFlowTo("dock");
-            }
-          }}
+          onClick={toggleVoice}
           aria-label={voice.active ? "Desactivar voz de Flow" : "Activar voz de Flow"}
         >
           {voice.active ? <Mic size={14} /> : <MicOff size={14} />}
@@ -404,6 +407,11 @@ export default function FlowlyCompanionRuntime() {
             <div className="flowly-companion-voice-card" data-active={voice.active}>
               <span>{voice.active ? "Voz activa" : "Voz apagada"}</span>
               <strong>{voice.active ? (voice.isAwake ? "Te escucho" : `Di "Flow" para llamarme`) : "Activa el micrófono una vez"}</strong>
+              {!voice.active && voice.state !== "unsupported" && (
+                <button type="button" className="flowly-companion-voice-primary" onClick={toggleVoice}>
+                  <Mic size={14} /> Activar voz ahora
+                </button>
+              )}
               {voice.transcript && <small>He oído: {voice.transcript}</small>}
               <small>Estado: {voice.state} · Grabaciones: {voice.debug.ticks} · Audio: {voice.debug.lastAudioKb} KB</small>
               {voice.debug.lastTranscription && <small>Última transcripción: {voice.debug.lastTranscription}</small>}
