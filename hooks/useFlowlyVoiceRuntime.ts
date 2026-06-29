@@ -33,6 +33,9 @@ type VoiceDebugSnapshot = {
   loopActive: boolean;
 };
 
+const CAPTURE_DURATION_MS = 1800;
+const LOOP_INTERVAL_MS = 2100;
+
 export function useFlowlyVoiceRuntime({
   enabled = true,
   wakeWord = "flow",
@@ -211,7 +214,7 @@ export function useFlowlyVoiceRuntime({
 
     try {
       console.info("[voice-debug] recording start");
-      const blob = await recordAudioSegment(stream, 4200);
+      const blob = await recordAudioSegment(stream, CAPTURE_DURATION_MS);
       console.info("[voice-debug] recording result", { size: blob?.size ?? 0, type: blob?.type ?? "" });
       if (!activeRef.current || manualStopRef.current) return;
 
@@ -258,7 +261,7 @@ export function useFlowlyVoiceRuntime({
     void captureAndTranscribe();
     intervalRef.current = window.setInterval(() => {
       void captureAndTranscribe();
-    }, 5200);
+    }, LOOP_INTERVAL_MS);
   }, [captureAndTranscribe, clearLoop]);
 
   const activate = useCallback(async () => {

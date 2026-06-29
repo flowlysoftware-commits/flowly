@@ -22,6 +22,7 @@ type RigBones = {
   spine2?: THREE.Object3D;
   neck?: THREE.Object3D;
   head?: THREE.Object3D;
+  jaw?: THREE.Object3D;
   leftArm?: THREE.Object3D;
   leftForeArm?: THREE.Object3D;
   leftHand?: THREE.Object3D;
@@ -54,6 +55,7 @@ function getRig(scene: THREE.Object3D): RigBones {
     spine2: getObject(scene, "mixamorig:Spine2", "mixamorigSpine2", "Spine2", "Spine02"),
     neck: getObject(scene, "mixamorig:Neck", "mixamorigNeck", "Neck", "NeckTwist01", "NeckTwist02"),
     head: getObject(scene, "mixamorig:Head", "mixamorigHead", "Head"),
+    jaw: getObject(scene, "mixamorig:Jaw", "mixamorigJaw", "Jaw", "jaw"),
     leftArm: getObject(scene, "mixamorig:LeftArm", "mixamorigLeftArm", "LeftArm", "L_Upperarm", "L_Clavicle", "L_UpperarmTwist01", "L_UpperarmTwist02"),
     leftForeArm: getObject(scene, "mixamorig:LeftForeArm", "mixamorigLeftForeArm", "LeftForeArm", "L_Forearm"),
     leftHand: getObject(scene, "mixamorig:LeftHand", "mixamorigLeftHand", "LeftHand", "L_Hand"),
@@ -213,13 +215,21 @@ function Model({
     softenTPose(basePose, rig, activeMode);
 
     if (rig.mouth) {
-      rig.mouth.scale.y = activeSpeaking ? 1 + Math.abs(Math.sin(t * 10)) * 0.12 : 1;
+      rig.mouth.scale.y = activeSpeaking ? 1 + Math.abs(Math.sin(t * 12.5)) * 0.26 : 1;
+      rig.mouth.scale.x = activeSpeaking ? 1 + Math.abs(Math.sin(t * 8.5)) * 0.06 : 1;
+    }
+
+    if (activeSpeaking) {
+      applyOffset(basePose, rig.jaw as THREE.Object3D | undefined, Math.abs(Math.sin(t * 12.5)) * 0.08, 0, 0);
+      applyOffset(basePose, rig.head, Math.sin(t * 5.2) * 0.028, Math.sin(t * 3.6) * 0.035, 0);
+      applyOffset(basePose, rig.neck, Math.sin(t * 4.2) * 0.018, Math.sin(t * 3.1) * 0.02, 0);
+      applyOffset(basePose, rig.spine1, Math.sin(t * 3.2) * 0.014, 0, Math.sin(t * 2.4) * 0.02);
     }
 
     const baseYaw = getFacingYaw(facing);
     const attentiveLean = activeAttention ? 0.045 : 0;
-    const looking = activeSpeaking ? Math.sin(t * 2.1) * 0.03 : Math.sin(t * 0.45) * 0.02;
-    const bodyBreath = breathe * 0.01;
+    const looking = activeSpeaking ? Math.sin(t * 2.8) * 0.05 : Math.sin(t * 0.45) * 0.02;
+    const bodyBreath = activeSpeaking ? breathe * 0.018 : breathe * 0.01;
 
     // Movimiento del personaje completo. Las piernas no se fuerzan: el Runtime mueve el cuerpo por pantalla.
     group.current.position.set(Math.sin(t * 0.38) * 0.012, -1.1 + bodyBreath, 0);
