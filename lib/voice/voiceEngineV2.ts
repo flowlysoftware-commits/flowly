@@ -304,16 +304,18 @@ export class VoiceEngineV2 {
         return { text: "", error: message };
       }
 
-      const transcriptionText: string =
-        typeof data?.text === "string"
-          ? data.text
-          : typeof (data as Record<string, unknown>)?.transcript === "object" &&
-              (data as Record<string, unknown>).transcript !== null &&
-              typeof ((data as Record<string, unknown>).transcript as Record<string, unknown>).text === "string"
-            ? String(((data as Record<string, unknown>).transcript as Record<string, unknown>).text)
-            : typeof (data as Record<string, unknown>).raw === "string"
-              ? (data as Record<string, unknown>).raw
-              : "";
+      const transcriptionText: string = (() => {
+        if (typeof data.text === "string") return data.text;
+
+        const transcript = (data as Record<string, unknown>).transcript;
+        if (typeof transcript === "object" && transcript !== null) {
+          const transcriptText = (transcript as Record<string, unknown>).text;
+          if (typeof transcriptText === "string") return transcriptText;
+        }
+
+        const raw = (data as Record<string, unknown>).raw;
+        return typeof raw === "string" ? raw : "";
+      })();
 
       const text = cleanText(transcriptionText);
       return { text, error: "" };
