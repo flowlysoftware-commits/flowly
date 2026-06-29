@@ -381,6 +381,34 @@ function deterministicArchitectAnswer(message: string, tools: FlowlyBrainToolRes
   ].join("\n");
 }
 
+function deterministicVoiceGreeting(mode: FlowlyBrainMode, snapshot: FlowlyContextSnapshot) {
+  if (mode === "arquitecto") {
+    return [
+      "Hola. Soy Flow, tu Companion de Flowly OS.",
+      `Estoy contigo en ${snapshot.area}.`,
+      "Te escucho. Dime qué quieres revisar, construir o resolver y voy directo a ello.",
+    ].join(" ");
+  }
+
+  return [
+    "Hola. Soy Flow, tu Companion.",
+    `Estoy contigo en ${snapshot.area}.`,
+    "Te escucho. Dime qué necesitas y te respondo al momento.",
+  ].join(" ");
+}
+
+function shouldBypassLLM(request: FlowlyBrainRequest, mode: FlowlyBrainMode, intent: FlowlyBrainResponse["intent"]) {
+  const source = typeof request.extraContext?.source === "string" ? request.extraContext.source : "text";
+  const normalizedMessage = normalize(request.message);
+  const wordCount = normalizedMessage.split(/\s+/).filter(Boolean).length;
+
+  if (intent === "saludo") return true;
+  if (source === "voice" && wordCount <= 4 && includesAny(normalizedMessage, ["hola", "buenas", "hey", "flow", "flowly"])) return true;
+  if (source === "voice" && (normalizedMessage === "flow" || normalizedMessage === "hola flow" || normalizedMessage === "hola flowly")) return true;
+
+  return false;
+}
+
 function buildSystemPrompt(params: {
   mode: FlowlyBrainMode;
   snapshot: FlowlyContextSnapshot;
@@ -480,6 +508,20 @@ export async function runFlowlyBrain(request: FlowlyBrainRequest): Promise<Flowl
       usedAI: false,
       blockedInternalAction,
       stage: "bloqueado",
+      tools,
+      plan,
+      suggestedActions: suggestedActions(intent, mode),
+    };
+  }
+
+  if (shouldBypassLLM(request, mode, intent)) {
+    return {
+      answer: deterministicVoiceGreeting(mode, snapshot),
+      mode,
+      intent,
+      usedAI: false,
+      blockedInternalAction,
+      stage: "respuesta",
       tools,
       plan,
       suggestedActions: suggestedActions(intent, mode),
