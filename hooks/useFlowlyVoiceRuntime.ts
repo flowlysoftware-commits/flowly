@@ -97,6 +97,15 @@ export function useFlowlyVoiceRuntime({
     syncDebug({ loopActive: false });
   }, [syncDebug]);
 
+  const stopSpeaking = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (speechTimeoutRef.current) window.clearTimeout(speechTimeoutRef.current);
+    speechTimeoutRef.current = null;
+    speakingRef.current = false;
+  }, []);
+
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -140,6 +149,15 @@ export function useFlowlyVoiceRuntime({
     const useful = isUsefulCommand(command, wakeWord);
     const shouldAnswer = wake || recentlyAwake || useful;
 
+    if (speakingRef.current) {
+      if (wake || useful) {
+        stopSpeaking();
+        syncDebug({ lastEvent: "Interrumpido por voz del usuario" });
+      } else {
+        return;
+      }
+    }
+
     if (!shouldAnswer) {
       setPhase("passive", `He oído: ${text}`);
       return;
@@ -169,7 +187,7 @@ export function useFlowlyVoiceRuntime({
       setIsAwake(false);
       if (activeRef.current && !manualStopRef.current) setPhase("passive", "Voz activa. Puedes hablarme cuando quieras");
     }
-  }, [onCommand, onWake, setPhase]);
+  }, [onCommand, onWake, setPhase, stopSpeaking, syncDebug]);
 
   const captureAndTranscribe = useCallback(async () => {
     console.info("[voice-debug] captureAndTranscribe enter", {
@@ -181,7 +199,7 @@ export function useFlowlyVoiceRuntime({
       speaking: speakingRef.current,
     });
     if (!activeRef.current || manualStopRef.current || !enabledRef.current) return;
-    if (recordingRef.current || processingRef.current || speakingRef.current) return;
+    if (recordingRef.current || processingRef.current) return;
 
     const stream = await ensureStream();
     console.info("[voice-debug] ensureStream result", stream ? "stream-ready" : "stream-null");
@@ -195,7 +213,7 @@ export function useFlowlyVoiceRuntime({
       console.info("[voice-debug] recording start");
       const blob = await recordAudioSegment(stream, 4200);
       console.info("[voice-debug] recording result", { size: blob?.size ?? 0, type: blob?.type ?? "" });
-      if (!activeRef.current || manualStopRef.current || speakingRef.current) return;
+      if (!activeRef.current || manualStopRef.current) return;
 
       if (!blob || blob.size < 256) {
         syncDebug({
@@ -272,7 +290,7 @@ export function useFlowlyVoiceRuntime({
   const deactivate = useCallback(() => {
     manualStopRef.current = true;
     activeRef.current = false;
-    speakingRef.current = false;
+    stopSpeaking();
     processingRef.current = false;
     recordingRef.current = false;
     clearLoop();
@@ -281,7 +299,7 @@ export function useFlowlyVoiceRuntime({
     setIsAwake(false);
     setTranscript("");
     setPhase("disabled", "Voz desactivada");
-  }, [clearLoop, setPhase, stopStream]);
+  }, [clearLoop, setPhase, stopSpeaking, stopStream]);
 
   const speak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
@@ -289,8 +307,7 @@ export function useFlowlyVoiceRuntime({
     const clean = text.replace(/[#*_`>\[\]]/g, " ").replace(/\s+/g, " ").slice(0, 520);
     if (!clean) return;
 
-    window.speechSynthesis.cancel();
-    if (speechTimeoutRef.current) window.clearTimeout(speechTimeoutRef.current);
+    stopSpeaking();
     speakingRef.current = true;
     setPhase("speaking", "Flow está hablando");
 
@@ -311,7 +328,7 @@ export function useFlowlyVoiceRuntime({
     utterance.onerror = finish;
     speechTimeoutRef.current = window.setTimeout(finish, Math.min(12000, Math.max(1800, clean.length * 65)));
     window.speechSynthesis.speak(utterance);
-  }, [setPhase]);
+  }, [setPhase, stopSpeaking]);
 
   useEffect(() => {
     const ok = typeof window !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined";
@@ -322,15 +339,13 @@ export function useFlowlyVoiceRuntime({
       manualStopRef.current = true;
       activeRef.current = false;
       clearLoop();
-      if (speechTimeoutRef.current) window.clearTimeout(speechTimeoutRef.current);
-      speechTimeoutRef.current = null;
+      stopSpeaking();
       stopStream();
-      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
     // Este efecto solo debe correr al montar/desmontar; si se re-ejecuta por callbacks cambiantes,
     // puede apagar el loop de escucha mientras la UI sigue en "activa".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [clearLoop, setPhase, stopSpeaking, stopStream]);
 
   return { supported, active, isAwake, state, transcript, debug, refreshDebug, activate, deactivate, speak };
 }

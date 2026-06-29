@@ -55,7 +55,9 @@ export default function FlowlyCompanionRuntime() {
     setLifeLabel(source === "voice" ? "Escuchando tu voz" : "Pensando con Flowly Brain");
 
     const nextConversation = [...conversation, { role: "user" as const, content: clean }];
-    setConversation(nextConversation);
+    if (source === "text") {
+      setConversation(nextConversation);
+    }
 
     try {
       const response = await fetch("/api/companion/chat", {
@@ -64,7 +66,7 @@ export default function FlowlyCompanionRuntime() {
         body: JSON.stringify({
           message: clean,
           pathname,
-          conversation,
+          conversation: nextConversation,
           extraContext: {
             source,
             companion: companionLiveContextRef.current,
@@ -76,13 +78,17 @@ export default function FlowlyCompanionRuntime() {
         ? data.answer
         : "No he podido pensar bien la respuesta. Inténtalo otra vez en unos segundos.";
       setLastBrainResponse(answer);
-      setConversation((current) => [...current, { role: "assistant", content: answer }]);
+      if (source === "text") {
+        setConversation((current) => [...current, { role: "assistant", content: answer }]);
+      }
       voiceSpeakRef.current(speakCleanly(answer));
     } catch (error) {
       console.error("Companion chat error", error);
       const fallback = "Ahora mismo no puedo conectar con mi motor de IA. Puedo seguir ayudándote si lo intentas de nuevo.";
       setLastBrainResponse(fallback);
-      setConversation((current) => [...current, { role: "assistant", content: fallback }]);
+      if (source === "text") {
+        setConversation((current) => [...current, { role: "assistant", content: fallback }]);
+      }
       voiceSpeakRef.current(fallback);
     } finally {
       setThinking(false);
