@@ -59,6 +59,10 @@ export default function RuntimeTestPage() {
               <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-cyan-100">
                 {snapshot.lastTranscriptionRawResponse || "—"}
               </pre>
+              <div><strong>Wake detectado:</strong> {snapshot.wakeDetected ? "sí" : "no"}</div>
+              <div><strong>Intención detectada:</strong> {snapshot.intentionDetected ? "sí" : "no"}</div>
+            </div>
+          </section>
 
           <section className="rounded-2xl border border-white/10 bg-black/20 p-5">
             <h2 className="font-black">Brain</h2>
