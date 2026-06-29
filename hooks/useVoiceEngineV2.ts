@@ -12,7 +12,7 @@ export function useVoiceEngineV2(activeConversationMode = true) {
     recording: false,
     lastAudioKb: 0,
     lastTranscript: "",
-    lastTranscriptionStatus: "",
+    lastTranscriptionStatus: null,
     lastTranscriptionRawResponse: "",
     wakeDetected: false,
     intentionDetected: false,
