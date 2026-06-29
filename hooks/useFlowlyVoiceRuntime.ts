@@ -327,7 +327,10 @@ export function useFlowlyVoiceRuntime({
       stopStream();
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
-  }, [clearLoop, setPhase, stopStream]);
+    // Este efecto solo debe correr al montar/desmontar; si se re-ejecuta por callbacks cambiantes,
+    // puede apagar el loop de escucha mientras la UI sigue en "activa".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return { supported, active, isAwake, state, transcript, debug, refreshDebug, activate, deactivate, speak };
 }

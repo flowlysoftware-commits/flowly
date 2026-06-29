@@ -89,26 +89,32 @@ export default function FlowlyCompanionRuntime() {
     }
   }, [conversation, pathname, speakCleanly, thinking]);
 
+  const handleVoiceWake = useCallback(() => {
+    setOpen(true);
+    setLifeMode("attention");
+    setLifeLabel("Flow te está escuchando");
+  }, []);
+
+  const handleVoiceStatus = useCallback((status: string) => {
+    setLifeLabel(status);
+  }, []);
+
+  const handleVoicePhase = useCallback((phase: "unsupported" | "disabled" | "permission" | "passive" | "waking" | "listening" | "thinking" | "speaking" | "error") => {
+    if (phase === "listening" || phase === "waking") setLifeMode("attention");
+    if (phase === "thinking") setLifeMode("thinking");
+    if (phase === "speaking") setLifeMode("talking");
+    if (phase === "passive") setLifeMode("idle");
+  }, []);
+
   const voice = useFlowlyVoiceRuntime({
     wakeWord: "flow",
     enabled: true,
-    onWake: () => {
-      setOpen(true);
-      setLifeMode("attention");
-      setLifeLabel("Flow te está escuchando");
-    },
+    onWake: handleVoiceWake,
     onCommand: async (text) => {
       await askCompanion(text, "voice");
     },
-    onStatus: (status) => {
-      setLifeLabel(status);
-    },
-    onPhase: (phase) => {
-      if (phase === "listening" || phase === "waking") setLifeMode("attention");
-      if (phase === "thinking") setLifeMode("thinking");
-      if (phase === "speaking") setLifeMode("talking");
-      if (phase === "passive") setLifeMode("idle");
-    },
+    onStatus: handleVoiceStatus,
+    onPhase: handleVoicePhase,
   });
 
 
