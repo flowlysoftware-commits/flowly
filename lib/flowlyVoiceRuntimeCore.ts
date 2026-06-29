@@ -90,9 +90,11 @@ export async function requestTranscription(blob: Blob): Promise<FlowlyVoiceTrans
 }
 
 export async function recordAudioSegment(stream: MediaStream, durationMs = 4500): Promise<Blob | null> {
+  console.info("[voice-debug] recordAudioSegment start", { durationMs, tracks: stream.getAudioTracks().length });
   if (typeof MediaRecorder === "undefined") return null;
 
   const mimeType = bestMimeType();
+  console.info("[voice-debug] recorder mime", mimeType || "default");
   const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
   const chunks: BlobPart[] = [];
 
@@ -102,10 +104,12 @@ export async function recordAudioSegment(stream: MediaStream, durationMs = 4500)
       if (resolved) return;
       resolved = true;
       const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+      console.info("[voice-debug] recorder finish", { chunks: chunks.length, size: blob.size, type: blob.type });
       resolve(blob);
     };
 
     recorder.ondataavailable = (event) => {
+      console.info("[voice-debug] recorder dataavailable", { size: event.data?.size ?? 0, type: event.data?.type ?? "" });
       if (event.data?.size) chunks.push(event.data);
     };
     recorder.onerror = () => finish();

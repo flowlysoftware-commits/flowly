@@ -166,10 +166,19 @@ export function useFlowlyVoiceRuntime({
   }, [onCommand, onWake, setPhase]);
 
   const captureAndTranscribe = useCallback(async () => {
+    console.info("[voice-debug] captureAndTranscribe enter", {
+      active: activeRef.current,
+      manualStop: manualStopRef.current,
+      enabled: enabledRef.current,
+      recording: recordingRef.current,
+      processing: processingRef.current,
+      speaking: speakingRef.current,
+    });
     if (!activeRef.current || manualStopRef.current || !enabledRef.current) return;
     if (recordingRef.current || processingRef.current || speakingRef.current) return;
 
     const stream = await ensureStream();
+    console.info("[voice-debug] ensureStream result", stream ? "stream-ready" : "stream-null");
     if (!stream) return;
 
     recordingRef.current = true;
@@ -177,7 +186,9 @@ export function useFlowlyVoiceRuntime({
     setPhase("listening", "Escuchando audio...");
 
     try {
+      console.info("[voice-debug] recording start");
       const blob = await recordAudioSegment(stream, 4200);
+      console.info("[voice-debug] recording result", { size: blob?.size ?? 0, type: blob?.type ?? "" });
       if (!activeRef.current || manualStopRef.current || speakingRef.current) return;
 
       if (!blob || blob.size < 1024) {
@@ -197,7 +208,9 @@ export function useFlowlyVoiceRuntime({
         lastEvent: `Audio capturado: ${kb} KB`,
       });
       setPhase("listening", `Procesando ${kb} KB de audio`);
+      console.info("[voice-debug] transcription request", { size: blob.size });
       const result = await requestTranscription(blob);
+      console.info("[voice-debug] transcription result", result);
 
       if (result.error && !result.text) {
         setTranscript(result.error);
@@ -215,6 +228,7 @@ export function useFlowlyVoiceRuntime({
   }, [ensureStream, processTranscribedText, setPhase, syncDebug]);
 
   const startLoop = useCallback(() => {
+    console.info("[voice-debug] startLoop");
     clearLoop();
     syncDebug({ loopActive: true });
     void captureAndTranscribe();
@@ -224,9 +238,11 @@ export function useFlowlyVoiceRuntime({
   }, [captureAndTranscribe, clearLoop]);
 
   const activate = useCallback(async () => {
+    console.info("[voice-debug] activate start");
     setPhase("permission", "Solicitando permiso de micrófono");
     try {
       const stream = await ensureStream();
+      console.info("[voice-debug] activate stream", stream ? "ready" : "missing");
       if (!stream) return false;
 
       manualStopRef.current = false;
