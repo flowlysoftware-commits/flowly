@@ -79,7 +79,15 @@ export async function requestTranscription(blob: Blob): Promise<FlowlyVoiceTrans
   try {
     const response = await fetch("/api/voice-test/transcribe", { method: "POST", body: form });
     const data = await response.json().catch(() => null);
-    const text = cleanText(typeof data?.text === "string" ? data.text : "");
+    const transcriptText =
+      typeof data?.text === "string"
+        ? data.text
+        : typeof data?.transcript === "object" && data?.transcript !== null && typeof (data.transcript as Record<string, unknown>).text === "string"
+          ? String((data.transcript as Record<string, unknown>).text)
+          : typeof data?.raw === "object" && data?.raw !== null && typeof (data.raw as Record<string, unknown>).text === "string"
+            ? String((data.raw as Record<string, unknown>).text)
+            : "";
+    const text = cleanText(transcriptText);
     const error = typeof data?.error === "string" ? data.error : undefined;
 
     if (!response.ok) return { text, error: error || `Error HTTP ${response.status}` };

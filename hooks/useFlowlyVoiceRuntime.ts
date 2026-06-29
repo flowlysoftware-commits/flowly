@@ -35,12 +35,12 @@ type VoiceDebugSnapshot = {
 
 export function useFlowlyVoiceRuntime({
   enabled = true,
+  wakeWord = "flow",
   onWake,
   onCommand,
   onStatus,
   onPhase,
 }: VoiceRuntimeOptions = {}) {
-  const wakeWord = "flow";
   const enabledRef = useRef(enabled);
   const activeRef = useRef(false);
   const speakingRef = useRef(false);
@@ -137,10 +137,16 @@ export function useFlowlyVoiceRuntime({
 
     const command = stripFlowWakeWord(text, wakeWord) || text;
     const recentlyAwake = Date.now() - lastWakeAtRef.current < 30000;
-    const shouldAnswer = wake || recentlyAwake || isUsefulCommand(command, wakeWord);
+    const useful = isUsefulCommand(command, wakeWord);
+    const shouldAnswer = wake || recentlyAwake || useful;
 
-    if (!shouldAnswer || !isUsefulCommand(command, wakeWord)) {
+    if (!shouldAnswer) {
       setPhase("passive", `He oído: ${text}`);
+      return;
+    }
+
+    if (!useful) {
+      setPhase("waking", "Te escucho. Dime tu petición para Flow.");
       return;
     }
 
@@ -191,7 +197,7 @@ export function useFlowlyVoiceRuntime({
       console.info("[voice-debug] recording result", { size: blob?.size ?? 0, type: blob?.type ?? "" });
       if (!activeRef.current || manualStopRef.current || speakingRef.current) return;
 
-      if (!blob || blob.size < 1024) {
+      if (!blob || blob.size < 256) {
         syncDebug({
           ticks: debugRef.current.ticks + 1,
           lastAudioKb: blob ? Math.round(blob.size / 1024) : 0,
