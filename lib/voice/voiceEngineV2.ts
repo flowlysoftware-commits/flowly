@@ -304,15 +304,18 @@ export class VoiceEngineV2 {
         return { text: "", error: message };
       }
 
-      const text = cleanText(
+      const transcriptionText: string =
         typeof data?.text === "string"
           ? data.text
-          : typeof (data as Record<string, unknown>)?.transcript === "object" && (data as Record<string, unknown>).transcript && typeof (data as Record<string, unknown>).transcript === "object"
-            ? String(((data as Record<string, unknown>).transcript as Record<string, unknown>).text || "")
+          : typeof (data as Record<string, unknown>)?.transcript === "object" &&
+              (data as Record<string, unknown>).transcript !== null &&
+              typeof ((data as Record<string, unknown>).transcript as Record<string, unknown>).text === "string"
+            ? String(((data as Record<string, unknown>).transcript as Record<string, unknown>).text)
             : typeof (data as Record<string, unknown>).raw === "string"
               ? (data as Record<string, unknown>).raw
-              : ""
-      );
+              : "";
+
+      const text = cleanText(transcriptionText);
       return { text, error: "" };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al transcribir.";
