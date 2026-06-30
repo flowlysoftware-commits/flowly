@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, type ReactNode } from "react";
 import { CalendarDays, LockKeyhole, Plus, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 
 type MovementType = "ingreso" | "gasto";
@@ -9,7 +9,7 @@ type AccountingEntry = {
   id: string;
   type: MovementType;
   date: string;
-  person: string;
+  person: AccountingEntity;
   channel: string;
   category: string;
   amount: number;
@@ -19,21 +19,22 @@ type AccountingEntry = {
 const ACCESS_PASSWORDS = new Set(["Nosotrostarot1.", "Nosotrostarot1"]);
 
 const entityOptions = ["Flowly", "Celestial", "Leonaris"] as const;
+type AccountingEntity = (typeof entityOptions)[number];
 
 const peopleOptions = {
-  ingreso: [...entityOptions],
-  gasto: [...entityOptions],
-} satisfies Record<MovementType, string[]>;
+  ingreso: entityOptions,
+  gasto: entityOptions,
+} satisfies Record<MovementType, readonly AccountingEntity[]>;
 
 const channelOptions = {
   ingreso: ["Square", "Transferencia", "Bizum", "Tarjeta", "Stripe", "PayPal", "Otro"],
   gasto: ["Square", "Transferencia", "Bizum", "Tarjeta", "Domiciliación", "Otro"],
-} satisfies Record<MovementType, string[]>;
+} satisfies Record<MovementType, readonly string[]>;
 
 const categoryOptions = {
   ingreso: ["recarga", "facebook", "pago tarotista", "Deuda", "Pago Centrales", "Pago premium numbers", "pago hubspot", "otros", "call400", "Flowly"],
   gasto: ["recarga", "facebook", "pago tarotista", "Deuda", "Pago Centrales", "Pago premium numbers", "pago hubspot", "otros", "call400", "Flowly"],
-} satisfies Record<MovementType, string[]>;
+} satisfies Record<MovementType, readonly string[]>;
 
 function euro(value: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(value || 0);
@@ -49,7 +50,7 @@ export default function ContabilidadPage() {
   const [accessError, setAccessError] = useState("");
   const [type, setType] = useState<MovementType>("ingreso");
   const [date, setDate] = useState(today());
-  const [person, setPerson] = useState(peopleOptions.ingreso[0]);
+  const [person, setPerson] = useState<AccountingEntity>(peopleOptions.ingreso[0]);
   const [channel, setChannel] = useState(channelOptions.ingreso[0]);
   const [category, setCategory] = useState(categoryOptions.ingreso[0]);
   const [amount, setAmount] = useState("");
@@ -62,19 +63,12 @@ export default function ContabilidadPage() {
     return { income, expenses, balance: income - expenses };
   }, [entries]);
 
-  const entityStats = useMemo(() => {
+  const entitySummaries = useMemo(() => {
     return entityOptions.map((entity) => {
       const entityEntries = entries.filter((entry) => entry.person === entity);
       const income = entityEntries.filter((entry) => entry.type === "ingreso").reduce((sum, entry) => sum + entry.amount, 0);
       const expenses = entityEntries.filter((entry) => entry.type === "gasto").reduce((sum, entry) => sum + entry.amount, 0);
-
-      return {
-        entity,
-        entries: entityEntries,
-        income,
-        expenses,
-        balance: income - expenses,
-      };
+      return { entity, entries: entityEntries, income, expenses, balance: income - expenses };
     });
   }, [entries]);
 
@@ -205,7 +199,7 @@ export default function ContabilidadPage() {
             </Field>
 
             <Field label={type === "ingreso" ? "Quién ingresa" : "Quién paga"}>
-              <select value={person} onChange={(event) => setPerson(event.target.value)} className="min-h-[50px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-cyan-300/70 [&_option]:bg-slate-900 [&_option]:text-white">
+              <select value={person} onChange={(event) => setPerson(event.target.value as AccountingEntity)} className="min-h-[50px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-cyan-300/70 [&_option]:bg-slate-900 [&_option]:text-white">
                 {peopleOptions[type].map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
@@ -312,62 +306,62 @@ export default function ContabilidadPage() {
         </section>
 
         <section className="grid gap-5 xl:grid-cols-3">
-          {entityStats.map((group) => (
-            <div key={group.entity} className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur">
-              <div className="mb-5 flex items-start justify-between gap-4">
+          {entitySummaries.map((summary) => (
+            <article key={summary.entity} className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur">
+              <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/70">Resumen por entidad</p>
-                  <h3 className="mt-2 text-2xl font-black">{group.entity}</h3>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/70">Resumen</p>
+                  <h3 className="mt-1 text-2xl font-black">{summary.entity}</h3>
                 </div>
-                <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-bold text-slate-300">{group.entries.length} mov.</span>
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-300">
+                  {summary.entries.length} movimientos
+                </span>
               </div>
 
-              <div className="mb-5 grid grid-cols-3 gap-2">
-                <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-200/75">Ingresos</p>
-                  <p className="mt-1 text-sm font-black text-emerald-100 sm:text-base">{euro(group.income)}</p>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-200/70">Ingresos</p>
+                  <p className="mt-1 font-black text-emerald-100">{euro(summary.income)}</p>
                 </div>
-                <div className="rounded-2xl border border-rose-300/15 bg-rose-300/10 p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-200/75">Gastos</p>
-                  <p className="mt-1 text-sm font-black text-rose-100 sm:text-base">{euro(group.expenses)}</p>
+                <div className="rounded-2xl border border-rose-300/20 bg-rose-300/10 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-200/70">Gastos</p>
+                  <p className="mt-1 font-black text-rose-100">{euro(summary.expenses)}</p>
                 </div>
-                <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/10 p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-200/75">Saldo</p>
-                  <p className="mt-1 text-sm font-black text-cyan-100 sm:text-base">{euro(group.balance)}</p>
+                <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-200/70">Saldo</p>
+                  <p className="mt-1 font-black text-cyan-100">{euro(summary.balance)}</p>
                 </div>
               </div>
 
-              {group.entries.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-white/15 bg-black/20 p-6 text-center text-sm text-slate-400">
-                  Sin movimientos para {group.entity}.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-left text-xs">
-                    <thead className="uppercase tracking-[0.14em] text-slate-500">
-                      <tr className="border-b border-white/10">
-                        <th className="px-3 py-3">Fecha</th>
-                        <th className="px-3 py-3">Tipo</th>
-                        <th className="px-3 py-3">Categoría</th>
-                        <th className="px-3 py-3 text-right">Importe</th>
+              <div className="mt-4 overflow-hidden rounded-3xl border border-white/10">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-black/25 uppercase tracking-[0.14em] text-slate-500">
+                    <tr>
+                      <th className="px-3 py-3">Fecha</th>
+                      <th className="px-3 py-3">Tipo</th>
+                      <th className="px-3 py-3 text-right">Importe</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.entries.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-6 text-center text-slate-500">Sin movimientos.</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {group.entries.map((entry) => (
-                        <tr key={entry.id} className="border-b border-white/5 text-slate-200 last:border-0">
+                    ) : (
+                      summary.entries.slice(0, 6).map((entry) => (
+                        <tr key={entry.id} className="border-t border-white/5 text-slate-300">
                           <td className="px-3 py-3">{entry.date}</td>
-                          <td className={`px-3 py-3 font-black uppercase ${entry.type === "ingreso" ? "text-emerald-200" : "text-rose-200"}`}>{entry.type}</td>
                           <td className="px-3 py-3">{entry.category}</td>
                           <td className={`px-3 py-3 text-right font-black ${entry.type === "ingreso" ? "text-emerald-200" : "text-rose-200"}`}>
                             {entry.type === "gasto" ? "-" : "+"}{euro(entry.amount)}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </article>
           ))}
         </section>
       </section>
@@ -375,7 +369,7 @@ export default function ContabilidadPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="space-y-2">
       <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</span>
