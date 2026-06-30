@@ -2657,3 +2657,121 @@ input[type="date"].input-dark { color-scheme: dark; }
     width: calc(100vw - .8rem);
   }
 }
+
+/* Flowly Companion Copilot Dock - collapses the living avatar into a small OS orb */
+.flowly-companion-dock-toggle {
+  position: absolute;
+  right: .35rem;
+  top: .35rem;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, .74);
+  color: #e0f2fe;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 14px 35px rgba(0,0,0,.34), inset 0 0 18px rgba(103,232,249,.08);
+  opacity: .82;
+  transition: transform .18s ease, opacity .18s ease, border-color .18s ease, background .18s ease;
+}
+.flowly-companion-dock-toggle:hover {
+  opacity: 1;
+  transform: translateY(-1px) scale(1.04);
+  border-color: rgba(103,232,249,.46);
+  background: rgba(8, 47, 73, .86);
+}
+.flowly-companion-copilot-launcher {
+  position: fixed;
+  right: 1.1rem;
+  bottom: 1.1rem;
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  min-width: 4.6rem;
+  border: 1px solid rgba(103,232,249,.34);
+  border-radius: 999px;
+  background: radial-gradient(circle at 25% 20%, rgba(103,232,249,.22), transparent 38%), linear-gradient(145deg, rgba(2,6,23,.92), rgba(15,23,42,.88));
+  color: white;
+  padding: .55rem .78rem .55rem .55rem;
+  cursor: pointer;
+  box-shadow: 0 24px 70px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.05) inset, 0 0 34px rgba(34,211,238,.16);
+  backdrop-filter: blur(18px);
+  animation: flowly-copilot-orb-in .25s ease-out both, flowly-copilot-orb-breathe 4.2s ease-in-out infinite .3s;
+}
+.flowly-companion-copilot-launcher:hover {
+  transform: translateY(-2px);
+  border-color: rgba(103,232,249,.62);
+  box-shadow: 0 30px 90px rgba(0,0,0,.5), 0 0 42px rgba(34,211,238,.24);
+}
+.flowly-companion-copilot-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #67e8f9, #a78bfa 58%, #22c55e);
+  color: #020617;
+  box-shadow: 0 0 26px rgba(103,232,249,.32);
+  flex: none;
+}
+.flowly-companion-copilot-orb::after {
+  content: "";
+  position: absolute;
+  right: .18rem;
+  bottom: .18rem;
+  width: .55rem;
+  height: .55rem;
+  border: 2px solid rgba(2,6,23,.82);
+  border-radius: 999px;
+  background: #94a3b8;
+}
+.flowly-companion-copilot-launcher[data-voice="active"] .flowly-companion-copilot-orb::after {
+  background: #22c55e;
+  box-shadow: 0 0 14px rgba(34,197,94,.72);
+}
+.flowly-companion-copilot-launcher[data-awake="true"] .flowly-companion-copilot-orb::after {
+  background: #67e8f9;
+  box-shadow: 0 0 18px rgba(103,232,249,.95);
+}
+.flowly-companion-copilot-copy {
+  display: grid;
+  gap: .04rem;
+  text-align: left;
+}
+.flowly-companion-copilot-copy strong {
+  font-size: .82rem;
+  line-height: 1;
+  letter-spacing: .02em;
+}
+.flowly-companion-copilot-copy small {
+  max-width: 7.8rem;
+  color: rgba(255,255,255,.64);
+  font-size: .66rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes flowly-copilot-orb-in {
+  from { opacity: 0; transform: translateY(8px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes flowly-copilot-orb-breathe {
+  0%, 100% { box-shadow: 0 24px 70px rgba(0,0,0,.45), 0 0 34px rgba(34,211,238,.16); }
+  50% { box-shadow: 0 28px 82px rgba(0,0,0,.5), 0 0 46px rgba(168,85,247,.22); }
+}
+@media (max-width: 720px) {
+  .flowly-companion-copilot-launcher {
+    right: .8rem;
+    bottom: .8rem;
+    padding-right: .65rem;
+  }
+  .flowly-companion-copilot-copy small { display: none; }
+}
