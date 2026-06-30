@@ -1,7 +1,8 @@
 import { inspectPullRequestForQA, fixPullRequestWithQA } from "@/lib/flowlyQAAgent";
 import { planExecutorV3, runExecutorV3, type ExecutorV3Plan, type ExecutorV3RunResult } from "@/lib/flowlyExecutorV3";
-import { getGitHubExecutorConfig, readRepositoryFile } from "@/lib/flowlyGitHubExecutor";
+import { getGitHubExecutorConfig } from "@/lib/flowlyGitHubExecutor";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph } from "@/lib/flowlyProjectGraph";
+import { buildDeveloperContextBundle, summarizeDeveloperContext, type DeveloperContextBundle } from "@/lib/flowlyDeveloperContextEngine";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -37,6 +38,9 @@ export type DeveloperPipelinePlan = ExecutorV3Plan & {
   pipelineVersion: "developer_pipeline_v1";
   pipelineReady: boolean;
   operatingProtocol: DeveloperPipelineKnowledgeSource[];
+  contextEngine: ReturnType<typeof summarizeDeveloperContext>;
+  conversationReply: string;
+  needsMoreContext: boolean;
   stages: DeveloperPipelineStage[];
   buildVerification: {
     strategy: "pull_request_checks";
@@ -49,6 +53,7 @@ export type DeveloperPipelinePlan = ExecutorV3Plan & {
     executor: string;
     qa: string;
     knowledge: string;
+    context: string;
   };
 };
 
@@ -59,40 +64,32 @@ export type DeveloperPipelineRunResult = ExecutorV3RunResult & {
   nextAction: string;
 };
 
-const OPERATING_PROTOCOL_PATHS = [
-  "AI_BOOTSTRAP.md",
-  ".github/copilot-instructions.md",
-  "docs/SUMMARY.md",
-  "docs/architecture-bible/16-companion-os.md",
-  "docs/architecture-bible/19-conversation-engine.md",
-  "docs/architecture-bible/09-memory-engine.md",
-  "docs/architecture-bible/28-execution-engine.md",
-];
-
-function excerpt(content: string) {
-  return content.replace(/\s+/g, " ").trim().slice(0, 380);
+function toKnowledgeSources(bundle: DeveloperContextBundle): DeveloperPipelineKnowledgeSource[] {
+  return bundle.sources.map((source) => ({
+    path: source.path,
+    loaded: source.loaded,
+    summary: source.loaded
+      ? `${source.title} · ${source.summary}`
+      : `No disponible: ${source.summary}`,
+    excerpt: source.excerpt,
+  }));
 }
 
-async function readOperatingProtocol(): Promise<DeveloperPipelineKnowledgeSource[]> {
-  const sources: DeveloperPipelineKnowledgeSource[] = [];
-  for (const path of OPERATING_PROTOCOL_PATHS) {
-    try {
-      const file = await readRepositoryFile(path);
-      sources.push({
-        path: file.path,
-        loaded: true,
-        summary: `Leído correctamente (${Math.round(file.content.length / 1000)}k caracteres).`,
-        excerpt: excerpt(file.content),
-      });
-    } catch (error) {
-      sources.push({
-        path,
-        loaded: false,
-        summary: error instanceof Error ? error.message : String(error),
-      });
-    }
+function buildNaturalDeveloperReply(params: { instruction: string; context: DeveloperContextBundle; hasProposedFiles: boolean; target?: string }) {
+  const { context, hasProposedFiles } = params;
+  const target = params.target || context.intent.target;
+  const sources = context.loadedSources.slice(0, 4).map((source) => source.title).filter(Boolean);
+  const base = `He revisado la memoria de Flowly en /docs antes de responder. He identificado que la petición va sobre ${target} y la acción principal es ${context.intent.action}.`;
+
+  if (context.intent.needsClarification && !hasProposedFiles) {
+    return `${base} Antes de ejecutar nada necesito concretar un poco más para no crear cambios falsos ni duplicados. Cuéntame exactamente qué quieres cambiar, dónde lo ves en el panel y qué resultado esperas.`;
   }
-  return sources;
+
+  if (!hasProposedFiles) {
+    return `${base} He encontrado documentación relevante (${sources.join(", ") || "docs/SUMMARY"}), pero todavía no veo un cambio de código seguro. Puedo seguir investigando o puedes indicarme el archivo, pantalla o comportamiento exacto.`;
+  }
+
+  return `${base} También he cargado ${context.loadedSources.length} documentos relevantes (${sources.join(", ") || "Flowly Knowledge"}). Tengo una propuesta segura: te explico qué tocaría y solo si das el OK crearé una rama y un Pull Request.`;
 }
 
 function stage(id: DeveloperPipelineStageId, label: string, description: string, status: DeveloperPipelineStageStatus, details?: string[]): DeveloperPipelineStage {
@@ -107,8 +104,8 @@ function buildPlanStages(params: {
 }): DeveloperPipelineStage[] {
   return [
     stage("intake", "Entender petición", "Brain recibe la idea en lenguaje normal y la convierte en intención técnica.", "done"),
-    stage("bootstrap", "Leer protocolo OS", "Lee AI_BOOTSTRAP, instrucciones de Copilot y reglas internas antes de proponer cambios.", params.protocolLoaded ? "done" : "blocked"),
-    stage("knowledge", "Consultar memoria/documentación", "Busca Companion, Brain, Memory, Execution Engine y arquitectura relacionada.", params.protocolLoaded ? "done" : "waiting"),
+    stage("bootstrap", "Leer protocolo OS", "Lee AI_BOOTSTRAP y la memoria viva de /docs antes de proponer cambios.", params.protocolLoaded ? "done" : "blocked"),
+    stage("knowledge", "Consultar memoria/documentación", "Context Engine selecciona documentos relevantes de /docs según la petición.", params.protocolLoaded ? "done" : "waiting"),
     stage("graph", "Construir Project Graph", "Analiza rutas, APIs, componentes, dependencias y módulos afectados.", params.graphFiles ? "done" : "active", params.graphFiles ? [`${params.graphFiles} archivos indexados.`] : undefined),
     stage("blueprint", "Preparar blueprint", "Convierte el análisis en una propuesta revisable con archivos afectados.", params.hasProposedFiles ? "done" : "blocked"),
     stage("approval", "Esperar aprobación", "No escribe código hasta que tú pulses aplicar cambios.", params.approval ? "done" : "active"),
@@ -123,8 +120,8 @@ function buildPlanStages(params: {
 function buildRunStages(params: { prCreated: boolean; qaStatus?: string; error?: string }): DeveloperPipelineStage[] {
   return [
     stage("intake", "Entender petición", "Petición recibida y preparada.", "done"),
-    stage("bootstrap", "Leer protocolo OS", "Reglas de Flowly OS aplicadas.", "done"),
-    stage("knowledge", "Consultar memoria/documentación", "Contexto técnico aplicado antes de ejecutar.", "done"),
+    stage("bootstrap", "Leer protocolo OS", "Context Engine y reglas de Flowly OS aplicadas.", "done"),
+    stage("knowledge", "Consultar memoria/documentación", "Documentación relevante de /docs aplicada antes de ejecutar.", "done"),
     stage("graph", "Construir Project Graph", "Mapa de proyecto usado para decidir archivos.", "done"),
     stage("blueprint", "Preparar blueprint", "Propuesta convertida en cambios seguros.", "done"),
     stage("approval", "Esperar aprobación", "Aprobación humana recibida.", "done"),
@@ -140,22 +137,28 @@ export async function planDeveloperPipeline(instruction: string): Promise<Develo
   const clean = instruction.trim();
   if (!clean) throw new Error("Falta la instrucción para Developer Pipeline.");
 
-  const [protocol, graph, impact, executorPlan] = await Promise.all([
-    readOperatingProtocol(),
+  const contextBundle = await buildDeveloperContextBundle(clean);
+  const contextSummary = summarizeDeveloperContext(contextBundle);
+
+  const [graph, impact, executorPlan] = await Promise.all([
     buildFlowlyProjectGraph(clean).catch(() => null),
     analyzeFlowlyImpact(clean).catch(() => null),
-    planExecutorV3(clean),
+    planExecutorV3(clean, contextSummary),
   ]);
 
   const graphSummary = graph ? summarizeProjectGraph(graph) : executorPlan.projectMap.projectGraph;
-  const protocolLoaded = protocol.some((source) => source.loaded);
+  const protocol = toKnowledgeSources(contextBundle);
+  const protocolLoaded = contextBundle.loadedSources.length > 0;
   const hasProposedFiles = executorPlan.proposedFiles.length > 0;
 
   return {
     ...executorPlan,
+    conversationReply: buildNaturalDeveloperReply({ instruction: clean, context: contextBundle, hasProposedFiles, target: executorPlan.projectMap.modules[0] }),
+    needsMoreContext: contextBundle.intent.needsClarification && !hasProposedFiles,
     pipelineVersion: "developer_pipeline_v1",
-    pipelineReady: protocolLoaded && hasProposedFiles,
+    pipelineReady: protocolLoaded && (hasProposedFiles || contextBundle.intent.needsClarification),
     operatingProtocol: protocol,
+    contextEngine: contextSummary,
     stages: buildPlanStages({
       protocolLoaded,
       hasProposedFiles,
@@ -172,7 +175,8 @@ export async function planDeveloperPipeline(instruction: string): Promise<Develo
       planner: "Developer Pipeline + Executor V3",
       executor: "Executor V3",
       qa: "QA Agent",
-      knowledge: "AI_BOOTSTRAP + Docs + Project Graph",
+      knowledge: "/docs + AI_BOOTSTRAP + Project Graph",
+      context: "Flowly Developer Context Engine",
     },
     projectMap: {
       ...executorPlan.projectMap,
@@ -183,7 +187,8 @@ export async function planDeveloperPipeline(instruction: string): Promise<Develo
 }
 
 export async function runDeveloperPipeline(instruction: string, approved: boolean): Promise<DeveloperPipelineRunResult> {
-  const result = await runExecutorV3(instruction, approved);
+  const contextBundle = await buildDeveloperContextBundle(instruction);
+  const result = await runExecutorV3(instruction, approved, summarizeDeveloperContext(contextBundle));
   let qaStatus: Awaited<ReturnType<typeof inspectPullRequestForQA>> | undefined;
 
   if (result.pullRequestNumber) {

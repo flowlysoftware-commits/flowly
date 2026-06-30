@@ -70,6 +70,7 @@ type DeveloperPlan = {
   conversationReply?: string;
   needsMoreContext?: boolean;
   operatingProtocol?: DeveloperKnowledgeSource[];
+  contextEngine?: { target?: string; action?: string; confidence?: number; needsClarification?: boolean; loaded?: number; missing?: number; warnings?: string[]; sources?: Array<{ path: string; title?: string; kind?: string }> };
   stages?: DeveloperStage[];
   buildVerification?: { message?: string; automaticFixAvailable?: boolean };
   unifiedEngines?: Record<string, string>;
@@ -387,7 +388,7 @@ export default function DeveloperControlCenterPage() {
           </header>
 
           <section className="grid gap-4 md:grid-cols-4">
-            <PipelineCard title="Knowledge" value={plan?.operatingProtocol?.some((item) => item.loaded) ? "Leído" : "Pendiente"} detail="AI_BOOTSTRAP + Docs" />
+            <PipelineCard title="Context Engine" value={plan?.contextEngine?.loaded ? `${plan.contextEngine.loaded} docs` : plan?.operatingProtocol?.some((item) => item.loaded) ? "Leído" : "Pendiente"} detail="/docs + Brain" />
             <PipelineCard title="Blueprint" value={plan?.proposedFiles?.length ? `${plan.proposedFiles.length} cambios` : "Sin cambios"} detail="Plan revisable" />
             <PipelineCard title="PR seguro" value={run?.pullRequestUrl ? "Creado" : "Esperando"} detail="Nunca toca main" />
             <PipelineCard title="QA" value={run?.qaStatus?.status ? String(run.qaStatus.status) : "Preparado"} detail="Checks + corrección" />
@@ -581,15 +582,21 @@ export default function DeveloperControlCenterPage() {
                 </div>
               </Panel>
 
-              <Panel title="Protocolo OS" icon={<FileCode2 size={18} />}>
+              <Panel title="Context Engine" icon={<FileCode2 size={18} />}>
                 <div className="space-y-2">
-                  {(plan?.operatingProtocol || []).slice(0, 5).map((source) => (
+                  {plan?.contextEngine && (
+                    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-3 text-xs text-cyan-50">
+                      <p className="font-black">Objetivo detectado: {plan.contextEngine.target || "Flowly OS"}</p>
+                      <p className="mt-1 opacity-75">Acción: {plan.contextEngine.action || "analizar"} · Docs leídos: {plan.contextEngine.loaded || 0}</p>
+                    </div>
+                  )}
+                  {(plan?.operatingProtocol || []).filter((source) => source.loaded).slice(0, 5).map((source) => (
                     <div key={source.path} className={`rounded-2xl border p-3 text-xs ${source.loaded ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50" : "border-amber-300/20 bg-amber-300/10 text-amber-50"}`}>
                       <p className="break-all font-mono font-bold">{source.path}</p>
-                      <p className="mt-1 opacity-70">{source.loaded ? "Leído antes de planificar" : "No disponible"}</p>
+                      <p className="mt-1 opacity-70">Leído antes de planificar</p>
                     </div>
                   ))}
-                  {!(plan?.operatingProtocol || []).length && <p className="text-sm text-white/45">Cuando pidas un cambio, Developer leerá AI_BOOTSTRAP y Docs antes de planificar.</p>}
+                  {!(plan?.operatingProtocol || []).length && <p className="text-sm text-white/45">Cuando pidas un cambio, Developer usará el Context Engine para leer /docs antes de planificar.</p>}
                 </div>
               </Panel>
 

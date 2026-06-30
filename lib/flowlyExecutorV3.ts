@@ -31,6 +31,7 @@ export type ExecutorV3ProjectMap = {
 };
 
 export type ExecutorV3Plan = {
+  developerContext?: unknown;
   ok: true;
   version: "v3";
   status: "planned";
@@ -391,6 +392,7 @@ async function buildDeterministicSafeFiles(plan: Omit<ExecutorV3Plan, "proposedF
 async function buildAIFiles(params: {
   plan: Omit<ExecutorV3Plan, "proposedFiles">;
   context: Array<{ path: string; content: string }>;
+  developerContext?: unknown;
 }): Promise<ExecutorFileChange[] | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -430,6 +432,7 @@ async function buildAIFiles(params: {
             projectMap: params.plan.projectMap,
             projectGraph: params.plan.projectMap.projectGraph,
             impact: params.plan.projectMap.impact,
+            developerContext: params.developerContext || params.plan.developerContext || null,
             contextFiles: params.context,
           }),
         },
@@ -457,7 +460,7 @@ async function buildAIFiles(params: {
   }
 }
 
-export async function planExecutorV3(instruction: string): Promise<ExecutorV3Plan> {
+export async function planExecutorV3(instruction: string, developerContext?: unknown): Promise<ExecutorV3Plan> {
   const clean = instruction.trim();
   const { map, context } = await buildProjectMap(clean);
   const risk: ExecutorV3Risk = map.relatedFiles > 24 ? "medio" : "bajo";
@@ -488,21 +491,22 @@ export async function planExecutorV3(instruction: string): Promise<ExecutorV3Pla
     reasoning,
     proposedSteps,
     requiresApproval: true as const,
+    developerContext,
   };
 
-  const aiFiles = await buildAIFiles({ plan: planBase, context });
+  const aiFiles = await buildAIFiles({ plan: planBase, context, developerContext });
   const deterministicFiles = aiFiles?.length ? [] : await buildDeterministicSafeFiles(planBase);
   const proposedFiles = (aiFiles?.length ? aiFiles : deterministicFiles).filter((file) => !normalize(file.path).startsWith("docs/executor/"));
 
   return { ...planBase, proposedFiles: proposedFiles.length ? proposedFiles : fallbackFiles(planBase) };
 }
 
-export async function runExecutorV3(instruction: string, approved: boolean): Promise<ExecutorV3RunResult> {
-  const plan = await planExecutorV3(instruction);
+export async function runExecutorV3(instruction: string, approved: boolean, developerContext?: unknown): Promise<ExecutorV3RunResult> {
+  const plan = await planExecutorV3(instruction, developerContext);
   if (!approved) return plan;
 
   const { context } = await buildProjectMap(plan.instruction);
-  const aiFiles = await buildAIFiles({ plan, context });
+  const aiFiles = await buildAIFiles({ plan, context, developerContext });
   const deterministicFiles = aiFiles?.length ? [] : await buildDeterministicSafeFiles(plan);
   const candidateFiles = aiFiles?.length ? aiFiles : deterministicFiles.length ? deterministicFiles : plan.proposedFiles;
   const files = (candidateFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
