@@ -1,5 +1,5 @@
 import { inspectPullRequestForQA, fixPullRequestWithQA } from "@/lib/flowlyQAAgent";
-import { planExecutorV3, runExecutorV3, type ExecutorV3Plan, type ExecutorV3RunResult } from "@/lib/flowlyExecutorV3";
+import { planExecutorV3, runExecutorV3, runExecutorV3FromApprovedPlan, type ExecutorV3Plan, type ExecutorV3RunResult } from "@/lib/flowlyExecutorV3";
 import { getGitHubExecutorConfig } from "@/lib/flowlyGitHubExecutor";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph } from "@/lib/flowlyProjectGraph";
 import { buildDeveloperContextBundle, summarizeDeveloperContext, type DeveloperContextBundle } from "@/lib/flowlyDeveloperContextEngine";
@@ -75,8 +75,9 @@ function toKnowledgeSources(bundle: DeveloperContextBundle): DeveloperPipelineKn
   }));
 }
 
-function buildNaturalDeveloperReply(params: { instruction: string; context: DeveloperContextBundle; hasProposedFiles: boolean; target?: string }) {
+function buildNaturalDeveloperReply(params: { instruction: string; context: DeveloperContextBundle; hasProposedFiles: boolean; target?: string; humanChanges?: Array<{ title: string; description: string }> }) {
   const { context, hasProposedFiles } = params;
+  const humanChanges = params.humanChanges || [];
   const target = params.target || context.intent.target;
   const sources = context.loadedSources.slice(0, 4).map((source) => source.title).filter(Boolean);
   const base = `He revisado la memoria de Flowly en /docs antes de responder. He identificado que la petición va sobre ${target} y la acción principal es ${context.intent.action}.`;
@@ -89,7 +90,8 @@ function buildNaturalDeveloperReply(params: { instruction: string; context: Deve
     return `${base} He encontrado documentación relevante (${sources.join(", ") || "docs/SUMMARY"}), pero todavía no veo un cambio de código seguro. Puedo seguir investigando o puedes indicarme el archivo, pantalla o comportamiento exacto.`;
   }
 
-  return `${base} También he cargado ${context.loadedSources.length} documentos relevantes (${sources.join(", ") || "Flowly Knowledge"}). Tengo una propuesta segura: te explico qué tocaría y solo si das el OK crearé una rama y un Pull Request.`;
+  const changePreview = humanChanges.length ? ` En concreto: ${humanChanges.slice(0, 3).map((item) => item.title.toLowerCase()).join("; ")}.` : "";
+  return `${base} También he cargado ${context.loadedSources.length} documentos relevantes (${sources.join(", ") || "Flowly Knowledge"}). Tengo una propuesta segura y te explicaré el cambio en lenguaje de producto, no solo como lista de archivos.${changePreview} Solo si das el OK crearé una rama y un Pull Request.`;
 }
 
 function stage(id: DeveloperPipelineStageId, label: string, description: string, status: DeveloperPipelineStageStatus, details?: string[]): DeveloperPipelineStage {
@@ -153,7 +155,7 @@ export async function planDeveloperPipeline(instruction: string): Promise<Develo
 
   return {
     ...executorPlan,
-    conversationReply: buildNaturalDeveloperReply({ instruction: clean, context: contextBundle, hasProposedFiles, target: executorPlan.projectMap.modules[0] }),
+    conversationReply: buildNaturalDeveloperReply({ instruction: clean, context: contextBundle, hasProposedFiles, target: executorPlan.projectMap.modules[0], humanChanges: executorPlan.humanChangePlan }),
     needsMoreContext: contextBundle.intent.needsClarification && !hasProposedFiles,
     pipelineVersion: "developer_pipeline_v1",
     pipelineReady: protocolLoaded && (hasProposedFiles || contextBundle.intent.needsClarification),
@@ -167,7 +169,9 @@ export async function planDeveloperPipeline(instruction: string): Promise<Develo
     }),
     buildVerification: {
       strategy: "pull_request_checks",
-      message: "La verificación real ocurre tras crear el Pull Request: GitHub/Vercel publican checks y QA Agent puede corregir sobre la misma rama si pegas el log.",
+      message: executorPlan.preflight.ok
+        ? "Preflight interno superado antes del PR. Después GitHub/Vercel publicarán checks y QA Agent podrá corregir sobre la misma rama si aparece un fallo."
+        : `Preflight bloqueado: ${executorPlan.preflight.blockedReason || "el cambio no es suficientemente seguro"}. No debe crearse PR hasta corregirlo.`,
       automaticFixAvailable: true,
     },
     unifiedEngines: {
@@ -186,9 +190,11 @@ export async function planDeveloperPipeline(instruction: string): Promise<Develo
   };
 }
 
-export async function runDeveloperPipeline(instruction: string, approved: boolean): Promise<DeveloperPipelineRunResult> {
+export async function runDeveloperPipeline(instruction: string, approved: boolean, approvedPlan?: DeveloperPipelinePlan): Promise<DeveloperPipelineRunResult> {
   const contextBundle = await buildDeveloperContextBundle(instruction);
-  const result = await runExecutorV3(instruction, approved, summarizeDeveloperContext(contextBundle));
+  const result = approvedPlan
+    ? await runExecutorV3FromApprovedPlan(approvedPlan, approved)
+    : await runExecutorV3(instruction, approved, summarizeDeveloperContext(contextBundle));
   let qaStatus: Awaited<ReturnType<typeof inspectPullRequestForQA>> | undefined;
 
   if (result.pullRequestNumber) {

@@ -39,6 +39,20 @@ type CandidateFile = {
 type ProposedFile = {
   path: string;
   message?: string;
+  content?: string;
+};
+
+type HumanChange = {
+  title: string;
+  description: string;
+  userImpact: string;
+  safetyNote: string;
+};
+
+type PreflightCheck = {
+  label: string;
+  ok: boolean;
+  detail: string;
 };
 
 type DeveloperStage = {
@@ -65,6 +79,8 @@ type DeveloperPlan = {
   reasoning?: string[];
   proposedSteps?: string[];
   proposedFiles?: ProposedFile[];
+  humanChangePlan?: HumanChange[];
+  preflight?: { ok: boolean; status: "passed" | "blocked"; checks: PreflightCheck[]; blockedReason?: string };
   pipelineVersion?: string;
   pipelineReady?: boolean;
   conversationReply?: string;
@@ -201,6 +217,8 @@ function explainPlan(plan: DeveloperPlan | null) {
     proposedFiles: proposedFiles.slice(0, 8),
     uniqueCapabilities: uniqueCapabilityItems(candidates).slice(0, 8),
     hasChanges,
+    humanChangePlan: (plan.humanChangePlan || []).slice(0, 6),
+    preflight: plan.preflight,
     next: hasChanges
       ? "Si me das el OK, crearé una rama nueva, aplicaré los cambios y abriré un Pull Request para que puedas revisarlo antes de tocar producción."
       : "Aún no he encontrado un cambio de código suficientemente seguro. No crearé archivos falsos ni duplicados; puedo seguir investigando o puedes concretar un poco más qué parte quieres mejorar.",
@@ -271,7 +289,7 @@ export default function DeveloperControlCenterPage() {
           role: "brain",
           text:
             explained?.hasChanges
-              ? (data.conversationReply || `He terminado. ${explained.naturalIntro} Veo una forma segura de hacerlo. Revisa la propuesta y, si te parece bien, pulsa “Aplicar cambios”.`)
+              ? (data.conversationReply || `He terminado. ${explained.naturalIntro} Te dejo debajo una explicación clara de qué cambiaría en el producto antes de tocar archivos. Si te encaja, pulsa “Aplicar cambios”.`)
               : (data.conversationReply || `He terminado. ${explained?.naturalIntro || "He revisado el proyecto."} De momento no haré cambios automáticos porque no quiero crear archivos duplicados ni tocar código sin seguridad.`),
         },
       ]);
@@ -297,7 +315,7 @@ export default function DeveloperControlCenterPage() {
       const response = await fetch("/api/developer/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: clean, approved: true }),
+        body: JSON.stringify({ instruction: clean, approved: true, approvedPlan: plan }),
       });
       const data = (await response.json()) as DeveloperRun;
       if (!response.ok || data.error) throw new Error(data.error || "No he podido ejecutar los cambios.");
@@ -449,7 +467,7 @@ export default function DeveloperControlCenterPage() {
                       {mode === "planning" ? <Loader2 className="animate-spin" size={17} /> : <Search size={17} />}
                       Investigar y preparar plan
                     </button>
-                    <button type="button" onClick={approveAndRun} disabled={isBusy || !plan?.ok || !explanation?.hasChanges} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/30 bg-emerald-300/15 px-5 py-3 text-sm font-black text-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">
+                    <button type="button" onClick={approveAndRun} disabled={isBusy || !plan?.ok || !explanation?.hasChanges || plan?.preflight?.ok === false} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/30 bg-emerald-300/15 px-5 py-3 text-sm font-black text-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">
                       {mode === "running" ? <Loader2 className="animate-spin" size={17} /> : <Rocket size={17} />}
                       Aplicar cambios
                     </button>
@@ -492,13 +510,42 @@ export default function DeveloperControlCenterPage() {
 
                     <PlanBox title="Lo que haré si apruebas" icon={<Rocket size={18} />}>
                       <ul className="space-y-2 text-sm leading-6 text-white/70">
-                        <li>• Crearé una rama segura.</li>
-                        <li>• Modificaré solo archivos necesarios.</li>
-                        <li>• Evitaré duplicados y versiones paralelas.</li>
-                        <li>• Abriré un Pull Request para revisión.</li>
+                        <li>• Ejecutaré exactamente este plan aprobado, no uno regenerado.</li>
+                        <li>• Pasaré un preflight de seguridad antes de crear PR.</li>
+                        <li>• Crearé una rama segura y no tocaré main.</li>
+                        <li>• Abriré un Pull Request con explicación clara y rollback sencillo.</li>
                       </ul>
                     </PlanBox>
                   </div>
+
+                  {explanation.humanChangePlan.length > 0 && (
+                    <PlanBox title="Modificaciones reales que voy a hacer" icon={<Sparkles size={18} />} className="mt-5">
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        {explanation.humanChangePlan.map((item) => (
+                          <div key={item.title} className="rounded-2xl border border-cyan-200/15 bg-cyan-200/10 p-4">
+                            <p className="text-sm font-black text-cyan-50">{item.title}</p>
+                            <p className="mt-2 text-sm leading-6 text-white/72">{item.description}</p>
+                            <p className="mt-3 text-xs leading-5 text-emerald-100/75"><b>Impacto:</b> {item.userImpact}</p>
+                            <p className="mt-2 text-[11px] leading-5 text-white/42">{item.safetyNote}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </PlanBox>
+                  )}
+
+                  {explanation.preflight && (
+                    <PlanBox title="Preflight antes del PR" icon={<ShieldCheck size={18} />} className="mt-5">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {explanation.preflight.checks.map((check) => (
+                          <div key={check.label} className={`rounded-xl border p-3 ${check.ok ? "border-emerald-300/15 bg-emerald-300/10" : "border-red-300/20 bg-red-300/10"}`}>
+                            <p className="text-sm font-black text-white">{check.ok ? "✓" : "✕"} {check.label}</p>
+                            <p className="mt-1 text-xs leading-5 text-white/55">{check.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {!explanation.preflight.ok && <p className="mt-3 text-sm text-red-100">No crearé Pull Request hasta resolver este bloqueo: {explanation.preflight.blockedReason}</p>}
+                    </PlanBox>
+                  )}
 
                   <div className="mt-5 grid gap-5 xl:grid-cols-2">
                     <PlanBox title="Funcionalidades sobre las que trabajaría" icon={<Sparkles size={18} />}>
@@ -512,7 +559,7 @@ export default function DeveloperControlCenterPage() {
                       </div>
                     </PlanBox>
 
-                    <PlanBox title="Cambios concretos" icon={<GitPullRequest size={18} />}>
+                    <PlanBox title="Archivos técnicos que tocaría" icon={<GitPullRequest size={18} />}>
                       {explanation.hasChanges ? (
                         <div className="space-y-2">
                           {explanation.proposedFiles.map((file) => (
@@ -657,8 +704,8 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>;
 }
 
-function PlanBox({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
-  return <div className="rounded-[1.5rem] border border-white/10 bg-black/25 p-4"><div className="mb-4 flex items-center gap-2 text-cyan-100">{icon}<h3 className="font-black text-white">{title}</h3></div>{children}</div>;
+function PlanBox({ title, icon, children, className = "" }: { title: string; icon: ReactNode; children: ReactNode; className?: string }) {
+  return <div className={`rounded-[1.5rem] border border-white/10 bg-black/25 p-4 ${className}`}><div className="mb-4 flex items-center gap-2 text-cyan-100">{icon}<h3 className="font-black text-white">{title}</h3></div>{children}</div>;
 }
 
 function RiskBadge({ risk }: { risk?: string }) {

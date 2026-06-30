@@ -9,10 +9,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const instruction = String(body.instruction || "").trim();
     const approved = Boolean(body.approved);
+    const approvedPlan = body.approvedPlan && typeof body.approvedPlan === "object" ? body.approvedPlan : undefined;
     if (!instruction) return NextResponse.json({ ok: false, error: "Falta la instrucción para ejecutar Developer Pipeline." }, { status: 400 });
     if (!approved) return NextResponse.json({ ok: false, error: "Necesito aprobación explícita antes de crear rama y Pull Request." }, { status: 400 });
 
-    const result = await runDeveloperPipeline(instruction, approved);
+    const result = await runDeveloperPipeline(instruction, approved, approvedPlan);
 
     try {
       await supabaseAdmin.from("flowly_developer_pipeline_runs").insert({

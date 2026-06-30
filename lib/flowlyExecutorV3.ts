@@ -30,6 +30,20 @@ export type ExecutorV3ProjectMap = {
   impact?: FlowlyImpactAnalysis;
 };
 
+export type ExecutorV3HumanChange = {
+  title: string;
+  description: string;
+  userImpact: string;
+  safetyNote: string;
+};
+
+export type ExecutorV3Preflight = {
+  ok: boolean;
+  status: "passed" | "blocked";
+  checks: Array<{ label: string; ok: boolean; detail: string }>;
+  blockedReason?: string;
+};
+
 export type ExecutorV3Plan = {
   developerContext?: unknown;
   ok: true;
@@ -42,6 +56,8 @@ export type ExecutorV3Plan = {
   reasoning: string[];
   proposedSteps: string[];
   proposedFiles: ExecutorFileChange[];
+  humanChangePlan: ExecutorV3HumanChange[];
+  preflight: ExecutorV3Preflight;
   requiresApproval: true;
 };
 
@@ -209,7 +225,7 @@ async function buildProjectMap(instruction: string): Promise<{ map: ExecutorV3Pr
   };
 }
 
-function buildPlanDoc(plan: Omit<ExecutorV3Plan, "proposedFiles">) {
+function buildPlanDoc(plan: Omit<ExecutorV3Plan, "proposedFiles" | "humanChangePlan" | "preflight">) {
   return [
     "# Flowly Executor V3 - Plan inteligente",
     "",
@@ -265,7 +281,7 @@ function buildPlanDoc(plan: Omit<ExecutorV3Plan, "proposedFiles">) {
   ].join("\n");
 }
 
-function fallbackFiles(_plan: Omit<ExecutorV3Plan, "proposedFiles">): ExecutorFileChange[] {
+function fallbackFiles(_plan: Omit<ExecutorV3Plan, "proposedFiles" | "humanChangePlan" | "preflight">): ExecutorFileChange[] {
   // El Executor ya no convierte conversaciones/prompts en archivos Markdown.
   // Los planes se guardan como datos estructurados en Supabase desde las APIs de ejecución.
   // Si la IA no puede proponer un cambio seguro sobre archivos reales, no se crea Pull Request.
@@ -276,7 +292,7 @@ function isCompanionInstruction(instruction: string) {
   return /(companion|avatar|mascota|asistente|assistant|personaje|emocion|emoci[oó]n|vivo|evolutivo|animaci[oó]n)/i.test(instruction);
 }
 
-function findCandidatePath(plan: Omit<ExecutorV3Plan, "proposedFiles">, pattern: RegExp) {
+function findCandidatePath(plan: Omit<ExecutorV3Plan, "proposedFiles" | "humanChangePlan" | "preflight">, pattern: RegExp) {
   return plan.projectMap.candidates.find((file) => pattern.test(file.path))?.path;
 }
 
@@ -351,7 +367,7 @@ function upgradeCompanionCssContent(content: string) {
 `;
 }
 
-async function buildDeterministicSafeFiles(plan: Omit<ExecutorV3Plan, "proposedFiles">): Promise<ExecutorFileChange[]> {
+async function buildDeterministicSafeFiles(plan: Omit<ExecutorV3Plan, "proposedFiles" | "humanChangePlan" | "preflight">): Promise<ExecutorFileChange[]> {
   if (!isCompanionInstruction(plan.instruction)) return [];
 
   const avatarPath = findCandidatePath(plan, /(^|\/)EvolutionaryCompanionAvatar\.tsx$/i) || "components/EvolutionaryCompanionAvatar.tsx";
@@ -390,7 +406,7 @@ async function buildDeterministicSafeFiles(plan: Omit<ExecutorV3Plan, "proposedF
 }
 
 async function buildAIFiles(params: {
-  plan: Omit<ExecutorV3Plan, "proposedFiles">;
+  plan: Omit<ExecutorV3Plan, "proposedFiles" | "humanChangePlan" | "preflight">;
   context: Array<{ path: string; content: string }>;
   developerContext?: unknown;
 }): Promise<ExecutorFileChange[] | null> {
@@ -460,6 +476,97 @@ async function buildAIFiles(params: {
   }
 }
 
+function humanizeChangeFromFile(file: ExecutorFileChange, instruction: string): ExecutorV3HumanChange {
+  const path = normalize(file.path);
+  const text = normalize(`${instruction} ${file.message || ""}`);
+
+  if (path.includes("app/developer") || path.includes("flowlydeveloper") || text.includes("developer")) {
+    return {
+      title: "Developer será más conversacional y menos forzado",
+      description: "Voy a mejorar la forma en la que Developer explica el trabajo: primero entenderá la petición, después contará con palabras normales qué cambiará en la pantalla o flujo afectado, y solo al final enseñará los archivos técnicos como detalle secundario.",
+      userImpact: "Podrás hablarle como a una persona: pedir cambios, corregir el rumbo, continuar una idea anterior y entender exactamente qué resultado visual o funcional va a aplicar antes de aprobar.",
+      safetyNote: "No se modifica producción directamente; el cambio se aplicará en una rama y Pull Request.",
+    };
+  }
+
+  if (path.includes("companion") || path.includes("avatar") || text.includes("companion")) {
+    return {
+      title: "El Companion cambiará su comportamiento visible",
+      description: "Voy a ajustar la experiencia del Companion existente en vez de crear otro: controles, presencia en pantalla, estado visual, movimiento o comportamiento según lo que hayas pedido.",
+      userImpact: "El usuario verá a Flow más controlable y menos molesto, manteniendo la idea de asistente permanente dentro del OS.",
+      safetyNote: "Reutilizaré el runtime/componente existente para evitar duplicados.",
+    };
+  }
+
+  if (path.includes("crm") || text.includes("crm") || text.includes("cliente")) {
+    return {
+      title: "El CRM se reorganizará para ser más claro",
+      description: "Voy a ajustar la distribución del CRM, priorizando que la ficha, listas, acciones y navegación respiren mejor y no compitan por espacio.",
+      userImpact: "El CRM se sentirá menos saturado, más profesional y más fácil de usar para comerciales o administración.",
+      safetyNote: "No tocaré base de datos salvo que el plan lo indique expresamente.",
+    };
+  }
+
+  if (path.includes("css") || path.includes("globals")) {
+    return {
+      title: "La interfaz recibirá ajustes visuales controlados",
+      description: "Voy a tocar estilos globales o microinteracciones para que la pantalla se sienta más pulida sin cambiar la lógica principal.",
+      userImpact: "El cambio se notará en el aspecto, espaciado, animación o presencia visual de la zona afectada.",
+      safetyNote: "Mantendré los estilos acotados para no romper otras pantallas.",
+    };
+  }
+
+  if (path.includes("api/")) {
+    return {
+      title: "La API afectada se hará más segura o fiable",
+      description: "Voy a ajustar el endpoint existente para validar mejor la entrada, devolver respuestas más claras y evitar ejecuciones ambiguas.",
+      userImpact: "El panel tendrá menos errores silenciosos y Developer podrá explicar mejor qué ha ocurrido.",
+      safetyNote: "No expondré claves ni cambiaré permisos sensibles sin aprobación explícita.",
+    };
+  }
+
+  return {
+    title: "Se modificará una pieza existente de Flowly",
+    description: file.message || "Voy a aplicar un cambio pequeño y revisable sobre una parte existente del proyecto, evitando crear versiones paralelas.",
+    userImpact: "El usuario verá el cambio en el comportamiento o la presentación de la zona relacionada con la petición.",
+    safetyNote: "El cambio se ejecutará en rama segura y Pull Request.",
+  };
+}
+
+export function buildHumanReadableChangePlan(files: ExecutorFileChange[], instruction: string): ExecutorV3HumanChange[] {
+  const unique = new Map<string, ExecutorV3HumanChange>();
+  for (const file of files.slice(0, 8)) {
+    const item = humanizeChangeFromFile(file, instruction);
+    if (!unique.has(item.title)) unique.set(item.title, item);
+  }
+  return Array.from(unique.values());
+}
+
+export function runExecutorPreflight(files: ExecutorFileChange[], options?: { approvedPackageJson?: boolean }): ExecutorV3Preflight {
+  const checks: ExecutorV3Preflight["checks"] = [];
+  const approvedPackageJson = Boolean(options?.approvedPackageJson);
+  const normalized = files.map((file) => normalize(file.path));
+  const hasUnsafePath = files.some((file) => file.path.includes("..") || file.path.startsWith("/"));
+  const packageTouched = normalized.some((file) => file === "package.json" || file.endsWith("/package.json"));
+  const duplicateRuntime = normalized.some((file) => /(v2|v3|new|copy|copia|backup)/.test(file) && /(companion|voice|brain|memory|executor)/.test(file));
+  const emptyContent = files.some((file) => !file.content || file.content.trim().length < 20);
+  const docsOnly = files.length > 0 && normalized.every((file) => file.startsWith("docs/"));
+
+  checks.push({ label: "Rutas seguras", ok: !hasUnsafePath, detail: hasUnsafePath ? "Hay rutas absolutas o con .." : "Todas las rutas son relativas y seguras." });
+  checks.push({ label: "Contenido válido", ok: !emptyContent, detail: emptyContent ? "Algún archivo viene vacío o incompleto." : "Los archivos tienen contenido suficiente." });
+  checks.push({ label: "Sin cambios sensibles", ok: !packageTouched || approvedPackageJson, detail: packageTouched ? "package.json requiere aprobación explícita." : "No se cambian dependencias ni package.json." });
+  checks.push({ label: "Sin motores duplicados", ok: !duplicateRuntime, detail: duplicateRuntime ? "Se detectó posible archivo paralelo V2/V3/copia en un motor crítico." : "No se detectan runtimes o motores duplicados." });
+  checks.push({ label: "No documentación falsa", ok: !docsOnly, detail: docsOnly ? "El cambio solo generaría documentación; no se creará PR automático." : "El PR contiene cambios de producto/código, no solo docs." });
+
+  const failed = checks.find((check) => !check.ok);
+  return {
+    ok: !failed,
+    status: failed ? "blocked" : "passed",
+    checks,
+    blockedReason: failed?.detail,
+  };
+}
+
 export async function planExecutorV3(instruction: string, developerContext?: unknown): Promise<ExecutorV3Plan> {
   const clean = instruction.trim();
   const { map, context } = await buildProjectMap(clean);
@@ -498,47 +605,54 @@ export async function planExecutorV3(instruction: string, developerContext?: unk
   const deterministicFiles = aiFiles?.length ? [] : await buildDeterministicSafeFiles(planBase);
   const proposedFiles = (aiFiles?.length ? aiFiles : deterministicFiles).filter((file) => !normalize(file.path).startsWith("docs/executor/"));
 
-  return { ...planBase, proposedFiles: proposedFiles.length ? proposedFiles : fallbackFiles(planBase) };
+  const safeProposedFiles = proposedFiles.length ? proposedFiles : fallbackFiles(planBase);
+  return {
+    ...planBase,
+    proposedFiles: safeProposedFiles,
+    humanChangePlan: buildHumanReadableChangePlan(safeProposedFiles, clean),
+    preflight: runExecutorPreflight(safeProposedFiles),
+  };
 }
 
-export async function runExecutorV3(instruction: string, approved: boolean, developerContext?: unknown): Promise<ExecutorV3RunResult> {
-  const plan = await planExecutorV3(instruction, developerContext);
+export async function runExecutorV3FromApprovedPlan(plan: ExecutorV3Plan, approved: boolean): Promise<ExecutorV3RunResult> {
   if (!approved) return plan;
 
-  const { context } = await buildProjectMap(plan.instruction);
-  const aiFiles = await buildAIFiles({ plan, context, developerContext });
-  const deterministicFiles = aiFiles?.length ? [] : await buildDeterministicSafeFiles(plan);
-  const candidateFiles = aiFiles?.length ? aiFiles : deterministicFiles.length ? deterministicFiles : plan.proposedFiles;
-  const files = (candidateFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
+  const files = (plan.proposedFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
+  const preflight = runExecutorPreflight(files);
 
-  if (!files.length) {
+  if (!files.length || !preflight.ok) {
     return {
       ...plan,
+      preflight,
       status: "planned",
-      proposedFiles: [],
-      error: "Executor V3 no ha encontrado cambios de código seguros para aplicar. No crearé documentación falsa ni archivos duplicados. Revisa el plan, concreta mejor la petición o selecciona archivos existentes desde Project Graph.",
+      proposedFiles: files,
+      error: preflight.blockedReason || "Executor V3 no ha encontrado cambios de código seguros para aplicar. No crearé PR falso ni archivos duplicados.",
     };
   }
 
-  const title = `Flowly Executor V3: ${plan.instruction.slice(0, 72)}`;
+  const title = `Flowly Developer: ${plan.instruction.slice(0, 72)}`;
   const pr = await createExecutorPullRequest({
     title,
     body: [
-      "## Flowly Executor V3",
-      "Este Pull Request fue creado automáticamente por Flowly Brain/Executor V3.",
+      "## Flowly Developer OS",
+      "Este Pull Request fue creado automáticamente por Flowly Developer usando el plan aprobado por el usuario.",
       "",
-      "### Petición",
+      "### Petición aprobada",
       plan.instruction,
       "",
-      "### Análisis",
-      `- Archivos analizados: ${plan.projectMap.analyzedFiles}`,
-      `- Archivos relacionados: ${plan.projectMap.relatedFiles}`,
-      `- Archivos editables: ${plan.projectMap.editableFiles}`,
+      "### Cambios entendibles para usuario",
+      ...plan.humanChangePlan.flatMap((item) => [`- **${item.title}**: ${item.description}`, `  Impacto: ${item.userImpact}`]),
+      "",
+      "### Archivos modificados",
+      ...files.map((file) => `- \`${file.path}\` — ${file.message || "Cambio aprobado"}`),
+      "",
+      "### Preflight",
+      ...preflight.checks.map((check) => `- ${check.ok ? "✅" : "❌"} ${check.label}: ${check.detail}`),
       "",
       "### Seguridad",
       "No se modifica la rama principal directamente. Este PR debe revisarse antes de hacer merge.",
     ].join("\n"),
-    branchName: `flowly/executor-v3-${slug(plan.instruction)}-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 12)}`,
+    branchName: `flowly/developer-${slug(plan.instruction)}-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 12)}`,
     files,
   });
 
@@ -546,9 +660,15 @@ export async function runExecutorV3(instruction: string, approved: boolean, deve
     ...plan,
     status: pr.ok ? "pull_request_created" : "planned",
     proposedFiles: files,
+    preflight,
     pullRequestUrl: pr.pullRequestUrl,
     pullRequestNumber: pr.pullRequestNumber,
     branch: pr.branch,
     error: pr.error,
   };
+}
+
+export async function runExecutorV3(instruction: string, approved: boolean, developerContext?: unknown): Promise<ExecutorV3RunResult> {
+  const plan = await planExecutorV3(instruction, developerContext);
+  return runExecutorV3FromApprovedPlan(plan, approved);
 }
