@@ -1,0 +1,44 @@
+# Flowly OS - Copilot / Codex Instructions
+
+Este repositorio NO es un CRM tradicional. Es Flowly OS: un sistema operativo empresarial inteligente.
+
+Antes de modificar código:
+
+1. Lee `AI_BOOTSTRAP.md`.
+2. Lee `docs/SUMMARY.md`.
+3. Lee la documentación relacionada con el área afectada.
+4. Si trabajas sobre Companion, lee también:
+   - `docs/architecture-bible/16-companion-os.md`
+   - `docs/architecture-bible/19-conversation-engine.md`
+   - `docs/architecture-bible/09-memory-engine.md`
+   - `docs/architecture-bible/28-execution-engine.md`
+   - `docs/architecture-bible/33-voice-engine.md`
+   - `docs/companion/README.md`
+
+Reglas no negociables:
+
+- No crees motores duplicados.
+- No crees hooks duplicados.
+- No crees componentes paralelos tipo `V2`, `Nuevo`, `Final` si existe una pieza equivalente.
+- Reutiliza Brain, Heart, Memory, Kernel, Event Bus, Project Graph, Executor y QA antes de crear nada.
+- Toda IA debe pasar por Brain.
+- Toda acción sensible debe tener aprobación humana.
+- No modifiques producción directamente.
+- Crea ramas y Pull Requests.
+- Ejecuta `npm run build` antes de terminar.
+- Si el build falla, corrige antes de dar el trabajo como terminado.
+
+Para `/developer`:
+
+- Debe comportarse como una conversación natural con un arquitecto senior.
+- No debe responder siempre con plantillas.
+- No debe reiniciar proyectos salvo que el usuario lo pida explícitamente.
+- Primero investiga, luego explica, luego espera aprobación, luego ejecuta.
+- Si no hay cambios seguros, debe decirlo claramente y pedir más contexto.
+
+Para Companion:
+
+- Flow no es una mascota ni un widget.
+- Flow es el personaje principal de Flowly OS.
+- Debe conectarse con Brain, Memory, Heart, Event Bus, Voice, Emotion y Movement.
+- No mezcles herramientas internas de desarrollador con el panel del cliente.
