@@ -67,6 +67,8 @@ type DeveloperPlan = {
   proposedFiles?: ProposedFile[];
   pipelineVersion?: string;
   pipelineReady?: boolean;
+  conversationReply?: string;
+  needsMoreContext?: boolean;
   operatingProtocol?: DeveloperKnowledgeSource[];
   stages?: DeveloperStage[];
   buildVerification?: { message?: string; automaticFixAvailable?: boolean };
@@ -268,8 +270,8 @@ export default function DeveloperControlCenterPage() {
           role: "brain",
           text:
             explained?.hasChanges
-              ? `He terminado. ${explained.naturalIntro} Veo una forma segura de hacerlo. Revisa la propuesta y, si te parece bien, pulsa “Aplicar cambios”.`
-              : `He terminado. ${explained?.naturalIntro || "He revisado el proyecto."} De momento no haré cambios automáticos porque no quiero crear archivos duplicados ni tocar código sin seguridad.`,
+              ? (data.conversationReply || `He terminado. ${explained.naturalIntro} Veo una forma segura de hacerlo. Revisa la propuesta y, si te parece bien, pulsa “Aplicar cambios”.`)
+              : (data.conversationReply || `He terminado. ${explained?.naturalIntro || "He revisado el proyecto."} De momento no haré cambios automáticos porque no quiero crear archivos duplicados ni tocar código sin seguridad.`),
         },
       ]);
     } catch (err) {
