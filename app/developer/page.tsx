@@ -73,6 +73,9 @@ type DeveloperKnowledgeSource = {
 type DeveloperPlan = {
   ok?: boolean;
   error?: string;
+  conversationOnly?: boolean;
+  conversationIntent?: string;
+  shouldRun?: boolean;
   instruction?: string;
   summary?: string;
   risk?: string;
@@ -239,6 +242,7 @@ function buildTimeline(mode: string, plan: DeveloperPlan | null, run: DeveloperR
 
 export default function DeveloperControlCenterPage() {
   const [instruction, setInstruction] = useState("");
+  const [conversationId, setConversationId] = useState(() => `developer-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   const [plan, setPlan] = useState<DeveloperPlan | null>(null);
   const [run, setRun] = useState<DeveloperRun | null>(null);
   const [mode, setMode] = useState<"idle" | "planning" | "planned" | "running" | "done" | "error">("idle");
@@ -264,21 +268,42 @@ export default function DeveloperControlCenterPage() {
     setMode("planning");
     setError(null);
     setRun(null);
-    setPlan(null);
-    setHistory((items) => [
-      ...items,
-      { role: "user", text: clean },
-      { role: "brain", text: "Perfecto. Voy a investigar Flowly antes de tocar nada. Buscaré qué parte existe ya, qué conviene reutilizar y qué riesgos hay." },
-    ]);
+
+    const userMessage = { role: "user" as const, text: clean };
+    const thinkingText = plan?.ok
+      ? "Estoy dentro de la misma sesión. Primero comprobaré si es una pregunta sobre el plan actual, una corrección o una nueva tarea."
+      : "Perfecto. Voy a investigar Flowly antes de tocar nada. Buscaré qué parte existe ya, qué conviene reutilizar y qué riesgos hay.";
+
+    const nextHistory = [...history, userMessage, { role: "brain" as const, text: thinkingText }];
+    setHistory(nextHistory);
 
     try {
       const response = await fetch("/api/developer/pipeline/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: clean }),
+        body: JSON.stringify({
+          instruction: clean,
+          conversationId,
+          history: nextHistory,
+          currentPlan: plan,
+        }),
       });
       const data = (await response.json()) as DeveloperPlan;
       if (!response.ok || !data.ok) throw new Error(data.error || "No he podido preparar el plan.");
+
+      setInstruction("");
+
+      if (data.conversationOnly) {
+        setMode(plan?.ok ? "planned" : "idle");
+        setHistory((items) => [
+          ...items,
+          {
+            role: "brain",
+            text: data.conversationReply || "Sigo en la misma sesión. Dime cómo quieres ajustar el plan.",
+          },
+        ]);
+        return;
+      }
 
       setPlan(data);
       setMode("planned");
@@ -302,8 +327,8 @@ export default function DeveloperControlCenterPage() {
   }
 
   async function approveAndRun() {
-    const clean = instruction.trim();
-    if (!clean) return;
+    const clean = plan?.instruction?.trim() || instruction.trim();
+    if (!clean || !plan?.ok) return;
     setMode("running");
     setError(null);
     setHistory((items) => [
@@ -315,7 +340,7 @@ export default function DeveloperControlCenterPage() {
       const response = await fetch("/api/developer/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: clean, approved: true, approvedPlan: plan }),
+        body: JSON.stringify({ instruction: clean, approved: true, approvedPlan: plan, conversationId }),
       });
       const data = (await response.json()) as DeveloperRun;
       if (!response.ok || data.error) throw new Error(data.error || "No he podido ejecutar los cambios.");
@@ -471,7 +496,15 @@ export default function DeveloperControlCenterPage() {
                       {mode === "running" ? <Loader2 className="animate-spin" size={17} /> : <Rocket size={17} />}
                       Aplicar cambios
                     </button>
-                    <button type="button" onClick={() => { setInstruction(""); setPlan(null); setRun(null); setMode("idle"); setError(null); }} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-black text-white/70">
+                    <button type="button" onClick={() => {
+                      setInstruction("");
+                      setPlan(null);
+                      setRun(null);
+                      setMode("idle");
+                      setError(null);
+                      setConversationId(`developer-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+                      setHistory([{ role: "brain", text: "Sesión reiniciada. Dime qué quieres mejorar y lo investigaré antes de tocar código." }]);
+                    }} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-black text-white/70">
                       Limpiar
                     </button>
                   </div>
