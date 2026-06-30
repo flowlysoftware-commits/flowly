@@ -41,6 +41,21 @@ type ProposedFile = {
   message?: string;
 };
 
+type DeveloperStage = {
+  id?: string;
+  label: string;
+  description: string;
+  status: "done" | "active" | "waiting" | "blocked" | "error";
+  details?: string[];
+};
+
+type DeveloperKnowledgeSource = {
+  path: string;
+  loaded: boolean;
+  summary: string;
+  excerpt?: string;
+};
+
 type DeveloperPlan = {
   ok?: boolean;
   error?: string;
@@ -50,6 +65,12 @@ type DeveloperPlan = {
   reasoning?: string[];
   proposedSteps?: string[];
   proposedFiles?: ProposedFile[];
+  pipelineVersion?: string;
+  pipelineReady?: boolean;
+  operatingProtocol?: DeveloperKnowledgeSource[];
+  stages?: DeveloperStage[];
+  buildVerification?: { message?: string; automaticFixAvailable?: boolean };
+  unifiedEngines?: Record<string, string>;
   projectMap?: {
     analyzedFiles?: number;
     relatedFiles?: number;
@@ -77,13 +98,17 @@ type DeveloperRun = DeveloperPlan & {
   pullRequestUrl?: string;
   pullRequestNumber?: number;
   branch?: string;
+  nextAction?: string;
+  qaStatus?: { status?: string; summary?: string; checks?: Array<{ name: string; conclusion?: string; status?: string; url?: string }> };
 };
 
-type WorkStepStatus = "done" | "active" | "waiting" | "error";
+type WorkStepStatus = "done" | "active" | "waiting" | "blocked" | "error";
 
 type WorkStep = {
   label: string;
   status: WorkStepStatus;
+  description?: string;
+  details?: string[];
 };
 
 const quickPrompts = [
@@ -207,7 +232,7 @@ export default function DeveloperControlCenterPage() {
   ]);
 
   const explanation = useMemo(() => explainPlan(plan), [plan]);
-  const timeline = useMemo(() => buildTimeline(mode, plan, run, error), [mode, plan, run, error]);
+  const timeline = useMemo(() => (run?.stages?.length ? run.stages : plan?.stages?.length ? plan.stages : buildTimeline(mode, plan, run, error)), [mode, plan, run, error]);
   const isBusy = mode === "planning" || mode === "running";
 
   async function analyze(event?: FormEvent) {
@@ -226,7 +251,7 @@ export default function DeveloperControlCenterPage() {
     ]);
 
     try {
-      const response = await fetch("/api/executor/v3/plan", {
+      const response = await fetch("/api/developer/pipeline/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instruction: clean }),
@@ -266,7 +291,7 @@ export default function DeveloperControlCenterPage() {
     ]);
 
     try {
-      const response = await fetch("/api/executor/v3/run", {
+      const response = await fetch("/api/developer/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instruction: clean, approved: true }),
@@ -358,6 +383,13 @@ export default function DeveloperControlCenterPage() {
               </div>
             </div>
           </header>
+
+          <section className="grid gap-4 md:grid-cols-4">
+            <PipelineCard title="Knowledge" value={plan?.operatingProtocol?.some((item) => item.loaded) ? "Leído" : "Pendiente"} detail="AI_BOOTSTRAP + Docs" />
+            <PipelineCard title="Blueprint" value={plan?.proposedFiles?.length ? `${plan.proposedFiles.length} cambios` : "Sin cambios"} detail="Plan revisable" />
+            <PipelineCard title="PR seguro" value={run?.pullRequestUrl ? "Creado" : "Esperando"} detail="Nunca toca main" />
+            <PipelineCard title="QA" value={run?.qaStatus?.status ? String(run.qaStatus.status) : "Preparado"} detail="Checks + corrección" />
+          </section>
 
           <section className="grid gap-5 2xl:grid-cols-[1fr_430px]">
             <div className="space-y-5">
@@ -522,6 +554,8 @@ export default function DeveloperControlCenterPage() {
                       <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100/70">Trabajo terminado</p>
                       <h2 className="mt-2 text-3xl font-black">Hecho. Pull Request creado.</h2>
                       <p className="mt-2 text-sm text-emerald-50/75">Rama: {run.branch || "rama segura"}. Revísalo antes de hacer merge.</p>
+                      {run.nextAction && <p className="mt-2 text-sm text-emerald-50/70">{run.nextAction}</p>}
+                      {run.qaStatus?.summary && <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-100/65">QA: {run.qaStatus.summary}</p>}
                     </div>
                     <Link href={run.pullRequestUrl} target="_blank" className="inline-flex items-center gap-2 rounded-2xl bg-emerald-200 px-5 py-3 text-sm font-black text-slate-950">
                       Ver Pull Request <ArrowRight size={17} />
@@ -542,6 +576,18 @@ export default function DeveloperControlCenterPage() {
               <Panel title="Línea de trabajo" icon={<Activity size={18} />}>
                 <div className="space-y-3">
                   {timeline.map((step, index) => <TimelineStep key={step.label} index={index + 1} step={step} />)}
+                </div>
+              </Panel>
+
+              <Panel title="Protocolo OS" icon={<FileCode2 size={18} />}>
+                <div className="space-y-2">
+                  {(plan?.operatingProtocol || []).slice(0, 5).map((source) => (
+                    <div key={source.path} className={`rounded-2xl border p-3 text-xs ${source.loaded ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50" : "border-amber-300/20 bg-amber-300/10 text-amber-50"}`}>
+                      <p className="break-all font-mono font-bold">{source.path}</p>
+                      <p className="mt-1 opacity-70">{source.loaded ? "Leído antes de planificar" : "No disponible"}</p>
+                    </div>
+                  ))}
+                  {!(plan?.operatingProtocol || []).length && <p className="text-sm text-white/45">Cuando pidas un cambio, Developer leerá AI_BOOTSTRAP y Docs antes de planificar.</p>}
                 </div>
               </Panel>
 
@@ -570,6 +616,16 @@ function MenuGroup({ title, children }: { title: string; children: ReactNode }) 
 
 function MenuItem({ href, icon, label, active, highlight }: { href: string; icon: ReactNode; label: string; active?: boolean; highlight?: boolean }) {
   return <Link href={href} className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 transition ${active ? "bg-violet-500/25 text-white" : highlight ? "text-cyan-100 hover:bg-cyan-300/10" : "text-white/65 hover:bg-white/8 hover:text-white"}`}>{icon}<span>{label}</span></Link>;
+}
+
+function PipelineCard({ title, value, detail }: { title: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-[1.35rem] border border-cyan-300/15 bg-white/[0.045] p-4 backdrop-blur-xl">
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/45">{title}</p>
+      <p className="mt-2 text-xl font-black text-white">{value}</p>
+      <p className="mt-1 text-xs text-white/45">{detail}</p>
+    </div>
+  );
 }
 
 function Badge({ label, value }: { label: string; value: string }) {
@@ -607,6 +663,7 @@ function TimelineStep({ index, step }: { index: number; step: WorkStep }) {
     done: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
     active: "border-cyan-300/30 bg-cyan-300/10 text-cyan-50",
     waiting: "border-white/10 bg-black/20 text-white/45",
+    blocked: "border-amber-300/25 bg-amber-300/10 text-amber-100",
     error: "border-rose-300/25 bg-rose-300/10 text-rose-100",
   };
   return (
@@ -614,7 +671,11 @@ function TimelineStep({ index, step }: { index: number; step: WorkStep }) {
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-black">
         {step.status === "done" ? <CheckCircle2 size={16} /> : step.status === "active" ? <Loader2 className="animate-spin" size={16} /> : index}
       </div>
-      <p className="text-sm font-bold">{step.label}</p>
+      <div className="min-w-0">
+        <p className="text-sm font-bold">{step.label}</p>
+        {step.description && <p className="mt-1 text-xs opacity-65">{step.description}</p>}
+        {step.details?.length ? <p className="mt-1 text-[11px] opacity-60">{step.details.join(" · ")}</p> : null}
+      </div>
     </div>
   );
 }
