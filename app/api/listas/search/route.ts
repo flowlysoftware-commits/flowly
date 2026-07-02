@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getSupabaseAdminConfigStatus, supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type GoogleAddressComponent = {
   longText?: string;
@@ -82,7 +82,7 @@ function toLeadRow(place: GooglePlace, params: { businessType: string; country: 
     google_reviews: Number(place.userRatingCount || 0),
     website: place.websiteUri || "",
     google_maps_uri: place.googleMapsUri || "",
-    google_place_id: place.id || "",
+    google_place_id: place.id || place.googleMapsUri || `${place.displayName?.text || "negocio"}-${place.formattedAddress || "sin-direccion"}`,
     source: "google_places",
     worked: false,
     worked_by: "",
@@ -162,8 +162,14 @@ export async function POST(request: NextRequest) {
       .select("*");
 
     if (error) {
+      const config = getSupabaseAdminConfigStatus();
       return NextResponse.json(
-        { error: "La búsqueda funcionó, pero no se pudo guardar en Supabase. Ejecuta el SQL que te he pasado.", details: error.message },
+        {
+          error: `La búsqueda funcionó, pero no se pudo guardar en Supabase: ${error.message}`,
+          details: error.message,
+          config,
+          help: "Ejecuta supabase/flowly_leads_ia.sql y revisa que en Vercel existan NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY o NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+        },
         { status: 500 },
       );
     }

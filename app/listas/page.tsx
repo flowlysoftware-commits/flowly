@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -74,22 +75,6 @@ export default function ListasPage() {
   const [minReviews, setMinReviews] = useState(50);
   const [limit, setLimit] = useState(20);
 
-  const [filterCountry, setFilterCountry] = useState("España");
-  const [filterProvince, setFilterProvince] = useState("Todas");
-  const [filterBusinessType, setFilterBusinessType] = useState("Todos");
-  const [workedFilter, setWorkedFilter] = useState("todos");
-  const [statusFilter, setStatusFilter] = useState("todos");
-  const [query, setQuery] = useState("");
-  const [filterMinReviews, setFilterMinReviews] = useState(0);
-
-  const provinces = useMemo(() => {
-    const values = leads
-      .filter((lead) => filterCountry === "Todos" || lead.country === filterCountry)
-      .map((lead) => lead.province)
-      .filter(Boolean);
-    return ["Todas", ...Array.from(new Set(values)).sort()];
-  }, [filterCountry, leads]);
-
   const stats = useMemo(() => {
     const worked = leads.filter((lead) => lead.worked).length;
     const clients = leads.filter((lead) => lead.status === "cliente").length;
@@ -98,20 +83,11 @@ export default function ListasPage() {
     return { total: leads.length, worked, pending: leads.length - worked, clients, demos, withPhone };
   }, [leads]);
 
-  async function loadLeads() {
+  async function loadLeads(clearCurrentMessage = true) {
     setLoading(true);
-    setMessage("");
+    if (clearCurrentMessage) setMessage("");
     try {
-      const params = new URLSearchParams({
-        country: filterCountry,
-        province: filterProvince,
-        businessType: filterBusinessType,
-        worked: workedFilter,
-        status: statusFilter,
-        query,
-        minReviews: String(filterMinReviews),
-        limit: "500",
-      });
+      const params = new URLSearchParams({ limit: "500" });
       const response = await fetch(`/api/listas/leads?${params.toString()}`, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "No se pudo cargar la base comercial.");
@@ -126,7 +102,7 @@ export default function ListasPage() {
   useEffect(() => {
     loadLeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCountry, filterProvince, filterBusinessType, workedFilter, statusFilter, filterMinReviews]);
+  }, []);
 
   async function runGoogleSearch() {
     setSearching(true);
@@ -140,10 +116,6 @@ export default function ListasPage() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "No se pudo hacer la búsqueda real.");
       setMessage(`Búsqueda terminada. Guardados nuevos: ${payload.inserted || 0}. Repetidos ignorados: ${payload.duplicates || 0}.`);
-      setFilterCountry(country);
-      setFilterBusinessType(businessType);
-      setFilterProvince("Todas");
-      setFilterMinReviews(minReviews);
       await loadLeads();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo hacer la búsqueda real.");
@@ -239,28 +211,6 @@ export default function ListasPage() {
           {message && <p className="mt-4 rounded-2xl border border-cyan-200/20 bg-cyan-200/10 p-3 text-sm text-cyan-50">{message}</p>}
         </Panel>
 
-        <Panel title="Filtros de trabajo comercial">
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-8">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") loadLeads(); }} className="input-dark lg:col-span-2" placeholder="Buscar por nombre, teléfono, comercial..." />
-            <select value={filterBusinessType} onChange={(e) => setFilterBusinessType(e.target.value)} className="input-dark">
-              <option>Todos</option>{businessTypes.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <select value={filterCountry} onChange={(e) => { setFilterCountry(e.target.value); setFilterProvince("Todas"); }} className="input-dark">
-              <option>Todos</option>{countries.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <select value={filterProvince} onChange={(e) => setFilterProvince(e.target.value)} className="input-dark">
-              {provinces.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <input value={filterMinReviews} min={0} type="number" onChange={(e) => setFilterMinReviews(Number(e.target.value || 0))} className="input-dark" placeholder="Mín. reseñas" />
-            <select value={workedFilter} onChange={(e) => setWorkedFilter(e.target.value)} className="input-dark">
-              <option value="todos">Todos</option><option value="pendientes">Pendientes</option><option value="trabajados">Trabajados</option>
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-dark">
-              <option value="todos">Todos los estados</option>{statuses.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
-            </select>
-          </div>
-          <button onClick={loadLeads} className="mt-4 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/10">Aplicar búsqueda</button>
-        </Panel>
 
         <Panel title="Base de datos comercial">
           {loading ? (
@@ -299,10 +249,10 @@ export default function ListasPage() {
   );
 }
 
-function Metric({ icon, label, value, helper }: { icon: React.ReactNode; label: string; value: number | string; helper: string }) {
+function Metric({ icon, label, value, helper }: { icon: ReactNode; label: string; value: number | string; helper: string }) {
   return <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/10 backdrop-blur-xl"><div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-100">{icon}</div><p className="text-sm text-white/45">{label}</p><p className="mt-1 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-white/35">{helper}</p></div>;
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, children }: { title: string; children: ReactNode }) {
   return <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/10 backdrop-blur-xl"><h2 className="mb-5 text-xl font-semibold">{title}</h2>{children}</div>;
 }
