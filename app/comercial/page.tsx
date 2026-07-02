@@ -870,6 +870,12 @@ export default function ComercialPage() {
 
         {tab === "herramientas" && (
           <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <Panel title="Listas de prospección">
+              <div className="space-y-4">
+                <p className="text-sm text-white/55">Accede a la nueva base comercial de peluquerías con filtros por país, reseñas, estado, casilla de trabajado y comercial asignado.</p>
+                <Link href="/listas" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/20">Abrir /listas <ArrowRight size={16} /></Link>
+              </div>
+            </Panel>
             <Panel title="Coach de ventas IA">
               <div className="space-y-4">
                 <p className="text-sm text-white/55">Pega una objeción real del cliente y Flowly te propone una respuesta preparada para WhatsApp, llamada o email.</p>
