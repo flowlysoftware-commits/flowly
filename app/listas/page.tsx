@@ -138,7 +138,10 @@ export default function ListasPage() {
         body: JSON.stringify({ businessType, country, province, city, minReviews, limit }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "No se pudo hacer la búsqueda real.");
+      if (!response.ok) {
+        const extra = [payload.details, payload.hint].filter(Boolean).join(" ");
+        throw new Error(`${payload.error || "No se pudo hacer la búsqueda real."}${extra ? ` ${extra}` : ""}`);
+      }
       setMessage(`Búsqueda terminada. Guardados nuevos: ${payload.inserted || 0}. Repetidos ignorados: ${payload.duplicates || 0}.`);
       setFilterCountry(country);
       setFilterBusinessType(businessType);
@@ -239,28 +242,6 @@ export default function ListasPage() {
           {message && <p className="mt-4 rounded-2xl border border-cyan-200/20 bg-cyan-200/10 p-3 text-sm text-cyan-50">{message}</p>}
         </Panel>
 
-        <Panel title="Filtros de trabajo comercial">
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-8">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") loadLeads(); }} className="input-dark lg:col-span-2" placeholder="Buscar por nombre, teléfono, comercial..." />
-            <select value={filterBusinessType} onChange={(e) => setFilterBusinessType(e.target.value)} className="input-dark">
-              <option>Todos</option>{businessTypes.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <select value={filterCountry} onChange={(e) => { setFilterCountry(e.target.value); setFilterProvince("Todas"); }} className="input-dark">
-              <option>Todos</option>{countries.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <select value={filterProvince} onChange={(e) => setFilterProvince(e.target.value)} className="input-dark">
-              {provinces.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <input value={filterMinReviews} min={0} type="number" onChange={(e) => setFilterMinReviews(Number(e.target.value || 0))} className="input-dark" placeholder="Mín. reseñas" />
-            <select value={workedFilter} onChange={(e) => setWorkedFilter(e.target.value)} className="input-dark">
-              <option value="todos">Todos</option><option value="pendientes">Pendientes</option><option value="trabajados">Trabajados</option>
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-dark">
-              <option value="todos">Todos los estados</option>{statuses.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
-            </select>
-          </div>
-          <button onClick={() => loadLeads()} className="mt-4 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/10">Aplicar búsqueda</button>
-        </Panel>
 
         <Panel title="Base de datos comercial">
           {loading ? (

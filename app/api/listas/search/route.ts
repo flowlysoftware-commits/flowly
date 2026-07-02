@@ -156,19 +156,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ leads: [], inserted: 0, duplicates: 0 });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("flowly_prospecting_leads")
-      .upsert(leads, { onConflict: "google_place_id", ignoreDuplicates: true })
-      .select("*");
+    const placeIds = leads.map((lead) => lead.google_place_id).filter(Boolean);
 
-    if (error) {
+    const { data: existingRows, error: existingError } = await supabaseAdmin
+      .from("flowly_prospecting_leads")
+      .select("google_place_id")
+      .in("google_place_id", placeIds);
+
+    if (existingError) {
       return NextResponse.json(
-        { error: "La búsqueda funcionó, pero no se pudo guardar en Supabase. Ejecuta el SQL que te he pasado.", details: error.message },
+        {
+          error: "La búsqueda funcionó, pero Flowly no puede leer la tabla de Supabase.",
+          details: existingError.message,
+          hint: "Ejecuta el SQL actualizado y revisa que NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY estén configuradas en Vercel.",
+        },
         { status: 500 },
       );
     }
 
-    return NextResponse.json({ leads: data || [], inserted: data?.length || 0, duplicates: Math.max(leads.length - (data?.length || 0), 0) });
+    const existingIds = new Set((existingRows || []).map((row) => row.google_place_id));
+    const newLeads = leads.filter((lead) => lead.google_place_id && !existingIds.has(lead.google_place_id));
+
+    let insertedRows: LeadRow[] = [];
+    if (newLeads.length > 0) {
+      const { data: insertedData, error: insertError } = await supabaseAdmin
+        .from("flowly_prospecting_leads")
+        .insert(newLeads)
+        .select("*");
+
+      if (insertError) {
+        return NextResponse.json(
+          {
+            error: "La búsqueda funcionó, pero no se pudo guardar en Supabase.",
+            details: insertError.message,
+            hint: "Ejecuta el SQL actualizado de supabase/flowly_leads_ia.sql. Si sigue fallando, revisa que SUPABASE_SERVICE_ROLE_KEY esté en Vercel y vuelve a desplegar.",
+          },
+          { status: 500 },
+        );
+      }
+      insertedRows = insertedData || [];
+    }
+
+    const { data: refreshedRows } = await supabaseAdmin
+      .from("flowly_prospecting_leads")
+      .select("*")
+      .in("google_place_id", placeIds)
+      .order("google_reviews", { ascending: false });
+
+    return NextResponse.json({
+      leads: refreshedRows || insertedRows,
+      inserted: insertedRows.length,
+      duplicates: leads.length - insertedRows.length,
+      found: leads.length,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se ha podido completar la búsqueda real." },
