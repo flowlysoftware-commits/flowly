@@ -70,6 +70,19 @@ type DeveloperKnowledgeSource = {
   excerpt?: string;
 };
 
+
+type DeveloperIntelligence = {
+  engine?: string;
+  model?: string;
+  intent?: string;
+  currentObjective?: string;
+  directReply?: string;
+  thinkingTrace?: string[];
+  constraints?: string[];
+  confidence?: number;
+  usedAI?: boolean;
+};
+
 type DeveloperPlan = {
   ok?: boolean;
   error?: string;
@@ -88,6 +101,7 @@ type DeveloperPlan = {
   pipelineReady?: boolean;
   conversationReply?: string;
   needsMoreContext?: boolean;
+  intelligence?: DeveloperIntelligence;
   operatingProtocol?: DeveloperKnowledgeSource[];
   contextEngine?: { target?: string; action?: string; confidence?: number; needsClarification?: boolean; loaded?: number; missing?: number; warnings?: string[]; sources?: Array<{ path: string; title?: string; kind?: string }> };
   stages?: DeveloperStage[];
@@ -252,7 +266,7 @@ export default function DeveloperControlCenterPage() {
     {
       role: "brain",
       text:
-        "Hola Ricky. Dime qué quieres mejorar con palabras normales. Primero investigaré el proyecto, después te explicaré qué he encontrado y solo si me das permiso crearé un Pull Request seguro.",
+        "Hola Ricky. Soy Developer OS. Háblame como a un ingeniero: puedo responder dudas, mantener el contexto de la sesión, preparar un plan claro en lenguaje normal y solo ejecutar si lo apruebas.",
     },
   ]);
 
@@ -272,7 +286,7 @@ export default function DeveloperControlCenterPage() {
     const userMessage = { role: "user" as const, text: clean };
     const thinkingText = plan?.ok
       ? "Estoy dentro de la misma sesión. Primero comprobaré si es una pregunta sobre el plan actual, una corrección o una nueva tarea."
-      : "Perfecto. Voy a investigar Flowly antes de tocar nada. Buscaré qué parte existe ya, qué conviene reutilizar y qué riesgos hay.";
+      : "Entendido. Primero voy a interpretar si esto es una pregunta, un ajuste del plan actual o una tarea nueva. Si hace falta planificar, consultaré Brain, /docs y el mapa del proyecto antes de proponerte nada.";
 
     const nextHistory = [...history, userMessage, { role: "brain" as const, text: thinkingText }];
     setHistory(nextHistory);
@@ -418,11 +432,11 @@ export default function DeveloperControlCenterPage() {
                 <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-100/55">Flowly IA Developer</p>
                 <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">Desarrolla Flowly hablando</h1>
                 <p className="mt-2 max-w-4xl text-sm leading-6 text-white/58">
-                  Escribe lo que quieres mejorar. Brain investiga, te explica la propuesta en lenguaje normal y solo si apruebas crea una rama y un Pull Request seguro.
+                  Escribe como si hablaras con un CTO. Developer mantiene la sesión, diferencia preguntas de ejecuciones, explica cambios en lenguaje de producto y solo crea PR cuando apruebas.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-                <Badge label="Modo" value="Arquitecto" />
+                <Badge label="Modo" value={plan?.intelligence?.usedAI ? "GPT CTO" : "Arquitecto"} />
                 <Badge label="Executor" value="V3" />
                 <Badge label="GitHub" value="PR seguro" />
                 <Badge label="QA" value="Preparado" />
@@ -529,6 +543,25 @@ export default function DeveloperControlCenterPage() {
                     </div>
                     <RiskBadge risk={plan.risk} />
                   </div>
+
+                  {plan.intelligence && (
+                    <div className="mt-5 rounded-[1.5rem] border border-violet-300/20 bg-violet-300/10 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-100/60">Developer Intelligence</p>
+                          <p className="mt-1 text-sm leading-6 text-violet-50/80">Objetivo actual: <b>{plan.intelligence.currentObjective || plan.instruction}</b></p>
+                        </div>
+                        <span className="rounded-full border border-violet-200/20 bg-black/20 px-3 py-1 text-xs font-black text-violet-50">{plan.intelligence.usedAI ? "GPT conectado" : "Modo seguro"}</span>
+                      </div>
+                      {plan.intelligence.thinkingTrace?.length ? (
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          {plan.intelligence.thinkingTrace.slice(0, 4).map((item) => (
+                            <div key={item} className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs leading-5 text-white/62">{item}</div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
 
                   <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
                     <PlanBox title="Lo que he encontrado" icon={<BrainCircuit size={18} />}>

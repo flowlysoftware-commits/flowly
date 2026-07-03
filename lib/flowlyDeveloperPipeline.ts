@@ -3,6 +3,7 @@ import { planExecutorV3, runExecutorV3, runExecutorV3FromApprovedPlan, type Exec
 import { getGitHubExecutorConfig } from "@/lib/flowlyGitHubExecutor";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph } from "@/lib/flowlyProjectGraph";
 import { buildDeveloperContextBundle, summarizeDeveloperContext, type DeveloperContextBundle } from "@/lib/flowlyDeveloperContextEngine";
+import type { DeveloperIntelligenceDecision } from "@/lib/flowlyDeveloperIntelligenceEngine";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -41,6 +42,7 @@ export type DeveloperPipelinePlan = ExecutorV3Plan & {
   contextEngine: ReturnType<typeof summarizeDeveloperContext>;
   conversationReply: string;
   needsMoreContext: boolean;
+  intelligence?: DeveloperIntelligenceDecision;
   stages: DeveloperPipelineStage[];
   buildVerification: {
     strategy: "pull_request_checks";
@@ -135,7 +137,7 @@ function buildRunStages(params: { prCreated: boolean; qaStatus?: string; error?:
   ];
 }
 
-export async function planDeveloperPipeline(instruction: string): Promise<DeveloperPipelinePlan> {
+export async function planDeveloperPipeline(instruction: string, options: { intelligence?: DeveloperIntelligenceDecision } = {}): Promise<DeveloperPipelinePlan> {
   const clean = instruction.trim();
   if (!clean) throw new Error("Falta la instrucción para Developer Pipeline.");
 
@@ -152,10 +154,14 @@ export async function planDeveloperPipeline(instruction: string): Promise<Develo
   const protocol = toKnowledgeSources(contextBundle);
   const protocolLoaded = contextBundle.loadedSources.length > 0;
   const hasProposedFiles = executorPlan.proposedFiles.length > 0;
+  const intelligenceChanges = options.intelligence?.productChangePlan?.length ? options.intelligence.productChangePlan : null;
+  const humanChangePlan = intelligenceChanges || executorPlan.humanChangePlan;
 
   return {
     ...executorPlan,
-    conversationReply: buildNaturalDeveloperReply({ instruction: clean, context: contextBundle, hasProposedFiles, target: executorPlan.projectMap.modules[0], humanChanges: executorPlan.humanChangePlan }),
+    humanChangePlan,
+    conversationReply: options.intelligence?.directReply || buildNaturalDeveloperReply({ instruction: clean, context: contextBundle, hasProposedFiles, target: executorPlan.projectMap.modules[0], humanChanges: humanChangePlan }),
+    intelligence: options.intelligence,
     needsMoreContext: contextBundle.intent.needsClarification && !hasProposedFiles,
     pipelineVersion: "developer_pipeline_v1",
     pipelineReady: protocolLoaded && (hasProposedFiles || contextBundle.intent.needsClarification),

@@ -32,6 +32,30 @@ export type ExecutorPullRequestResult = {
   mode?: GitHubExecutorConfig["authMode"];
 };
 
+const GITHUB_CACHE_TTL_MS = 1000 * 60 * 5;
+const githubMemoryCache = new Map<string, { expiresAt: number; value: unknown }>();
+
+function getCached<T>(key: string): T | null {
+  const item = githubMemoryCache.get(key);
+  if (!item) return null;
+  if (Date.now() > item.expiresAt) {
+    githubMemoryCache.delete(key);
+    return null;
+  }
+  return item.value as T;
+}
+
+function setCached<T>(key: string, value: T, ttlMs = GITHUB_CACHE_TTL_MS) {
+  githubMemoryCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  return value;
+}
+
+function clearRepositoryCache() {
+  for (const key of githubMemoryCache.keys()) {
+    if (key.startsWith("tree:") || key.startsWith("file:") || key.startsWith("ref:")) githubMemoryCache.delete(key);
+  }
+}
+
 function normalizePrivateKey(value: string) {
   return value.replace(/\\n/g, "\n").trim();
 }
@@ -151,7 +175,11 @@ export async function githubFetch<T>(path: string, init: RequestInit = {}) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    throw new Error(`GitHub API error ${response.status}: ${text}`);
+    const remaining = response.headers.get("x-ratelimit-remaining");
+    const reset = response.headers.get("x-ratelimit-reset");
+    const resetMessage = reset ? ` Reset aproximado: ${new Date(Number(reset) * 1000).toISOString()}.` : "";
+    const rateMessage = response.status === 403 ? ` Límite GitHub restante: ${remaining || "desconocido"}.${resetMessage}` : "";
+    throw new Error(`GitHub API error ${response.status}: ${text}${rateMessage}`);
   }
   return data as T;
 }
@@ -184,8 +212,11 @@ export async function getGitHubRepositoryStatus() {
 }
 
 async function getBranchSha(owner: string, repo: string, branch: string) {
+  const key = `ref:${owner}/${repo}/${branch}`;
+  const cached = getCached<string>(key);
+  if (cached) return cached;
   const ref = await githubFetch<{ object: { sha: string } }>(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
-  return ref.object.sha;
+  return setCached(key, ref.object.sha);
 }
 
 async function createBranch(owner: string, repo: string, branch: string, fromSha: string) {
@@ -251,14 +282,17 @@ export async function listRepositoryTree(branch?: string) {
   const repo = config.repo;
   const targetBranch = branch || config.defaultBranch || "main";
   const sha = await getBranchSha(owner, repo, targetBranch);
+  const cacheKey = `tree:${owner}/${repo}/${targetBranch}/${sha}`;
+  const cached = getCached<{ owner: string; repo: string; branch: string; truncated: boolean; items: GitHubTreeItem[] }>(cacheKey);
+  if (cached) return cached;
   const tree = await githubFetch<{ tree: GitHubTreeItem[]; truncated: boolean }>(`/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`);
-  return {
+  return setCached(cacheKey, {
     owner,
     repo,
     branch: targetBranch,
     truncated: tree.truncated,
     items: tree.tree || [],
-  };
+  });
 }
 
 export async function readRepositoryFile(path: string, branch?: string) {
@@ -312,6 +346,7 @@ export async function createExecutorPullRequest(input: ExecutorPullRequestInput)
     }
 
     const pr = await createPullRequest(owner, repo, input.title, input.body, branch, baseBranch);
+    clearRepositoryCache();
     return {
       ok: true,
       branch,
@@ -391,6 +426,7 @@ export async function commitFilesToBranch(input: { branch: string; files: Execut
     for (const file of input.files) {
       await upsertFile(config.owner, config.repo, input.branch, file, file.message || input.message);
     }
+    clearRepositoryCache();
     return { ok: true, files: input.files.map((file) => file.path), branch: input.branch };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error), branch: input.branch };
