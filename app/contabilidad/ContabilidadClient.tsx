@@ -1,10 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
-import { CalendarDays, LockKeyhole, Plus, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
+import { CalendarDays, LockKeyhole, Plus, ReceiptText, ShieldCheck, WalletCards, Landmark } from "lucide-react";
 
 type MovementType = "ingreso" | "gasto";
 type BusinessName = "Flowly" | "Celestial" | "Leonaris";
+type MoneyPlace = "Cuenta" | "Caja extra";
 
 type AccountingEntry = {
   id: string;
@@ -15,6 +16,8 @@ type AccountingEntry = {
   category: string;
   amount: number;
   note: string;
+  origin: MoneyPlace;
+  destination: MoneyPlace;
   createdAt?: string;
 };
 
@@ -27,6 +30,8 @@ type ApiEntry = {
   category: string;
   amount: number | string;
   note: string | null;
+  origin_wallet?: MoneyPlace | null;
+  destination_wallet?: MoneyPlace | null;
   created_at?: string;
 };
 
@@ -45,6 +50,7 @@ const categoryOptions = [
   "call400",
   "Flowly",
 ] as const;
+const moneyPlaces = ["Cuenta", "Caja extra"] as const;
 
 function euro(value: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(value || 0);
@@ -58,6 +64,10 @@ function currentMonth() {
   return new Date().toISOString().slice(0, 7);
 }
 
+function normalizeMoneyPlace(value: unknown): MoneyPlace {
+  return value === "Caja extra" ? "Caja extra" : "Cuenta";
+}
+
 function mapEntry(entry: ApiEntry): AccountingEntry {
   return {
     id: entry.id,
@@ -68,6 +78,8 @@ function mapEntry(entry: ApiEntry): AccountingEntry {
     category: entry.category,
     amount: Number(entry.amount) || 0,
     note: entry.note || "",
+    origin: normalizeMoneyPlace(entry.origin_wallet),
+    destination: normalizeMoneyPlace(entry.destination_wallet),
     createdAt: entry.created_at,
   };
 }
@@ -76,6 +88,12 @@ function calculateTotals(entries: AccountingEntry[]) {
   const income = entries.filter((entry) => entry.type === "ingreso").reduce((sum, entry) => sum + entry.amount, 0);
   const expenses = entries.filter((entry) => entry.type === "gasto").reduce((sum, entry) => sum + entry.amount, 0);
   return { income, expenses, balance: income - expenses };
+}
+
+function calculateCashBox(entries: AccountingEntry[]) {
+  const incoming = entries.filter((entry) => entry.destination === "Caja extra").reduce((sum, entry) => sum + entry.amount, 0);
+  const outgoing = entries.filter((entry) => entry.origin === "Caja extra").reduce((sum, entry) => sum + entry.amount, 0);
+  return { incoming, outgoing, balance: incoming - outgoing };
 }
 
 export default function ContabilidadPage() {
@@ -88,6 +106,8 @@ export default function ContabilidadPage() {
   const [business, setBusiness] = useState<BusinessName>("Flowly");
   const [channel, setChannel] = useState<(typeof channelOptions)[number]>(channelOptions[0]);
   const [category, setCategory] = useState<(typeof categoryOptions)[number]>(categoryOptions[0]);
+  const [origin, setOrigin] = useState<MoneyPlace>("Cuenta");
+  const [destination, setDestination] = useState<MoneyPlace>("Cuenta");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
@@ -96,6 +116,8 @@ export default function ContabilidadPage() {
   const [formError, setFormError] = useState("");
 
   const totals = useMemo(() => calculateTotals(entries), [entries]);
+  const cashBox = useMemo(() => calculateCashBox(entries), [entries]);
+  const cashBoxEntries = useMemo(() => entries.filter((entry) => entry.origin === "Caja extra" || entry.destination === "Caja extra"), [entries]);
 
   const entriesByBusiness = useMemo(
     () => businesses.map((name) => ({ business: name, entries: entries.filter((entry) => entry.business === name), totals: calculateTotals(entries.filter((entry) => entry.business === name)) })),
@@ -148,6 +170,11 @@ export default function ContabilidadPage() {
       return;
     }
 
+    if (origin === "Caja extra" && destination === "Caja extra") {
+      setFormError("El origen y el destino no pueden ser Caja extra a la vez.");
+      return;
+    }
+
     setSaving(true);
     setFormError("");
     try {
@@ -165,6 +192,8 @@ export default function ContabilidadPage() {
           category,
           amount: numericAmount,
           note: note.trim(),
+          origin,
+          destination,
         }),
       });
       const payload = await response.json();
@@ -175,6 +204,8 @@ export default function ContabilidadPage() {
       setMonth(savedEntry.date.slice(0, 7));
       setAmount("");
       setNote("");
+      setOrigin("Cuenta");
+      setDestination("Cuenta");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "No se pudo guardar el movimiento.");
     } finally {
@@ -192,7 +223,7 @@ export default function ContabilidadPage() {
             </div>
             <p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-200/70">Área privada</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight">Contabilidad mensual</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-300">Introduce la contraseña para acceder al panel manual de ingresos y gastos.</p>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Introduce la contraseña para acceder al panel manual de ingresos, gastos y caja extra.</p>
             <div className="mt-8 space-y-3">
               <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Contraseña</label>
               <input
@@ -223,15 +254,36 @@ export default function ContabilidadPage() {
                 <ShieldCheck size={16} /> Privado
               </p>
               <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Contabilidad mensual</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Registro manual conectado a Supabase. Cada movimiento guardado queda registrado abajo y separado por negocio.</p>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Registro manual conectado a Supabase. Cada movimiento guardado queda registrado abajo y separado por negocio y caja extra.</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[520px]">
+            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[700px] lg:grid-cols-4">
               <StatCard label="Ingresos" value={euro(totals.income)} tone="emerald" />
               <StatCard label="Gastos" value={euro(totals.expenses)} tone="rose" />
               <StatCard label="Saldo" value={euro(totals.balance)} tone="cyan" />
+              <StatCard label="Caja extra" value={euro(cashBox.balance)} tone="amber" />
             </div>
           </div>
         </header>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-[2rem] border border-amber-200/20 bg-amber-300/10 p-5 shadow-2xl shadow-amber-950/10">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-200/15 text-amber-100">
+                <Landmark size={21} />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-100/70">Tesorería</p>
+                <h2 className="text-2xl font-black">Caja extra</h2>
+              </div>
+            </div>
+            <p className="mt-4 text-4xl font-black text-amber-50">{euro(cashBox.balance)}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <MiniStat label="Entradas" value={euro(cashBox.incoming)} tone="emerald" />
+              <MiniStat label="Salidas" value={euro(cashBox.outgoing)} tone="rose" />
+            </div>
+            <p className="mt-4 text-xs leading-5 text-amber-100/70">Marca “Destino: Caja extra” para guardar dinero en caja. Marca “Origen: Caja extra” cuando un gasto salga de esa caja.</p>
+          </div>
+        </section>
 
         <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-purple-950/10 backdrop-blur sm:p-5">
           <div className="mb-4 flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between">
@@ -249,7 +301,7 @@ export default function ContabilidadPage() {
             </Field>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[150px_165px_1fr_1fr_1fr_150px_1.3fr_auto]">
+          <div className="grid gap-3 xl:grid-cols-[130px_155px_1fr_1fr_1fr_1fr_1fr_145px_1.2fr_auto]">
             <Field label="Movimiento">
               <select value={type} onChange={(event) => setType(event.target.value as MovementType)} className="field-control capitalize">
                 <option value="ingreso">Ingreso</option>
@@ -267,6 +319,22 @@ export default function ContabilidadPage() {
             <Field label="Negocio">
               <select value={business} onChange={(event) => setBusiness(event.target.value as BusinessName)} className="field-control">
                 {businesses.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Origen">
+              <select value={origin} onChange={(event) => setOrigin(event.target.value as MoneyPlace)} className="field-control">
+                {moneyPlaces.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Destino">
+              <select value={destination} onChange={(event) => setDestination(event.target.value as MoneyPlace)} className="field-control">
+                {moneyPlaces.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
@@ -319,6 +387,11 @@ export default function ContabilidadPage() {
           <MovementsTable entries={entries} emptyText="Todavía no hay movimientos. Añade el primer ingreso o gasto desde la barra superior." />
         </section>
 
+        <section className="rounded-[2rem] border border-amber-200/20 bg-amber-300/10 p-5 shadow-2xl shadow-amber-950/10 backdrop-blur">
+          <SectionHeader title="Movimientos de caja extra" subtitle="Entradas y salidas que afectan al saldo de la caja extra." count={cashBoxEntries.length} />
+          <CashBoxTable entries={cashBoxEntries} emptyText="Todavía no hay movimientos de caja extra en este mes." />
+        </section>
+
         <section className="grid gap-5 xl:grid-cols-3">
           {entriesByBusiness.map((group) => (
             <div key={group.business} className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur">
@@ -367,11 +440,12 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function StatCard({ label, value, tone }: { label: string; value: string; tone: "emerald" | "rose" | "cyan" }) {
+function StatCard({ label, value, tone }: { label: string; value: string; tone: "emerald" | "rose" | "cyan" | "amber" }) {
   const classes = {
     emerald: "border-emerald-300/20 bg-emerald-300/10 text-emerald-100",
     rose: "border-rose-300/20 bg-rose-300/10 text-rose-100",
     cyan: "border-cyan-300/20 bg-cyan-300/10 text-cyan-100",
+    amber: "border-amber-300/20 bg-amber-300/10 text-amber-100",
   }[tone];
   return (
     <div className={`rounded-2xl border p-4 ${classes}`}>
@@ -421,12 +495,14 @@ function MovementsTable({ entries, emptyText, compact = false }: { entries: Acco
 
   return (
     <div className="overflow-x-auto">
-      <table className={`w-full text-left text-sm ${compact ? "min-w-[720px]" : "min-w-[960px]"}`}>
+      <table className={`w-full text-left text-sm ${compact ? "min-w-[820px]" : "min-w-[1100px]"}`}>
         <thead className="text-xs uppercase tracking-[0.18em] text-slate-500">
           <tr className="border-b border-white/10">
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3">Fecha</th>
             {!compact ? <th className="px-4 py-3">Negocio</th> : null}
+            <th className="px-4 py-3">Origen</th>
+            <th className="px-4 py-3">Destino</th>
             <th className="px-4 py-3">Medio</th>
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3 text-right">Importe</th>
@@ -443,11 +519,59 @@ function MovementsTable({ entries, emptyText, compact = false }: { entries: Acco
               </td>
               <td className="px-4 py-4">{entry.date}</td>
               {!compact ? <td className="px-4 py-4 font-semibold">{entry.business}</td> : null}
+              <td className="px-4 py-4">{entry.origin}</td>
+              <td className="px-4 py-4">{entry.destination}</td>
               <td className="px-4 py-4">{entry.channel}</td>
               <td className="px-4 py-4">{entry.category}</td>
               <td className={`px-4 py-4 text-right font-black ${entry.type === "ingreso" ? "text-emerald-200" : "text-rose-200"}`}>
                 {entry.type === "gasto" ? "-" : "+"}{euro(entry.amount)}
               </td>
+              <td className="px-4 py-4 text-slate-400">{entry.note || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CashBoxTable({ entries, emptyText }: { entries: AccountingEntry[]; emptyText: string }) {
+  if (entries.length === 0) {
+    return <div className="rounded-3xl border border-dashed border-amber-200/20 bg-black/20 p-8 text-center text-sm text-amber-100/70">{emptyText}</div>;
+  }
+
+  let runningBalance = 0;
+  const chronological = [...entries].sort((a, b) => `${a.date}-${a.createdAt || ""}`.localeCompare(`${b.date}-${b.createdAt || ""}`));
+  const rows = chronological.map((entry) => {
+    const cashIn = entry.destination === "Caja extra" ? entry.amount : 0;
+    const cashOut = entry.origin === "Caja extra" ? entry.amount : 0;
+    runningBalance += cashIn - cashOut;
+    return { entry, cashIn, cashOut, runningBalance };
+  }).reverse();
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[920px] text-left text-sm">
+        <thead className="text-xs uppercase tracking-[0.18em] text-amber-100/60">
+          <tr className="border-b border-amber-200/15">
+            <th className="px-4 py-3">Fecha</th>
+            <th className="px-4 py-3">Negocio</th>
+            <th className="px-4 py-3">Concepto</th>
+            <th className="px-4 py-3 text-right">Entrada</th>
+            <th className="px-4 py-3 text-right">Salida</th>
+            <th className="px-4 py-3 text-right">Saldo</th>
+            <th className="px-4 py-3">Observación</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ entry, cashIn, cashOut, runningBalance: balance }) => (
+            <tr key={entry.id} className="border-b border-amber-200/10 text-slate-200 last:border-0">
+              <td className="px-4 py-4">{entry.date}</td>
+              <td className="px-4 py-4 font-semibold">{entry.business}</td>
+              <td className="px-4 py-4">{entry.category} · {entry.channel}</td>
+              <td className="px-4 py-4 text-right font-black text-emerald-200">{cashIn ? `+${euro(cashIn)}` : "—"}</td>
+              <td className="px-4 py-4 text-right font-black text-rose-200">{cashOut ? `-${euro(cashOut)}` : "—"}</td>
+              <td className="px-4 py-4 text-right font-black text-amber-100">{euro(balance)}</td>
               <td className="px-4 py-4 text-slate-400">{entry.note || "—"}</td>
             </tr>
           ))}
