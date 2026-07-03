@@ -4,9 +4,9 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 const ACCESS_PASSWORD = "Nosotrostarot1.";
 const movementTypes = new Set(["ingreso", "gasto"]);
 const businesses = new Set(["Flowly", "Celestial", "Leonaris"]);
+const accounts = new Set(["Banco", "Caja extra"]);
 const channels = new Set(["Square", "Transferencia", "Bizum", "Tarjeta", "Stripe", "PayPal", "Otro"]);
 const categories = new Set(["recarga", "facebook", "pago tarotista", "Deuda", "Pago Centrales", "Pago premium numbers", "pago hubspot", "otros", "call400", "Flowly"]);
-const moneyPlaces = new Set(["Cuenta", "Caja extra"]);
 
 function isAuthorized(request: NextRequest) {
   return request.headers.get("x-contabilidad-password") === ACCESS_PASSWORD;
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from("manual_accounting_movements")
-    .select("id, movement_type, movement_date, business, channel, category, amount, note, origin_wallet, destination_wallet, created_at")
+    .select("id, movement_type, movement_date, business, channel, category, amount, note, origin_account, destination_account, created_at")
     .gte("movement_date", start)
     .lt("movement_date", next)
     .order("movement_date", { ascending: false })
@@ -55,21 +55,20 @@ export async function POST(request: NextRequest) {
   const type = String(body.type || "");
   const date = String(body.date || "");
   const business = String(body.business || "");
+  const originAccount = String(body.originAccount || body.origin_account || "Banco");
+  const destinationAccount = String(body.destinationAccount || body.destination_account || "Banco");
   const channel = String(body.channel || "");
   const category = String(body.category || "");
   const amount = Number(String(body.amount ?? "").replace(",", "."));
   const note = typeof body.note === "string" ? body.note.trim() : "";
-  const origin = String(body.origin || "Cuenta");
-  const destination = String(body.destination || "Cuenta");
 
   if (!movementTypes.has(type)) return jsonError("Tipo de movimiento no válido");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return jsonError("Fecha no válida");
   if (!businesses.has(business)) return jsonError("Negocio no válido");
+  if (!accounts.has(originAccount)) return jsonError("Origen de dinero no válido");
+  if (!accounts.has(destinationAccount)) return jsonError("Destino de dinero no válido");
   if (!channels.has(channel)) return jsonError("Medio no válido");
   if (!categories.has(category)) return jsonError("Tipo no válido");
-  if (!moneyPlaces.has(origin)) return jsonError("Origen no válido");
-  if (!moneyPlaces.has(destination)) return jsonError("Destino no válido");
-  if (origin === "Caja extra" && destination === "Caja extra") return jsonError("Origen y destino no pueden ser Caja extra a la vez");
   if (!Number.isFinite(amount) || amount <= 0) return jsonError("Importe no válido");
 
   const { data, error } = await supabaseAdmin
@@ -78,14 +77,14 @@ export async function POST(request: NextRequest) {
       movement_type: type,
       movement_date: date,
       business,
+      origin_account: originAccount,
+      destination_account: destinationAccount,
       channel,
       category,
       amount,
       note: note || null,
-      origin_wallet: origin,
-      destination_wallet: destination,
     })
-    .select("id, movement_type, movement_date, business, channel, category, amount, note, origin_wallet, destination_wallet, created_at")
+    .select("id, movement_type, movement_date, business, channel, category, amount, note, origin_account, destination_account, created_at")
     .single();
 
   if (error) return jsonError(error.message, 500);
