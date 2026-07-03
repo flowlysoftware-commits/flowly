@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     const city = searchParams.get("city") || "";
     const businessType = searchParams.get("businessType") || "Todos";
     const worked = searchParams.get("worked") || "todos";
+    const tab = searchParams.get("tab") || "disponibles";
     const status = searchParams.get("status") || "todos";
     const query = searchParams.get("query") || "";
     const minReviews = Number(searchParams.get("minReviews") || 0);
@@ -40,9 +41,17 @@ export async function GET(request: NextRequest) {
     if (province !== "Todas") requestBuilder = requestBuilder.eq("province", province);
     if (city) requestBuilder = requestBuilder.ilike("city", `%${city}%`);
     if (businessType !== "Todos") requestBuilder = requestBuilder.eq("business_type", businessType);
-    if (worked === "trabajados") requestBuilder = requestBuilder.eq("worked", true);
-    if (worked === "pendientes") requestBuilder = requestBuilder.eq("worked", false);
-    if (status !== "todos") requestBuilder = requestBuilder.eq("status", status);
+    if (tab === "disponibles") {
+      requestBuilder = requestBuilder.eq("worked", false).eq("status", "pendiente").or("worked_by.is.null,worked_by.eq.").or("assigned_to.is.null,assigned_to.eq.");
+    } else if (tab === "trabajando") {
+      requestBuilder = requestBuilder.not("status", "in", "(pendiente,cliente,descartado)");
+    } else if (tab === "cerrados") {
+      requestBuilder = requestBuilder.in("status", ["cliente", "descartado"]);
+    } else {
+      if (worked === "trabajados") requestBuilder = requestBuilder.eq("worked", true);
+      if (worked === "pendientes") requestBuilder = requestBuilder.eq("worked", false);
+      if (status !== "todos") requestBuilder = requestBuilder.eq("status", status);
+    }
     if (query) requestBuilder = requestBuilder.or(`business_name.ilike.%${query}%,phone.ilike.%${query}%,worked_by.ilike.%${query}%,assigned_to.ilike.%${query}%,address.ilike.%${query}%`);
 
     const { data, error } = await requestBuilder;

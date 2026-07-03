@@ -97,46 +97,66 @@ async function searchPlaces(params: { businessType: string; country: string; pro
     throw new Error("Falta configurar GOOGLE_PLACES_API_KEY en Vercel > Settings > Environment Variables.");
   }
 
-  const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": [
-        "places.id",
-        "places.displayName",
-        "places.formattedAddress",
-        "places.nationalPhoneNumber",
-        "places.internationalPhoneNumber",
-        "places.rating",
-        "places.userRatingCount",
-        "places.websiteUri",
-        "places.googleMapsUri",
-        "places.addressComponents",
-        "places.businessStatus",
-      ].join(","),
-    },
-    body: JSON.stringify({
-      textQuery: buildQuery(params),
-      regionCode: countryCodes[params.country] || "ES",
-      languageCode: "es",
-      pageSize: Math.min(params.limit, 20),
-    }),
-    next: { revalidate: 0 },
-  });
+  const collected: LeadRow[] = [];
+  let pageToken = "";
+  let pages = 0;
+  const maxCollect = Math.min(Math.max(params.limit * 3, params.limit), 60);
+  const maxPages = Math.ceil(maxCollect / 20) || 1;
 
-  if (!response.ok) {
-    const details = await response.text();
-    throw new Error(`Google Places ha devuelto un error ${response.status}: ${details.slice(0, 280)}`);
+  while (collected.length < maxCollect && pages < maxPages) {
+    const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": [
+          "places.id",
+          "places.displayName",
+          "places.formattedAddress",
+          "places.nationalPhoneNumber",
+          "places.internationalPhoneNumber",
+          "places.rating",
+          "places.userRatingCount",
+          "places.websiteUri",
+          "places.googleMapsUri",
+          "places.addressComponents",
+          "places.businessStatus",
+          "nextPageToken",
+        ].join(","),
+      },
+      body: JSON.stringify({
+        textQuery: buildQuery(params),
+        regionCode: countryCodes[params.country] || "ES",
+        languageCode: "es",
+        pageSize: Math.min(20, maxCollect),
+        ...(pageToken ? { pageToken } : {}),
+      }),
+      next: { revalidate: 0 },
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      throw new Error(`Google Places ha devuelto un error ${response.status}: ${details.slice(0, 280)}`);
+    }
+
+    const data = await response.json();
+    pages += 1;
+    const places = Array.isArray(data.places) ? (data.places as GooglePlace[]) : [];
+    const rows = places
+      .filter((place) => place.businessStatus !== "CLOSED_PERMANENTLY")
+      .filter((place) => Number(place.userRatingCount || 0) >= params.minReviews)
+      .map((place) => toLeadRow(place, params));
+
+    for (const row of rows) {
+      if (collected.length >= maxCollect) break;
+      if (row.google_place_id && !collected.some((lead) => lead.google_place_id === row.google_place_id)) collected.push(row);
+    }
+
+    pageToken = typeof data.nextPageToken === "string" ? data.nextPageToken : "";
+    if (!pageToken) break;
   }
 
-  const data = await response.json();
-  const places = Array.isArray(data.places) ? (data.places as GooglePlace[]) : [];
-  return places
-    .filter((place) => place.businessStatus !== "CLOSED_PERMANENTLY")
-    .filter((place) => Number(place.userRatingCount || 0) >= params.minReviews)
-    .slice(0, params.limit)
-    .map((place) => toLeadRow(place, params));
+  return { leads: collected.slice(0, maxCollect), pages };
 }
 
 export async function POST(request: NextRequest) {
@@ -151,7 +171,8 @@ export async function POST(request: NextRequest) {
       limit: Math.min(Math.max(Number(body.limit || 20), 1), 60),
     };
 
-    const leads = await searchPlaces(params);
+    const searchResult = await searchPlaces(params);
+    const leads = searchResult.leads;
     if (!leads.length) {
       return NextResponse.json({ leads: [], inserted: 0, duplicates: 0 });
     }
@@ -175,7 +196,7 @@ export async function POST(request: NextRequest) {
     }
 
     const existingIds = new Set((existingRows || []).map((row) => row.google_place_id));
-    const newLeads = leads.filter((lead) => lead.google_place_id && !existingIds.has(lead.google_place_id));
+    const newLeads = leads.filter((lead) => lead.google_place_id && !existingIds.has(lead.google_place_id)).slice(0, params.limit);
 
     let insertedRows: LeadRow[] = [];
     if (newLeads.length > 0) {
@@ -208,6 +229,7 @@ export async function POST(request: NextRequest) {
       inserted: insertedRows.length,
       duplicates: leads.length - insertedRows.length,
       found: leads.length,
+      pages: searchResult.pages,
     });
   } catch (error) {
     return NextResponse.json(
