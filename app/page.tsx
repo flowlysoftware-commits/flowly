@@ -99,6 +99,19 @@ const comparisonRows: Array<[string, string, string]> = [
   ["Visión del negocio", "Unificada", "Fragmentada"],
 ];
 
+const heroBenefits = [
+  "Centraliza clientes, citas, WhatsApp y facturas",
+  "Evita perder oportunidades por conversaciones sueltas",
+  "Panel listo para empezar sin instalaciones complicadas",
+];
+
+const conversionProof = [
+  ["Para negocios con caos diario", "Flowly ordena clientes, agenda, WhatsApp, cobros y seguimiento en un solo sitio."],
+  ["No necesitas cambiar todo de golpe", "Empieza con CRM, agenda y facturación; activa módulos cuando los necesites."],
+  ["Acompañamiento humano", "Te ayudamos a configurar el panel para que no tengas que hacerlo solo."],
+];
+
+
 function isCountry(value: string | null): value is Country {
   return markets.some((market) => market.code === value);
 }
@@ -124,8 +137,8 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
           <a href="#producto" className="transition hover:text-white">Producto</a>
           <a href="#sectores" className="transition hover:text-white">Sectores</a>
           <a href="#comparativa" className="transition hover:text-white">Comparativa</a>
-          <Link href={pricesHref} className="transition hover:text-white">Precios</Link>
-          <Link href="/contacto" className="transition hover:text-white">Contacto</Link>
+          <Link href={pricesHref} data-track-label="Header · Precios" className="transition hover:text-white">Precios</Link>
+          <Link href="/contacto" data-track-label="Header · Contacto" className="transition hover:text-white">Contacto</Link>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -137,8 +150,8 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
               ))}
             </select>
           </label>
-          <Link href="/login" className="flowly-secondary hidden rounded-full px-4 py-2.5 text-xs font-semibold sm:inline-flex sm:text-sm">Área cliente</Link>
-          <Link href="/demo/login" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold transition sm:inline-flex">Ver demo</Link>
+          <Link href="/login" data-track-label="Header · Área cliente" className="flowly-secondary hidden rounded-full px-4 py-2.5 text-xs font-semibold sm:inline-flex sm:text-sm">Área cliente</Link>
+          <Link href="/demo/login" data-track-label="Header · Ver demo" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold transition sm:inline-flex">Ver demo</Link>
           <button
             type="button"
             className="flowly-secondary inline-flex h-11 w-11 items-center justify-center rounded-full lg:hidden"
@@ -157,8 +170,8 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
             <a onClick={closeMobile} href="#producto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Producto</a>
             <a onClick={closeMobile} href="#sectores" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Sectores</a>
             <a onClick={closeMobile} href="#comparativa" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Comparativa</a>
-            <Link onClick={closeMobile} href={pricesHref} className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Precios</Link>
-            <Link onClick={closeMobile} href="/contacto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Contacto</Link>
+            <Link onClick={closeMobile} href={pricesHref} data-track-label="Menú móvil · Precios" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Precios</Link>
+            <Link onClick={closeMobile} href="/contacto" data-track-label="Menú móvil · Contacto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Contacto</Link>
           </div>
 
           <div className="mt-3 grid gap-3 border-t border-white/10 pt-3">
@@ -170,8 +183,8 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
                 ))}
               </select>
             </label>
-            <Link onClick={closeMobile} href="/login" className="flowly-secondary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Área cliente</Link>
-            <Link onClick={closeMobile} href="/demo/login" className="flowly-primary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Ver demo</Link>
+            <Link onClick={closeMobile} href="/login" data-track-label="Menú móvil · Área cliente" className="flowly-secondary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Área cliente</Link>
+            <Link onClick={closeMobile} href="/demo/login" data-track-label="Menú móvil · Ver demo" className="flowly-primary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Ver demo</Link>
           </div>
         </div>
       )}
@@ -245,6 +258,61 @@ function ProductMockup({ country }: { country: Country }) {
     </div>
   );
 }
+
+
+function ConversionSection({ pricesHref }: { pricesHref: string }) {
+  return (
+    <section className="relative z-10 mx-auto max-w-7xl px-6 pb-14">
+      <div className="grid gap-4 lg:grid-cols-3">
+        {conversionProof.map(([title, text]) => (
+          <div key={title} className="rounded-[1.8rem] border border-cyan-300/15 bg-cyan-300/[0.07] p-5 shadow-2xl shadow-cyan-950/10">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/14 text-cyan-100">
+              <CheckCircle2 size={20} />
+            </div>
+            <h3 className="text-lg font-semibold">{title}</h3>
+            <p className="mt-2 text-sm leading-6 text-white/58">{text}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 text-left shadow-2xl shadow-purple-950/10 sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[.3em] text-cyan-200/80">Oferta de entrada</p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Empieza viendo una demo real y después decide el plan.</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-white/58">
+              La mayoría de usuarios que llegan desde anuncios necesitan entender rápido qué gana su negocio. Por eso ahora el camino principal es simple: ver demo, comprobar el panel y pasar a precios o registro.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+            <Link href="/demo/login" data-track-label="Bloque conversión · Ver demo" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
+              Ver demo ahora <ArrowRight size={18} />
+            </Link>
+            <Link href={pricesHref} data-track-label="Bloque conversión · Ver precios" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
+              Ver planes
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StickyMobileCTA() {
+  return (
+    <div className="fixed inset-x-3 bottom-3 z-40 rounded-full border border-cyan-300/20 bg-slate-950/88 p-2 shadow-2xl shadow-cyan-950/35 backdrop-blur-xl sm:hidden">
+      <div className="grid grid-cols-2 gap-2">
+        <Link href="/demo/login" data-track-label="Sticky móvil · Ver demo" className="flowly-primary inline-flex justify-center rounded-full px-4 py-3 text-sm font-bold">
+          Ver demo
+        </Link>
+        <Link href="/precios" data-track-label="Sticky móvil · Ver planes" className="flowly-secondary inline-flex justify-center rounded-full px-4 py-3 text-sm font-bold">
+          Planes
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 
 function TrustBar() {
   return (
@@ -517,21 +585,33 @@ export default function Home() {
 
       <Header country={country} setMarket={setMarket} pricesHref={pricesHref} />
 
-      <section className="relative z-10 mx-auto max-w-7xl px-6 pb-16 pt-16 text-center sm:pt-24">
+      <section className="relative z-10 mx-auto max-w-7xl px-6 pb-14 pt-14 text-center sm:pt-20">
         <div className="flowly-chip mx-auto mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> {market.headline}</div>
-        <h1 className="mx-auto max-w-6xl text-5xl font-semibold tracking-tight md:text-7xl lg:text-8xl">
-          Todo tu negocio. <span className="flowly-gradient-text">Una sola plataforma.</span>
+        <h1 className="mx-auto max-w-6xl text-4xl font-semibold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
+          Ordena tu negocio en un solo panel. <span className="flowly-gradient-text">Sin perder clientes por el camino.</span>
         </h1>
-        <p className="mx-auto mt-7 max-w-3xl text-lg leading-8 text-white/68">
-          CRM, Agenda, WhatsApp, Facturación, Automatizaciones e IA conectados para captar clientes, responder mejor, organizar citas y cobrar con más control.
+        <p className="mx-auto mt-7 max-w-3xl text-lg leading-8 text-white/72">
+          Flowly une CRM, agenda, WhatsApp, facturación, automatizaciones e IA para que puedas captar, responder, organizar citas y cobrar con más control desde el primer día.
         </p>
-        <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
-          <Link href="/demo/login" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold transition"><Play size={18} /> Ver demostración</Link>
-          <Link href={pricesHref} className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">Ver planes <ArrowRight size={18} /></Link>
+
+        <div className="mx-auto mt-7 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
+          {heroBenefits.map((benefit) => (
+            <div key={benefit} className="flex items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white/72">
+              <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-cyan-200" />
+              <span>{benefit}</span>
+            </div>
+          ))}
         </div>
+
+        <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+          <Link href="/demo/login" data-track-label="Hero principal · Ver demo" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold transition"><Play size={18} /> Ver demo real</Link>
+          <Link href={pricesHref} data-track-label="Hero principal · Ver planes" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">Ver planes <ArrowRight size={18} /></Link>
+        </div>
+        <p className="mt-4 text-sm text-white/45">Sin compromiso. Primero ves cómo funciona y después decides si encaja con tu negocio.</p>
         <ProductMockup country={country} />
       </section>
 
+      <ConversionSection pricesHref={pricesHref} />
       <TrustBar />
       <WorkflowSection />
       <OutcomesSection />
@@ -542,6 +622,7 @@ export default function Home() {
       <PricingPreview pricesHref={pricesHref} />
       <FinalCTA pricesHref={pricesHref} />
       <Footer />
+      <StickyMobileCTA />
     </main>
   );
 }

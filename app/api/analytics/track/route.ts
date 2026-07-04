@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const EVENT_NAMES = new Set(["page_view", "heartbeat", "page_leave", "checkout_started", "checkout_completed", "signup_started", "signup_completed"]);
+const EVENT_NAMES = new Set([
+  "page_view",
+  "heartbeat",
+  "page_leave",
+  "cta_click",
+  "scroll_depth",
+  "checkout_started",
+  "checkout_completed",
+  "signup_started",
+  "signup_completed",
+]);
 const MAX_TEXT = 500;
 
 function dbReady() {
@@ -19,6 +29,16 @@ function getClientIp(request: NextRequest) {
     request.headers.get("cf-connecting-ip") ||
     null
   );
+}
+
+function cleanMetadata(body: Record<string, unknown>) {
+  return {
+    ...body,
+    // Nunca guardamos textos enormes por accidente.
+    title: cleanText(body.title || body.page_title),
+    label: cleanText(body.label),
+    href: cleanText(body.href),
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -56,19 +76,37 @@ export async function POST(request: NextRequest) {
     duration_ms: Number(body.durationMs || body.duration_ms || 0) || null,
     user_agent: cleanText(request.headers.get("user-agent")),
     ip_address: getClientIp(request),
-    metadata: body,
+    metadata: cleanMetadata(body),
   };
 
   const { error } = await supabaseAdmin.from("flowly_analytics_events").insert(eventPayload);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  await supabaseAdmin.from("flowly_analytics_sessions").upsert(
-    {
+  const { data: existingSession } = await supabaseAdmin
+    .from("flowly_analytics_sessions")
+    .select("session_id, first_path, created_at")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (existingSession?.session_id) {
+    await supabaseAdmin
+      .from("flowly_analytics_sessions")
+      .update({
+        last_path: path,
+        last_funnel_step: eventPayload.funnel_step,
+        last_seen_at: now,
+        viewport: eventPayload.viewport,
+        language: eventPayload.language,
+        timezone: eventPayload.timezone,
+      })
+      .eq("session_id", sessionId);
+  } else {
+    await supabaseAdmin.from("flowly_analytics_sessions").insert({
       session_id: sessionId,
       visitor_id: visitorId,
       first_path: path,
       last_path: path,
-      last_funnel_step: cleanText(body.funnelStep || body.funnel_step, "other"),
+      last_funnel_step: eventPayload.funnel_step,
       last_seen_at: now,
       user_agent: eventPayload.user_agent,
       ip_address: eventPayload.ip_address,
@@ -76,9 +114,8 @@ export async function POST(request: NextRequest) {
       viewport: eventPayload.viewport,
       language: eventPayload.language,
       timezone: eventPayload.timezone,
-    },
-    { onConflict: "session_id" },
-  );
+    });
+  }
 
   return NextResponse.json({ ok: true, stored: true });
 }

@@ -7,17 +7,28 @@ const ACCESS_PASSWORD = "Nosotrostarot1.";
 
 type Summary = {
   onlineNow?: number;
+  eventsToday?: number;
   visitsToday?: number;
   visitorsToday?: number;
   visitors30Days?: number;
   sessions30Days?: number;
+  landingSessions?: number;
+  pricingSessions?: number;
+  ctaClickSessions?: number;
+  signupStartedSessions?: number;
+  scroll75Sessions?: number;
   reachedCheckout?: number;
   completedPurchase?: number;
+  pricingRate?: number;
+  ctaRate?: number;
+  signupRate?: number;
   checkoutConversion?: number;
 };
 
 type FunnelStep = { step: string; count: number; dropRate: number };
 type SimpleRow = { path: string; count?: number; views?: number };
+type CampaignRow = { source: string; campaign: string; sessions: number; ctaClicks: number; signupStarts: number };
+type CtaRow = { label: string; clicks: number };
 type RecentEvent = { event_name: string; path: string; funnel_step: string; created_at: string; viewport?: string; language?: string };
 
 type AnalyticsPayload = {
@@ -27,6 +38,8 @@ type AnalyticsPayload = {
   funnel?: FunnelStep[];
   abandonments?: SimpleRow[];
   pages?: SimpleRow[];
+  campaigns?: CampaignRow[];
+  ctas?: CtaRow[];
   recentEvents?: RecentEvent[];
   recommendations?: string[];
   error?: string;
@@ -143,9 +156,16 @@ export default function PanelAdminPage() {
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard icon={<Activity size={22} />} label="Usuarios ahora" value={formatNumber(summary.onlineNow)} hint="Activos en los últimos 5 minutos" tone="emerald" />
-          <MetricCard icon={<Eye size={22} />} label="Visitas hoy" value={formatNumber(summary.visitsToday)} hint={`${formatNumber(summary.visitorsToday)} visitantes únicos hoy`} tone="cyan" />
-          <MetricCard icon={<Users size={22} />} label="Visitantes 30 días" value={formatNumber(summary.visitors30Days)} hint={`${formatNumber(summary.sessions30Days)} sesiones detectadas`} tone="purple" />
+          <MetricCard icon={<Eye size={22} />} label="Page views hoy" value={formatNumber(summary.visitsToday)} hint={`${formatNumber(summary.visitorsToday)} visitantes únicos hoy · ${formatNumber(summary.eventsToday)} eventos`} tone="cyan" />
+          <MetricCard icon={<MousePointerClick size={22} />} label="Clics en CTA" value={formatNumber(summary.ctaClickSessions)} hint={`${formatNumber(summary.ctaRate)}% de sesiones de landing hacen clic`} tone="purple" />
           <MetricCard icon={<ShoppingCart size={22} />} label="Llegaron al carrito" value={formatNumber(summary.reachedCheckout)} hint={`${formatNumber(summary.checkoutConversion)}% conversión desde checkout`} tone="amber" />
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard icon={<Users size={22} />} label="Visitantes 30 días" value={formatNumber(summary.visitors30Days)} hint={`${formatNumber(summary.sessions30Days)} sesiones detectadas`} tone="purple" />
+          <MetricCard icon={<BarChart3 size={22} />} label="Llegan a precios" value={`${formatNumber(summary.pricingRate)}%`} hint={`${formatNumber(summary.pricingSessions)} sesiones llegan a precios`} tone="cyan" />
+          <MetricCard icon={<MousePointerClick size={22} />} label="Empiezan registro" value={`${formatNumber(summary.signupRate)}%`} hint={`${formatNumber(summary.signupStartedSessions)} sesiones con intención de registro`} tone="emerald" />
+          <MetricCard icon={<Activity size={22} />} label="Scroll 75%" value={formatNumber(summary.scroll75Sessions)} hint="Sesiones que consumieron casi toda la home" tone="amber" />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
@@ -183,6 +203,15 @@ export default function PanelAdminPage() {
           </Panel>
           <Panel title="Páginas más vistas" subtitle="Ranking de page views de los últimos 30 días.">
             <SimpleTable rows={data?.pages || []} valueKey="views" valueLabel="Vistas" />
+          </Panel>
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-2">
+          <Panel title="Campañas y origen" subtitle="Detectado con UTM, fbclid/gclid o tráfico directo.">
+            <CampaignTable rows={data?.campaigns || []} />
+          </Panel>
+          <Panel title="CTAs más pulsados" subtitle="Botones y enlaces que generan intención comercial.">
+            <CtaTable rows={data?.ctas || []} />
           </Panel>
         </section>
 
@@ -240,6 +269,43 @@ function SimpleTable({ rows, valueKey, valueLabel }: { rows: SimpleRow[]; valueK
   if (!rows.length) return <Empty text="Todavía no hay datos suficientes." />;
   return <div className="space-y-2">{rows.map((row) => <div key={row.path} className="flex items-center justify-between gap-4 rounded-2xl bg-black/20 px-4 py-3 text-sm"><span className="truncate font-semibold text-slate-200">{row.path}</span><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-cyan-100">{formatNumber(row[valueKey])} {valueLabel}</span></div>)}</div>;
 }
+
+
+function CampaignTable({ rows }: { rows: CampaignRow[] }) {
+  if (!rows.length) return <Empty text="Todavía no hay datos de campañas. Añade UTM a los anuncios o espera nuevos eventos." />;
+  return (
+    <div className="space-y-2">
+      {rows.map((row) => (
+        <div key={`${row.source}-${row.campaign}`} className="grid gap-2 rounded-2xl bg-black/20 px-4 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="min-w-0">
+            <p className="truncate font-black text-slate-100">{row.source}</p>
+            <p className="truncate text-xs text-slate-500">{row.campaign}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-black">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-cyan-100">{formatNumber(row.sessions)} sesiones</span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-purple-100">{formatNumber(row.ctaClicks)} clics</span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-emerald-100">{formatNumber(row.signupStarts)} registros</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CtaTable({ rows }: { rows: CtaRow[] }) {
+  if (!rows.length) return <Empty text="Todavía no hay clics en CTA. Revisa la home desde una ventana nueva y pulsa botones principales." />;
+  return (
+    <div className="space-y-2">
+      {rows.map((row) => (
+        <div key={row.label} className="flex items-center justify-between gap-4 rounded-2xl bg-black/20 px-4 py-3 text-sm">
+          <span className="truncate font-semibold text-slate-200">{row.label}</span>
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-cyan-100">{formatNumber(row.clicks)} clics</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-3xl border border-dashed border-white/15 bg-black/20 p-8 text-center text-sm text-slate-400">{text}</div>;
