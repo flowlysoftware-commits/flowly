@@ -2775,3 +2775,175 @@ input[type="date"].input-dark { color-scheme: dark; }
   }
   .flowly-companion-copilot-copy small { display: none; }
 }
+
+/* Flowly Client Product Parity · real panels aligned with sector demos */
+.flowly-client-product-shell {
+  color-scheme: dark;
+}
+.flowly-client-product-shell::before,
+.flowly-app-shell::before {
+  opacity: .9;
+}
+.flowly-client-sidebar {
+  overflow: hidden;
+}
+.flowly-client-sidebar::before,
+.flowly-client-card::before,
+.flowly-client-hero::before,
+.flowly-client-stat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255,255,255,.15), transparent 28%, rgba(34,211,238,.08));
+  opacity: .72;
+}
+.flowly-client-sidebar,
+.flowly-client-card,
+.flowly-client-hero,
+.flowly-client-stat,
+.flowly-client-mini-stat {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.flowly-client-brand {
+  border: 1px solid rgba(34,211,238,.18);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(34,211,238,.18), transparent 42%),
+    radial-gradient(circle at 100% 0%, rgba(168,85,247,.22), transparent 42%),
+    rgba(2,6,23,.62);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 18px 60px rgba(0,0,0,.24);
+}
+.flowly-client-hero {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34,211,238,.20), transparent 38%),
+    radial-gradient(circle at 82% 10%, rgba(236,72,153,.18), transparent 34%),
+    linear-gradient(145deg, rgba(255,255,255,.12), rgba(255,255,255,.045)) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+.flowly-client-card,
+.flowly-app-shell .rounded-\[2rem\].border,
+.flowly-app-shell .rounded-\[2\.5rem\].border,
+.flowly-app-shell .rounded-3xl.border {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.105), rgba(255,255,255,.045)) !important;
+  border-color: rgba(255,255,255,.12) !important;
+  box-shadow: 0 22px 70px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.08) !important;
+  backdrop-filter: blur(20px);
+}
+.flowly-client-stat,
+.flowly-client-mini-stat,
+.flowly-app-shell .rounded-\[1\.6rem\].border,
+.flowly-app-shell .rounded-\[1\.5rem\].border,
+.flowly-app-shell .rounded-2xl.border {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(34,211,238,.10), transparent 40%),
+    linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.04)) !important;
+  border-color: rgba(255,255,255,.12) !important;
+  box-shadow: 0 14px 42px rgba(0,0,0,.20), inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+.flowly-app-shell .menu-item {
+  border: 1px solid transparent;
+  background: rgba(255,255,255,.035);
+}
+.flowly-app-shell .menu-item:hover {
+  border-color: rgba(34,211,238,.20);
+  background: rgba(34,211,238,.08);
+  transform: translateX(2px);
+}
+.flowly-app-shell .menu-active {
+  background: linear-gradient(135deg, #22d3ee, #8b5cf6 56%, #ec4899) !important;
+  color: #ffffff !important;
+  box-shadow: 0 16px 48px rgba(139,92,246,.32), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.flowly-app-shell .btn-primary,
+.flowly-app-shell button.bg-cyan-300,
+.flowly-app-shell .bg-cyan-300 {
+  background: linear-gradient(135deg, #22d3ee, #a78bfa 58%, #f472b6) !important;
+  color: #020617 !important;
+  box-shadow: 0 18px 55px rgba(34,211,238,.20), 0 0 40px rgba(168,85,247,.18);
+}
+.flowly-app-shell .btn-secondary {
+  border-color: rgba(255,255,255,.16);
+  background: rgba(255,255,255,.08);
+}
+.flowly-app-shell .input-dark,
+.flowly-app-shell .field-control,
+.flowly-app-shell input,
+.flowly-app-shell select,
+.flowly-app-shell textarea {
+  color-scheme: dark;
+  border-color: rgba(255,255,255,.13) !important;
+  background-color: rgba(2,6,23,.52) !important;
+  color: #fff !important;
+}
+.flowly-app-shell input:focus,
+.flowly-app-shell select:focus,
+.flowly-app-shell textarea:focus,
+.flowly-app-shell .field-control:focus,
+.flowly-app-shell .input-dark:focus {
+  border-color: rgba(34,211,238,.68) !important;
+  box-shadow: 0 0 0 4px rgba(34,211,238,.12) !important;
+}
+.flowly-app-shell select option,
+.flowly-app-shell .field-control option {
+  background: #0f172a !important;
+  color: #fff !important;
+}
+.flowly-app-shell table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.flowly-app-shell thead tr {
+  background: rgba(255,255,255,.035);
+}
+.flowly-app-shell tbody tr {
+  transition: background .16s ease, transform .16s ease;
+}
+.flowly-app-shell tbody tr:hover {
+  background: rgba(34,211,238,.055);
+}
+.flowly-app-shell .bg-black\/20,
+.flowly-app-shell .bg-black\/25,
+.flowly-app-shell .bg-black\/30 {
+  background-color: rgba(2,6,23,.44) !important;
+}
+.flowly-app-shell .text-slate-300,
+.flowly-app-shell .text-slate-400,
+.flowly-app-shell .text-white\/55,
+.flowly-app-shell .text-white\/60,
+.flowly-app-shell .text-white\/62 {
+  color: rgba(255,255,255,.64) !important;
+}
+.flowly-app-shell .text-slate-500,
+.flowly-app-shell .text-white\/45,
+.flowly-app-shell .text-white\/50 {
+  color: rgba(255,255,255,.46) !important;
+}
+.flowly-app-shell h1,
+.flowly-app-shell h2,
+.flowly-app-shell h3 {
+  letter-spacing: -.035em;
+}
+@media (max-width: 1024px) {
+  .flowly-client-sidebar {
+    position: relative !important;
+    width: 100% !important;
+  }
+  .flowly-app-shell .menu-item,
+  .flowly-app-shell .menu-active {
+    min-height: 46px;
+  }
+}
+@media (max-width: 640px) {
+  .flowly-app-shell {
+    overflow-x: hidden;
+  }
+  .flowly-app-shell .rounded-\[2rem\],
+  .flowly-app-shell .rounded-\[2\.5rem\] {
+    border-radius: 1.45rem !important;
+  }
+  .flowly-app-shell h1 { font-size: 2.1rem; }
+}

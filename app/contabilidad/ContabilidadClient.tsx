@@ -228,9 +228,9 @@ export default function ContabilidadClient() {
 
   if (!unlocked) {
     return (
-      <main className="min-h-screen bg-[#070913] px-6 py-10 text-white">
+      <main className="flowly-app-shell min-h-screen px-6 py-10 text-white">
         <section className="mx-auto flex min-h-[78vh] max-w-xl items-center justify-center">
-          <form onSubmit={handleAccess} className="w-full rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 shadow-2xl shadow-purple-950/30 backdrop-blur">
+          <form onSubmit={handleAccess} className="flowly-client-card w-full rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 shadow-2xl shadow-purple-950/30 backdrop-blur">
             <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-200">
               <LockKeyhole size={26} />
             </div>
@@ -258,9 +258,9 @@ export default function ContabilidadClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[#060816] px-5 py-8 text-white sm:px-8">
+    <main className="flowly-app-shell min-h-screen px-5 py-8 text-white sm:px-8">
       <section className="mx-auto max-w-7xl space-y-6">
-        <header className="overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/12 via-purple-500/10 to-black p-6 shadow-2xl shadow-cyan-950/20 sm:p-8">
+        <header className="flowly-client-hero overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/12 via-purple-500/10 to-black p-6 shadow-2xl shadow-cyan-950/20 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.32em] text-cyan-200/75">
@@ -278,7 +278,7 @@ export default function ContabilidadClient() {
           </div>
         </header>
 
-        <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-purple-950/10 backdrop-blur sm:p-5">
+        <form onSubmit={handleSubmit} className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-purple-950/10 backdrop-blur sm:p-5">
           <div className="mb-4 flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-100">
@@ -375,19 +375,19 @@ export default function ContabilidadClient() {
           {formError ? <p className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm font-semibold text-rose-200">{formError}</p> : null}
         </form>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-cyan-950/10 backdrop-blur">
+        <section className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-cyan-950/10 backdrop-blur">
           <SectionHeader title="Movimientos del mes" subtitle={loading ? "Cargando movimientos desde Supabase..." : "Registros guardados para el mes seleccionado."} count={entries.length} />
           <MovementsTable entries={entries} emptyText="Todavía no hay movimientos. Añade el primer ingreso o gasto desde la barra superior." />
         </section>
 
-        <section className="rounded-[2rem] border border-amber-300/20 bg-amber-300/[0.06] p-5 shadow-2xl shadow-amber-950/10 backdrop-blur">
+        <section className="flowly-client-card rounded-[2rem] border border-amber-300/20 bg-amber-300/[0.06] p-5 shadow-2xl shadow-amber-950/10 backdrop-blur">
           <CashHeader cashIn={cashTotals.cashIn} cashOut={cashTotals.cashOut} balance={cashTotals.balance} count={cashRows.length} />
           <CashTable rows={cashRows} />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-3">
           {entriesByBusiness.map((group) => (
-            <div key={group.business} className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur">
+            <div key={group.business} className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/70">Negocio</p>
