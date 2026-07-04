@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import FlowlyCompanionRuntime from "@/components/FlowlyCompanionRuntime";
 
-const HIDDEN_PREFIXES = ["/", "/login", "/registro", "/reservas", "/demo/login"];
+const HIDDEN_PREFIXES = ["/", "/automatiza", "/login", "/registro", "/reservas", "/demo/login"];
 
 function shouldHideCompanion(pathname: string) {
   return HIDDEN_PREFIXES.some((prefix) =>

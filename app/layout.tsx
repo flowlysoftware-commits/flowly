@@ -5,8 +5,8 @@ import FlowlyCompanionGate from "@/components/FlowlyCompanionGate";
 import FlowlyAnalyticsTracker from "@/components/FlowlyAnalyticsTracker";
 
 export const metadata: Metadata = {
-  title: "Flowly IA | SaaS para negocios modernos",
-  description: "Automatiza reservas, clientes, pagos y dashboards con Flowly IA.",
+  title: "Flowly IA | La IA que organiza tu empresa",
+  description: "Flowly organiza clientes, WhatsApp, agenda, presupuestos, facturas y seguimiento para que tu negocio venda más con menos caos.",
 };
 
 const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID || "1479231557294191";

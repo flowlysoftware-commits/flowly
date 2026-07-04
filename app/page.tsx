@@ -10,16 +10,18 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  Clock3,
+  CreditCard,
   FileText,
-  HeartPulse,
   Menu,
   MessageCircle,
   Play,
-  Scissors,
   ShieldCheck,
   Sparkles,
   Store,
+  TrendingUp,
   Users,
+  Wand2,
   X,
   Zap,
 } from "lucide-react";
@@ -31,86 +33,50 @@ type MarketConfig = {
   label: string;
   flag: string;
   currency: string;
+  price: string;
   headline: string;
-  dashboardMoney: string;
 };
 
 const markets: MarketConfig[] = [
-  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", headline: "Flowly IA Venezuela · gestión comercial en USD", dashboardMoney: "$13.5k" },
-  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", headline: "SaaS premium para negocios modernos", dashboardMoney: "12.4k€" },
-  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", headline: "Flowly IA Colombia · operación comercial conectada", dashboardMoney: "$54.0M" },
-  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", headline: "Flowly IA Ecuador · gestión comercial en USD", dashboardMoney: "$13.5k" },
-  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", headline: "Flowly IA Puerto Rico · negocio conectado", dashboardMoney: "$13.5k" },
+  { code: "VE", label: "Venezuela", flag: "🇻🇪", currency: "USD", price: "$29.99", headline: "Flowly IA para negocios de Venezuela" },
+  { code: "ES", label: "España", flag: "🇪🇸", currency: "EUR", price: "29,99 €", headline: "Flowly IA para negocios modernos" },
+  { code: "CO", label: "Colombia", flag: "🇨🇴", currency: "COP", price: "$119.000", headline: "Flowly IA para negocios de Colombia" },
+  { code: "EC", label: "Ecuador", flag: "🇪🇨", currency: "USD", price: "$29.99", headline: "Flowly IA para negocios de Ecuador" },
+  { code: "PR", label: "Puerto Rico", flag: "🇵🇷", currency: "USD", price: "$29.99", headline: "Flowly IA para negocios de Puerto Rico" },
 ];
 
-const productModules = [
-  { icon: Users, title: "CRM", text: "Clientes, contactos, historial, etiquetas y seguimiento comercial en una sola ficha." },
-  { icon: MessageCircle, title: "WhatsApp", text: "Conversaciones conectadas al cliente para responder, vender y hacer seguimiento." },
-  { icon: CalendarDays, title: "Agenda", text: "Citas, reservas y recordatorios para organizar mejor cada día de trabajo." },
-  { icon: FileText, title: "Facturación", text: "Cotizaciones, facturas sencillas, PDFs y registro de cobros desde Flowly Basic." },
-  { icon: Bot, title: "Automatizaciones", text: "Mensajes, tareas y recordatorios automáticos para reducir trabajo repetitivo." },
-  { icon: BrainCircuit, title: "IA", text: "Resumen de clientes, próximos pasos y asistencia para tomar mejores decisiones." },
+const pains = [
+  "Respondes WhatsApps todo el día y aun así se pierden clientes.",
+  "No sabes quién pidió información, quién está pendiente y quién ya pagó.",
+  "Agenda, clientes, presupuestos y cobros están repartidos en demasiadas herramientas.",
+  "El seguimiento depende de la memoria del equipo y no de un sistema.",
 ];
 
-const workflow = [
-  { title: "Cliente escribe", text: "Llega por WhatsApp, formulario, reserva o contacto manual.", icon: MessageCircle },
-  { title: "Flowly lo guarda", text: "Se crea o actualiza su ficha con historial, origen y estado.", icon: Users },
-  { title: "Agenda la cita", text: "Organiza disponibilidad, servicios, recordatorios y tareas.", icon: CalendarDays },
-  { title: "Cotiza y factura", text: "Convierte presupuestos en facturas y registra el cobro.", icon: FileText },
-  { title: "Haz seguimiento", text: "Automatiza mensajes y próximos pasos para no perder oportunidades.", icon: Zap },
+const benefits = [
+  ["Más ventas sin perseguir clientes", "Flowly guarda cada oportunidad, asigna una próxima acción y te recuerda a quién responder."],
+  ["Menos caos operativo", "Clientes, WhatsApp, agenda, presupuestos, facturas y tareas viven en un único panel."],
+  ["Imagen más profesional", "Tu negocio trabaja con procesos claros, respuestas rápidas y documentos ordenados."],
+];
+
+const steps = [
+  { icon: MessageCircle, title: "1. Entra un cliente", text: "Por anuncio, WhatsApp, llamada, formulario o carga manual." },
+  { icon: BrainCircuit, title: "2. Flow lo organiza", text: "Crea la ficha, guarda contexto, estado, próxima acción y origen." },
+  { icon: CalendarDays, title: "3. Tu equipo actúa", text: "Agenda, responde, cotiza, factura y hace seguimiento sin perder nada." },
 ];
 
 const sectors = [
-  {
-    name: "Clínicas y estética",
-    icon: HeartPulse,
-    href: "/demo/clinic",
-    result: "Pacientes organizados, citas visibles y seguimiento desde una ficha 360.",
-    tags: ["Pacientes", "Agenda", "Documentos"],
-  },
-  {
-    name: "Peluquerías y barberías",
-    icon: Scissors,
-    href: "/demo/hair",
-    result: "Reservas, preferencias, recordatorios y campañas por WhatsApp en un solo lugar.",
-    tags: ["Reservas", "Preferencias", "WhatsApp"],
-  },
-  {
-    name: "Comercios y servicios",
-    icon: Store,
-    href: "/demo/restaurant",
-    result: "Clientes, presupuestos, facturas y cobros conectados al proceso comercial.",
-    tags: ["Clientes", "Ventas", "Cobros"],
-  },
+  ["Peluquerías y estética", "Reservas, preferencias, campañas y recordatorios por WhatsApp."],
+  ["Clínicas y servicios", "Pacientes/clientes, citas, documentos y seguimiento desde una ficha."],
+  ["Comercio y ventas", "Prospectos, presupuestos, cobros y oportunidades en un solo flujo."],
+  ["Tarot y atención online", "Clientes, recargas, turnos, promociones y seguimiento comercial."],
 ];
 
-const outcomes = [
-  { title: "Menos herramientas abiertas", text: "Sustituye hojas, apps sueltas y conversaciones perdidas por un panel centralizado." },
-  { title: "Más control comercial", text: "Cada cliente tiene historial, próxima acción, citas, documentos y facturación." },
-  { title: "Seguimiento más rápido", text: "WhatsApp, tareas y automatizaciones ayudan a responder antes y vender mejor." },
+const faqs = [
+  ["¿Necesito saber de tecnología?", "No. Flowly está pensado para usarlo como un panel sencillo. Primero configuras lo básico y después puedes activar módulos."],
+  ["¿Puedo empezar gratis?", "Sí. La idea es que puedas entrar, ver el panel y comprobar si encaja antes de pagar."],
+  ["¿Sirve para mi sector?", "Flowly es modular. Se adapta a negocios de citas, servicios, atención por WhatsApp, ventas y equipos comerciales."],
+  ["¿Tengo que usar todos los módulos?", "No. Puedes empezar con CRM, agenda y facturación básica, y añadir WhatsApp, automatizaciones o módulos avanzados cuando lo necesites."],
 ];
-
-const comparisonRows: Array<[string, string, string]> = [
-  ["Clientes y CRM", "Integrado", "Separado o manual"],
-  ["Agenda y reservas", "Incluido", "Otra aplicación"],
-  ["WhatsApp con historial", "Conectado", "Sin contexto"],
-  ["Cotizaciones y facturas", "Desde el cliente", "Herramienta aparte"],
-  ["Automatizaciones e IA", "En el flujo", "No conectado"],
-  ["Visión del negocio", "Unificada", "Fragmentada"],
-];
-
-const heroBenefits = [
-  "Responde antes y deja cada cliente registrado",
-  "Convierte mensajes en citas, tareas, presupuestos y cobros",
-  "Empieza gratis y prueba el panel antes de pagar",
-];
-
-const conversionProof = [
-  ["La oportunidad no se pierde", "Cada contacto queda guardado con origen, estado y próxima acción para que sepas a quién llamar o escribir."],
-  ["El equipo trabaja con orden", "Clientes, agenda, presupuestos, facturas y WhatsApp dejan de estar repartidos entre móviles y hojas sueltas."],
-  ["Puedes empezar sin riesgo", "Primero pruebas el panel, ves la demo y luego eliges si quieres activar el plan que encaja con tu negocio."],
-];
-
 
 function isCountry(value: string | null): value is Country {
   return markets.some((market) => market.code === value);
@@ -123,35 +89,34 @@ function getMarket(country: Country) {
 function Header({ country, setMarket, pricesHref }: { country: Country; setMarket: (value: Country) => void; pricesHref: string }) {
   const market = getMarket(country);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const closeMobile = () => setMobileOpen(false);
+  const close = () => setMobileOpen(false);
 
   return (
-    <header className="relative z-30 mx-auto mt-4 max-w-7xl px-3 sm:px-0">
-      <nav className="flowly-nav relative flex items-center justify-between gap-3 rounded-[1.7rem] px-4 py-3 sm:rounded-full sm:px-5">
-        <Link href="/" className="flex min-w-0 items-center gap-3" onClick={closeMobile}>
-          <Image src="/logo.png" alt="Flowly IA" width={150} height={42} className="h-auto w-28 object-contain drop-shadow-[0_0_24px_rgba(34,211,238,.25)] sm:w-36" priority />
+    <header className="sticky top-3 z-40 mx-auto max-w-7xl px-4">
+      <nav className="flowly-nav relative flex items-center justify-between gap-3 rounded-[1.6rem] px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur-2xl md:rounded-full md:px-5">
+        <Link href="/" className="flex items-center gap-3" onClick={close}>
+          <Image src="/logo.png" alt="Flowly IA" width={150} height={42} className="h-auto w-28 object-contain md:w-36" priority />
         </Link>
 
-        <div className="hidden items-center gap-7 text-sm text-white/68 lg:flex">
+        <div className="hidden items-center gap-7 text-sm text-white/70 lg:flex">
           <a href="#problema" className="transition hover:text-white">Problema</a>
-          <a href="#producto" className="transition hover:text-white">Cómo funciona</a>
+          <a href="#demo" className="transition hover:text-white">Demo</a>
           <a href="#sectores" className="transition hover:text-white">Sectores</a>
-          <Link href={pricesHref} data-track-label="Header · Precios" className="transition hover:text-white">Precios</Link>
+          <a href="#planes" className="transition hover:text-white">Planes</a>
           <Link href="/contacto" data-track-label="Header · Contacto" className="transition hover:text-white">Contacto</Link>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center gap-2">
           <label className="flowly-chip hidden items-center gap-2 rounded-full px-3 py-2 md:inline-flex">
             <span className="text-lg">{market.flag}</span>
-            <select value={country} onChange={(event) => setMarket(event.target.value as Country)} className="bg-transparent text-xs font-medium outline-none sm:text-sm" aria-label="Seleccionar país">
+            <select value={country} onChange={(event) => setMarket(event.target.value as Country)} className="bg-transparent text-xs font-medium outline-none" aria-label="Seleccionar país">
               {markets.map((item) => (
-                <option key={item.code} value={item.code}>{item.label} · {item.currency}</option>
+                <option key={item.code} value={item.code}>{item.label}</option>
               ))}
             </select>
           </label>
-          <Link href="/login" data-track-label="Header · Área cliente" className="flowly-secondary hidden rounded-full px-4 py-2.5 text-xs font-semibold sm:inline-flex sm:text-sm">Área cliente</Link>
-          <Link href="/registro" data-track-label="Header · Empieza gratis" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold transition sm:inline-flex">Empieza gratis</Link>
+          <Link href="/login" data-track-label="Header · Login" className="flowly-secondary hidden rounded-full px-4 py-2.5 text-sm font-semibold sm:inline-flex">Entrar</Link>
+          <Link href="/registro" data-track-label="Header · Empieza gratis" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold sm:inline-flex">Empieza gratis</Link>
           <button
             type="button"
             className="flowly-secondary inline-flex h-11 w-11 items-center justify-center rounded-full lg:hidden"
@@ -165,26 +130,14 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
       </nav>
 
       {mobileOpen && (
-        <div className="flowly-nav absolute left-3 right-3 top-[calc(100%+.65rem)] overflow-hidden rounded-[1.7rem] border border-white/10 p-3 shadow-2xl shadow-cyan-950/25 backdrop-blur-2xl lg:hidden">
-          <div className="grid gap-2 text-sm text-white/78">
-            <a onClick={closeMobile} href="#problema" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Problema</a>
-            <a onClick={closeMobile} href="#producto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Cómo funciona</a>
-            <a onClick={closeMobile} href="#sectores" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Sectores</a>
-            <Link onClick={closeMobile} href={pricesHref} data-track-label="Menú móvil · Precios" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Precios</Link>
-            <Link onClick={closeMobile} href="/contacto" data-track-label="Menú móvil · Contacto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Contacto</Link>
-          </div>
-
-          <div className="mt-3 grid gap-3 border-t border-white/10 pt-3">
-            <label className="flowly-chip flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
-              <span className="flex items-center gap-2 text-sm font-medium"><span className="text-lg">{market.flag}</span> País</span>
-              <select value={country} onChange={(event) => setMarket(event.target.value as Country)} className="max-w-[11rem] bg-transparent text-right text-xs font-medium outline-none" aria-label="Seleccionar país móvil">
-                {markets.map((item) => (
-                  <option key={item.code} value={item.code}>{item.label} · {item.currency}</option>
-                ))}
-              </select>
-            </label>
-            <Link onClick={closeMobile} href="/login" data-track-label="Menú móvil · Área cliente" className="flowly-secondary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Área cliente</Link>
-            <Link onClick={closeMobile} href="/registro" data-track-label="Menú móvil · Empieza gratis" className="flowly-primary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Empieza gratis</Link>
+        <div className="flowly-nav absolute left-4 right-4 top-[calc(100%+.6rem)] rounded-[1.6rem] border border-white/10 p-3 shadow-2xl shadow-black/30 backdrop-blur-2xl lg:hidden">
+          <div className="grid gap-2 text-sm text-white/80">
+            <a onClick={close} href="#problema" className="rounded-2xl px-4 py-3 hover:bg-white/10">Problema</a>
+            <a onClick={close} href="#demo" className="rounded-2xl px-4 py-3 hover:bg-white/10">Demo</a>
+            <a onClick={close} href="#sectores" className="rounded-2xl px-4 py-3 hover:bg-white/10">Sectores</a>
+            <Link onClick={close} href={pricesHref} data-track-label="Menú móvil · Planes" className="rounded-2xl px-4 py-3 hover:bg-white/10">Planes</Link>
+            <Link onClick={close} href="/login" data-track-label="Menú móvil · Login" className="rounded-2xl px-4 py-3 hover:bg-white/10">Entrar</Link>
+            <Link onClick={close} href="/registro" data-track-label="Menú móvil · Empieza gratis" className="flowly-primary mt-2 inline-flex justify-center rounded-full px-5 py-3 font-semibold">Empieza gratis</Link>
           </div>
         </div>
       )}
@@ -192,296 +145,216 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
   );
 }
 
-function ProductMockup({ country }: { country: Country }) {
-  const money = getMarket(country).dashboardMoney;
+function Hero({ country, pricesHref }: { country: Country; pricesHref: string }) {
+  const market = getMarket(country);
 
   return (
-    <div id="producto" data-analytics-section="producto" className="flowly-product-stage relative mx-auto mt-14 max-w-6xl rounded-[2.6rem] p-3 sm:p-4">
-      <div className="flowly-scanline" />
-      <div className="rounded-[2rem] border border-white/10 bg-slate-950/88 p-4 shadow-2xl shadow-cyan-950/30 sm:p-6">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="flex items-center gap-2 text-sm text-cyan-200/80"><span className="flowly-live-dot" /> Panel operativo en tiempo real</p>
-            <h3 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Flowly Business Center</h3>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs text-white/70">
-            {["CRM", "Agenda", "WhatsApp", "Facturación", "IA"].map((item) => (
-              <span key={item} className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2">{item}</span>
-            ))}
-          </div>
+    <section data-analytics-section="hero" className="relative z-10 mx-auto grid max-w-7xl gap-12 px-6 pb-20 pt-16 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:pt-24">
+      <div>
+        <div className="flowly-chip mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm">
+          <Sparkles size={16} /> {market.headline}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          {[["Ingresos", money, "+28%"], ["Clientes activos", "842", "+64"], ["Reservas", "312", "+19%"], ["Seguimientos", "94%", "online"]].map(([label, value, meta]) => (
-            <div key={label} className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
-              <p className="text-sm text-white/45">{label}</p>
-              <div className="mt-3 flex items-end justify-between gap-3">
-                <p className="text-3xl font-semibold">{value}</p>
-                <span className="rounded-full bg-emerald-300/12 px-2 py-1 text-xs text-emerald-200">{meta}</span>
-              </div>
+        <h1 className="max-w-5xl text-5xl font-semibold leading-[0.95] tracking-tight sm:text-6xl md:text-7xl">
+          Tu empresa funcionando con orden mientras la IA hace el seguimiento.
+        </h1>
+
+        <p className="mt-7 max-w-2xl text-lg leading-8 text-white/72">
+          Flowly convierte WhatsApps, clientes, citas, presupuestos y cobros en un sistema claro para que vendas más sin vivir apagando fuegos.
+        </p>
+
+        <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+          <Link href="/registro" data-track-label="Hero · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 text-base font-semibold">
+            Empieza gratis <ArrowRight size={19} />
+          </Link>
+          <a href="#demo" data-track-label="Hero · Ver demo 2 minutos" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 text-base font-semibold">
+            <Play size={18} /> Ver demo de 2 minutos
+          </a>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-3 text-sm text-white/55">
+          <span className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-cyan-200" /> Sin tarjeta</span>
+          <span className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-cyan-200" /> Configuración en minutos</span>
+          <span className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-cyan-200" /> Desde {market.price}/mes</span>
+        </div>
+
+        <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
+          {[
+            ["CRM", "Clientes y seguimiento"],
+            ["WhatsApp", "Conversaciones con contexto"],
+            ["Facturas", "Presupuestos y cobros"],
+          ].map(([title, text]) => (
+            <div key={title} className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+              <p className="text-sm font-semibold text-white">{title}</p>
+              <p className="mt-2 text-xs leading-5 text-white/50">{text}</p>
             </div>
           ))}
         </div>
+      </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-5">
-            <div className="mb-4 flex items-center justify-between text-sm text-white/55">
-              <span>Rendimiento semanal</span>
-              <span className="text-emerald-300">+28%</span>
+      <div className="relative">
+        <div className="absolute -inset-10 rounded-full bg-cyan-400/15 blur-3xl" />
+        <div className="relative overflow-hidden rounded-[2.4rem] border border-cyan-300/20 bg-slate-950/80 p-5 shadow-2xl shadow-cyan-950/30">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-cyan-200">Flow trabajando ahora</p>
+              <h2 className="mt-1 text-2xl font-semibold">Centro operativo</h2>
             </div>
-            <div className="flex h-52 items-end gap-2 sm:gap-3">
-              {[36, 68, 48, 78, 60, 94, 72, 88, 80, 96].map((h, i) => (
-                <div key={i} className="flowly-chart-bar flex-1 rounded-t-2xl" style={{ height: `${h}%`, animationDelay: `${i * 80}ms` }} />
+            <span className="rounded-full bg-emerald-300/12 px-3 py-1 text-xs font-semibold text-emerald-200">online</span>
+          </div>
+
+          <div className="grid gap-3">
+            {[
+              ["Nuevo lead de Meta", "Guardado en CRM · requiere respuesta", "Ahora"],
+              ["Cliente sin seguimiento", "Flow propone escribirle hoy", "12 min"],
+              ["Presupuesto pendiente", "Listo para convertir a factura", "1 h"],
+            ].map(([title, detail, time]) => (
+              <div key={title} className="rounded-3xl border border-white/10 bg-white/[0.065] p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="font-semibold">{title}</p>
+                  <span className="text-xs text-white/40">{time}</span>
+                </div>
+                <p className="mt-2 text-sm text-white/55">{detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-3xl border border-fuchsia-300/20 bg-fuchsia-300/[0.075] p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950">
+                <Bot size={24} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-fuchsia-100">Flow</p>
+                <p className="mt-2 text-sm leading-6 text-white/70">
+                  "He detectado 3 clientes calientes. Te preparo el seguimiento para convertirlos antes de que se enfríen."
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+            {[
+              ["24", "leads"],
+              ["7", "pendientes"],
+              ["3", "urgentes"],
+            ].map(([value, label]) => (
+              <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+                <p className="text-3xl font-semibold">{value}</p>
+                <p className="mt-1 text-xs text-white/45">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProblemSection() {
+  return (
+    <section id="problema" data-analytics-section="problema" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="mx-auto max-w-3xl text-center">
+        <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">El problema real</p>
+        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">No pierdes ventas por falta de clientes. Las pierdes por falta de sistema.</h2>
+        <p className="mt-5 text-lg leading-8 text-white/62">
+          Cuando todo depende del móvil, de Excel o de acordarse, las oportunidades se escapan.
+        </p>
+      </div>
+
+      <div className="mt-12 grid gap-4 md:grid-cols-2">
+        {pains.map((pain) => (
+          <div key={pain} className="rounded-[1.8rem] border border-red-300/15 bg-red-300/[0.055] p-6">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-red-300/10 text-red-100"><X size={19} /></div>
+            <p className="text-lg font-semibold leading-7">{pain}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DemoSection() {
+  return (
+    <section id="demo" data-analytics-section="demo" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="grid gap-10 rounded-[2.5rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/20 lg:grid-cols-[.9fr_1.1fr] lg:p-8">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Demo express</p>
+          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Mira en 30 segundos qué cambia con Flowly.</h2>
+          <p className="mt-5 text-lg leading-8 text-white/62">
+            La landing debe enseñar el resultado rápido: menos caos, más seguimiento y una IA dentro del panel ayudando al negocio.
+          </p>
+          <Link href="/demo/login" data-track-label="Demo section · Abrir demo" className="flowly-primary mt-8 inline-flex items-center gap-2 rounded-full px-7 py-4 font-semibold">
+            Abrir demo <ArrowRight size={18} />
+          </Link>
+        </div>
+
+        <div className="overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-slate-950/80 p-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-red-400" />
+              <span className="h-3 w-3 rounded-full bg-yellow-300" />
+              <span className="h-3 w-3 rounded-full bg-emerald-400" />
+            </div>
+            <span className="text-xs text-white/40">flowly demo</span>
+          </div>
+          <div className="grid gap-4 pt-5 md:grid-cols-2">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-5">
+              <p className="mb-4 text-sm font-semibold text-red-100">Antes</p>
+              {["WhatsApp suelto", "Excel", "Agenda aparte", "Facturas manuales"].map((item) => (
+                <div key={item} className="mb-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white/58">{item}</div>
+              ))}
+            </div>
+            <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/[0.07] p-5">
+              <p className="mb-4 text-sm font-semibold text-cyan-100">Con Flowly</p>
+              {["Cliente registrado", "Siguiente acción", "Cita agendada", "Cobro controlado"].map((item) => (
+                <div key={item} className="mb-3 flex items-center gap-2 rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.08] px-4 py-3 text-sm text-white/75">
+                  <CheckCircle2 size={16} className="text-cyan-200" /> {item}
+                </div>
               ))}
             </div>
           </div>
-
-          <div className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.045] p-5">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm text-white/55">Flujo conectado</p>
-              <BrainCircuit className="text-cyan-200" size={18} />
-            </div>
-            {[
-              ["WhatsApp recibido", "Cliente nuevo detectado"],
-              ["Ficha CRM actualizada", "Origen, teléfono e historial listos"],
-              ["Cita agendada", "Recordatorio automático preparado"],
-              ["Factura enviada", "PDF y cobro registrados"],
-            ].map(([title, detail]) => (
-              <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.075] p-4 text-sm">
-                <p className="font-medium text-white/88">{title}</p>
-                <p className="mt-1 text-white/48">{detail}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-
-function PainSection() {
-  const pains = [
-    ["Clientes que escriben y se enfrían", "Si tardas en responder o no haces seguimiento, esa oportunidad se va con otro negocio."],
-    ["WhatsApp, agenda y facturas separados", "Cuando todo vive en sitios distintos, tu equipo pierde contexto y tiempo cada día."],
-    ["No sabes qué venta está pendiente", "Sin estados claros, es fácil olvidar presupuestos, citas, cobros o llamadas."],
-    ["El negocio depende demasiado de ti", "Flowly ayuda a que el proceso quede escrito, visible y fácil de repetir."],
-  ];
-
-  return (
-    <section id="problema" data-analytics-section="problema" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
-      <div className="grid gap-8 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[.35em] text-rose-200/80">El problema real</p>
-          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">No pierdes ventas por falta de clientes. Las pierdes por falta de seguimiento.</h2>
-          <p className="mt-5 text-lg leading-8 text-white/62">Flowly está pensado para negocios que reciben mensajes, citas y oportunidades todos los días, pero necesitan convertir ese movimiento en ventas organizadas.</p>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link href="/registro" data-track-label="Problema · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Quiero ordenar mi negocio <ArrowRight size={18} /></Link>
-            <Link href="/demo/login" data-track-label="Problema · Ver demo" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Ver demo</Link>
-          </div>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {pains.map(([title, text]) => (
-            <div key={title} className="rounded-[1.8rem] border border-rose-200/15 bg-rose-200/[0.055] p-6">
-              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-300/12 text-rose-100"><Zap size={20} /></div>
-              <h3 className="text-xl font-semibold">{title}</h3>
-              <p className="mt-3 text-sm leading-7 text-white/56">{text}</p>
-            </div>
-          ))}
         </div>
       </div>
     </section>
   );
 }
 
-function AdLandingSection() {
-  const steps = [
-    ["1", "Entra el cliente", "Formulario, WhatsApp, llamada, anuncio o contacto manual."],
-    ["2", "Flowly crea el seguimiento", "Ficha, estado, próxima acción, cita, presupuesto o tarea."],
-    ["3", "Tu equipo vende con control", "Todo queda visible y el cliente no desaparece entre mensajes."],
-  ];
-
+function BenefitsSection() {
   return (
-    <section data-analytics-section="camino_rapido" className="relative z-10 mx-auto max-w-7xl px-6 py-14">
-      <div className="rounded-[2.3rem] border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.10] via-white/[0.045] to-fuchsia-300/[0.08] p-6 shadow-2xl shadow-cyan-950/20 sm:p-8">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[.35em] text-cyan-200/80">Camino simple para vender</p>
-            <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-5xl">Del anuncio al registro en menos pasos.</h2>
-          </div>
-          <Link href="/registro" data-track-label="Camino rápido · Crear cuenta" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Crear cuenta gratis <ArrowRight size={18} /></Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {steps.map(([number, title, text]) => (
-            <div key={title} className="rounded-[1.7rem] border border-white/10 bg-slate-950/55 p-5">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-sm font-black text-slate-950">{number}</span>
-              <h3 className="mt-5 text-xl font-semibold">{title}</h3>
-              <p className="mt-3 text-sm leading-7 text-white/56">{text}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function FounderProofSection() {
-  return (
-    <section data-analytics-section="confianza_venta" className="relative z-10 mx-auto max-w-7xl px-6 py-16">
-      <div className="grid gap-5 lg:grid-cols-[1fr_.9fr] lg:items-stretch">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-7">
-          <p className="text-sm font-semibold uppercase tracking-[.35em] text-emerald-200/80">Para decidir rápido</p>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">No necesitas entender tecnología. Necesitas ver si te ahorra trabajo.</h2>
-          <p className="mt-5 text-base leading-8 text-white/60">Por eso la experiencia principal ahora es directa: prueba el panel, mira cómo se ve un cliente organizado y decide si quieres activarlo para tu negocio.</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-          {[
-            ["Sin tarjeta para empezar", "Reduce fricción en tráfico frío."],
-            ["Demo visible antes de comprar", "El usuario ve el valor antes de hablar de precio."],
-            ["Precio claro desde el inicio", "Flowly Basic desde 29,99 €/mes."],
-          ].map(([title, text]) => (
-            <div key={title} className="rounded-[1.7rem] border border-emerald-300/15 bg-emerald-300/[0.07] p-5">
-              <h3 className="font-semibold text-emerald-50">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-white/56">{text}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ConversionSection({ pricesHref }: { pricesHref: string }) {
-  return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 pb-14">
-      <div className="grid gap-4 lg:grid-cols-3">
-        {conversionProof.map(([title, text]) => (
-          <div key={title} className="rounded-[1.8rem] border border-cyan-300/15 bg-cyan-300/[0.07] p-5 shadow-2xl shadow-cyan-950/10">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/14 text-cyan-100">
-              <CheckCircle2 size={20} />
-            </div>
-            <h3 className="text-lg font-semibold">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-white/58">{text}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-5 rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 text-left shadow-2xl shadow-purple-950/10 sm:p-6">
-        <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[.3em] text-cyan-200/80">Oferta de entrada</p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Primero consigue que el visitante haga una acción clara.</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-white/58">
-              La home está pensada para tráfico frío de anuncios: promesa directa, problema reconocible, CTA visible, demo opcional y registro sin fricción.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-            <Link href="/registro" data-track-label="Bloque conversión · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
-              Empezar gratis <ArrowRight size={18} />
-            </Link>
-            <Link href={pricesHref} data-track-label="Bloque conversión · Ver precios" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
-              Ver planes
-            </Link>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function StickyMobileCTA() {
-  return (
-    <div className="fixed inset-x-3 bottom-3 z-40 rounded-full border border-cyan-300/20 bg-slate-950/88 p-2 shadow-2xl shadow-cyan-950/35 backdrop-blur-xl sm:hidden">
-      <div className="grid grid-cols-2 gap-2">
-        <Link href="/registro" data-track-label="Sticky móvil · Empieza gratis" className="flowly-primary inline-flex justify-center rounded-full px-4 py-3 text-sm font-bold">
-          Empieza gratis
-        </Link>
-        <Link href="/precios" data-track-label="Sticky móvil · Ver planes" className="flowly-secondary inline-flex justify-center rounded-full px-4 py-3 text-sm font-bold">
-          Planes
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-
-function TrustBar() {
-  return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6">
-      <div className="grid gap-3 rounded-[2rem] border border-white/10 bg-white/[0.05] p-3 text-sm text-white/70 shadow-2xl shadow-cyan-950/20 backdrop-blur-xl md:grid-cols-5">
-        {["Datos aislados por empresa", "Infraestructura cloud", "WhatsApp integrado", "Soporte humano", "Actualizaciones continuas"].map((item) => (
-          <div key={item} className="flex items-center gap-2 rounded-2xl bg-slate-950/45 px-4 py-3">
-            <CheckCircle2 size={16} className="shrink-0 text-cyan-200" />
-            <span>{item}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function WorkflowSection() {
-  return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-28">
-      <div className="mx-auto max-w-3xl text-center">
-        <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Así funciona</p>
-        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">De primer mensaje a cobro, sin cambiar de herramienta.</h2>
-        <p className="mt-5 text-lg leading-8 text-white/62">Flowly une el recorrido completo del negocio: captación, atención, agenda, presupuesto, factura y seguimiento.</p>
-      </div>
-
-      <div className="mt-14 grid gap-4 lg:grid-cols-5">
-        {workflow.map(({ title, text, icon: Icon }, index) => (
-          <div key={title} className="group relative rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.075]">
-            <div className="mb-8 flex items-center justify-between">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><Icon size={22} /></div>
-              <span className="text-sm text-white/35">0{index + 1}</span>
-            </div>
-            <h3 className="text-lg font-semibold">{title}</h3>
-            <p className="mt-3 text-sm leading-6 text-white/52">{text}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function OutcomesSection() {
-  return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
-      <div className="grid gap-10 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Por qué Flowly</p>
-          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Más orden, menos tareas manuales y mejor seguimiento.</h2>
-          <p className="mt-5 text-lg leading-8 text-white/62">El cliente no compra módulos: compra control, rapidez y una forma más profesional de trabajar cada día.</p>
-        </div>
-        <div className="grid gap-4">
-          {outcomes.map((item) => (
-            <div key={item.title} className="rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-6">
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-300/12 text-emerald-200"><CheckCircle2 size={20} /></div>
-              <h3 className="text-xl font-semibold">{item.title}</h3>
-              <p className="mt-3 text-sm leading-7 text-white/56">{item.text}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ModulesSection() {
-  return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+    <section data-analytics-section="beneficios" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
       <div className="mb-12 max-w-3xl">
-        <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Producto</p>
-        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Todo lo importante conectado en un mismo panel.</h2>
+        <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Qué ganas</p>
+        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Flowly vende orden, tiempo y seguimiento. No solo software.</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {productModules.map(({ icon: Icon, title, text }) => (
-          <div key={title} className="rounded-[1.8rem] border border-white/10 bg-white/[0.055] p-6 transition hover:-translate-y-1 hover:border-cyan-300/35 hover:bg-white/[0.075]">
-            <Icon className="mb-6 text-cyan-200" size={28} />
-            <h3 className="text-xl font-semibold">{title}</h3>
-            <p className="mt-3 text-sm leading-7 text-white/55">{text}</p>
+
+      <div className="grid gap-5 lg:grid-cols-3">
+        {benefits.map(([title, text]) => (
+          <div key={title} className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-7">
+            <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-300/12 text-emerald-200"><TrendingUp size={22} /></div>
+            <h3 className="text-2xl font-semibold">{title}</h3>
+            <p className="mt-4 text-sm leading-7 text-white/55">{text}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StepsSection() {
+  return (
+    <section data-analytics-section="como-funciona" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="mx-auto max-w-3xl text-center">
+        <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Cómo funciona</p>
+        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Tres pasos para dejar de improvisar.</h2>
+      </div>
+
+      <div className="mt-12 grid gap-5 lg:grid-cols-3">
+        {steps.map(({ icon: Icon, title, text }) => (
+          <div key={title} className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-7">
+            <Icon className="mb-6 text-cyan-200" size={30} />
+            <h3 className="text-2xl font-semibold">{title}</h3>
+            <p className="mt-4 text-sm leading-7 text-white/55">{text}</p>
           </div>
         ))}
       </div>
@@ -491,124 +364,84 @@ function ModulesSection() {
 
 function SectorsSection() {
   return (
-    <section id="sectores" className="relative z-10 mx-auto max-w-7xl px-6 py-24">
-      <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+    <section id="sectores" data-analytics-section="sectores" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="mb-12 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Sectores</p>
-          <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">Una plataforma adaptable a negocios reales.</h2>
+          <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">Pensado para negocios que atienden, venden y hacen seguimiento.</h2>
         </div>
-        <Link href="/demo/login" className="flowly-chip inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm">Ver demos <ChevronRight size={16} /></Link>
+        <Link href="/demo/login" data-track-label="Sectores · Ver demos" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
+          Ver demos <ChevronRight size={18} />
+        </Link>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {sectors.map(({ name, icon: Icon, href, result, tags }) => (
-          <Link key={name} href={href} className="group overflow-hidden rounded-[2.2rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/15 transition hover:-translate-y-1 hover:border-cyan-300/35 hover:bg-white/[0.075]">
-            <div className="relative mb-7 h-48 overflow-hidden rounded-[1.7rem] border border-white/10 bg-slate-950/60 p-4">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_10%,rgba(34,211,238,.22),transparent_34%),radial-gradient(circle_at_80%_30%,rgba(236,72,153,.16),transparent_36%)]" />
-              <div className="relative z-10 flex items-center justify-between">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-violet-500 text-slate-950"><Icon size={23} /></div>
-                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/60">Demo</span>
-              </div>
-              <div className="relative z-10 mt-8 grid gap-2">
-                {tags.map((tag) => <span key={tag} className="rounded-xl border border-white/10 bg-white/[0.08] px-3 py-2 text-xs text-white/66">{tag}</span>)}
-              </div>
-            </div>
-            <h3 className="text-2xl font-semibold">{name}</h3>
-            <p className="mt-3 text-sm leading-7 text-white/55">{result}</p>
-            <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-cyan-200">Abrir demo <ArrowRight size={16} /></div>
-          </Link>
+      <div className="grid gap-5 md:grid-cols-2">
+        {sectors.map(([title, text]) => (
+          <div key={title} className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-7">
+            <Store className="mb-6 text-cyan-200" size={28} />
+            <h3 className="text-2xl font-semibold">{title}</h3>
+            <p className="mt-4 text-sm leading-7 text-white/55">{text}</p>
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-function TrustSection() {
-  const items = [
-    ["Multiempresa", "Cada negocio trabaja con sus propios datos, clientes, mensajes y configuraciones."],
-    ["Implementación acompañada", "Soporte para configurar módulos, procesos, agenda, WhatsApp y facturación."],
-    ["Preparado para crecer", "Empieza con Basic y activa módulos cuando el negocio los necesite."],
-    ["Experiencia profesional", "Un panel moderno para que tu equipo trabaje mejor y el cliente perciba más confianza."],
-  ];
+function PricingSection({ country, pricesHref }: { country: Country; pricesHref: string }) {
+  const market = getMarket(country);
 
   return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
-      <div className="overflow-hidden rounded-[2.4rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))] p-6 shadow-2xl shadow-cyan-950/20 md:p-8">
-        <div className="grid gap-10 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
+    <section id="planes" data-analytics-section="planes" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="overflow-hidden rounded-[2.5rem] border border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,.13),rgba(168,85,247,.08))] p-6 shadow-2xl shadow-cyan-950/20 lg:p-8">
+        <div className="grid gap-10 lg:grid-cols-[1fr_.8fr] lg:items-center">
           <div>
-            <div className="flowly-chip mb-5 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><ShieldCheck size={16} /> Confianza y control</div>
-            <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">Gestiona clientes, citas, mensajes y cobros con una imagen profesional.</h2>
-            <p className="mt-5 max-w-xl text-base leading-8 text-white/62">Flowly ayuda a que tu negocio funcione con más orden, mejor seguimiento y menos dependencia de herramientas sueltas.</p>
-          </div>
-          <div className="grid gap-3">
-            {items.map(([title, text]) => (
-              <div key={title} className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-5">
-                <p className="font-semibold">{title}</p>
-                <p className="mt-2 text-sm leading-6 text-white/50">{text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ComparisonSection({ pricesHref }: { pricesHref: string }) {
-  return (
-    <section id="comparativa" className="relative z-10 mx-auto max-w-7xl px-6 py-24">
-      <div className="mx-auto max-w-3xl text-center">
-        <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Comparativa</p>
-        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Flowly sustituye el caos de herramientas separadas.</h2>
-        <p className="mt-5 text-lg leading-8 text-white/62">Todo el contexto del cliente queda conectado: mensajes, citas, tareas, presupuestos, facturas y seguimiento.</p>
-      </div>
-
-      <div className="mx-auto mt-12 max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.055]">
-        <div className="grid grid-cols-[1.1fr_.65fr_.8fr] border-b border-white/10 bg-white/[0.06] px-5 py-4 text-sm font-semibold text-white/75">
-          <span>Necesidad</span><span className="text-center">Flowly</span><span className="text-center">Sin Flowly</span>
-        </div>
-        {comparisonRows.map(([label, flowly, separate]) => (
-          <div key={label} className="grid grid-cols-[1.1fr_.65fr_.8fr] items-center border-b border-white/10 px-5 py-4 text-sm last:border-b-0">
-            <span className="font-medium text-white/82">{label}</span>
-            <span className="flex justify-center"><span className="rounded-full bg-emerald-300/12 px-3 py-1 text-xs text-emerald-200">{flowly}</span></span>
-            <span className="text-center text-white/45">{separate}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-10 flex justify-center">
-        <Link href={pricesHref} className="flowly-primary inline-flex items-center gap-2 rounded-full px-7 py-4 font-semibold">Ver planes <ArrowRight size={18} /></Link>
-      </div>
-    </section>
-  );
-}
-
-function PricingPreview({ pricesHref }: { pricesHref: string }) {
-  const plans = [
-    { name: "Basic", text: "Agenda, CRM esencial y facturación básica para empezar con orden desde el primer día.", badge: "Para empezar" },
-    { name: "Modular", text: "Activa WhatsApp, marketing, automatizaciones, facturación PRO y módulos avanzados.", badge: "Más elegido" },
-    { name: "Enterprise", text: "Solución a medida para empresas con equipos, procesos o integraciones específicas.", badge: "A medida" },
-  ];
-
-  return (
-    <section id="precios" className="relative z-10 mx-auto max-w-7xl px-6 py-24">
-      <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Planes</p>
-          <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">Empieza simple. Crece por módulos.</h2>
-        </div>
-        <Link href={pricesHref} className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Ver precios completos <ArrowRight size={18} /></Link>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        {plans.map((plan, index) => (
-          <div key={plan.name} className={`rounded-[2rem] border p-6 shadow-2xl shadow-black/15 ${index === 1 ? "border-cyan-300/35 bg-cyan-300/[0.08]" : "border-white/10 bg-white/[0.055]"}`}>
-            <div className="mb-8 flex items-center justify-between">
-              <h3 className="text-2xl font-semibold">{plan.name}</h3>
-              <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/65">{plan.badge}</span>
+            <p className="text-sm font-semibold uppercase tracking-[.35em] text-cyan-200/80">Empieza simple</p>
+            <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Prueba gratis. Si encaja, activa tu plan.</h2>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-white/62">
+              La barrera debe ser baja: primero entra, ve el panel, entiende el valor y luego decide.
+            </p>
+            <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+              <Link href="/registro" data-track-label="Planes · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">
+                Empieza gratis <ArrowRight size={18} />
+              </Link>
+              <Link href={pricesHref} data-track-label="Planes · Ver precios" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">
+                Ver precios completos
+              </Link>
             </div>
-            <p className="min-h-20 text-sm leading-7 text-white/58">{plan.text}</p>
-            <Link href={pricesHref} className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-cyan-200">Ver plan <ArrowRight size={16} /></Link>
+          </div>
+
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-6">
+            <p className="text-sm text-white/45">Plan inicial</p>
+            <div className="mt-3 flex items-end gap-2">
+              <span className="text-5xl font-semibold">{market.price}</span>
+              <span className="pb-2 text-white/45">/mes</span>
+            </div>
+            <div className="mt-6 grid gap-3">
+              {["CRM y clientes", "Agenda y seguimiento", "Facturación básica", "Soporte inicial"].map((item) => (
+                <p key={item} className="flex items-center gap-2 text-sm text-white/70"><CheckCircle2 size={16} className="text-cyan-200" /> {item}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FAQSection() {
+  return (
+    <section data-analytics-section="faq" className="relative z-10 mx-auto max-w-5xl px-6 py-20">
+      <div className="mb-10 text-center">
+        <p className="text-sm font-semibold uppercase tracking-[.35em] text-fuchsia-200/80">Dudas rápidas</p>
+        <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">Preguntas antes de empezar.</h2>
+      </div>
+
+      <div className="grid gap-4">
+        {faqs.map(([question, answer]) => (
+          <div key={question} className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-6">
+            <h3 className="text-lg font-semibold">{question}</h3>
+            <p className="mt-3 text-sm leading-7 text-white/55">{answer}</p>
           </div>
         ))}
       </div>
@@ -616,17 +449,16 @@ function PricingPreview({ pricesHref }: { pricesHref: string }) {
   );
 }
 
-function FinalCTA({ pricesHref }: { pricesHref: string }) {
+function FinalCTA() {
   return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+    <section data-analytics-section="cta-final" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
       <div className="flowly-glass rounded-[2.5rem] px-8 py-16 text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><Sparkles /></div>
-        <h2 className="mx-auto max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl">Organiza tu negocio y ofrece una experiencia más profesional a tus clientes.</h2>
-        <p className="mx-auto mt-5 max-w-2xl text-white/60">Prueba Flowly, revisa las demos y elige el plan que mejor encaje con tu negocio.</p>
-        <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
-          <Link href="/registro" data-track-label="CTA final · Empieza gratis" className="flowly-primary inline-flex justify-center rounded-full px-7 py-4 font-semibold transition">Empieza gratis</Link>
-          <Link href={pricesHref} data-track-label="CTA final · Ver planes" className="flowly-secondary inline-flex justify-center rounded-full px-7 py-4 font-semibold">Ver planes</Link>
-        </div>
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><Wand2 /></div>
+        <h2 className="mx-auto max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl">Deja de perder clientes por falta de seguimiento.</h2>
+        <p className="mx-auto mt-5 max-w-2xl text-white/60">Entra gratis, mira el panel y decide si Flowly encaja con tu negocio.</p>
+        <Link href="/registro" data-track-label="CTA final · Empieza gratis" className="flowly-primary mt-8 inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 font-semibold">
+          Empieza gratis <ArrowRight size={18} />
+        </Link>
       </div>
     </section>
   );
@@ -637,16 +469,25 @@ function Footer() {
     <footer className="relative z-10 mx-auto max-w-7xl border-t border-white/10 px-6 py-8 text-sm text-white/55">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap gap-5">
-          <Link href="/#producto" className="hover:text-cyan-200">Producto</Link>
+          <Link href="/#demo" className="hover:text-cyan-200">Demo</Link>
           <Link href="/contacto" className="hover:text-cyan-200">Contacto</Link>
-          <Link href="/privacy" className="hover:text-cyan-200">Política privacidad</Link>
+          <Link href="/privacy" className="hover:text-cyan-200">Privacidad</Link>
           <Link href="/legal/condiciones" className="hover:text-cyan-200">Términos</Link>
-          <Link href="/contacto" className="hover:text-cyan-200">Soporte</Link>
           <Link href="/trabaja-con-nosotros" className="hover:text-cyan-200">Trabaja con nosotros</Link>
         </div>
         <div className="text-white/45">Copyright 2026 Flowly IA · Version 2.0</div>
       </div>
     </footer>
+  );
+}
+
+function StickyMobileCTA() {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/88 p-3 backdrop-blur-2xl sm:hidden">
+      <Link href="/registro" data-track-label="Sticky móvil · Empieza gratis" className="flowly-primary flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold">
+        Empieza gratis <ArrowRight size={16} />
+      </Link>
+    </div>
   );
 }
 
@@ -666,56 +507,24 @@ export default function Home() {
     window.localStorage.setItem("flowly_country", value);
   };
 
-  const market = getMarket(country);
   const pricesHref = useMemo(() => `/precios?country=${country}`, [country]);
 
   return (
-    <main className="flowly-public min-h-screen">
+    <main className="flowly-public min-h-screen overflow-hidden pb-20 sm:pb-0">
       <span className="flowly-orb left-8 top-24 h-44 w-44 bg-cyan-400/30" />
       <span className="flowly-orb right-16 top-40 h-52 w-52 bg-fuchsia-500/25" />
       <span className="flowly-orb bottom-80 left-1/3 h-64 w-64 bg-violet-500/18" />
 
       <Header country={country} setMarket={setMarket} pricesHref={pricesHref} />
-
-      <section data-analytics-section="hero" className="relative z-10 mx-auto max-w-7xl px-6 pb-14 pt-14 text-center sm:pt-20">
-        <div className="flowly-chip mx-auto mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> {market.headline}</div>
-        <h1 className="mx-auto max-w-6xl text-4xl font-semibold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
-          La IA que organiza tus clientes, ventas y seguimiento. <span className="flowly-gradient-text">Sin caos ni oportunidades perdidas.</span>
-        </h1>
-        <p className="mx-auto mt-7 max-w-3xl text-lg leading-8 text-white/72">
-          Si tus clientes llegan por WhatsApp, anuncios, llamadas o formularios, Flowly los ordena en un solo panel para que sepas quién escribió, qué necesita, cuándo responder y cómo convertirlo en venta.
-        </p>
-
-        <div className="mx-auto mt-7 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
-          {heroBenefits.map((benefit) => (
-            <div key={benefit} className="flex items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white/72">
-              <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-cyan-200" />
-              <span>{benefit}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
-          <Link href="/registro" data-track-label="Hero principal · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold transition"><Sparkles size={18} /> Empieza gratis</Link>
-          <Link href="/demo/login" data-track-label="Hero principal · Ver demo" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold"><Play size={18} /> Ver demo</Link>
-        </div>
-        <p className="mt-4 text-sm text-white/45">Sin tarjeta · Prueba el panel · Plan Basic desde 29,99 €/mes cuando quieras activarlo.</p>
-        <ProductMockup country={country} />
-      </section>
-
-      <PainSection />
-      <AdLandingSection />
-      <ConversionSection pricesHref={pricesHref} />
-      <TrustBar />
-      <WorkflowSection />
-      <OutcomesSection />
-      <ModulesSection />
+      <Hero country={country} pricesHref={pricesHref} />
+      <ProblemSection />
+      <DemoSection />
+      <BenefitsSection />
+      <StepsSection />
       <SectorsSection />
-      <FounderProofSection />
-      <TrustSection />
-      <ComparisonSection pricesHref={pricesHref} />
-      <PricingPreview pricesHref={pricesHref} />
-      <FinalCTA pricesHref={pricesHref} />
+      <PricingSection country={country} pricesHref={pricesHref} />
+      <FAQSection />
+      <FinalCTA />
       <Footer />
       <StickyMobileCTA />
     </main>
