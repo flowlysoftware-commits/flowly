@@ -11,6 +11,9 @@ const EVENT_NAMES = new Set([
   "checkout_completed",
   "signup_started",
   "signup_completed",
+  "demo_intent",
+  "pricing_intent",
+  "section_view",
 ]);
 const MAX_TEXT = 500;
 

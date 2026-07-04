@@ -100,15 +100,15 @@ const comparisonRows: Array<[string, string, string]> = [
 ];
 
 const heroBenefits = [
-  "Centraliza clientes, citas, WhatsApp y facturas",
-  "Evita perder oportunidades por conversaciones sueltas",
-  "Panel listo para empezar sin instalaciones complicadas",
+  "Responde antes y deja cada cliente registrado",
+  "Convierte mensajes en citas, tareas, presupuestos y cobros",
+  "Empieza gratis y prueba el panel antes de pagar",
 ];
 
 const conversionProof = [
-  ["Para negocios con caos diario", "Flowly ordena clientes, agenda, WhatsApp, cobros y seguimiento en un solo sitio."],
-  ["No necesitas cambiar todo de golpe", "Empieza con CRM, agenda y facturación; activa módulos cuando los necesites."],
-  ["Acompañamiento humano", "Te ayudamos a configurar el panel para que no tengas que hacerlo solo."],
+  ["La oportunidad no se pierde", "Cada contacto queda guardado con origen, estado y próxima acción para que sepas a quién llamar o escribir."],
+  ["El equipo trabaja con orden", "Clientes, agenda, presupuestos, facturas y WhatsApp dejan de estar repartidos entre móviles y hojas sueltas."],
+  ["Puedes empezar sin riesgo", "Primero pruebas el panel, ves la demo y luego eliges si quieres activar el plan que encaja con tu negocio."],
 ];
 
 
@@ -134,9 +134,9 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
         </Link>
 
         <div className="hidden items-center gap-7 text-sm text-white/68 lg:flex">
-          <a href="#producto" className="transition hover:text-white">Producto</a>
+          <a href="#problema" className="transition hover:text-white">Problema</a>
+          <a href="#producto" className="transition hover:text-white">Cómo funciona</a>
           <a href="#sectores" className="transition hover:text-white">Sectores</a>
-          <a href="#comparativa" className="transition hover:text-white">Comparativa</a>
           <Link href={pricesHref} data-track-label="Header · Precios" className="transition hover:text-white">Precios</Link>
           <Link href="/contacto" data-track-label="Header · Contacto" className="transition hover:text-white">Contacto</Link>
         </div>
@@ -151,7 +151,7 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
             </select>
           </label>
           <Link href="/login" data-track-label="Header · Área cliente" className="flowly-secondary hidden rounded-full px-4 py-2.5 text-xs font-semibold sm:inline-flex sm:text-sm">Área cliente</Link>
-          <Link href="/demo/login" data-track-label="Header · Ver demo" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold transition sm:inline-flex">Ver demo</Link>
+          <Link href="/registro" data-track-label="Header · Empieza gratis" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold transition sm:inline-flex">Empieza gratis</Link>
           <button
             type="button"
             className="flowly-secondary inline-flex h-11 w-11 items-center justify-center rounded-full lg:hidden"
@@ -167,9 +167,9 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
       {mobileOpen && (
         <div className="flowly-nav absolute left-3 right-3 top-[calc(100%+.65rem)] overflow-hidden rounded-[1.7rem] border border-white/10 p-3 shadow-2xl shadow-cyan-950/25 backdrop-blur-2xl lg:hidden">
           <div className="grid gap-2 text-sm text-white/78">
-            <a onClick={closeMobile} href="#producto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Producto</a>
+            <a onClick={closeMobile} href="#problema" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Problema</a>
+            <a onClick={closeMobile} href="#producto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Cómo funciona</a>
             <a onClick={closeMobile} href="#sectores" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Sectores</a>
-            <a onClick={closeMobile} href="#comparativa" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Comparativa</a>
             <Link onClick={closeMobile} href={pricesHref} data-track-label="Menú móvil · Precios" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Precios</Link>
             <Link onClick={closeMobile} href="/contacto" data-track-label="Menú móvil · Contacto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Contacto</Link>
           </div>
@@ -184,7 +184,7 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
               </select>
             </label>
             <Link onClick={closeMobile} href="/login" data-track-label="Menú móvil · Área cliente" className="flowly-secondary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Área cliente</Link>
-            <Link onClick={closeMobile} href="/demo/login" data-track-label="Menú móvil · Ver demo" className="flowly-primary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Ver demo</Link>
+            <Link onClick={closeMobile} href="/registro" data-track-label="Menú móvil · Empieza gratis" className="flowly-primary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Empieza gratis</Link>
           </div>
         </div>
       )}
@@ -196,7 +196,7 @@ function ProductMockup({ country }: { country: Country }) {
   const money = getMarket(country).dashboardMoney;
 
   return (
-    <div id="producto" className="flowly-product-stage relative mx-auto mt-14 max-w-6xl rounded-[2.6rem] p-3 sm:p-4">
+    <div id="producto" data-analytics-section="producto" className="flowly-product-stage relative mx-auto mt-14 max-w-6xl rounded-[2.6rem] p-3 sm:p-4">
       <div className="flowly-scanline" />
       <div className="rounded-[2rem] border border-white/10 bg-slate-950/88 p-4 shadow-2xl shadow-cyan-950/30 sm:p-6">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -260,6 +260,98 @@ function ProductMockup({ country }: { country: Country }) {
 }
 
 
+
+function PainSection() {
+  const pains = [
+    ["Clientes que escriben y se enfrían", "Si tardas en responder o no haces seguimiento, esa oportunidad se va con otro negocio."],
+    ["WhatsApp, agenda y facturas separados", "Cuando todo vive en sitios distintos, tu equipo pierde contexto y tiempo cada día."],
+    ["No sabes qué venta está pendiente", "Sin estados claros, es fácil olvidar presupuestos, citas, cobros o llamadas."],
+    ["El negocio depende demasiado de ti", "Flowly ayuda a que el proceso quede escrito, visible y fácil de repetir."],
+  ];
+
+  return (
+    <section id="problema" data-analytics-section="problema" className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="grid gap-8 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[.35em] text-rose-200/80">El problema real</p>
+          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">No pierdes ventas por falta de clientes. Las pierdes por falta de seguimiento.</h2>
+          <p className="mt-5 text-lg leading-8 text-white/62">Flowly está pensado para negocios que reciben mensajes, citas y oportunidades todos los días, pero necesitan convertir ese movimiento en ventas organizadas.</p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <Link href="/registro" data-track-label="Problema · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Quiero ordenar mi negocio <ArrowRight size={18} /></Link>
+            <Link href="/demo/login" data-track-label="Problema · Ver demo" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Ver demo</Link>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {pains.map(([title, text]) => (
+            <div key={title} className="rounded-[1.8rem] border border-rose-200/15 bg-rose-200/[0.055] p-6">
+              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-300/12 text-rose-100"><Zap size={20} /></div>
+              <h3 className="text-xl font-semibold">{title}</h3>
+              <p className="mt-3 text-sm leading-7 text-white/56">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AdLandingSection() {
+  const steps = [
+    ["1", "Entra el cliente", "Formulario, WhatsApp, llamada, anuncio o contacto manual."],
+    ["2", "Flowly crea el seguimiento", "Ficha, estado, próxima acción, cita, presupuesto o tarea."],
+    ["3", "Tu equipo vende con control", "Todo queda visible y el cliente no desaparece entre mensajes."],
+  ];
+
+  return (
+    <section data-analytics-section="camino_rapido" className="relative z-10 mx-auto max-w-7xl px-6 py-14">
+      <div className="rounded-[2.3rem] border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.10] via-white/[0.045] to-fuchsia-300/[0.08] p-6 shadow-2xl shadow-cyan-950/20 sm:p-8">
+        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[.35em] text-cyan-200/80">Camino simple para vender</p>
+            <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-5xl">Del anuncio al registro en menos pasos.</h2>
+          </div>
+          <Link href="/registro" data-track-label="Camino rápido · Crear cuenta" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">Crear cuenta gratis <ArrowRight size={18} /></Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {steps.map(([number, title, text]) => (
+            <div key={title} className="rounded-[1.7rem] border border-white/10 bg-slate-950/55 p-5">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-sm font-black text-slate-950">{number}</span>
+              <h3 className="mt-5 text-xl font-semibold">{title}</h3>
+              <p className="mt-3 text-sm leading-7 text-white/56">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FounderProofSection() {
+  return (
+    <section data-analytics-section="confianza_venta" className="relative z-10 mx-auto max-w-7xl px-6 py-16">
+      <div className="grid gap-5 lg:grid-cols-[1fr_.9fr] lg:items-stretch">
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-7">
+          <p className="text-sm font-semibold uppercase tracking-[.35em] text-emerald-200/80">Para decidir rápido</p>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">No necesitas entender tecnología. Necesitas ver si te ahorra trabajo.</h2>
+          <p className="mt-5 text-base leading-8 text-white/60">Por eso la experiencia principal ahora es directa: prueba el panel, mira cómo se ve un cliente organizado y decide si quieres activarlo para tu negocio.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+          {[
+            ["Sin tarjeta para empezar", "Reduce fricción en tráfico frío."],
+            ["Demo visible antes de comprar", "El usuario ve el valor antes de hablar de precio."],
+            ["Precio claro desde el inicio", "Flowly Basic desde 29,99 €/mes."],
+          ].map(([title, text]) => (
+            <div key={title} className="rounded-[1.7rem] border border-emerald-300/15 bg-emerald-300/[0.07] p-5">
+              <h3 className="font-semibold text-emerald-50">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-white/56">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ConversionSection({ pricesHref }: { pricesHref: string }) {
   return (
     <section className="relative z-10 mx-auto max-w-7xl px-6 pb-14">
@@ -279,14 +371,14 @@ function ConversionSection({ pricesHref }: { pricesHref: string }) {
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[.3em] text-cyan-200/80">Oferta de entrada</p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Empieza viendo una demo real y después decide el plan.</h2>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Primero consigue que el visitante haga una acción clara.</h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-white/58">
-              La mayoría de usuarios que llegan desde anuncios necesitan entender rápido qué gana su negocio. Por eso ahora el camino principal es simple: ver demo, comprobar el panel y pasar a precios o registro.
+              La home está pensada para tráfico frío de anuncios: promesa directa, problema reconocible, CTA visible, demo opcional y registro sin fricción.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-            <Link href="/demo/login" data-track-label="Bloque conversión · Ver demo" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
-              Ver demo ahora <ArrowRight size={18} />
+            <Link href="/registro" data-track-label="Bloque conversión · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
+              Empezar gratis <ArrowRight size={18} />
             </Link>
             <Link href={pricesHref} data-track-label="Bloque conversión · Ver precios" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold">
               Ver planes
@@ -302,8 +394,8 @@ function StickyMobileCTA() {
   return (
     <div className="fixed inset-x-3 bottom-3 z-40 rounded-full border border-cyan-300/20 bg-slate-950/88 p-2 shadow-2xl shadow-cyan-950/35 backdrop-blur-xl sm:hidden">
       <div className="grid grid-cols-2 gap-2">
-        <Link href="/demo/login" data-track-label="Sticky móvil · Ver demo" className="flowly-primary inline-flex justify-center rounded-full px-4 py-3 text-sm font-bold">
-          Ver demo
+        <Link href="/registro" data-track-label="Sticky móvil · Empieza gratis" className="flowly-primary inline-flex justify-center rounded-full px-4 py-3 text-sm font-bold">
+          Empieza gratis
         </Link>
         <Link href="/precios" data-track-label="Sticky móvil · Ver planes" className="flowly-secondary inline-flex justify-center rounded-full px-4 py-3 text-sm font-bold">
           Planes
@@ -532,8 +624,8 @@ function FinalCTA({ pricesHref }: { pricesHref: string }) {
         <h2 className="mx-auto max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl">Organiza tu negocio y ofrece una experiencia más profesional a tus clientes.</h2>
         <p className="mx-auto mt-5 max-w-2xl text-white/60">Prueba Flowly, revisa las demos y elige el plan que mejor encaje con tu negocio.</p>
         <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
-          <Link href={pricesHref} className="flowly-primary inline-flex justify-center rounded-full px-7 py-4 font-semibold transition">Ver planes</Link>
-          <Link href="/contacto" className="flowly-secondary inline-flex justify-center rounded-full px-7 py-4 font-semibold">Solicitar propuesta</Link>
+          <Link href="/registro" data-track-label="CTA final · Empieza gratis" className="flowly-primary inline-flex justify-center rounded-full px-7 py-4 font-semibold transition">Empieza gratis</Link>
+          <Link href={pricesHref} data-track-label="CTA final · Ver planes" className="flowly-secondary inline-flex justify-center rounded-full px-7 py-4 font-semibold">Ver planes</Link>
         </div>
       </div>
     </section>
@@ -585,13 +677,13 @@ export default function Home() {
 
       <Header country={country} setMarket={setMarket} pricesHref={pricesHref} />
 
-      <section className="relative z-10 mx-auto max-w-7xl px-6 pb-14 pt-14 text-center sm:pt-20">
+      <section data-analytics-section="hero" className="relative z-10 mx-auto max-w-7xl px-6 pb-14 pt-14 text-center sm:pt-20">
         <div className="flowly-chip mx-auto mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"><Sparkles size={16} /> {market.headline}</div>
         <h1 className="mx-auto max-w-6xl text-4xl font-semibold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
-          Ordena tu negocio en un solo panel. <span className="flowly-gradient-text">Sin perder clientes por el camino.</span>
+          La IA que organiza tus clientes, ventas y seguimiento. <span className="flowly-gradient-text">Sin caos ni oportunidades perdidas.</span>
         </h1>
         <p className="mx-auto mt-7 max-w-3xl text-lg leading-8 text-white/72">
-          Flowly une CRM, agenda, WhatsApp, facturación, automatizaciones e IA para que puedas captar, responder, organizar citas y cobrar con más control desde el primer día.
+          Si tus clientes llegan por WhatsApp, anuncios, llamadas o formularios, Flowly los ordena en un solo panel para que sepas quién escribió, qué necesita, cuándo responder y cómo convertirlo en venta.
         </p>
 
         <div className="mx-auto mt-7 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
@@ -604,19 +696,22 @@ export default function Home() {
         </div>
 
         <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
-          <Link href="/demo/login" data-track-label="Hero principal · Ver demo" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold transition"><Play size={18} /> Ver demo real</Link>
-          <Link href={pricesHref} data-track-label="Hero principal · Ver planes" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">Ver planes <ArrowRight size={18} /></Link>
+          <Link href="/registro" data-track-label="Hero principal · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold transition"><Sparkles size={18} /> Empieza gratis</Link>
+          <Link href="/demo/login" data-track-label="Hero principal · Ver demo" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold"><Play size={18} /> Ver demo</Link>
         </div>
-        <p className="mt-4 text-sm text-white/45">Sin compromiso. Primero ves cómo funciona y después decides si encaja con tu negocio.</p>
+        <p className="mt-4 text-sm text-white/45">Sin tarjeta · Prueba el panel · Plan Basic desde 29,99 €/mes cuando quieras activarlo.</p>
         <ProductMockup country={country} />
       </section>
 
+      <PainSection />
+      <AdLandingSection />
       <ConversionSection pricesHref={pricesHref} />
       <TrustBar />
       <WorkflowSection />
       <OutcomesSection />
       <ModulesSection />
       <SectorsSection />
+      <FounderProofSection />
       <TrustSection />
       <ComparisonSection pricesHref={pricesHref} />
       <PricingPreview pricesHref={pricesHref} />

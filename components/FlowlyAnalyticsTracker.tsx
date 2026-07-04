@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const SESSION_KEY = "flowly_analytics_session_id";
 const VISITOR_KEY = "flowly_analytics_visitor_id";
+const SESSION_STARTED_KEY = "flowly_analytics_session_started_at";
 const SCROLL_DEPTHS = [25, 50, 75, 100];
 
 type AnalyticsExtra = Record<string, unknown>;
@@ -16,15 +17,33 @@ function createId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-function readOrCreateStorageId(key: string, prefix: string) {
+function readOrCreateVisitorId() {
   try {
-    const existing = window.localStorage.getItem(key);
+    const existing = window.localStorage.getItem(VISITOR_KEY);
     if (existing) return existing;
-    const next = createId(prefix);
-    window.localStorage.setItem(key, next);
+    const next = createId("visitor");
+    window.localStorage.setItem(VISITOR_KEY, next);
     return next;
   } catch {
-    return createId(prefix);
+    return createId("visitor");
+  }
+}
+
+function readOrCreateSessionId() {
+  try {
+    const existing = window.sessionStorage.getItem(SESSION_KEY);
+    const startedAt = Number(window.sessionStorage.getItem(SESSION_STARTED_KEY) || 0);
+    const isFresh = startedAt && Date.now() - startedAt < 30 * 60 * 1000;
+    if (existing && isFresh) {
+      window.sessionStorage.setItem(SESSION_STARTED_KEY, String(Date.now()));
+      return existing;
+    }
+    const next = createId("session");
+    window.sessionStorage.setItem(SESSION_KEY, next);
+    window.sessionStorage.setItem(SESSION_STARTED_KEY, String(Date.now()));
+    return next;
+  } catch {
+    return createId("session");
   }
 }
 
@@ -78,8 +97,8 @@ export default function FlowlyAnalyticsTracker() {
 
     sentScrollDepthsRef.current = new Set();
 
-    const visitorId = readOrCreateStorageId(VISITOR_KEY, "visitor");
-    const sessionId = readOrCreateStorageId(SESSION_KEY, "session");
+    const visitorId = readOrCreateVisitorId();
+    const sessionId = readOrCreateSessionId();
     const fullPath = `${pathname}${window.location.search || ""}${window.location.hash || ""}`;
     const startedAt = Date.now();
     const attribution = getAttribution();
@@ -121,8 +140,9 @@ export default function FlowlyAnalyticsTracker() {
       const href = target instanceof HTMLAnchorElement ? target.getAttribute("href") : null;
       const label = getElementLabel(target);
       const isCheckout = Boolean(href?.includes("checkout") || href?.includes("stripe") || label.toLowerCase().includes("checkout") || label.toLowerCase().includes("carrito"));
-      const isSignup = Boolean(href?.includes("registro") || href?.includes("signup") || label.toLowerCase().includes("empezar") || label.toLowerCase().includes("prueba"));
-      const isPricing = Boolean(href?.includes("precios") || href?.includes("pricing") || label.toLowerCase().includes("plan"));
+      const isDemo = Boolean(href?.includes("demo") || label.toLowerCase().includes("demo"));
+      const isSignup = Boolean(href?.includes("registro") || href?.includes("signup") || label.toLowerCase().includes("empezar") || label.toLowerCase().includes("prueba") || label.toLowerCase().includes("gratis"));
+      const isPricing = Boolean(href?.includes("precios") || href?.includes("pricing") || label.toLowerCase().includes("plan") || label.toLowerCase().includes("precio"));
 
       send("cta_click", {
         label,
@@ -134,6 +154,8 @@ export default function FlowlyAnalyticsTracker() {
 
       if (isCheckout) send("checkout_started", { label, href, durationMs: Date.now() - startedAt, funnelStep: "checkout" });
       if (isSignup) send("signup_started", { label, href, durationMs: Date.now() - startedAt, funnelStep: "signup" });
+      if (isDemo) send("demo_intent", { label, href, durationMs: Date.now() - startedAt, funnelStep: "signup" });
+      if (isPricing) send("pricing_intent", { label, href, durationMs: Date.now() - startedAt, funnelStep: "pricing" });
     };
 
     const handleScroll = () => {
@@ -145,6 +167,19 @@ export default function FlowlyAnalyticsTracker() {
       sentScrollDepthsRef.current.add(nextDepth);
       send("scroll_depth", { depth: nextDepth, durationMs: Date.now() - startedAt });
     };
+
+    const sectionObserver = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const element = entry.target as HTMLElement;
+        const section = element.dataset.analyticsSection || element.id;
+        if (!section) continue;
+        send("section_view", { section, durationMs: Date.now() - startedAt });
+        sectionObserver?.unobserve(element);
+      }
+    }, { threshold: 0.45 }) : null;
+
+    document.querySelectorAll<HTMLElement>("[data-analytics-section]").forEach((element) => sectionObserver?.observe(element));
 
     document.addEventListener("click", handleClick, true);
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -166,6 +201,7 @@ export default function FlowlyAnalyticsTracker() {
       document.removeEventListener("click", handleClick, true);
       window.removeEventListener("scroll", handleScroll);
       document.removeEventListener("visibilitychange", handleVisibility);
+      sectionObserver?.disconnect();
       send("page_leave", { durationMs: Date.now() - startedAt });
     };
   }, [pathname]);
