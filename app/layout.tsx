@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import FlowlyCompanionRuntime from "@/components/FlowlyCompanionRuntime";
+import FlowlyAnalyticsTracker from "@/components/FlowlyAnalyticsTracker";
 
 export const metadata: Metadata = {
   title: "Flowly IA | SaaS para negocios modernos",
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           />
         </noscript>
         {children}
+        <FlowlyAnalyticsTracker />
         <FlowlyCompanionRuntime />
       </body>
     </html>
