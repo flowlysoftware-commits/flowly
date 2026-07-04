@@ -11,10 +11,7 @@ export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
 
   if (!signature) {
-    return NextResponse.json(
-      { error: "Falta firma de Stripe" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Falta firma de Stripe" }, { status: 400 });
   }
 
   let event: Stripe.Event;
@@ -27,11 +24,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Webhook signature error:", error);
-
-    return NextResponse.json(
-      { error: "Firma inválida" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Firma inválida" }, { status: 400 });
   }
 
   try {
@@ -52,23 +45,6 @@ export async function POST(request: Request) {
       const salesDealId = session.metadata?.sales_deal_id || null;
       const setupAmount = Number(session.metadata?.setup_amount || 0);
       const monthlyAmount = Number(session.metadata?.monthly_amount || 0);
-      const amountTotal = Number(session.amount_total || 0) / 100;
-      const purchaseValue = amountTotal > 0 ? amountTotal : monthlyAmount;
-      const purchaseCurrency = (session.currency || session.metadata?.currency || "eur").toUpperCase();
-
-      if (amountTotal > 0) {
-        await sendMetaServerEvent({
-          eventName: "Purchase",
-          eventId: `stripe_checkout_${session.id}`,
-          eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL || "https://flowlyia.com"}/registro`,
-          email,
-          value: purchaseValue,
-          currency: purchaseCurrency,
-          contentName: `Flowly ${plan}`,
-          contentCategory: "Suscripción SaaS",
-          plan,
-        });
-      }
 
       await supabaseAdmin.from("stripe_checkout_sessions").upsert({
         stripe_session_id: session.id,
@@ -104,18 +80,36 @@ export async function POST(request: Request) {
         if (deal && deal.status !== "paid") {
           await supabaseAdmin
             .from("sales_deals")
-            .update({ status: "paid", paid_at: new Date().toISOString(), stripe_session_id: session.id })
+            .update({
+              status: "paid",
+              paid_at: new Date().toISOString(),
+              stripe_session_id: session.id,
+            })
             .eq("id", salesDealId);
 
           if (salesUserId) {
-            const [{ data: users }, { data: seller }, { data: business }] = await Promise.all([
-              supabaseAdmin.from("sales_users").select("id, full_name, role, manager_id"),
-              supabaseAdmin.from("sales_users").select("id, full_name, role, manager_id").eq("id", salesUserId).maybeSingle(),
-              businessId ? supabaseAdmin.from("businesses").select("name").eq("id", businessId).maybeSingle() : Promise.resolve({ data: null } as any),
-            ]);
+            const [{ data: users }, { data: seller }, { data: business }] =
+              await Promise.all([
+                supabaseAdmin
+                  .from("sales_users")
+                  .select("id, full_name, role, manager_id"),
+                supabaseAdmin
+                  .from("sales_users")
+                  .select("id, full_name, role, manager_id")
+                  .eq("id", salesUserId)
+                  .maybeSingle(),
+                businessId
+                  ? supabaseAdmin
+                      .from("businesses")
+                      .select("name")
+                      .eq("id", businessId)
+                      .maybeSingle()
+                  : Promise.resolve({ data: null } as any),
+              ]);
 
             if (seller) {
               const saleBaseAmount = setupAmount > 0 ? setupAmount : monthlyAmount;
+
               const lines = buildCommissionLines({
                 seller,
                 users: users || [],
@@ -125,29 +119,42 @@ export async function POST(request: Request) {
                 source: "stripe_checkout",
                 includeMonthly: false,
               });
-              if (lines.length > 0) await supabaseAdmin.from("commissions").insert(lines);
+
+              if (lines.length > 0) {
+                await supabaseAdmin.from("commissions").insert(lines);
+              }
             }
           }
         }
       }
     }
 
-
-
     if (event.type === "invoice.paid") {
       const invoice = event.data.object as any;
-      const customerId = typeof invoice.customer === "string" ? invoice.customer : "";
+      const customerId =
+        typeof invoice.customer === "string" ? invoice.customer : "";
+
       const amountPaid = Number(invoice.amount_paid || 0) / 100;
-      const billingReason = typeof invoice.billing_reason === "string" ? invoice.billing_reason : "";
-      const invoiceEmail = invoice.customer_email || invoice.customer_details?.email || "";
+      const billingReason =
+        typeof invoice.billing_reason === "string" ? invoice.billing_reason : "";
+
+      const invoiceEmail =
+        invoice.customer_email || invoice.customer_details?.email || "";
+
       const invoiceCurrency = String(invoice.currency || "eur").toUpperCase();
-      const invoicePlan = invoice.subscription_details?.metadata?.plan || invoice.lines?.data?.[0]?.metadata?.plan || "flowly";
+
+      const invoicePlan =
+        invoice.subscription_details?.metadata?.plan ||
+        invoice.lines?.data?.[0]?.metadata?.plan ||
+        "flowly";
 
       if (amountPaid > 0) {
         await sendMetaServerEvent({
           eventName: "Purchase",
           eventId: `stripe_invoice_${invoice.id}`,
-          eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL || "https://flowlyia.com"}/registro`,
+          eventSourceUrl: `${
+            process.env.NEXT_PUBLIC_SITE_URL || "https://flowlyia.com"
+          }/registro`,
           email: invoiceEmail,
           value: amountPaid,
           currency: invoiceCurrency,
@@ -169,8 +176,14 @@ export async function POST(request: Request) {
           .maybeSingle();
 
         if (business?.sales_user_id) {
-          const { data: users } = await supabaseAdmin.from("sales_users").select("id, full_name, role, manager_id");
-          const seller = (users || []).find((user: any) => user.id === business.sales_user_id);
+          const { data: users } = await supabaseAdmin
+            .from("sales_users")
+            .select("id, full_name, role, manager_id");
+
+          const seller = (users || []).find(
+            (user: any) => user.id === business.sales_user_id
+          );
+
           if (seller) {
             const monthlyLines = buildCommissionLines({
               seller,
@@ -179,9 +192,15 @@ export async function POST(request: Request) {
               saleBaseAmount: 0,
               monthlyAmount: amountPaid,
               source: "stripe_invoice",
-            }).filter((line) => line.type === "direct_monthly" || line.type === "branch_monthly");
+            }).filter(
+              (line) =>
+                line.type === "direct_monthly" ||
+                line.type === "branch_monthly"
+            );
 
-            if (monthlyLines.length > 0) await supabaseAdmin.from("commissions").insert(monthlyLines);
+            if (monthlyLines.length > 0) {
+              await supabaseAdmin.from("commissions").insert(monthlyLines);
+            }
           }
         }
       }
@@ -195,18 +214,13 @@ export async function POST(request: Request) {
       const subscription = event.data.object as Stripe.Subscription;
 
       const customerId =
-        typeof subscription.customer === "string"
-          ? subscription.customer
-          : "";
-
-      const subscriptionId = subscription.id;
-      const status = subscription.status;
+        typeof subscription.customer === "string" ? subscription.customer : "";
 
       await supabaseAdmin
         .from("businesses")
         .update({
-          subscription_status: status,
-          stripe_subscription_id: subscriptionId,
+          subscription_status: subscription.status,
+          stripe_subscription_id: subscription.id,
         })
         .eq("stripe_customer_id", customerId);
     }
