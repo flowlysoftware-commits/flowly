@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { trackMetaEvent } from "@/lib/metaEvents";
 import Link from "next/link";
 import { CheckCircle2, Send, Sparkles } from "lucide-react";
 
@@ -32,6 +33,12 @@ export default function ContactoPage() {
     const { error } = await supabase.from("contacts").insert({ name, email, phone, company, type, message, status: "Nuevo" });
     if (error) alert(`Error enviando contacto: ${error.message}`);
     else {
+      await trackMetaEvent("Lead", {
+        email,
+        phone,
+        contentName: "Formulario de contacto Flowly",
+        contentCategory: type,
+      });
       setSent(true);
       setName(""); setEmail(""); setPhone(""); setCompany(""); setType("Información"); setMessage("");
     }

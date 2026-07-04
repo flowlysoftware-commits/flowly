@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { marketingPlans } from "@/lib/marketingPlans";
+import { trackMetaEvent } from "@/lib/metaEvents";
 import {
   Bot,
   CalendarDays,
@@ -182,6 +183,14 @@ export default function PreciosPage() {
   const [showModuleBuilder, setShowModuleBuilder] = useState(false);
 
   useEffect(() => {
+    trackMetaEvent("ViewContent", {
+      contentName: "Planes y precios Flowly",
+      contentCategory: "Suscripción SaaS",
+      currency: getMarket(country).currency,
+    });
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const queryCountry = params.get("country");
     const saved = window.localStorage.getItem("flowly_country");
@@ -225,6 +234,14 @@ export default function PreciosPage() {
   const startCheckout = async (plan: string, moduleIds: ModuleId[] = []) => {
     try {
       setLoadingPlan(plan);
+      const checkoutValue = plan === "basic" ? displayPrice(29.99, country) : plan === "premium" ? displayPrice(59.99, country) : displayPrice(modularTotal, country);
+      await trackMetaEvent("InitiateCheckout", {
+        value: checkoutValue,
+        currency: getMarket(country).currency,
+        contentName: `Flowly ${plan}`,
+        contentCategory: "Suscripción SaaS",
+        plan,
+      });
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

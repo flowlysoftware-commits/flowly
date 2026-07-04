@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildCommissionLines } from "@/lib/salesCommissions";
+import { sendMetaServerEvent } from "@/lib/metaConversionsServer";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_placeholder");
 
@@ -51,6 +52,23 @@ export async function POST(request: Request) {
       const salesDealId = session.metadata?.sales_deal_id || null;
       const setupAmount = Number(session.metadata?.setup_amount || 0);
       const monthlyAmount = Number(session.metadata?.monthly_amount || 0);
+      const amountTotal = Number(session.amount_total || 0) / 100;
+      const purchaseValue = amountTotal > 0 ? amountTotal : monthlyAmount;
+      const purchaseCurrency = (session.currency || session.metadata?.currency || "eur").toUpperCase();
+
+      if (amountTotal > 0) {
+        await sendMetaServerEvent({
+          eventName: "Purchase",
+          eventId: `stripe_checkout_${session.id}`,
+          eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL || "https://flowlyia.com"}/registro`,
+          email,
+          value: purchaseValue,
+          currency: purchaseCurrency,
+          contentName: `Flowly ${plan}`,
+          contentCategory: "Suscripción SaaS",
+          plan,
+        });
+      }
 
       await supabaseAdmin.from("stripe_checkout_sessions").upsert({
         stripe_session_id: session.id,
@@ -121,6 +139,23 @@ export async function POST(request: Request) {
       const customerId = typeof invoice.customer === "string" ? invoice.customer : "";
       const amountPaid = Number(invoice.amount_paid || 0) / 100;
       const billingReason = typeof invoice.billing_reason === "string" ? invoice.billing_reason : "";
+      const invoiceEmail = invoice.customer_email || invoice.customer_details?.email || "";
+      const invoiceCurrency = String(invoice.currency || "eur").toUpperCase();
+      const invoicePlan = invoice.subscription_details?.metadata?.plan || invoice.lines?.data?.[0]?.metadata?.plan || "flowly";
+
+      if (amountPaid > 0) {
+        await sendMetaServerEvent({
+          eventName: "Purchase",
+          eventId: `stripe_invoice_${invoice.id}`,
+          eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL || "https://flowlyia.com"}/registro`,
+          email: invoiceEmail,
+          value: amountPaid,
+          currency: invoiceCurrency,
+          contentName: `Flowly ${invoicePlan}`,
+          contentCategory: "Suscripción SaaS",
+          plan: invoicePlan,
+        });
+      }
 
       if (billingReason === "subscription_create") {
         return NextResponse.json({ received: true });

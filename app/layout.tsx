@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: "Automatiza reservas, clientes, pagos y dashboards con Flowly IA.",
 };
 
+const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID || "1479231557294191";
+
 const metaPixelCode = `
 !function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -17,7 +19,7 @@ n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '1479231557294191');
+fbq('init', '${metaPixelId}');
 fbq('track', 'PageView');
 `;
 
@@ -44,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             height="1"
             width="1"
             style={{ display: "none" }}
-            src="https://www.facebook.com/tr?id=1479231557294191&ev=PageView&noscript=1"
+            src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
             alt=""
           />
         </noscript>
