@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
-import FlowlyCompanionRuntime from "@/components/FlowlyCompanionRuntime";
+import FlowlyCompanionGate from "@/components/FlowlyCompanionGate";
 import FlowlyAnalyticsTracker from "@/components/FlowlyAnalyticsTracker";
 
 export const metadata: Metadata = {
@@ -53,7 +53,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </noscript>
         {children}
         <FlowlyAnalyticsTracker />
-        <FlowlyCompanionRuntime />
+        <FlowlyCompanionGate />
       </body>
     </html>
   );

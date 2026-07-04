@@ -12,6 +12,7 @@ import {
   ChevronRight,
   FileText,
   HeartPulse,
+  Menu,
   MessageCircle,
   Play,
   Scissors,
@@ -19,6 +20,7 @@ import {
   Sparkles,
   Store,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -107,34 +109,73 @@ function getMarket(country: Country) {
 
 function Header({ country, setMarket, pricesHref }: { country: Country; setMarket: (value: Country) => void; pricesHref: string }) {
   const market = getMarket(country);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const closeMobile = () => setMobileOpen(false);
 
   return (
-    <nav className="flowly-nav relative z-20 mx-auto mt-4 flex max-w-7xl items-center justify-between gap-3 rounded-full px-4 py-3 sm:px-5">
-      <Link href="/" className="flex min-w-0 items-center gap-3">
-        <Image src="/logo.png" alt="Flowly IA" width={150} height={42} className="h-auto w-28 object-contain drop-shadow-[0_0_24px_rgba(34,211,238,.25)] sm:w-36" priority />
-      </Link>
+    <header className="relative z-30 mx-auto mt-4 max-w-7xl px-3 sm:px-0">
+      <nav className="flowly-nav relative flex items-center justify-between gap-3 rounded-[1.7rem] px-4 py-3 sm:rounded-full sm:px-5">
+        <Link href="/" className="flex min-w-0 items-center gap-3" onClick={closeMobile}>
+          <Image src="/logo.png" alt="Flowly IA" width={150} height={42} className="h-auto w-28 object-contain drop-shadow-[0_0_24px_rgba(34,211,238,.25)] sm:w-36" priority />
+        </Link>
 
-      <div className="hidden items-center gap-7 text-sm text-white/68 lg:flex">
-        <a href="#producto" className="transition hover:text-white">Producto</a>
-        <a href="#sectores" className="transition hover:text-white">Sectores</a>
-        <a href="#comparativa" className="transition hover:text-white">Comparativa</a>
-        <Link href={pricesHref} className="transition hover:text-white">Precios</Link>
-        <Link href="/contacto" className="transition hover:text-white">Contacto</Link>
-      </div>
+        <div className="hidden items-center gap-7 text-sm text-white/68 lg:flex">
+          <a href="#producto" className="transition hover:text-white">Producto</a>
+          <a href="#sectores" className="transition hover:text-white">Sectores</a>
+          <a href="#comparativa" className="transition hover:text-white">Comparativa</a>
+          <Link href={pricesHref} className="transition hover:text-white">Precios</Link>
+          <Link href="/contacto" className="transition hover:text-white">Contacto</Link>
+        </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <label className="flowly-chip hidden items-center gap-2 rounded-full px-3 py-2 md:inline-flex">
-          <span className="text-lg">{market.flag}</span>
-          <select value={country} onChange={(event) => setMarket(event.target.value as Country)} className="bg-transparent text-xs font-medium outline-none sm:text-sm" aria-label="Seleccionar país">
-            {markets.map((item) => (
-              <option key={item.code} value={item.code}>{item.label} · {item.currency}</option>
-            ))}
-          </select>
-        </label>
-        <Link href="/login" className="flowly-secondary rounded-full px-4 py-2.5 text-xs font-semibold sm:text-sm">Área cliente</Link>
-        <Link href="/demo/login" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold transition sm:inline-flex">Ver demo</Link>
-      </div>
-    </nav>
+        <div className="flex shrink-0 items-center gap-2">
+          <label className="flowly-chip hidden items-center gap-2 rounded-full px-3 py-2 md:inline-flex">
+            <span className="text-lg">{market.flag}</span>
+            <select value={country} onChange={(event) => setMarket(event.target.value as Country)} className="bg-transparent text-xs font-medium outline-none sm:text-sm" aria-label="Seleccionar país">
+              {markets.map((item) => (
+                <option key={item.code} value={item.code}>{item.label} · {item.currency}</option>
+              ))}
+            </select>
+          </label>
+          <Link href="/login" className="flowly-secondary hidden rounded-full px-4 py-2.5 text-xs font-semibold sm:inline-flex sm:text-sm">Área cliente</Link>
+          <Link href="/demo/login" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold transition sm:inline-flex">Ver demo</Link>
+          <button
+            type="button"
+            className="flowly-secondary inline-flex h-11 w-11 items-center justify-center rounded-full lg:hidden"
+            onClick={() => setMobileOpen((value) => !value)}
+            aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+      </nav>
+
+      {mobileOpen && (
+        <div className="flowly-nav absolute left-3 right-3 top-[calc(100%+.65rem)] overflow-hidden rounded-[1.7rem] border border-white/10 p-3 shadow-2xl shadow-cyan-950/25 backdrop-blur-2xl lg:hidden">
+          <div className="grid gap-2 text-sm text-white/78">
+            <a onClick={closeMobile} href="#producto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Producto</a>
+            <a onClick={closeMobile} href="#sectores" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Sectores</a>
+            <a onClick={closeMobile} href="#comparativa" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Comparativa</a>
+            <Link onClick={closeMobile} href={pricesHref} className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Precios</Link>
+            <Link onClick={closeMobile} href="/contacto" className="rounded-2xl px-4 py-3 transition hover:bg-white/10 hover:text-white">Contacto</Link>
+          </div>
+
+          <div className="mt-3 grid gap-3 border-t border-white/10 pt-3">
+            <label className="flowly-chip flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+              <span className="flex items-center gap-2 text-sm font-medium"><span className="text-lg">{market.flag}</span> País</span>
+              <select value={country} onChange={(event) => setMarket(event.target.value as Country)} className="max-w-[11rem] bg-transparent text-right text-xs font-medium outline-none" aria-label="Seleccionar país móvil">
+                {markets.map((item) => (
+                  <option key={item.code} value={item.code}>{item.label} · {item.currency}</option>
+                ))}
+              </select>
+            </label>
+            <Link onClick={closeMobile} href="/login" className="flowly-secondary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Área cliente</Link>
+            <Link onClick={closeMobile} href="/demo/login" className="flowly-primary inline-flex justify-center rounded-full px-5 py-3 text-sm font-semibold">Ver demo</Link>
+          </div>
+        </div>
+      )}
+    </header>
   );
 }
 
