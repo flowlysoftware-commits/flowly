@@ -3,6 +3,7 @@ import { runFlowlyBuildGuard, type FlowlyBuildGuardResult } from "@/lib/flowlyBu
 import { flowlyMigrationModules } from "@/lib/flowlyOSMigration";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph, type FlowlyImpactAnalysis } from "@/lib/flowlyProjectGraph";
 import { evaluateGoalFidelity, isBudgetCrmObjective } from "@/lib/flowlyGoalFidelityGuard";
+import { buildPlannerScopePrompt, filterFilesToPlannerScope, validatePlannerScope, type FlowlyPlannerScopeGuardResult } from "@/lib/flowlyPlannerScopeGuard";
 
 export type ExecutorV3Risk = "bajo" | "medio" | "alto";
 
@@ -437,6 +438,7 @@ async function buildAIFiles(params: {
     "- Mantén cambios pequeños, revisables y compatibles con TypeScript estricto.",
     "- Si no puedes estar seguro, devuelve {\"files\":[]} y NO crees documentación ni archivos de plan.",
     "- Grounding obligatorio: usa solo archivos reales incluidos en projectMap.candidates, projectGraph, impact o developerContext.projectSnapshot.",
+    buildPlannerScopePrompt(params.plan.instruction) || "- Planner Scope Guard: sin scope cerrado para esta misión.",
     "- Este repositorio usa Next.js App Router si developerContext.projectSnapshot.framework.router='app-router'. Nunca inventes index.html, about.html, blog.html, header.php ni archivos de otros frameworks.",
     "- Para SEO/metadata/Open Graph prioriza app/layout.tsx, app/page.tsx, app/sitemap.ts, app/robots.ts, app/manifest.ts, app/opengraph-image.tsx, app/twitter-image.tsx, app/icon.png o public/favicon.ico SOLO si aparecen como rutas reales en developerContext.projectSnapshot.",
     "- Usa projectGraph e impact para decidir. Si impact.avoidCreating contiene archivos, revisa esos archivos antes de crear otros.",
@@ -566,7 +568,7 @@ export function buildHumanReadableChangePlan(files: ExecutorFileChange[], instru
   return Array.from(unique.values());
 }
 
-export function runExecutorPreflight(files: ExecutorFileChange[], options?: { approvedPackageJson?: boolean; buildGuard?: FlowlyBuildGuardResult; instruction?: string }): ExecutorV3Preflight {
+export function runExecutorPreflight(files: ExecutorFileChange[], options?: { approvedPackageJson?: boolean; buildGuard?: FlowlyBuildGuardResult; instruction?: string; plannerScope?: FlowlyPlannerScopeGuardResult }): ExecutorV3Preflight {
   const checks: ExecutorV3Preflight["checks"] = [];
   const approvedPackageJson = Boolean(options?.approvedPackageJson);
   const buildGuard = options?.buildGuard || runFlowlyBuildGuard(files);
@@ -592,6 +594,13 @@ export function runExecutorPreflight(files: ExecutorFileChange[], options?: { ap
       label: "Goal Fidelity",
       ok: goal.ok,
       detail: goal.ok ? goal.summary : `${goal.summary} Términos objetivo: ${goal.objectiveTerms.join(", ") || "ninguno"}. Términos perdidos: ${goal.missingTerms.join(", ") || "ninguno"}. Drift: ${goal.driftTerms.join(", ") || "ninguno"}.`,
+    });
+
+    const scope = options.plannerScope || validatePlannerScope({ instruction: options.instruction, files });
+    checks.push({
+      label: "Planner Scope Guard",
+      ok: scope.ok,
+      detail: scope.summary,
     });
   }
 
@@ -646,13 +655,14 @@ export async function planExecutorV3(instruction: string, developerContext?: unk
   const proposedFiles = (aiFiles?.length ? aiFiles : deterministicFiles).filter((file) => !normalize(file.path).startsWith("docs/executor/"));
 
   const initialProposedFiles = proposedFiles.length ? proposedFiles : fallbackFiles(planBase);
-  const buildGuard = runFlowlyBuildGuard(initialProposedFiles);
+  const scoped = filterFilesToPlannerScope(clean, initialProposedFiles);
+  const buildGuard = runFlowlyBuildGuard(scoped.files);
   const safeProposedFiles = buildGuard.files;
   return {
     ...planBase,
     proposedFiles: safeProposedFiles,
     humanChangePlan: buildHumanReadableChangePlan(safeProposedFiles, clean),
-    preflight: runExecutorPreflight(safeProposedFiles, { buildGuard, instruction: clean }),
+    preflight: runExecutorPreflight(safeProposedFiles, { buildGuard, instruction: clean, plannerScope: scoped.guard }),
   };
 }
 
@@ -660,9 +670,10 @@ export async function runExecutorV3FromApprovedPlan(plan: ExecutorV3Plan, approv
   if (!approved) return plan;
 
   const rawFiles = (plan.proposedFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
-  const buildGuard = runFlowlyBuildGuard(rawFiles);
+  const scoped = filterFilesToPlannerScope(plan.instruction, rawFiles);
+  const buildGuard = runFlowlyBuildGuard(scoped.files);
   const files = buildGuard.files;
-  const preflight = runExecutorPreflight(files, { buildGuard, instruction: plan.instruction });
+  const preflight = runExecutorPreflight(files, { buildGuard, instruction: plan.instruction, plannerScope: scoped.guard });
 
   if (!files.length || !preflight.ok) {
     return {

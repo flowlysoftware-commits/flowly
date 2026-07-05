@@ -87,6 +87,7 @@ function buildNaturalDeveloperReply(params: { instruction: string; context: Deve
   const sources = context.loadedSources.slice(0, 4).map((source) => source.title).filter(Boolean);
   const base = `He revisado la memoria de Flowly en /docs antes de responder. He identificado que la petición va sobre ${target} y la acción principal es ${context.intent.action}.`;
 
+
   if (context.intent.needsClarification && !hasProposedFiles) {
     return `${base} Antes de ejecutar nada necesito concretar un poco más para no crear cambios falsos ni duplicados. Cuéntame exactamente qué quieres cambiar, dónde lo ves en el panel y qué resultado esperas.`;
   }
@@ -107,15 +108,28 @@ function buildConcreteStudioReply(params: {
   hasProposedFiles: boolean;
   humanChanges: Array<{ title: string; description: string; userImpact?: string; safetyNote?: string }>;
   proposedFiles: Array<{ path: string; message?: string }>;
+  preflight?: { ok: boolean; blockedReason?: string; checks?: Array<{ label: string; ok: boolean; detail: string }> };
   target?: string;
 }) {
-  const { intelligence, context, humanChanges, proposedFiles, hasProposedFiles, instruction } = params;
+  const { intelligence, context, humanChanges, proposedFiles, hasProposedFiles, instruction, preflight } = params;
   const target = params.target || context.intent.target || "Flowly OS";
   const docs = context.loadedSources.slice(0, 4).map((source) => source.title).filter(Boolean);
   const intro =
     intelligence?.directReply && !/voy a investigar|consultando|preparar[eé] una propuesta/i.test(intelligence.directReply)
       ? intelligence.directReply.trim()
       : `He analizado la petición dentro de Flowly OS y la enfoco sobre ${target}.`;
+
+  const scopeFailure = preflight?.checks?.find((check) => check.label === "Planner Scope Guard" && !check.ok);
+  if (scopeFailure) {
+    return [
+      intro,
+      "",
+      "No tengo un plan aprobable todavía.",
+      `Motivo: ${scopeFailure.detail}`,
+      "",
+      "No voy a proponer archivos fuera del scope validado. Ejecuta primero una verificación de evidencia si quieres ampliar el scope de esta misión.",
+    ].join("\n");
+  }
 
   if (context.intent.needsClarification && !hasProposedFiles) {
     return [
@@ -265,6 +279,7 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
       target: executorPlan.projectMap.modules[0],
       humanChanges: humanChangePlan,
       proposedFiles: executorPlan.proposedFiles,
+      preflight: executorPlan.preflight,
     }),
     intelligence: options.intelligence,
     needsMoreContext: contextBundle.intent.needsClarification && !hasProposedFiles,
