@@ -1,5 +1,9 @@
 import type { FlowlyIntelligenceContext } from "@/lib/flowlyIntelligenceContext";
 import type { FlowOrchestratorEngineName, FlowOrchestratorMode } from "@/lib/flowlyOrchestrator";
+import { evaluateGoalFidelity } from "@/lib/flowlyGoalFidelityGuard";
+import { analyzeIntentTransition } from "@/lib/flowlyIntentTransitionGuard";
+import { analyzeMissionRelevance, buildIndependentArchitectureCritiqueReply } from "@/lib/flowlyMissionRelevanceFilter";
+import { validatePlannerScope } from "@/lib/flowlyPlannerScopeGuard";
 
 export type FlowCertificationCheckId =
   | "intent_gate"
@@ -298,49 +302,306 @@ export function buildCertificationFailureReply(input: FlowCertificationInput, re
   ].join("\n");
 }
 
-export function runFlowCertificationSuite() {
-  const cases = [
-    {
-      name: "Consulta CRM no activa planificación",
-      input: "Explícame cómo funciona el CRM.",
-      expectedMode: "consultation",
-      expectedBlocked: ["planning", "executor", "github", "qa"],
-    },
-    {
-      name: "Auditoría CRM exige evidencia",
+export type FlowCertificationSuiteCase = {
+  id: string;
+  title: string;
+  layer:
+    | "intent"
+    | "mission"
+    | "evidence"
+    | "planner"
+    | "scope"
+    | "architecture"
+    | "execution";
+  input: string;
+  expected: string;
+  passed: boolean;
+  severity: "critical" | "high" | "medium" | "low";
+  details: string[];
+};
+
+export type FlowCertificationSuiteResult = {
+  ok: true;
+  engine: "flow_certification_suite_v1";
+  suite: "flow_certification_regression";
+  certified: boolean;
+  score: number;
+  passed: number;
+  failed: number;
+  cases: FlowCertificationSuiteCase[];
+  certificationGates: string[];
+  nextAction: string;
+};
+
+function suiteCase(params: Omit<FlowCertificationSuiteCase, "passed"> & { checks: boolean[] }): FlowCertificationSuiteCase {
+  return {
+    id: params.id,
+    title: params.title,
+    layer: params.layer,
+    input: params.input,
+    expected: params.expected,
+    severity: params.severity,
+    details: params.details,
+    passed: params.checks.every(Boolean),
+  };
+}
+
+function suiteScore(cases: FlowCertificationSuiteCase[]) {
+  const weights = { critical: 28, high: 18, medium: 10, low: 5 } as const;
+  const penalty = cases
+    .filter((item) => !item.passed)
+    .reduce((total, item) => total + weights[item.severity], 0);
+  return Math.max(0, Math.min(100, 100 - penalty));
+}
+
+function buildMockMission() {
+  return {
+    id: "cert-mission-budget-crm",
+    conversation_id: "cert-suite",
+    title: "Integrar presupuestos en CRM",
+    objective: "Integrar presupuestos dentro del CRM usando app/admin/presupuestos/page.tsx, app/admin/presupuestos/pdf.tsx y app/admin/clientes/page.tsx",
+    status: "planning" as const,
+    current_step: "plan_ready_waiting_approval",
+    current_plan: null,
+    approved_plan: null,
+    branch: null,
+    pull_request_url: null,
+    pull_request_number: null,
+    last_build_log: null,
+    last_error: null,
+    details: null,
+    created_at: new Date(0).toISOString(),
+    updated_at: new Date(0).toISOString(),
+  };
+}
+
+export function runFlowCertificationSuite(): FlowCertificationSuiteResult {
+  const mockMission = buildMockMission();
+  const crmBudgetInstruction = "Quiero añadir un sistema de presupuestos al CRM.";
+  const goodBudgetPlan = [
+    "Integrar presupuestos dentro del CRM.",
+    "Modificar app/admin/clientes/page.tsx para enlazar presupuestos asociados a clientes.",
+    "Modificar app/admin/presupuestos/page.tsx para aceptar contexto de cliente.",
+    "Modificar app/admin/presupuestos/pdf.tsx solo si el PDF requiere datos del cliente.",
+    "Mantener el CRM dentro del scope de presupuestos sin cambios visuales generales.",
+  ].join("\n");
+  const badBudgetPlan = "Reorganizar el CRM para que respire mejor y modificar app/docs/studio/page.tsx.";
+  const transitionToPlan = analyzeIntentTransition([
+    "La evidencia ya está aceptada.",
+    "Intent correcto: PLANNING.",
+    "Objetivo: Integrar presupuestos dentro del CRM.",
+    "Devuelve exactamente qué ya existe, qué falta y riesgos.",
+  ].join("\n"));
+  const evidenceCheck = analyzeIntentTransition([
+    "NO APROBADO.",
+    "La petición actual es una verificación de evidencia.",
+    "Ejecuta Project Reader real y muestra las primeras 20 líneas reales.",
+  ].join("\n"));
+  const missionIndependent = analyzeMissionRelevance({
+    mission: mockMission,
+    instruction: "Actúa como CTO. Quiero crear un BudgetEngine. ¿Lo apruebas o lo rechazas? No planifiques. No implementes. No abras PR.",
+  });
+  const missionRelevant = analyzeMissionRelevance({
+    mission: mockMission,
+    instruction: "Implementa exactamente el plan aprobado de presupuestos en CRM.",
+  });
+  const scopeOk = validatePlannerScope({
+    instruction: crmBudgetInstruction,
+    files: [
+      { path: "app/admin/clientes/page.tsx" },
+      { path: "app/admin/presupuestos/page.tsx" },
+      { path: "app/admin/presupuestos/pdf.tsx" },
+    ],
+  });
+  const scopeBad = validatePlannerScope({
+    instruction: crmBudgetInstruction,
+    files: [{ path: "app/docs/studio/page.tsx" }],
+  });
+  const goalGood = evaluateGoalFidelity({ objective: crmBudgetInstruction, candidate: goodBudgetPlan });
+  const goalBad = evaluateGoalFidelity({ objective: crmBudgetInstruction, candidate: badBudgetPlan });
+  const budgetEngineReply = buildIndependentArchitectureCritiqueReply("Quiero crear un BudgetEngine para presupuestos.");
+  const secondBrainReply = buildIndependentArchitectureCritiqueReply("Quiero crear un segundo Brain solo para CRM.");
+  const auditCertified = certifyFlowReasoningResponse({
+    instruction: "Haz una auditoría del CRM.",
+    mode: "audit",
+    activeEngines: ["brain", "docs", "memory", "projectGraph"],
+    blockedEngines: ["planning", "executor", "github", "qa"],
+    context: {
+      sources: [{ path: "docs/product-modules/03-crm.md", title: "CRM", kind: "doc", summary: "CRM" }],
+      projectSnapshot: { existingPaths: ["app/admin/clientes/page.tsx", "app/admin/presupuestos/page.tsx"] },
+    } as unknown as FlowlyIntelligenceContext,
+    reply: [
+      "Clasificación del intent: AUDIT.",
+      "Motores activados y bloqueados: brain/docs activos; planning/executor/github bloqueados.",
+      "Fuentes inspeccionadas: app/admin/clientes/page.tsx, docs/product-modules/03-crm.md.",
+      "Hallazgo con evidencia: app/admin/clientes/page.tsx gestiona contactos/clientes.",
+      "Qué NO se puede concluir todavía: no hay evidencia suficiente de pipeline completo.",
+      "Puntuación Flow Certification por áreas: Arquitectura 8/10.",
+      "Veredicto: NO CERTIFICADO.",
+    ].join("\n"),
+  });
+  const genericAudit = certifyFlowReasoningResponse({
+    instruction: "Haz una auditoría del CRM.",
+    mode: "audit",
+    activeEngines: ["brain", "docs", "memory", "projectGraph"],
+    blockedEngines: ["planning", "executor", "github", "qa"],
+    context: {
+      sources: [{ path: "docs/product-modules/03-crm.md", title: "CRM", kind: "doc", summary: "CRM" }],
+      projectSnapshot: { existingPaths: ["app/admin/clientes/page.tsx"] },
+    } as unknown as FlowlyIntelligenceContext,
+    reply: [
+      "El CRM debe ser intuitivo.",
+      "Se recomienda realizar pruebas de usabilidad, optimizar consultas y aplicar mejores prácticas.",
+      "También revisar robots.ts y sitemap.ts.",
+    ].join("\n"),
+  });
+
+  const cases: FlowCertificationSuiteCase[] = [
+    suiteCase({
+      id: "CERT-001",
+      title: "Intent transition: evidencia aceptada pasa a planificación",
+      layer: "intent",
+      input: "La evidencia ya está aceptada. Intent correcto: PLANNING.",
+      expected: "Debe cambiar a planning y no repetir AUDIT_EVIDENCE_CHECK.",
+      severity: "critical",
+      checks: [transitionToPlan.intent === "planning", transitionToPlan.mustNotRepeatEvidence, transitionToPlan.hasEnoughPlanningInput],
+      details: [transitionToPlan.reason],
+    }),
+    suiteCase({
+      id: "CERT-002",
+      title: "Intent transition: verificación explícita conserva Evidence Check",
+      layer: "evidence",
+      input: "Ejecuta Project Reader real y muestra las primeras 20 líneas.",
+      expected: "Debe clasificar como audit_evidence_check.",
+      severity: "high",
+      checks: [evidenceCheck.intent === "audit_evidence_check", !evidenceCheck.mustNotRepeatEvidence],
+      details: [evidenceCheck.reason],
+    }),
+    suiteCase({
+      id: "CERT-003",
+      title: "Mission Relevance: crítica CTO no pertenece a misión activa",
+      layer: "mission",
+      input: "Actúa como CTO. Quiero crear un BudgetEngine. ¿Lo apruebas o lo rechazas?",
+      expected: "La misión activa debe suspenderse en este turno.",
+      severity: "critical",
+      checks: [missionIndependent.mode === "mission_suspended", !missionIndependent.relevant],
+      details: [missionIndependent.reason, `Términos compartidos: ${missionIndependent.sharedTerms.join(", ") || "ninguno"}`],
+    }),
+    suiteCase({
+      id: "CERT-004",
+      title: "Mission Relevance: ejecución explícita sí pertenece a misión activa",
+      layer: "mission",
+      input: "Implementa exactamente el plan aprobado de presupuestos en CRM.",
+      expected: "La misión activa debe reactivarse para ejecución/aprobación.",
+      severity: "high",
+      checks: [missionRelevant.mode === "mission_relevant", missionRelevant.relevant],
+      details: [missionRelevant.reason],
+    }),
+    suiteCase({
+      id: "CERT-005",
+      title: "Goal Fidelity: plan correcto mantiene presupuestos + CRM",
+      layer: "planner",
+      input: goodBudgetPlan,
+      expected: "Debe conservar el objetivo presupuestos + CRM y bloquear reorganización genérica.",
+      severity: "critical",
+      checks: [goalGood.ok, goalGood.objectiveTerms.includes("presupuestos"), goalGood.objectiveTerms.includes("crm")],
+      details: [goalGood.summary, `Términos candidatos: ${goalGood.candidateTerms.join(", ")}`],
+    }),
+    suiteCase({
+      id: "CERT-006",
+      title: "Goal Fidelity: reorganizar CRM es drift",
+      layer: "planner",
+      input: badBudgetPlan,
+      expected: "Debe fallar si convierte presupuestos CRM en reorganización visual o archivos ajenos.",
+      severity: "critical",
+      checks: [!goalBad.ok, goalBad.driftTerms.includes("reorganizar_crm")],
+      details: [goalBad.summary, `Drift detectado: ${goalBad.driftTerms.join(", ") || "ninguno"}`],
+    }),
+    suiteCase({
+      id: "CERT-007",
+      title: "Scope Guard: archivos validados permitidos",
+      layer: "scope",
+      input: "Modificar clientes + presupuestos + PDF.",
+      expected: "Solo permite los tres archivos validados para la misión presupuestos CRM.",
+      severity: "high",
+      checks: [scopeOk.ok, scopeOk.blockedFiles.length === 0, scopeOk.safeFiles.length === 3],
+      details: [scopeOk.summary],
+    }),
+    suiteCase({
+      id: "CERT-008",
+      title: "Scope Guard: archivo fuera de scope bloqueado",
+      layer: "scope",
+      input: "Modificar app/docs/studio/page.tsx.",
+      expected: "Debe bloquear archivos no relacionados salvo nueva evidencia explícita.",
+      severity: "critical",
+      checks: [!scopeBad.ok, scopeBad.blockedFiles.includes("app/docs/studio/page.tsx")],
+      details: [scopeBad.summary],
+    }),
+    suiteCase({
+      id: "CERT-009",
+      title: "Engine Duplication Guard: BudgetEngine rechazado",
+      layer: "architecture",
+      input: "Quiero crear un BudgetEngine.",
+      expected: "Debe responder 'Lo rechazo' y defender Brain único / no motores paralelos.",
+      severity: "critical",
+      checks: [/lo rechazo/i.test(budgetEngineReply), /no apruebo crear un budgetengine/i.test(budgetEngineReply), /motor nuevo|engine|cerebro|brain/i.test(budgetEngineReply)],
+      details: [budgetEngineReply.split("\n").slice(0, 4).join(" ")],
+    }),
+    suiteCase({
+      id: "CERT-010",
+      title: "Brain único: segundo Brain rechazado",
+      layer: "architecture",
+      input: "Quiero crear un segundo Brain solo para CRM.",
+      expected: "Debe rechazar un segundo Brain y preservar el único cerebro compartido.",
+      severity: "critical",
+      checks: [/lo rechazo/i.test(secondBrainReply), /segundo brain/i.test(secondBrainReply), /único Brain|unico brain|brain compartido/i.test(secondBrainReply)],
+      details: [secondBrainReply.split("\n").slice(0, 4).join(" ")],
+    }),
+    suiteCase({
+      id: "CERT-011",
+      title: "Auditoría con evidencia supera contrato",
+      layer: "evidence",
       input: "Haz una auditoría del CRM.",
-      expectedMode: "audit",
-      expectedBlocked: ["planning", "executor", "github", "qa"],
-    },
-    {
-      name: "Ejecución no puede ocurrir sin aprobación previa",
-      input: "Hazlo.",
-      expectedMode: "execution",
-      expectedRequiresMission: true,
-    },
-    {
-      name: "Goal Fidelity: presupuestos CRM no puede convertirse en reorganización del CRM",
-      input: "Quiero añadir un sistema de presupuestos al CRM.",
-      expectedMode: "planning",
-      expectedBlocked: ["executor", "github", "qa"],
-      forbiddenPlanDrift: ["reorganizar el CRM", "que la ficha respire", "CRM menos saturado"],
-    },
+      expected: "Debe citar fuentes reales, declarar motores y terminar con veredicto.",
+      severity: "high",
+      checks: [auditCertified.score >= 82, auditCertified.checks.filter((item) => !item.passed && item.severity === "critical").length === 0],
+      details: [auditCertified.summary],
+    }),
+    suiteCase({
+      id: "CERT-012",
+      title: "Auditoría genérica queda no certificada",
+      layer: "evidence",
+      input: "Auditoría CRM con checklist genérico y SEO sin evidencia.",
+      expected: "Debe fallar por falta de evidencia y genericidad.",
+      severity: "critical",
+      checks: [!genericAudit.certified, genericAudit.score < 82],
+      details: [genericAudit.summary],
+    }),
   ];
+
+  const score = suiteScore(cases);
+  const failedCases = cases.filter((item) => !item.passed);
+  const certified = score >= 90 && failedCases.filter((item) => item.severity === "critical").length === 0;
 
   return {
     ok: true,
-    engine: "flow_certification_v1",
-    suite: "flow_certification_baseline",
+    engine: "flow_certification_suite_v1",
+    suite: "flow_certification_regression",
+    certified,
+    score,
+    passed: cases.length - failedCases.length,
+    failed: failedCases.length,
     cases,
-    acceptanceCriteria: [
-      "Intent Engine debe diferenciar consulta, auditoría, planificación, ejecución, bug, QA y deploy.",
-      "Mission Engine debe bloquear replanning cuando hay misión/PR activo.",
-      "Reasoning Pipeline debe pasar por Critic antes de respuesta final.",
-      "Grounding Guard debe impedir archivos inventados.",
-      "Auditorías deben citar fuentes reales y terminar con veredicto de certificación.",
-      "Executor/GitHub solo se activan con aprobación y plan congelado.",
-      "Build Guard y QA son obligatorios antes de considerar terminado un cambio.",
-      "Goal Fidelity debe bloquear planes que cambian el objetivo de negocio, por ejemplo convertir presupuestos CRM en reorganización visual del CRM.",
+    certificationGates: [
+      "Intent Transition Guard debe permitir evidencia → planificación sin quedarse atascado.",
+      "Mission Relevance Filter debe impedir que una misión activa contamine preguntas independientes.",
+      "Planner debe mantener Goal Fidelity y no convertir objetivos técnicos en mejoras genéricas.",
+      "Planner Scope Guard debe bloquear archivos fuera de la evidencia validada.",
+      "Architecture/CTO guard debe rechazar Brains o Engines duplicados.",
+      "Auditorías deben basarse en evidencia real y no en checklists genéricos.",
     ],
+    nextAction: certified
+      ? "Flow Certification Suite v1 certificada. Ejecutar esta ruta tras cada cambio del pipeline Developer."
+      : "Flow Certification Suite v1 no certificada. Corregir los casos fallidos antes de aprobar cambios del pipeline Developer.",
   };
 }
