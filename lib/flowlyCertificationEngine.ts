@@ -318,6 +318,13 @@ export function runFlowCertificationSuite() {
       expectedMode: "execution",
       expectedRequiresMission: true,
     },
+    {
+      name: "Goal Fidelity: presupuestos CRM no puede convertirse en reorganización del CRM",
+      input: "Quiero añadir un sistema de presupuestos al CRM.",
+      expectedMode: "planning",
+      expectedBlocked: ["executor", "github", "qa"],
+      forbiddenPlanDrift: ["reorganizar el CRM", "que la ficha respire", "CRM menos saturado"],
+    },
   ];
 
   return {
@@ -333,6 +340,7 @@ export function runFlowCertificationSuite() {
       "Auditorías deben citar fuentes reales y terminar con veredicto de certificación.",
       "Executor/GitHub solo se activan con aprobación y plan congelado.",
       "Build Guard y QA son obligatorios antes de considerar terminado un cambio.",
+      "Goal Fidelity debe bloquear planes que cambian el objetivo de negocio, por ejemplo convertir presupuestos CRM en reorganización visual del CRM.",
     ],
   };
 }

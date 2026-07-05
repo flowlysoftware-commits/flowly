@@ -6,6 +6,7 @@ import { buildDeveloperContextBundle, summarizeDeveloperContext, type DeveloperC
 import type { DeveloperIntelligenceDecision } from "@/lib/flowlyDeveloperIntelligenceEngine";
 import { validatePlanGrounding } from "@/lib/flowlyGroundingGuard";
 import { buildFlowlyProjectSnapshot } from "@/lib/flowlyProjectReader";
+import { evaluateGoalFidelity, isBudgetCrmObjective } from "@/lib/flowlyGoalFidelityGuard";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -100,6 +101,7 @@ function buildNaturalDeveloperReply(params: { instruction: string; context: Deve
 
 
 function buildConcreteStudioReply(params: {
+  instruction: string;
   intelligence?: DeveloperIntelligenceDecision;
   context: DeveloperContextBundle;
   hasProposedFiles: boolean;
@@ -107,7 +109,7 @@ function buildConcreteStudioReply(params: {
   proposedFiles: Array<{ path: string; message?: string }>;
   target?: string;
 }) {
-  const { intelligence, context, humanChanges, proposedFiles, hasProposedFiles } = params;
+  const { intelligence, context, humanChanges, proposedFiles, hasProposedFiles, instruction } = params;
   const target = params.target || context.intent.target || "Flowly OS";
   const docs = context.loadedSources.slice(0, 4).map((source) => source.title).filter(Boolean);
   const intro =
@@ -193,6 +195,10 @@ function buildPlanStages(params: {
   ];
 }
 
+function mergedInstructionForReply(baseInstruction: string, refinedInstruction?: string) {
+  return [baseInstruction, refinedInstruction || ""].filter(Boolean).join("\n");
+}
+
 function buildRunStages(params: { prCreated: boolean; qaStatus?: string; error?: string }): DeveloperPipelineStage[] {
   return [
     stage("intake", "Entender petición", "Petición recibida y preparada.", "done"),
@@ -252,6 +258,7 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
     ...executorPlan,
     humanChangePlan,
     conversationReply: buildConcreteStudioReply({
+      instruction: mergedInstructionForReply(clean, options.intelligence?.refinedInstruction),
       intelligence: options.intelligence,
       context: contextBundle,
       hasProposedFiles,

@@ -2,6 +2,7 @@ import { createExecutorPullRequest, listRepositoryTree, readRepositoryFile, type
 import { runFlowlyBuildGuard, type FlowlyBuildGuardResult } from "@/lib/flowlyBuildGuard";
 import { flowlyMigrationModules } from "@/lib/flowlyOSMigration";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph, type FlowlyImpactAnalysis } from "@/lib/flowlyProjectGraph";
+import { evaluateGoalFidelity, isBudgetCrmObjective } from "@/lib/flowlyGoalFidelityGuard";
 
 export type ExecutorV3Risk = "bajo" | "medio" | "alto";
 
@@ -494,6 +495,15 @@ function humanizeChangeFromFile(file: ExecutorFileChange, instruction: string): 
   const path = normalize(file.path);
   const text = normalize(`${instruction} ${file.message || ""}`);
 
+  if (isBudgetCrmObjective(instruction) && /(presupuesto|budget|cliente|crm|contact|factura|pdf)/.test(path + " " + text)) {
+    return {
+      title: "Integrar presupuestos dentro del CRM",
+      description: "Voy a conectar la pantalla existente de presupuestos y su generador PDF con la gestión de clientes, usando archivos reales ya detectados en vez de reorganizar el CRM o crear una pieza paralela.",
+      userImpact: "Desde el CRM se podrá trabajar con presupuestos asociados a clientes sin perder el flujo actual de clientes ni duplicar facturación.",
+      safetyNote: "No tocaré Brain, Mission Engine, Context Builder, Project Reader ni GitHub Executor; el cambio queda limitado a CRM/presupuestos y sus APIs si fueran necesarias.",
+    };
+  }
+
   if (path.includes("app/developer") || path.includes("flowlydeveloper") || text.includes("developer")) {
     return {
       title: "Developer será más conversacional y menos forzado",
@@ -556,7 +566,7 @@ export function buildHumanReadableChangePlan(files: ExecutorFileChange[], instru
   return Array.from(unique.values());
 }
 
-export function runExecutorPreflight(files: ExecutorFileChange[], options?: { approvedPackageJson?: boolean; buildGuard?: FlowlyBuildGuardResult }): ExecutorV3Preflight {
+export function runExecutorPreflight(files: ExecutorFileChange[], options?: { approvedPackageJson?: boolean; buildGuard?: FlowlyBuildGuardResult; instruction?: string }): ExecutorV3Preflight {
   const checks: ExecutorV3Preflight["checks"] = [];
   const approvedPackageJson = Boolean(options?.approvedPackageJson);
   const buildGuard = options?.buildGuard || runFlowlyBuildGuard(files);
@@ -572,6 +582,19 @@ export function runExecutorPreflight(files: ExecutorFileChange[], options?: { ap
   checks.push({ label: "Sin cambios sensibles", ok: !packageTouched || approvedPackageJson, detail: packageTouched ? "package.json requiere aprobación explícita." : "No se cambian dependencias ni package.json." });
   checks.push({ label: "Sin motores duplicados", ok: !duplicateRuntime, detail: duplicateRuntime ? "Se detectó posible archivo paralelo V2/V3/copia en un motor crítico." : "No se detectan runtimes o motores duplicados." });
   checks.push({ label: "No documentación falsa", ok: !docsOnly, detail: docsOnly ? "El cambio solo generaría documentación; no se creará PR automático." : "El PR contiene cambios de producto/código, no solo docs." });
+
+  if (options?.instruction) {
+    const goal = evaluateGoalFidelity({
+      objective: options.instruction,
+      candidate: files.map((file) => `${file.path} ${file.message || ""}`).join("\n"),
+    });
+    checks.push({
+      label: "Goal Fidelity",
+      ok: goal.ok,
+      detail: goal.ok ? goal.summary : `${goal.summary} Términos objetivo: ${goal.objectiveTerms.join(", ") || "ninguno"}. Términos perdidos: ${goal.missingTerms.join(", ") || "ninguno"}. Drift: ${goal.driftTerms.join(", ") || "ninguno"}.`,
+    });
+  }
+
   checks.push({ label: "Build Guard", ok: buildGuard.ok, detail: buildGuard.summary });
 
   const failed = checks.find((check) => !check.ok);
@@ -629,7 +652,7 @@ export async function planExecutorV3(instruction: string, developerContext?: unk
     ...planBase,
     proposedFiles: safeProposedFiles,
     humanChangePlan: buildHumanReadableChangePlan(safeProposedFiles, clean),
-    preflight: runExecutorPreflight(safeProposedFiles, { buildGuard }),
+    preflight: runExecutorPreflight(safeProposedFiles, { buildGuard, instruction: clean }),
   };
 }
 
@@ -639,7 +662,7 @@ export async function runExecutorV3FromApprovedPlan(plan: ExecutorV3Plan, approv
   const rawFiles = (plan.proposedFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
   const buildGuard = runFlowlyBuildGuard(rawFiles);
   const files = buildGuard.files;
-  const preflight = runExecutorPreflight(files, { buildGuard });
+  const preflight = runExecutorPreflight(files, { buildGuard, instruction: plan.instruction });
 
   if (!files.length || !preflight.ok) {
     return {
