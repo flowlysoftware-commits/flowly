@@ -1,5 +1,6 @@
 import { buildDeveloperContextBundle, summarizeDeveloperContext, type DeveloperContextBundle } from "@/lib/flowlyDeveloperContextEngine";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph } from "@/lib/flowlyProjectGraph";
+import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
 
 export type FlowOrchestratorMode =
   | "audit"
@@ -7,7 +8,8 @@ export type FlowOrchestratorMode =
   | "planning"
   | "execution"
   | "qa"
-  | "conversation";
+  | "conversation"
+  | "diagnostic";
 
 export type FlowOrchestratorIntent =
   | "audit_project"
@@ -16,7 +18,8 @@ export type FlowOrchestratorIntent =
   | "new_change"
   | "approve_change"
   | "fix_error"
-  | "continue_session";
+  | "continue_session"
+  | "diagnose_orchestrator";
 
 export type FlowOrchestratorEngineName =
   | "brain"
@@ -94,13 +97,47 @@ function detectIntent(input: OrchestratorInput): FlowOrchestratorIntent {
   const text = normalize(input.instruction);
   const plan = hasCurrentPlan(input.currentPlan);
 
-  if (hasAny(text, ["auditoria", "auditar", "informe completo", "analiza todo", "analizar todo", "revision completa", "revisión completa"])) return "audit_project";
-  if (hasAny(text, ["no escribas codigo", "no modifiques", "solo informe", "solo quiero un informe", "no ejecutes cambios"])) return "audit_project";
+  const forbidsAudit = hasAny(text, ["no hagas auditoria", "no quiero auditoria", "la auditoria ya estaba hecha", "no hagas otra auditoria"]);
+  const forbidsExecution = hasAny(text, ["no escribas codigo", "no modifiques", "no ejecutes", "no hagas pr", "no crees pr", "no crees rama"]);
+  const wantsInternalDiagnostic = hasAny(text, [
+    "fallo del intent classifier",
+    "fallo del orchestrator",
+    "por que el orchestrator",
+    "por que clasificaste",
+    "has clasificado mal",
+    "developer respondio mal",
+    "mejorar developer",
+  ]);
+  const wantsPlan = hasAny(text, [
+    "plan",
+    "roadmap",
+    "fase",
+    "convierte esto en plan",
+    "convierte esa fase en un plan",
+    "prepara propuesta",
+    "que archivos tocarias",
+    "qué archivos tocarías",
+    "no ejecutes codigo todavia",
+    "no modifiques codigo todavia",
+  ]);
+  const wantsAudit = !forbidsAudit && hasAny(text, [
+    "auditoria completa",
+    "auditar el proyecto",
+    "audita el proyecto",
+    "analiza todo flowly",
+    "analizar todo flowly",
+    "revision completa del proyecto",
+    "revisión completa del proyecto",
+  ]);
+
+  if (wantsInternalDiagnostic) return "diagnose_orchestrator";
+  if (wantsPlan) return "new_change";
+  if (wantsAudit) return "audit_project";
   if (hasAny(text, ["error", "build", "vercel", "typescript", "no compila", "fallo", "arregla este error"])) return "fix_error";
-  if (/^(ok|vale|adelante|hazlo|aprobado|aplica|ejecuta|si|sí)\b/.test(text)) return "approve_change";
+  if (!forbidsExecution && /^(ok|vale|adelante|hazlo|aprobado|aplica|ejecuta|si|sí)\b/.test(text)) return "approve_change";
   if (hasAny(text, ["continua", "continúa", "sigue", "seguimos", "lo de antes"])) return "continue_session";
   if (plan && (text.includes("?") || /^(que|qué|como|cómo|por que|por qué|dime|explica|cual|cu[aá]l|y\b)/.test(text))) return "ask_current_plan";
-  if (text.includes("?") || hasAny(text, ["que opinas", "qué opinas", "como lo harias", "cómo lo harías", "recomienda", "valora", "diagnostica"])) return "ask_architecture";
+  if (text.includes("?") || forbidsExecution || hasAny(text, ["que opinas", "qué opinas", "como lo harias", "cómo lo harías", "recomienda", "valora", "diagnostica", "informe"])) return "ask_architecture";
   return "new_change";
 }
 
@@ -109,12 +146,13 @@ function modeForIntent(intent: FlowOrchestratorIntent): FlowOrchestratorMode {
   if (intent === "ask_architecture" || intent === "ask_current_plan") return "consultation";
   if (intent === "approve_change") return "execution";
   if (intent === "fix_error") return "qa";
+  if (intent === "diagnose_orchestrator") return "diagnostic";
   if (intent === "continue_session") return "conversation";
   return "planning";
 }
 
 function enginePolicy(mode: FlowOrchestratorMode) {
-  if (mode === "audit" || mode === "consultation") {
+  if (mode === "audit" || mode === "consultation" || mode === "diagnostic") {
     return {
       activeEngines: ["brain", "docs", "memory", "projectGraph"] as FlowOrchestratorEngineName[],
       blockedEngines: ["planning", "executor", "github", "qa", "learning"] as FlowOrchestratorEngineName[],
@@ -161,7 +199,7 @@ function buildGuardrails(mode: FlowOrchestratorMode) {
     "Explicar primero el cambio en lenguaje de producto y solo después enseñar archivos técnicos.",
   ];
 
-  if (mode === "audit" || mode === "consultation") {
+  if (mode === "audit" || mode === "consultation" || mode === "diagnostic") {
     return [
       ...base,
       "Modo análisis: Executor, GitHub y PR quedan bloqueados.",
@@ -318,6 +356,52 @@ async function buildAuditReport(instruction: string): Promise<FlowAuditReport> {
   };
 }
 
+async function buildOpenAIOrchestratorReply(input: OrchestratorInput, decision: { mode: FlowOrchestratorMode; intent: FlowOrchestratorIntent }) {
+  const [bundle, graph] = await Promise.all([
+    buildDeveloperContextBundle(input.instruction).catch(() => null),
+    buildFlowlyProjectGraph(input.instruction).catch(() => null),
+  ]);
+  const graphSummary = graph ? summarizeProjectGraph(graph) : null;
+  const sources = bundle?.loadedSources?.slice(0, 10).map((source) => ({ path: source.path, title: source.title, summary: source.summary })) || [];
+
+  const system = [
+    "Eres Flow, el CTO digital de Flowly OS dentro de Flow Studio.",
+    "No eres un ejecutor de código. Primero entiendes la intención y respondes según el modo detectado.",
+    "Habla en español natural, directo y profesional, como un arquitecto senior.",
+    "Si el modo es planificación, entrega un plan concreto y pequeño. No hagas auditoría completa.",
+    "Si el modo es diagnóstico, explica el fallo del Orchestrator/Intent Classifier. No hagas auditoría de Flowly.",
+    "Si el usuario prohíbe ejecutar, recalca que Executor/GitHub/PR quedan bloqueados.",
+    "Nunca digas que vas a crear PR si el modo no es execution.",
+  ].join("\n");
+
+  const ai = await callFlowlyOpenAI({
+    purpose: "developer",
+    system,
+    user: JSON.stringify({
+      instruction: input.instruction,
+      intent: decision.intent,
+      mode: decision.mode,
+      hasCurrentPlan: hasCurrentPlan(input.currentPlan),
+      docsLoaded: sources,
+      projectStats: graphSummary ? {
+        totalFiles: graphSummary.totalFiles,
+        routes: graphSummary.routes,
+        apiRoutes: graphSummary.apiRoutes,
+        components: graphSummary.components,
+        modules: graphSummary.modules?.slice(0, 8),
+      } : null,
+      currentPlan: input.currentPlan || null,
+      requiredOutput: decision.intent === "diagnose_orchestrator"
+        ? ["regla que falló", "clasificación correcta", "nuevas intenciones", "cómo evitar repetición", "diseño del Orchestrator"]
+        : ["qué cambiará para usuario/Google", "archivos candidatos", "riesgos", "qué NO tocar", "siguiente paso"],
+    }),
+    temperature: 0.18,
+    maxOutputTokens: 2200,
+  });
+
+  return ai.ok && ai.text.trim() ? ai.text.trim() : null;
+}
+
 function buildConsultationReply(input: OrchestratorInput, decision: { mode: FlowOrchestratorMode; intent: FlowOrchestratorIntent }) {
   const hasPlan = hasCurrentPlan(input.currentPlan);
   if (decision.intent === "ask_current_plan" && hasPlan) {
@@ -370,7 +454,8 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
     };
   }
 
-  if (mode === "consultation") {
+  if (mode === "consultation" || mode === "diagnostic") {
+    const aiReply = await buildOpenAIOrchestratorReply(input, { mode, intent });
     return {
       ok: true,
       engine: "flow_orchestrator_v1",
@@ -378,13 +463,13 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
       mode,
       ...policy,
       refinedInstruction: input.instruction,
-      reply: buildConsultationReply(input, { mode, intent }),
+      reply: aiReply || buildConsultationReply(input, { mode, intent }),
       currentObjective,
       guardrails,
       reasoning: [
-        "La petición parece una pregunta o consulta.",
-        "No se debe regenerar un plan ni abrir PR por una pregunta.",
-        "Se responde primero en lenguaje natural y se espera instrucción explícita para planificar.",
+        mode === "diagnostic" ? "La petición pide diagnosticar el Orchestrator, no auditar Flowly." : "La petición parece una pregunta o consulta.",
+        "No se debe regenerar un plan ni abrir PR por una pregunta o diagnóstico.",
+        "Se responde primero en lenguaje natural y se espera instrucción explícita para planificar o ejecutar.",
       ],
     };
   }

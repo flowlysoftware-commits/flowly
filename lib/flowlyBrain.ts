@@ -1,4 +1,5 @@
 import { analyzeCurrentFlowlyProject, analyzeModule } from "@/lib/flowlyAnalyzer";
+import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
 import { detectCompanionIntent, getFlowlyContextSnapshot, type FlowlyCompanionIntent, type FlowlyContextSnapshot } from "@/lib/flowlyContextEngine";
 import { flowlyDocBooks } from "@/lib/flowlyDocsContent";
 import { flowlyMigrationModules, buildModuleBlueprint } from "@/lib/flowlyOSMigration";
@@ -447,35 +448,21 @@ async function callLLM(params: {
   conversation: FlowlyBrainMessage[];
   extraContext?: Record<string, unknown>;
 }) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.FLOWLY_AI_MODEL || "gpt-4o-mini",
-      temperature: 0.25,
-      max_tokens: 650,
-      messages: [
-        { role: "system", content: buildSystemPrompt(params) },
-        ...params.conversation.slice(-8).map((item) => ({ role: item.role, content: item.content })),
-        { role: "user", content: params.message },
-      ],
-    }),
+  const ai = await callFlowlyOpenAI({
+    purpose: params.mode === "arquitecto" ? "developer" : "companion",
+    system: buildSystemPrompt(params),
+    user: params.message,
+    history: params.conversation.slice(-8).map((item) => ({ role: item.role, content: item.content })),
+    temperature: params.mode === "arquitecto" ? 0.2 : 0.35,
+    maxOutputTokens: 750,
   });
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    console.warn("Flowly Brain LLM warning:", data?.error?.message || data);
+  if (!ai.ok || !ai.text.trim()) {
+    if (ai.error) console.warn("Flowly Brain OpenAI warning:", ai.error);
     return null;
   }
 
-  const content = data?.choices?.[0]?.message?.content;
-  return typeof content === "string" ? content : null;
+  return ai.text.trim();
 }
 
 export async function runFlowlyBrain(request: FlowlyBrainRequest): Promise<FlowlyBrainResponse> {

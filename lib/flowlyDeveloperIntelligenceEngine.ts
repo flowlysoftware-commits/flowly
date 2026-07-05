@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
 
 export type DeveloperChatMessage = {
   role: "user" | "brain" | "assistant" | "system";
@@ -130,38 +131,27 @@ export async function thinkWithDeveloperIntelligence(input: IntelligenceInput): 
     "Devuelve SOLO JSON válido con este esquema exacto: {\"intent\":\"new_task|question|refinement|approval|correction|continue\",\"shouldPlan\":boolean,\"refinedInstruction\":string,\"directReply\":string,\"currentObjective\":string,\"productChangePlan\":[{\"title\":string,\"description\":string,\"userImpact\":string,\"safetyNote\":string}],\"thinkingTrace\":[string],\"constraints\":[string],\"confidence\":number}",
   ].join("\n");
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      temperature: 0.15,
-      max_tokens: 1800,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: JSON.stringify({
-            instruction: input.instruction,
-            conversationId: input.conversationId || null,
-            history,
-            currentPlan,
-            requiredBehavior: [
-              "Distinguir estado de trabajo y respuesta final.",
-              "Si es pregunta, responder con contenido útil sin regenerar plan salvo que sea necesario.",
-              "Si es nueva tarea o refinamiento, construir instrucción refinada para el Pipeline.",
-            ],
-          }),
-        },
+  const ai = await callFlowlyOpenAI({
+    purpose: "developer",
+    system,
+    user: JSON.stringify({
+      instruction: input.instruction,
+      conversationId: input.conversationId || null,
+      history,
+      currentPlan,
+      requiredBehavior: [
+        "Distinguir estado de trabajo y respuesta final.",
+        "Si es pregunta, responder con contenido útil sin regenerar plan salvo que sea necesario.",
+        "Si es nueva tarea o refinamiento, construir instrucción refinada para el Pipeline.",
       ],
     }),
-  }).catch(() => null);
+    temperature: 0.15,
+    maxOutputTokens: 1800,
+    expectJson: true,
+  });
 
-  if (!response?.ok) return fallback;
-  const data = await response.json().catch(() => null);
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== "string") return fallback;
+  if (!ai.ok || !ai.text.trim()) return fallback;
+  const content = ai.text;
 
   const parsed = safeJsonParse<Partial<DeveloperIntelligenceDecision>>(content);
   if (!parsed) return fallback;

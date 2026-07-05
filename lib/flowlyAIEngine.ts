@@ -1,4 +1,5 @@
 import { detectCompanionIntent, getFlowlyContextSnapshot, type FlowlyContextSnapshot } from "@/lib/flowlyContextEngine";
+import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
 
 export type FlowlyAICompanionRole = "cliente" | "arquitecto";
 
@@ -195,34 +196,21 @@ function buildSystemPrompt(snapshot: FlowlyContextSnapshot) {
 }
 
 async function callOpenAI(message: string, snapshot: FlowlyContextSnapshot, conversation: FlowlyAIMessage[]) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.FLOWLY_AI_MODEL || "gpt-4o-mini",
-      temperature: 0.35,
-      max_tokens: 520,
-      messages: [
-        { role: "system", content: buildSystemPrompt(snapshot) },
-        ...conversation.slice(-8).map((item) => ({ role: item.role, content: item.content })),
-        { role: "user", content: message },
-      ],
-    }),
+  const ai = await callFlowlyOpenAI({
+    purpose: snapshot.mode === "arquitecto" ? "developer" : "companion",
+    system: buildSystemPrompt(snapshot),
+    user: message,
+    history: conversation.slice(-8).map((item) => ({ role: item.role, content: item.content })),
+    temperature: snapshot.mode === "arquitecto" ? 0.2 : 0.35,
+    maxOutputTokens: 560,
   });
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    console.warn("Flowly AI Engine OpenAI warning:", data?.error?.message || data);
+  if (!ai.ok || !ai.text.trim()) {
+    if (ai.error) console.warn("Flowly AI Engine OpenAI warning:", ai.error);
     return null;
   }
 
-  return typeof data?.choices?.[0]?.message?.content === "string" ? data.choices[0].message.content : null;
+  return ai.text.trim();
 }
 
 export async function runFlowlyAIEngine(request: FlowlyAIRequest): Promise<FlowlyAIResponse> {
