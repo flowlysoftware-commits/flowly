@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { decideDeveloperConversation } from "@/lib/flowlyDeveloperConversationEngine";
 import { logDeveloperConversationEvent, thinkWithDeveloperIntelligence } from "@/lib/flowlyDeveloperIntelligenceEngine";
 import { getLatestDeveloperSessionPlan, getRecentDeveloperSessionMessages, rememberDeveloperSessionPlan } from "@/lib/flowlyDeveloperSessionEngine";
+import { orchestrateFlowRequest } from "@/lib/flowlyOrchestrator";
 
 export const runtime = "nodejs";
 
@@ -30,8 +31,34 @@ export async function POST(request: NextRequest) {
       details: { source: "developer_page" },
     });
 
-    const intelligence = await thinkWithDeveloperIntelligence({
+    const orchestration = await orchestrateFlowRequest({
       instruction,
+      conversationId,
+      currentPlan,
+      history,
+    });
+
+    if (!orchestration.shouldPlan && !orchestration.shouldExecute) {
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: orchestration.reply,
+        intent: orchestration.intent,
+        details: { orchestration },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: orchestration.intent,
+        shouldRun: false,
+        conversationReply: orchestration.reply,
+        orchestration,
+      });
+    }
+
+    const intelligence = await thinkWithDeveloperIntelligence({
+      instruction: orchestration.refinedInstruction || instruction,
       conversationId,
       currentPlan,
       history,
@@ -75,7 +102,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const mergedInstruction = conversation.mergedInstruction || intelligence.refinedInstruction || instruction;
+    const mergedInstruction = conversation.mergedInstruction || intelligence.refinedInstruction || orchestration.refinedInstruction || instruction;
     const result = await planDeveloperPipeline(mergedInstruction, { intelligence });
 
     try {
@@ -86,7 +113,7 @@ export async function POST(request: NextRequest) {
         risk: result.risk,
         pull_request_url: null,
         branch: null,
-        details: { ...result, conversationId, intelligence },
+        details: { ...result, conversationId, intelligence, orchestration },
       });
     } catch {
       // El log no debe bloquear el plan.
@@ -99,14 +126,14 @@ export async function POST(request: NextRequest) {
       summary: result.summary,
       risk: result.risk,
     });
-    const resultWithSession = { ...result, sessionPlanId };
+    const resultWithSession = { ...result, sessionPlanId, orchestration };
 
     await logDeveloperConversationEvent({
       conversationId,
       role: "assistant",
       content: result.conversationReply,
       intent: intelligence.intent,
-      details: { planSummary: result.summary, risk: result.risk, proposedFiles: result.proposedFiles?.map((file) => file.path), intelligence },
+      details: { planSummary: result.summary, risk: result.risk, proposedFiles: result.proposedFiles?.map((file) => file.path), intelligence, orchestration },
     });
 
     return NextResponse.json(resultWithSession);
