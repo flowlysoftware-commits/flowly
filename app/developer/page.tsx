@@ -156,6 +156,7 @@ const quickPrompts = [
 ];
 
 const commandCenterLinks = [
+  { label: "Flow Studio", desc: "Entorno de ingeniería con Brain, Memory, Project Graph, Executor y QA.", href: "/flow-studio", icon: Sparkles },
   { label: "Cerebro", desc: "Brain: entiende, razona y coordina cambios.", href: "/os/brain", icon: BrainCircuit },
   { label: "Corazón", desc: "Kernel: registro central, eventos y gobierno.", href: "/kernel", icon: HeartPulse },
   { label: "Memoria", desc: "Knowledge: documentación viva y contexto técnico.", href: "/docs", icon: MemoryStick },
@@ -396,6 +397,7 @@ export default function DeveloperControlCenterPage() {
           <nav className="mt-6 space-y-6 text-sm">
             <MenuGroup title="Centro">
               <MenuItem href="/developer" icon={<Activity size={17} />} label="Panel Developer" active />
+              <MenuItem href="/flow-studio" icon={<Sparkles size={17} />} label="Flow Studio" highlight />
               <MenuItem href="/os/brain" icon={<BrainCircuit size={17} />} label="Cerebro" />
               <MenuItem href="/kernel" icon={<HeartPulse size={17} />} label="Corazón" />
               <MenuItem href="/docs" icon={<MemoryStick size={17} />} label="Memoria" />
