@@ -6,6 +6,10 @@ import { CheckCircle2, LayoutDashboard, LogIn, Sparkles, TrendingUp } from "luci
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
+type GoogleAnalyticsWindow = Window & typeof globalThis & {
+  gtag?: (...args: unknown[]) => void;
+};
+
 export default function BienvenidoPage() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
@@ -17,8 +21,10 @@ export default function BienvenidoPage() {
       content_name: "Flowly IA subscription",
     };
 
+    const analyticsWindow = window as GoogleAnalyticsWindow;
+
     window.fbq?.("track", "Purchase", payload);
-    window.gtag?.("event", "purchase", {
+    analyticsWindow.gtag?.("event", "purchase", {
       transaction_id: `flowly_${Date.now()}`,
       value: 1,
       currency: "EUR",
