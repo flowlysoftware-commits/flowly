@@ -3,7 +3,7 @@ import { planDeveloperPipeline } from "@/lib/flowlyDeveloperPipeline";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { decideDeveloperConversation } from "@/lib/flowlyDeveloperConversationEngine";
 import { logDeveloperConversationEvent, thinkWithDeveloperIntelligence } from "@/lib/flowlyDeveloperIntelligenceEngine";
-import { getLatestDeveloperSessionPlan, getRecentDeveloperSessionMessages, rememberDeveloperSessionPlan } from "@/lib/flowlyDeveloperSessionEngine";
+import { getLatestDeveloperSessionPlan, getRecentDeveloperSessionMessages, getRecentDeveloperSessionPlans, rememberDeveloperSessionPlan } from "@/lib/flowlyDeveloperSessionEngine";
 import { orchestrateFlowRequest } from "@/lib/flowlyOrchestrator";
 import { buildMissionStatusReply, getActiveDeveloperMission, interpretDeveloperMissionInstruction, rememberDeveloperMission, updateDeveloperMission } from "@/lib/flowlyMissionEngine";
 import { fixDeveloperPipelinePullRequest } from "@/lib/flowlyDeveloperPipeline";
@@ -12,6 +12,7 @@ import { analyzeIntentTransition, mustTreatAsPlanningTransition } from "@/lib/fl
 import { analyzeMissionRelevance, buildIndependentArchitectureCritiqueReply, isIndependentArchitectureCritiqueInstruction } from "@/lib/flowlyMissionRelevanceFilter";
 import { analyzeTurnIsolation } from "@/lib/flowlyTurnIsolationGuard";
 import { analyzeGeneralConversationMode, buildGeneralConversationReply } from "@/lib/flowlyGeneralConversationMode";
+import { buildApprovedPlanMismatchReply, resolveApprovedPlanForTurn } from "@/lib/flowlyApprovedPlanResolver";
 
 export const runtime = "nodejs";
 
@@ -29,28 +30,58 @@ export async function POST(request: NextRequest) {
       ...clientHistory,
     ].slice(-24);
     const rememberedPlan = await getLatestDeveloperSessionPlan(conversationId);
+    const recentPlans = await getRecentDeveloperSessionPlans(conversationId);
     const activeMission = await getActiveDeveloperMission(conversationId);
     const turnIsolation = analyzeTurnIsolation(instruction);
     const missionRelevance = analyzeMissionRelevance({ mission: turnIsolation.mustIgnoreCurrentMission ? null : activeMission, instruction });
-    const missionForTurn = missionRelevance.relevant ? activeMission : null;
+    const bodyCurrentPlan = body.currentPlan && typeof body.currentPlan === "object" ? body.currentPlan : null;
+    const planResolution = resolveApprovedPlanForTurn({
+      instruction,
+      history,
+      mission: missionRelevance.relevant ? activeMission : null,
+      rememberedPlan,
+      recentPlans,
+      bodyPlan: bodyCurrentPlan,
+    });
+    const missionForTurn = missionRelevance.relevant ? planResolution.safeMission : null;
     const historyForTurn = missionRelevance.relevant ? history : [];
-    const currentPlan = missionRelevance.relevant
-      ? (body.currentPlan && typeof body.currentPlan === "object"
-          ? body.currentPlan
-          : missionForTurn?.approved_plan || missionForTurn?.current_plan || rememberedPlan?.plan || null)
-      : null;
+    const currentPlan = missionRelevance.relevant ? planResolution.safePlan : null;
 
     await logDeveloperConversationEvent({
       conversationId,
       role: "user",
       content: instruction,
-      details: { source: "developer_page", activeMission, missionRelevance, turnIsolation },
+      details: { source: "developer_page", activeMission, missionRelevance, turnIsolation, planResolution },
     });
 
     const intentTransition = analyzeIntentTransition(instruction);
+
+    if (planResolution.shouldBlockExecution && !planResolution.shouldForceFreshPlanning) {
+      const reply = buildApprovedPlanMismatchReply(planResolution);
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: reply,
+        intent: "approved_plan_mismatch",
+        details: { activeMission, missionRelevance, turnIsolation, planResolution },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: "approved_plan_mismatch",
+        shouldRun: false,
+        conversationReply: reply,
+        mission: null,
+        missionRelevance,
+        turnIsolation,
+        planResolution,
+      });
+    }
+
     const generalConversation = analyzeGeneralConversationMode({
       instruction,
-      missionRelevant: missionRelevance.relevant,
+      missionRelevant: Boolean(missionForTurn),
       isolatedIntent: turnIsolation.intent,
     });
 
@@ -190,7 +221,7 @@ export async function POST(request: NextRequest) {
         role: "assistant",
         content: orchestration.reply,
         intent: orchestration.intent,
-        details: { orchestration, turnIsolation },
+        details: { orchestration, turnIsolation, planResolution },
       });
 
       return NextResponse.json({
@@ -259,7 +290,7 @@ export async function POST(request: NextRequest) {
         risk: result.risk,
         pull_request_url: null,
         branch: null,
-        details: { ...result, conversationId, intelligence, orchestration, intentTransition, missionRelevance },
+        details: { ...result, conversationId, intelligence, orchestration, intentTransition, missionRelevance, planResolution },
       });
     } catch {
       // El log no debe bloquear el plan.
@@ -279,7 +310,7 @@ export async function POST(request: NextRequest) {
       status: "planning",
       currentStep: "plan_ready_waiting_approval",
       currentPlan: result,
-      details: { sessionPlanId, orchestration, intelligence, intentTransition, missionRelevance },
+      details: { sessionPlanId, orchestration, intelligence, intentTransition, missionRelevance, planResolution },
     });
 
     const resultWithSession = { ...result, sessionPlanId, orchestration, mission };

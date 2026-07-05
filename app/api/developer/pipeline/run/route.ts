@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { runDeveloperPipeline } from "@/lib/flowlyDeveloperPipeline";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { logDeveloperConversationEvent } from "@/lib/flowlyDeveloperIntelligenceEngine";
-import { getLatestDeveloperSessionPlan, updateLatestDeveloperSessionPlanStatus } from "@/lib/flowlyDeveloperSessionEngine";
-import { rememberDeveloperMission, updateDeveloperMission } from "@/lib/flowlyMissionEngine";
+import { getLatestDeveloperSessionPlan, getRecentDeveloperSessionPlans, updateLatestDeveloperSessionPlanStatus } from "@/lib/flowlyDeveloperSessionEngine";
+import { getActiveDeveloperMission, rememberDeveloperMission, updateDeveloperMission } from "@/lib/flowlyMissionEngine";
 import type { DeveloperPipelinePlan } from "@/lib/flowlyDeveloperPipeline";
+import { buildApprovedPlanMismatchReply, resolveApprovedPlanForTurn } from "@/lib/flowlyApprovedPlanResolver";
 
 export const runtime = "nodejs";
 
@@ -19,8 +20,28 @@ export async function POST(request: NextRequest) {
     if (!approved) return NextResponse.json({ ok: false, error: "Necesito aprobación explícita antes de crear rama y Pull Request." }, { status: 400 });
 
     const latestSessionPlan = approvedPlanFromBody ? null : await getLatestDeveloperSessionPlan(conversationId);
-    const approvedPlan = approvedPlanFromBody || (latestSessionPlan?.plan as DeveloperPipelinePlan | undefined);
+    const recentPlans = approvedPlanFromBody ? [] : await getRecentDeveloperSessionPlans(conversationId);
+    const activeMission = await getActiveDeveloperMission(conversationId);
+    const planResolution = resolveApprovedPlanForTurn({
+      instruction,
+      mission: activeMission,
+      rememberedPlan: latestSessionPlan,
+      recentPlans,
+      bodyPlan: approvedPlanFromBody,
+    });
+    const approvedPlan = planResolution.safePlan as DeveloperPipelinePlan | undefined;
     const executionInstruction = approvedPlan?.instruction || instruction;
+
+    if (planResolution.shouldBlockExecution || planResolution.hasMismatch) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: buildApprovedPlanMismatchReply(planResolution),
+          planResolution,
+        },
+        { status: 409 }
+      );
+    }
 
     if (!approvedPlan) {
       return NextResponse.json(

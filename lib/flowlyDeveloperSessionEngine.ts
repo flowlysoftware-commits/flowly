@@ -138,6 +138,36 @@ export async function getLatestDeveloperSessionPlan(conversationId?: string): Pr
   }
 }
 
+
+export async function getRecentDeveloperSessionPlans(conversationId?: string, limit = 12): Promise<DeveloperSessionPlan[]> {
+  const id = safeConversationId(conversationId);
+  if (!id) return [];
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("flowly_developer_session_plans")
+      .select("id, conversation_id, instruction, status, summary, risk, plan, created_at, updated_at")
+      .eq("conversation_id", id)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !Array.isArray(data)) return [];
+    return data.map((item) => ({
+      id: String(item.id || ""),
+      conversation_id: String(item.conversation_id || id),
+      instruction: String(item.instruction || ""),
+      status: String(item.status || "planned") as DeveloperSessionPlan["status"],
+      summary: typeof item.summary === "string" ? item.summary : null,
+      risk: typeof item.risk === "string" ? item.risk : null,
+      plan: item.plan,
+      created_at: typeof item.created_at === "string" ? item.created_at : undefined,
+      updated_at: typeof item.updated_at === "string" ? item.updated_at : undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function updateLatestDeveloperSessionPlanStatus(conversationId: string | undefined, status: DeveloperSessionPlan["status"], details?: unknown) {
   const latest = await getLatestDeveloperSessionPlan(conversationId);
   if (!latest?.id) return;
