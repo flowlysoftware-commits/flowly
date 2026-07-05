@@ -116,7 +116,7 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
             </select>
           </label>
           <Link href="/login" data-track-label="Header · Login" className="flowly-secondary hidden rounded-full px-4 py-2.5 text-sm font-semibold sm:inline-flex">Entrar</Link>
-          <Link href="/registro" data-track-label="Header · Empieza gratis" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold sm:inline-flex">Empieza gratis</Link>
+          <Link href="/precios" data-track-label="Header · Ver planes" className="flowly-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold sm:inline-flex">Empieza gratis</Link>
           <button
             type="button"
             className="flowly-secondary inline-flex h-11 w-11 items-center justify-center rounded-full lg:hidden"
@@ -137,7 +137,7 @@ function Header({ country, setMarket, pricesHref }: { country: Country; setMarke
             <a onClick={close} href="#sectores" className="rounded-2xl px-4 py-3 hover:bg-white/10">Sectores</a>
             <Link onClick={close} href={pricesHref} data-track-label="Menú móvil · Planes" className="rounded-2xl px-4 py-3 hover:bg-white/10">Planes</Link>
             <Link onClick={close} href="/login" data-track-label="Menú móvil · Login" className="rounded-2xl px-4 py-3 hover:bg-white/10">Entrar</Link>
-            <Link onClick={close} href="/registro" data-track-label="Menú móvil · Empieza gratis" className="flowly-primary mt-2 inline-flex justify-center rounded-full px-5 py-3 font-semibold">Empieza gratis</Link>
+            <Link onClick={close} href="/precios" data-track-label="Menú móvil · Ver planes" className="flowly-primary mt-2 inline-flex justify-center rounded-full px-5 py-3 font-semibold">Empieza gratis</Link>
           </div>
         </div>
       )}
@@ -164,7 +164,7 @@ function Hero({ country, pricesHref }: { country: Country; pricesHref: string })
         </p>
 
         <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-          <Link href="/registro" data-track-label="Hero · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 text-base font-semibold">
+          <Link href="/precios" data-track-label="Hero · Ver planes" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 text-base font-semibold">
             Empieza gratis <ArrowRight size={19} />
           </Link>
           <a href="#demo" data-track-label="Hero · Ver demo 2 minutos" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 text-base font-semibold">
@@ -402,7 +402,7 @@ function PricingSection({ country, pricesHref }: { country: Country; pricesHref:
               La barrera debe ser baja: primero entra, ve el panel, entiende el valor y luego decide.
             </p>
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-              <Link href="/registro" data-track-label="Planes · Empieza gratis" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">
+              <Link href="/precios" data-track-label="Planes · Ver planes" className="flowly-primary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">
                 Empieza gratis <ArrowRight size={18} />
               </Link>
               <Link href={pricesHref} data-track-label="Planes · Ver precios" className="flowly-secondary inline-flex items-center justify-center gap-2 rounded-full px-7 py-4 font-semibold">
@@ -456,7 +456,7 @@ function FinalCTA() {
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 to-fuchsia-400 text-slate-950"><Wand2 /></div>
         <h2 className="mx-auto max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl">Deja de perder clientes por falta de seguimiento.</h2>
         <p className="mx-auto mt-5 max-w-2xl text-white/60">Entra gratis, mira el panel y decide si Flowly encaja con tu negocio.</p>
-        <Link href="/registro" data-track-label="CTA final · Empieza gratis" className="flowly-primary mt-8 inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 font-semibold">
+        <Link href="/precios" data-track-label="CTA final · Ver planes" className="flowly-primary mt-8 inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 font-semibold">
           Empieza gratis <ArrowRight size={18} />
         </Link>
       </div>
@@ -484,7 +484,7 @@ function Footer() {
 function StickyMobileCTA() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/88 p-3 backdrop-blur-2xl sm:hidden">
-      <Link href="/registro" data-track-label="Sticky móvil · Empieza gratis" className="flowly-primary flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold">
+      <Link href="/precios" data-track-label="Sticky móvil · Ver planes" className="flowly-primary flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold">
         Empieza gratis <ArrowRight size={16} />
       </Link>
     </div>
