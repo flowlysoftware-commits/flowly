@@ -45,7 +45,8 @@ export async function POST(request: NextRequest) {
     });
     const missionForTurn = missionRelevance.relevant ? planResolution.safeMission : null;
     const historyForTurn = missionRelevance.relevant ? history : [];
-    const currentPlan = missionRelevance.relevant ? planResolution.safePlan : null;
+    type ConversationCurrentPlan = Parameters<typeof decideDeveloperConversation>[0]["currentPlan"];
+    const currentPlan = (missionRelevance.relevant ? planResolution.safePlan : null) as ConversationCurrentPlan;
 
     await logDeveloperConversationEvent({
       conversationId,
