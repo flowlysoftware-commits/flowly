@@ -1,4 +1,5 @@
 import { createExecutorPullRequest, listRepositoryTree, readRepositoryFile, type ExecutorFileChange, type GitHubTreeItem } from "@/lib/flowlyGitHubExecutor";
+import { runFlowlyBuildGuard, type FlowlyBuildGuardResult } from "@/lib/flowlyBuildGuard";
 import { flowlyMigrationModules } from "@/lib/flowlyOSMigration";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph, type FlowlyImpactAnalysis } from "@/lib/flowlyProjectGraph";
 
@@ -42,6 +43,7 @@ export type ExecutorV3Preflight = {
   status: "passed" | "blocked";
   checks: Array<{ label: string; ok: boolean; detail: string }>;
   blockedReason?: string;
+  buildGuard?: FlowlyBuildGuardResult;
 };
 
 export type ExecutorV3Plan = {
@@ -542,9 +544,10 @@ export function buildHumanReadableChangePlan(files: ExecutorFileChange[], instru
   return Array.from(unique.values());
 }
 
-export function runExecutorPreflight(files: ExecutorFileChange[], options?: { approvedPackageJson?: boolean }): ExecutorV3Preflight {
+export function runExecutorPreflight(files: ExecutorFileChange[], options?: { approvedPackageJson?: boolean; buildGuard?: FlowlyBuildGuardResult }): ExecutorV3Preflight {
   const checks: ExecutorV3Preflight["checks"] = [];
   const approvedPackageJson = Boolean(options?.approvedPackageJson);
+  const buildGuard = options?.buildGuard || runFlowlyBuildGuard(files);
   const normalized = files.map((file) => normalize(file.path));
   const hasUnsafePath = files.some((file) => file.path.includes("..") || file.path.startsWith("/"));
   const packageTouched = normalized.some((file) => file === "package.json" || file.endsWith("/package.json"));
@@ -557,6 +560,7 @@ export function runExecutorPreflight(files: ExecutorFileChange[], options?: { ap
   checks.push({ label: "Sin cambios sensibles", ok: !packageTouched || approvedPackageJson, detail: packageTouched ? "package.json requiere aprobación explícita." : "No se cambian dependencias ni package.json." });
   checks.push({ label: "Sin motores duplicados", ok: !duplicateRuntime, detail: duplicateRuntime ? "Se detectó posible archivo paralelo V2/V3/copia en un motor crítico." : "No se detectan runtimes o motores duplicados." });
   checks.push({ label: "No documentación falsa", ok: !docsOnly, detail: docsOnly ? "El cambio solo generaría documentación; no se creará PR automático." : "El PR contiene cambios de producto/código, no solo docs." });
+  checks.push({ label: "Build Guard", ok: buildGuard.ok, detail: buildGuard.summary });
 
   const failed = checks.find((check) => !check.ok);
   return {
@@ -564,6 +568,7 @@ export function runExecutorPreflight(files: ExecutorFileChange[], options?: { ap
     status: failed ? "blocked" : "passed",
     checks,
     blockedReason: failed?.detail,
+    buildGuard,
   };
 }
 
@@ -605,20 +610,24 @@ export async function planExecutorV3(instruction: string, developerContext?: unk
   const deterministicFiles = aiFiles?.length ? [] : await buildDeterministicSafeFiles(planBase);
   const proposedFiles = (aiFiles?.length ? aiFiles : deterministicFiles).filter((file) => !normalize(file.path).startsWith("docs/executor/"));
 
-  const safeProposedFiles = proposedFiles.length ? proposedFiles : fallbackFiles(planBase);
+  const initialProposedFiles = proposedFiles.length ? proposedFiles : fallbackFiles(planBase);
+  const buildGuard = runFlowlyBuildGuard(initialProposedFiles);
+  const safeProposedFiles = buildGuard.files;
   return {
     ...planBase,
     proposedFiles: safeProposedFiles,
     humanChangePlan: buildHumanReadableChangePlan(safeProposedFiles, clean),
-    preflight: runExecutorPreflight(safeProposedFiles),
+    preflight: runExecutorPreflight(safeProposedFiles, { buildGuard }),
   };
 }
 
 export async function runExecutorV3FromApprovedPlan(plan: ExecutorV3Plan, approved: boolean): Promise<ExecutorV3RunResult> {
   if (!approved) return plan;
 
-  const files = (plan.proposedFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
-  const preflight = runExecutorPreflight(files);
+  const rawFiles = (plan.proposedFiles || []).filter((file) => file.content && !normalize(file.path).startsWith("docs/executor/"));
+  const buildGuard = runFlowlyBuildGuard(rawFiles);
+  const files = buildGuard.files;
+  const preflight = runExecutorPreflight(files, { buildGuard });
 
   if (!files.length || !preflight.ok) {
     return {
@@ -648,6 +657,10 @@ export async function runExecutorV3FromApprovedPlan(plan: ExecutorV3Plan, approv
       "",
       "### Preflight",
       ...preflight.checks.map((check) => `- ${check.ok ? "✅" : "❌"} ${check.label}: ${check.detail}`),
+      "",
+      "### Build Guard",
+      preflight.buildGuard?.summary || "Build Guard no ejecutado.",
+      ...(preflight.buildGuard?.issues.length ? preflight.buildGuard.issues.map((issue) => `- ${issue.severity === "error" ? "❌" : "⚠️"} ${issue.path}: ${issue.message}`) : ["- Sin incidencias estáticas conocidas."]),
       "",
       "### Seguridad",
       "No se modifica la rama principal directamente. Este PR debe revisarse antes de hacer merge.",

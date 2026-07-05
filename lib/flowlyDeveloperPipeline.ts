@@ -45,7 +45,7 @@ export type DeveloperPipelinePlan = ExecutorV3Plan & {
   intelligence?: DeveloperIntelligenceDecision;
   stages: DeveloperPipelineStage[];
   buildVerification: {
-    strategy: "pull_request_checks";
+    strategy: "build_guard_and_pull_request_checks";
     message: string;
     automaticFixAvailable: boolean;
   };
@@ -251,9 +251,9 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
       approval: false,
     }),
     buildVerification: {
-      strategy: "pull_request_checks",
+      strategy: "build_guard_and_pull_request_checks",
       message: executorPlan.preflight.ok
-        ? "Preflight interno superado antes del PR. Después GitHub/Vercel publicarán checks y QA Agent podrá corregir sobre la misma rama si aparece un fallo."
+        ? "Build Guard y Preflight superados antes del PR. Después GitHub/Vercel publicarán checks y QA Agent podrá corregir sobre la misma rama si aparece un fallo."
         : `Preflight bloqueado: ${executorPlan.preflight.blockedReason || "el cambio no es suficientemente seguro"}. No debe crearse PR hasta corregirlo.`,
       automaticFixAvailable: true,
     },
@@ -321,7 +321,7 @@ export function getDeveloperPipelineStatus() {
     ready: github.hasCredentials,
     github,
     pipeline: "developer_pipeline_v1",
-    stages: ["Brain", "Knowledge", "Project Graph", "Executor V3", "Pull Request", "Checks", "QA Agent"],
+    stages: ["Brain", "Knowledge", "Project Graph", "Executor V3", "Build Guard", "Pull Request", "Checks", "QA Agent"],
     missing: github.missing,
   };
 }
