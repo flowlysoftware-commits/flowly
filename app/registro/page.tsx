@@ -69,8 +69,8 @@ function RegistroContent() {
 
     if (data.error) alert(data.error);
     else {
-      alert("Cuenta creada correctamente. Ahora inicia sesión.");
-      router.push("/login");
+      const emailParam = data.email ? `?email=${encodeURIComponent(data.email)}` : "";
+      router.push(`/bienvenido${emailParam}`);
     }
 
     setLoading(false);

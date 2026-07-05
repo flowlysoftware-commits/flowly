@@ -56,7 +56,7 @@ function inferFunnelStep(path: string, fullPath = path) {
   if (cleanPath.includes("onboarding")) return "onboarding";
   if (cleanPath.includes("checkout") || cleanPath.includes("carrito") || cleanPath.includes("stripe")) return "checkout";
   if (cleanPath.includes("dashboard")) return "dashboard";
-  if (cleanPath.includes("gracias") || cleanPath.includes("success") || cleanPath.includes("completed")) return "purchase";
+  if (cleanPath.includes("bienvenido") || cleanPath.includes("gracias") || cleanPath.includes("success") || cleanPath.includes("completed")) return "purchase";
   return "other";
 }
 
