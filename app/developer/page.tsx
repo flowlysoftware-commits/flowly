@@ -90,6 +90,8 @@ type DeveloperPlan = {
   conversationOnly?: boolean;
   conversationIntent?: string;
   shouldRun?: boolean;
+  approvedPlan?: DeveloperPlan;
+  currentPlan?: DeveloperPlan;
   instruction?: string;
   summary?: string;
   risk?: string;
@@ -339,6 +341,19 @@ export default function DeveloperControlCenterPage() {
       setInstruction("");
 
       if (data.conversationOnly) {
+        const approvedPlan = data.approvedPlan || data.currentPlan || plan;
+        if (data.shouldRun && approvedPlan?.ok) {
+          setHistory((items) => [
+            ...items,
+            {
+              role: "brain",
+              text: data.conversationReply || "Plan aprobado recuperado. Paso a ejecución segura.",
+            },
+          ]);
+          await runApprovedPlan(approvedPlan, data.instruction || approvedPlan.instruction || clean);
+          return;
+        }
+
         setMode(plan?.ok ? "planned" : "idle");
         setHistory((items) => [
           ...items,
@@ -371,21 +386,22 @@ export default function DeveloperControlCenterPage() {
     }
   }
 
-  async function approveAndRun() {
-    const clean = plan?.instruction?.trim() || instruction.trim();
-    if (!clean || !plan?.ok) return;
+  async function runApprovedPlan(approvedPlan: DeveloperPlan, overrideInstruction?: string) {
+    const clean = overrideInstruction?.trim() || approvedPlan.instruction?.trim() || instruction.trim();
+    if (!clean || !approvedPlan?.ok) return;
+    setPlan(approvedPlan);
     setMode("running");
     setError(null);
     setHistory((items) => [
       ...items,
-      { role: "brain", text: "OK recibido. Voy a trabajar en una rama segura. Si algo falla, no tocaré producción." },
+      { role: "brain", text: "OK recibido. Ejecuto exactamente el plan aprobado en una rama segura. Si algo falla, no tocaré producción." },
     ]);
 
     try {
       const response = await fetch("/api/developer/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: clean, approved: true, approvedPlan: plan, sessionPlanId: plan.sessionPlanId || null, conversationId }),
+        body: JSON.stringify({ instruction: clean, approved: true, approvedPlan, sessionPlanId: approvedPlan.sessionPlanId || null, conversationId }),
       });
       const data = (await response.json()) as DeveloperRun;
       if (!response.ok || data.error) throw new Error(data.error || "No he podido ejecutar los cambios.");
@@ -407,6 +423,11 @@ export default function DeveloperControlCenterPage() {
       setError(message);
       setHistory((items) => [...items, { role: "brain", text: `No he podido terminar la ejecución: ${message}` }]);
     }
+  }
+
+  async function approveAndRun() {
+    if (!plan?.ok) return;
+    await runApprovedPlan(plan);
   }
 
   return (

@@ -13,6 +13,7 @@ import { analyzeMissionRelevance, buildIndependentArchitectureCritiqueReply, isI
 import { analyzeTurnIsolation } from "@/lib/flowlyTurnIsolationGuard";
 import { analyzeGeneralConversationMode, buildGeneralConversationReply } from "@/lib/flowlyGeneralConversationMode";
 import { buildApprovedPlanMismatchReply, resolveApprovedPlanForTurn } from "@/lib/flowlyApprovedPlanResolver";
+import { analyzeApprovedPlanExecutionTrigger, buildApprovedPlanExecutionReply } from "@/lib/flowlyApprovedPlanExecutionTrigger";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,35 @@ export async function POST(request: NextRequest) {
     });
 
     const intentTransition = analyzeIntentTransition(instruction);
+
+    const executionTrigger = analyzeApprovedPlanExecutionTrigger({ instruction, planResolution });
+
+    if (executionTrigger.shouldExecuteApprovedPlan) {
+      const reply = buildApprovedPlanExecutionReply(executionTrigger);
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: reply,
+        intent: "approved_plan_execution",
+        details: { activeMission, missionRelevance, turnIsolation, planResolution, executionTrigger },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: "approved_plan_execution",
+        shouldRun: true,
+        conversationReply: reply,
+        instruction: executionTrigger.executionInstruction,
+        currentPlan: planResolution.safePlan,
+        approvedPlan: planResolution.safePlan,
+        mission: missionForTurn,
+        missionRelevance,
+        turnIsolation,
+        planResolution,
+        executionTrigger,
+      });
+    }
 
     if (planResolution.shouldBlockExecution && !planResolution.shouldForceFreshPlanning) {
       const reply = buildApprovedPlanMismatchReply(planResolution);
