@@ -134,6 +134,7 @@ function scorePath(path: string, instruction: string, modules: string[]) {
     ["Facturación", ["factura", "facturacion", "invoice", "budget", "presupuesto", "finance"]],
     ["WhatsApp", ["whatsapp", "message", "webhook"]],
     ["Flowly OS", ["studio", "builder", "kernel", "brain", "executor", "developer", "docs", "knowledge"]],
+    ["SEO", ["seo", "metadata", "metadatos", "open graph", "opengraph", "twitter", "canonical", "robots", "sitemap", "manifest", "favicon", "schema", "json-ld"]],
   ] as const;
 
   for (const [moduleName, words] of keywordGroups) {
@@ -144,6 +145,14 @@ function scorePath(path: string, instruction: string, modules: string[]) {
 
   for (const token of text.split(/\s+/).filter((item) => item.length > 4)) {
     if (p.includes(token)) score += 2;
+  }
+
+  if (/(seo|metadata|metadatos|open graph|opengraph|twitter|canonical|robots|sitemap|manifest|favicon|schema|json-ld)/.test(text)) {
+    if (/^app\/(layout|page)\.(tsx|ts|jsx|js)$/.test(p)) score += 40;
+    if (/^app\/(robots|sitemap|manifest)\.(ts|js)$/.test(p)) score += 42;
+    if (/^app\/(opengraph-image|twitter-image)\.(tsx|ts|jsx|js)$/.test(p)) score += 38;
+    if (/^app\/(icon|favicon)\.(png|jpg|jpeg|svg|ico)$/.test(p)) score += 18;
+    if (/^public\/(favicon|apple-touch-icon|site\.webmanifest|.*og.*|.*twitter.*)/.test(p)) score += 20;
   }
 
   if (p.includes("components/")) score += 5;
@@ -426,6 +435,9 @@ async function buildAIFiles(params: {
     "- No añadas dependencias nuevas al package.json.",
     "- Mantén cambios pequeños, revisables y compatibles con TypeScript estricto.",
     "- Si no puedes estar seguro, devuelve {\"files\":[]} y NO crees documentación ni archivos de plan.",
+    "- Grounding obligatorio: usa solo archivos reales incluidos en projectMap.candidates, projectGraph, impact o developerContext.projectSnapshot.",
+    "- Este repositorio usa Next.js App Router si developerContext.projectSnapshot.framework.router='app-router'. Nunca inventes index.html, about.html, blog.html, header.php ni archivos de otros frameworks.",
+    "- Para SEO/metadata/Open Graph prioriza app/layout.tsx, app/page.tsx, app/sitemap.ts, app/robots.ts, app/manifest.ts, app/opengraph-image.tsx, app/twitter-image.tsx, app/icon.png o public/favicon.ico SOLO si aparecen como rutas reales en developerContext.projectSnapshot.",
     "- Usa projectGraph e impact para decidir. Si impact.avoidCreating contiene archivos, revisa esos archivos antes de crear otros.",
     "- Si existe un componente equivalente, devuélvelo modificado completo; no crees una versión paralela.",
     "- No expongas secretos ni variables privadas.",

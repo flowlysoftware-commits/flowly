@@ -230,6 +230,8 @@ async function askOpenAIForReply(params: {
     "Si mode=consultation: responde la pregunta directamente y no propongas PR.",
     "Si el usuario prohibió código/PR/ejecución, no sugieras ejecutar todavía.",
     "Estructura útil: qué cambia en lenguaje normal, qué tocarías, riesgos, qué NO tocarás y siguiente paso.",
+    "Grounding obligatorio: el contexto incluye Project Snapshot. Si indica Next.js App Router, no menciones index.html, about.html, blog.html, header.php ni archivos genéricos.",
+    "Para SEO/metadata/Open Graph usa solo rutas reales de projectSnapshot.keyPaths o projectSnapshot.seoRelevantPaths.",
     "Habla español, directo, profesional y sin frases de relleno.",
   ].join("\n");
 
@@ -252,6 +254,19 @@ async function askOpenAIForReply(params: {
         components: params.context.projectSummary.components,
         modules: params.context.projectSummary.modules?.slice(0, 10),
       } : null,
+      projectSnapshot: params.context.projectSnapshot ? {
+        framework: params.context.projectSnapshot.framework,
+        packageInfo: params.context.projectSnapshot.packageInfo,
+        counts: params.context.projectSnapshot.counts,
+        keyPaths: params.context.projectSnapshot.keyPaths,
+        publicRoutes: params.context.projectSnapshot.publicRoutes.slice(0, 80),
+        privateRoutes: params.context.projectSnapshot.privateRoutes.slice(0, 80),
+        apiRoutes: params.context.projectSnapshot.apiRoutes.slice(0, 80),
+        seoRelevantPaths: params.context.projectSnapshot.seoRelevantPaths,
+        notes: params.context.projectSnapshot.notes,
+        warnings: params.context.projectSnapshot.warnings,
+      } : null,
+      projectSnapshotText: params.context.projectSnapshotText,
       docsSources: params.context.sources,
       docsContext: params.context.docsContext,
       warnings: params.context.warnings,

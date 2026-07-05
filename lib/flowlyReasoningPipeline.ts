@@ -66,6 +66,21 @@ function contextPayload(input: FlowReasoningPipelineInput) {
           modules: input.context.projectSummary.modules?.slice(0, 14),
         }
       : null,
+    projectSnapshot: input.context.projectSnapshot
+      ? {
+          framework: input.context.projectSnapshot.framework,
+          packageInfo: input.context.projectSnapshot.packageInfo,
+          counts: input.context.projectSnapshot.counts,
+          keyPaths: input.context.projectSnapshot.keyPaths,
+          publicRoutes: input.context.projectSnapshot.publicRoutes.slice(0, 80),
+          privateRoutes: input.context.projectSnapshot.privateRoutes.slice(0, 80),
+          apiRoutes: input.context.projectSnapshot.apiRoutes.slice(0, 80),
+          seoRelevantPaths: input.context.projectSnapshot.seoRelevantPaths,
+          notes: input.context.projectSnapshot.notes,
+          warnings: input.context.projectSnapshot.warnings,
+        }
+      : null,
+    projectSnapshotText: trimText(input.context.projectSnapshotText || "", 9000),
     docsSources: input.context.sources.slice(0, 18),
     docsContext: trimText(input.context.docsContext, 26000),
     warnings: input.context.warnings,
@@ -143,7 +158,11 @@ async function runArchitectPass(input: FlowReasoningPipelineInput) {
   const system = [
     "Eres Flow, CTO digital y arquitecto principal de Flowly OS.",
     "No eres un asistente de programación. Piensas como responsable del producto, arquitectura, negocio y mantenimiento a 10 años.",
-    "Usas el contexto aportado por Flowly: Docs, Brain, Project Graph, historial y guardrails.",
+    "Usas el contexto aportado por Flowly: Docs, Brain, Project Graph, Project Snapshot, historial y guardrails.",
+    "GROUNDING OBLIGATORIO: este proyecto es Next.js App Router si el Project Snapshot lo indica. No menciones index.html, about.html, blog.html, header.php ni rutas genéricas de otros frameworks.",
+    "Solo puedes mencionar archivos que aparezcan en projectSnapshot.keyPaths, projectSnapshot.seoRelevantPaths, projectSnapshot.publicRoutes, projectSnapshot.privateRoutes, projectSnapshot.apiRoutes, docsSources o Project Graph.",
+    "Si no tienes archivos verificados para una propuesta técnica, dilo claramente y pide confirmación. No rellenes huecos con ejemplos genéricos.",
+    "Para SEO/metadata/Open Graph en Flowly, prioriza archivos reales como app/layout.tsx, app/page.tsx, app/sitemap.ts, app/robots.ts, app/manifest.ts, app/opengraph-image.tsx, app/twitter-image.tsx, app/icon.png o public/favicon.ico cuando existan en el snapshot.",
     "Nunca inventes que has ejecutado código. Nunca propongas PR si el modo no lo permite.",
     modeInstructions(input.mode),
     "Responde en español profesional, con detalle útil y sin relleno.",
@@ -165,6 +184,7 @@ async function runCriticPass(input: FlowReasoningPipelineInput, draft: string) {
     "Eres el Critic Engine de Flowly OS.",
     "Tu tarea es revisar la respuesta del arquitecto antes de entregarla al usuario.",
     "Detecta si incumple intención, si es demasiado genérica, si propone ejecución prohibida, si repite auditorías cuando se pidió plan, o si le falta concreción.",
+    "Detecta grounding débil: menciones a index.html, about.html, blog.html, header.php o archivos no verificados por Project Snapshot/Project Graph.",
     "Devuelve una crítica breve y accionable en español. No reescribas toda la respuesta.",
   ].join("\n");
 
@@ -196,6 +216,8 @@ async function runFinalPass(input: FlowReasoningPipelineInput, draft: string, cr
     "- Si mode=planning, entrega plan pequeño; no auditoría completa.",
     "- Si mode=diagnostic, diagnostica el fallo; no audites Flowly entero.",
     "- Si hay motores bloqueados, no digas que se usarán.",
+    "- Grounding obligatorio: no menciones index.html, about.html, blog.html, header.php ni archivos genéricos si el Project Snapshot indica Next.js App Router.",
+    "- Para SEO/metadata/Open Graph, usa únicamente rutas reales del Project Snapshot/Project Graph; si no existen, dilo.",
     "- Mantén tono de ingeniero senior, claro y directo.",
   ].join("\n");
 

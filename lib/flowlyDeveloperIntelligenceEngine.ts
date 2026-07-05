@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
+import { buildFlowlyProjectSnapshot, summarizeFlowlyProjectSnapshot } from "@/lib/flowlyProjectReader";
 
 export type DeveloperChatMessage = {
   role: "user" | "brain" | "assistant" | "system";
@@ -119,6 +120,7 @@ export async function thinkWithDeveloperIntelligence(input: IntelligenceInput): 
 
   const currentPlan = summarizeApprovedPlan(input.currentPlan);
   const history = getRecentHistory(input.history);
+  const snapshot = await buildFlowlyProjectSnapshot().catch(() => null);
 
   const system = [
     "Eres Flowly Developer Intelligence Engine, el CTO digital de Flowly OS.",
@@ -126,6 +128,8 @@ export async function thinkWithDeveloperIntelligence(input: IntelligenceInput): 
     "Debes hablar en español, con tono de ingeniero senior: claro, directo y natural.",
     "Nunca prometas tocar producción. Siempre rama + Pull Request + revisión.",
     "No dupliques Brain, Memory, Heart, Executor, QA ni runtimes. Reutiliza la arquitectura existente.",
+    "Grounding obligatorio: usa el Project Snapshot. Si indica Next.js App Router, no menciones index.html, about.html, blog.html, header.php ni archivos genéricos.",
+    "Para SEO/metadata/Open Graph en Flowly menciona únicamente rutas reales del snapshot como app/layout.tsx, app/page.tsx, app/sitemap.ts, app/robots.ts, app/manifest.ts, app/opengraph-image.tsx, app/twitter-image.tsx, app/icon.png o public/favicon.ico cuando existan.",
     "Cuando el usuario pregunte algo sobre el plan actual, responde la pregunta directamente. No digas solo 'voy a investigar'.",
     "Cuando propongas cambios, explícalos en lenguaje de producto: qué verá el usuario, cómo cambiará el flujo, qué no tocarás.",
     "Devuelve SOLO JSON válido con este esquema exacto: {\"intent\":\"new_task|question|refinement|approval|correction|continue\",\"shouldPlan\":boolean,\"refinedInstruction\":string,\"directReply\":string,\"currentObjective\":string,\"productChangePlan\":[{\"title\":string,\"description\":string,\"userImpact\":string,\"safetyNote\":string}],\"thinkingTrace\":[string],\"constraints\":[string],\"confidence\":number}",
@@ -139,6 +143,21 @@ export async function thinkWithDeveloperIntelligence(input: IntelligenceInput): 
       conversationId: input.conversationId || null,
       history,
       currentPlan,
+      projectSnapshot: snapshot
+        ? {
+            framework: snapshot.framework,
+            packageInfo: snapshot.packageInfo,
+            counts: snapshot.counts,
+            keyPaths: snapshot.keyPaths,
+            publicRoutes: snapshot.publicRoutes.slice(0, 80),
+            privateRoutes: snapshot.privateRoutes.slice(0, 80),
+            apiRoutes: snapshot.apiRoutes.slice(0, 80),
+            seoRelevantPaths: snapshot.seoRelevantPaths,
+            notes: snapshot.notes,
+            warnings: snapshot.warnings,
+            summary: summarizeFlowlyProjectSnapshot(snapshot),
+          }
+        : null,
       requiredBehavior: [
         "Distinguir estado de trabajo y respuesta final.",
         "Si es pregunta, responder con contenido útil sin regenerar plan salvo que sea necesario.",

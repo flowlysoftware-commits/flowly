@@ -5,6 +5,7 @@ import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph } f
 import { buildDeveloperContextBundle, summarizeDeveloperContext, type DeveloperContextBundle } from "@/lib/flowlyDeveloperContextEngine";
 import type { DeveloperIntelligenceDecision } from "@/lib/flowlyDeveloperIntelligenceEngine";
 import { validatePlanGrounding } from "@/lib/flowlyGroundingGuard";
+import { buildFlowlyProjectSnapshot } from "@/lib/flowlyProjectReader";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -215,10 +216,29 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
   const contextBundle = await buildDeveloperContextBundle(clean);
   const contextSummary = summarizeDeveloperContext(contextBundle);
 
+  const snapshot = await buildFlowlyProjectSnapshot().catch(() => null);
+  const developerContextForExecutor = {
+    contextSummary,
+    projectSnapshot: snapshot
+      ? {
+          framework: snapshot.framework,
+          packageInfo: snapshot.packageInfo,
+          counts: snapshot.counts,
+          keyPaths: snapshot.keyPaths,
+          publicRoutes: snapshot.publicRoutes.slice(0, 80),
+          privateRoutes: snapshot.privateRoutes.slice(0, 80),
+          apiRoutes: snapshot.apiRoutes.slice(0, 80),
+          seoRelevantPaths: snapshot.seoRelevantPaths,
+          notes: snapshot.notes,
+          warnings: snapshot.warnings,
+        }
+      : null,
+  };
+
   const [graph, impact, executorPlan] = await Promise.all([
     buildFlowlyProjectGraph(clean).catch(() => null),
     analyzeFlowlyImpact(clean).catch(() => null),
-    planExecutorV3(clean, contextSummary),
+    planExecutorV3(clean, developerContextForExecutor),
   ]);
 
   const graphSummary = graph ? summarizeProjectGraph(graph) : executorPlan.projectMap.projectGraph;
