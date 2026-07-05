@@ -1,6 +1,7 @@
 import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
 import { classifyFlowlyIntent, type FlowlyIntent, type FlowlyIntentMode } from "@/lib/flowlyIntentEngine";
 import { buildFlowlyIntelligenceContext, type FlowlyIntelligenceContext } from "@/lib/flowlyIntelligenceContext";
+import { runFlowReasoningPipeline, type FlowReasoningPipelineResult } from "@/lib/flowlyReasoningPipeline";
 
 export type FlowOrchestratorMode = FlowlyIntentMode;
 
@@ -62,6 +63,7 @@ export type FlowOrchestratorDecision = {
   guardrails: string[];
   reasoning: string[];
   audit?: FlowAuditReport;
+  reasoningPipeline?: Pick<FlowReasoningPipelineResult, "engine" | "usedAI" | "model" | "stages" | "critique">;
   intelligence?: {
     rawIntent: FlowlyIntent;
     confidence: number;
@@ -302,6 +304,19 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
   if (mode === "audit") {
     const context = await buildFlowlyIntelligenceContext(input.instruction);
     const audit = buildAuditReport(context);
+    const reasoningPipeline = await runFlowReasoningPipeline({
+      instruction: input.instruction,
+      conversationId: input.conversationId,
+      history: input.history,
+      currentPlan: input.currentPlan,
+      mode,
+      intent,
+      guardrails,
+      activeEngines: policy.activeEngines,
+      blockedEngines: policy.blockedEngines,
+      context,
+    });
+
     return {
       ok: true,
       engine: "flow_orchestrator_v2",
@@ -311,15 +326,23 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
       shouldExecute: false,
       requiresApproval: false,
       refinedInstruction: intentDecision.refinedInstruction,
-      reply: buildAuditReply(audit),
+      reply: reasoningPipeline.reply || buildAuditReply(audit),
       currentObjective: "Auditar Flowly OS sin ejecutar cambios",
       ...policy,
       guardrails,
       reasoning: [
         ...intentDecision.reasoning,
         "Modo auditoría confirmado: se devuelve informe y roadmap, no plan de PR.",
+        "Flow Reasoning Pipeline ejecutó Architect Pass, Critic Pass y Final Pass antes de responder.",
       ],
       audit,
+      reasoningPipeline: {
+        engine: reasoningPipeline.engine,
+        usedAI: reasoningPipeline.usedAI,
+        model: reasoningPipeline.model,
+        stages: reasoningPipeline.stages,
+        critique: reasoningPipeline.critique,
+      },
       intelligence: {
         rawIntent: intentDecision.intent,
         confidence: intentDecision.confidence,
@@ -332,7 +355,19 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
 
   if (mode === "consultation" || mode === "diagnostic" || mode === "conversation" || (mode === "planning" && intentDecision.explicitNoExecution)) {
     const context = await buildFlowlyIntelligenceContext(input.instruction);
-    const reply = await askOpenAIForReply({ input, context, mode, intent, guardrails });
+    const reasoningPipeline = await runFlowReasoningPipeline({
+      instruction: input.instruction,
+      conversationId: input.conversationId,
+      history: input.history,
+      currentPlan: input.currentPlan,
+      mode,
+      intent,
+      guardrails,
+      activeEngines: policy.activeEngines,
+      blockedEngines: policy.blockedEngines,
+      context,
+    });
+
     return {
       ok: true,
       engine: "flow_orchestrator_v2",
@@ -342,7 +377,7 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
       shouldExecute: false,
       requiresApproval: mode === "planning",
       refinedInstruction: intentDecision.refinedInstruction,
-      reply: reply || fallbackReply(mode, intent, hasCurrentPlan(input.currentPlan)),
+      reply: reasoningPipeline.reply || fallbackReply(mode, intent, hasCurrentPlan(input.currentPlan)),
       currentObjective,
       ...policy,
       guardrails,
@@ -350,8 +385,15 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
         ...intentDecision.reasoning,
         mode === "planning" && intentDecision.explicitNoExecution
           ? "El usuario pidió plan, pero prohibió código/ejecución: se entrega propuesta sin activar Pipeline."
-          : "Modo no ejecutivo: se responde con OpenAI + contexto y se bloquea ejecución.",
+          : "Modo no ejecutivo: se responde con Flow Reasoning Pipeline y se bloquea ejecución.",
       ],
+      reasoningPipeline: {
+        engine: reasoningPipeline.engine,
+        usedAI: reasoningPipeline.usedAI,
+        model: reasoningPipeline.model,
+        stages: reasoningPipeline.stages,
+        critique: reasoningPipeline.critique,
+      },
       intelligence: {
         rawIntent: intentDecision.intent,
         confidence: intentDecision.confidence,
