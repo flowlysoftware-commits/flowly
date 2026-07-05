@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { CheckCircle2, LayoutDashboard, LogIn, Sparkles, TrendingUp } from "lucide-react";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 type GoogleAnalyticsWindow = Window & typeof globalThis & {
@@ -11,6 +11,14 @@ type GoogleAnalyticsWindow = Window & typeof globalThis & {
 };
 
 export default function BienvenidoPage() {
+  return (
+    <Suspense fallback={<BienvenidoLoading />}>
+      <BienvenidoContent />
+    </Suspense>
+  );
+}
+
+function BienvenidoContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
 
@@ -107,6 +115,18 @@ export default function BienvenidoPage() {
             </div>
           </div>
         </section>
+      </div>
+    </main>
+  );
+}
+
+function BienvenidoLoading() {
+  return (
+    <main className="min-h-screen flowly-public px-6 py-10 text-white">
+      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center justify-center">
+        <div className="flowly-glass rounded-[2rem] px-8 py-6 text-center">
+          <p className="text-sm font-semibold text-white/70">Preparando bienvenida...</p>
+        </div>
       </div>
     </main>
   );
