@@ -63,7 +63,7 @@ export type FlowOrchestratorDecision = {
   guardrails: string[];
   reasoning: string[];
   audit?: FlowAuditReport;
-  reasoningPipeline?: Pick<FlowReasoningPipelineResult, "engine" | "usedAI" | "model" | "stages" | "critique">;
+  reasoningPipeline?: Pick<FlowReasoningPipelineResult, "engine" | "usedAI" | "model" | "stages" | "critique" | "certification">;
   intelligence?: {
     rawIntent: FlowlyIntent;
     confidence: number;
@@ -357,6 +357,7 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
         model: reasoningPipeline.model,
         stages: reasoningPipeline.stages,
         critique: reasoningPipeline.critique,
+        certification: reasoningPipeline.certification,
       },
       intelligence: {
         rawIntent: intentDecision.intent,
@@ -408,6 +409,7 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
         model: reasoningPipeline.model,
         stages: reasoningPipeline.stages,
         critique: reasoningPipeline.critique,
+        certification: reasoningPipeline.certification,
       },
       intelligence: {
         rawIntent: intentDecision.intent,

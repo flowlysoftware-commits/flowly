@@ -1,9 +1,10 @@
 import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
+import { buildCertificationFailureReply, buildFlowCertificationPrompt, certifyFlowReasoningResponse, type FlowCertificationResult } from "@/lib/flowlyCertificationEngine";
 import type { FlowlyIntelligenceContext } from "@/lib/flowlyIntelligenceContext";
 import type { FlowOrchestratorIntent, FlowOrchestratorMode, FlowOrchestratorEngineName } from "@/lib/flowlyOrchestrator";
 
 export type FlowReasoningStage = {
-  id: "intent" | "context" | "architect" | "critic" | "final";
+  id: "intent" | "context" | "architect" | "critic" | "final" | "certification";
   label: string;
   status: "done" | "fallback";
   summary: string;
@@ -31,6 +32,7 @@ export type FlowReasoningPipelineResult = {
   draft: string;
   critique: string;
   stages: FlowReasoningStage[];
+  certification?: FlowCertificationResult;
 };
 
 function trimText(value: string, limit: number) {
@@ -83,6 +85,7 @@ function contextPayload(input: FlowReasoningPipelineInput) {
     projectSnapshotText: trimText(input.context.projectSnapshotText || "", 9000),
     docsSources: input.context.sources.slice(0, 18),
     docsContext: trimText(input.context.docsContext, 26000),
+    certificationContract: buildFlowCertificationPrompt(input),
     warnings: input.context.warnings,
   };
 }
@@ -92,8 +95,8 @@ function modeInstructions(mode: FlowOrchestratorMode) {
     return [
       "El usuario ha pedido auditoría. Debes entregar una auditoría real, amplia y crítica.",
       "No conviertas la auditoría en plan de PR. No propongas ejecutar ahora.",
-      "Cubre arquitectura, diseño, UX, conversión, SEO, performance, código, Developer, Companion y roadmap.",
-      "Sé específico con lo que falta y evita respuestas cortas o genéricas.",
+      "Cubre solo las áreas que puedas justificar con evidencias reales del contexto; si un área no tiene evidencia, márcala como no certificada.",
+      "No uses una plantilla genérica. La auditoría debe citar archivos/docs/rutas reales y terminar con veredicto Flow Certification.",
     ].join("\n");
   }
 
@@ -165,6 +168,7 @@ async function runArchitectPass(input: FlowReasoningPipelineInput) {
     "Para SEO/metadata/Open Graph en Flowly, prioriza archivos reales como app/layout.tsx, app/page.tsx, app/sitemap.ts, app/robots.ts, app/manifest.ts, app/opengraph-image.tsx, app/twitter-image.tsx, app/icon.png o public/favicon.ico cuando existan en el snapshot.",
     "Nunca inventes que has ejecutado código. Nunca propongas PR si el modo no lo permite.",
     modeInstructions(input.mode),
+    buildFlowCertificationPrompt(input),
     "Responde en español profesional, con detalle útil y sin relleno.",
   ].join("\n\n");
 
@@ -185,6 +189,7 @@ async function runCriticPass(input: FlowReasoningPipelineInput, draft: string) {
     "Tu tarea es revisar la respuesta del arquitecto antes de entregarla al usuario.",
     "Detecta si incumple intención, si es demasiado genérica, si propone ejecución prohibida, si repite auditorías cuando se pidió plan, o si le falta concreción.",
     "Detecta grounding débil: menciones a index.html, about.html, blog.html, header.php o archivos no verificados por Project Snapshot/Project Graph.",
+    "En modo audit, rechaza respuestas tipo checklist si no citan fuentes reales, si hablan de SEO sin relación con el target, o si no terminan con veredicto de certificación.",
     "Devuelve una crítica breve y accionable en español. No reescribas toda la respuesta.",
   ].join("\n");
 
@@ -197,6 +202,7 @@ async function runCriticPass(input: FlowReasoningPipelineInput, draft: string) {
       intent: input.intent,
       guardrails: input.guardrails,
       blockedEngines: input.blockedEngines,
+      certificationContract: buildFlowCertificationPrompt(input),
       draft: trimText(draft, 10000),
     }),
     temperature: 0.05,
@@ -212,12 +218,13 @@ async function runFinalPass(input: FlowReasoningPipelineInput, draft: string, cr
     "Reescribe la respuesta final usando el borrador, la crítica y el contexto.",
     "Reglas estrictas:",
     "- Respeta exactamente el modo clasificado.",
-    "- Si mode=audit, entrega auditoría y roadmap; no PR.",
+    "- Si mode=audit, entrega auditoría certificable basada en evidencias; no PR.",
     "- Si mode=planning, entrega plan pequeño; no auditoría completa.",
     "- Si mode=diagnostic, diagnostica el fallo; no audites Flowly entero.",
     "- Si hay motores bloqueados, no digas que se usarán.",
     "- Grounding obligatorio: no menciones index.html, about.html, blog.html, header.php ni archivos genéricos si el Project Snapshot indica Next.js App Router.",
     "- Para SEO/metadata/Open Graph, usa únicamente rutas reales del Project Snapshot/Project Graph; si no existen, dilo.",
+    "- Cumple el Flow Certification Contract: fuentes reales, hallazgos con evidencia, límites y veredicto.",
     "- Mantén tono de ingeniero senior, claro y directo.",
   ].join("\n");
 
@@ -228,6 +235,7 @@ async function runFinalPass(input: FlowReasoningPipelineInput, draft: string, cr
       payload: contextPayload(input),
       draft: trimText(draft, 14000),
       critique: trimText(critique, 4000),
+      certificationContract: buildFlowCertificationPrompt(input),
     }),
     temperature: 0.08,
     maxOutputTokens: input.mode === "audit" ? 4600 : 2800,
@@ -259,6 +267,18 @@ export async function runFlowReasoningPipeline(input: FlowReasoningPipelineInput
     stages.push({ id: "final", label: "Final Pass", status: "fallback", summary: "Se entrega respuesta fallback segura." });
   }
 
+  const certification = certifyFlowReasoningResponse({ ...input, reply });
+  stages.push({
+    id: "certification",
+    label: "Flow Certification",
+    status: certification.certified ? "done" : "fallback",
+    summary: certification.summary,
+  });
+
+  if (!certification.certified && input.mode === "audit") {
+    reply = buildCertificationFailureReply({ ...input, reply }, certification);
+  }
+
   return {
     ok: true,
     engine: "flow_reasoning_pipeline_v1",
@@ -268,5 +288,6 @@ export async function runFlowReasoningPipeline(input: FlowReasoningPipelineInput
     draft: architect.text,
     critique,
     stages,
+    certification,
   };
 }

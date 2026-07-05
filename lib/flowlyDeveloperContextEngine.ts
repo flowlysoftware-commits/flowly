@@ -42,6 +42,7 @@ const ALWAYS_READ = [
   "docs/architecture-bible/28-execution-engine.md",
   "docs/architecture-bible/29-flowly-cognitive-loop.md",
   "docs/agent-operating-protocol/developer-pipeline.md",
+  "docs/agent-operating-protocol/04-flow-certification.md",
 ];
 
 const TOPIC_DOCS: Array<{ target: string; terms: string[]; paths: string[] }> = [
