@@ -11,6 +11,7 @@ import { isEvidenceCheckInstruction, runFlowlyEvidenceCheck } from "@/lib/flowly
 import { analyzeIntentTransition, mustTreatAsPlanningTransition } from "@/lib/flowlyIntentTransitionGuard";
 import { analyzeMissionRelevance, buildIndependentArchitectureCritiqueReply, isIndependentArchitectureCritiqueInstruction } from "@/lib/flowlyMissionRelevanceFilter";
 import { analyzeTurnIsolation } from "@/lib/flowlyTurnIsolationGuard";
+import { analyzeGeneralConversationMode, buildGeneralConversationReply } from "@/lib/flowlyGeneralConversationMode";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,34 @@ export async function POST(request: NextRequest) {
     });
 
     const intentTransition = analyzeIntentTransition(instruction);
+    const generalConversation = analyzeGeneralConversationMode({
+      instruction,
+      missionRelevant: missionRelevance.relevant,
+      isolatedIntent: turnIsolation.intent,
+    });
+
+    if (generalConversation.shouldHandle) {
+      const reply = await buildGeneralConversationReply(instruction, generalConversation.category);
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: reply,
+        intent: "general_conversation",
+        details: { activeMission, missionRelevance, turnIsolation, generalConversation },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: "general_conversation",
+        shouldRun: false,
+        conversationReply: reply,
+        mission: null,
+        missionRelevance,
+        turnIsolation,
+        generalConversation,
+      });
+    }
 
     if ((turnIsolation.intent === "audit_evidence_check" || isEvidenceCheckInstruction(instruction)) && !mustTreatAsPlanningTransition(instruction)) {
       const evidence = await runFlowlyEvidenceCheck(instruction);
