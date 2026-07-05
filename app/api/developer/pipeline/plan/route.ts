@@ -9,6 +9,7 @@ import { buildMissionStatusReply, getActiveDeveloperMission, interpretDeveloperM
 import { fixDeveloperPipelinePullRequest } from "@/lib/flowlyDeveloperPipeline";
 import { isEvidenceCheckInstruction, runFlowlyEvidenceCheck } from "@/lib/flowlyEvidenceCheck";
 import { analyzeIntentTransition, mustTreatAsPlanningTransition } from "@/lib/flowlyIntentTransitionGuard";
+import { analyzeMissionRelevance, buildIndependentArchitectureCritiqueReply, isIndependentArchitectureCritiqueInstruction } from "@/lib/flowlyMissionRelevanceFilter";
 
 export const runtime = "nodejs";
 
@@ -27,18 +28,44 @@ export async function POST(request: NextRequest) {
     ].slice(-24);
     const rememberedPlan = await getLatestDeveloperSessionPlan(conversationId);
     const activeMission = await getActiveDeveloperMission(conversationId);
-    const currentPlan = body.currentPlan && typeof body.currentPlan === "object"
-      ? body.currentPlan
-      : activeMission?.approved_plan || activeMission?.current_plan || rememberedPlan?.plan || null;
+    const missionRelevance = analyzeMissionRelevance({ mission: activeMission, instruction });
+    const missionForTurn = missionRelevance.relevant ? activeMission : null;
+    const historyForTurn = missionRelevance.relevant ? history : [];
+    const currentPlan = missionRelevance.relevant
+      ? (body.currentPlan && typeof body.currentPlan === "object"
+          ? body.currentPlan
+          : missionForTurn?.approved_plan || missionForTurn?.current_plan || rememberedPlan?.plan || null)
+      : null;
 
     await logDeveloperConversationEvent({
       conversationId,
       role: "user",
       content: instruction,
-      details: { source: "developer_page", activeMission },
+      details: { source: "developer_page", activeMission, missionRelevance },
     });
 
     const intentTransition = analyzeIntentTransition(instruction);
+
+    if (!missionRelevance.relevant && isIndependentArchitectureCritiqueInstruction(instruction)) {
+      const reply = buildIndependentArchitectureCritiqueReply(instruction);
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: reply,
+        intent: "architecture_critique",
+        details: { activeMission, missionRelevance },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: "architecture_critique",
+        shouldRun: false,
+        conversationReply: reply,
+        mission: null,
+        missionRelevance,
+      });
+    }
 
     if (isEvidenceCheckInstruction(instruction) && !mustTreatAsPlanningTransition(instruction)) {
       const evidence = await runFlowlyEvidenceCheck(instruction);
@@ -47,7 +74,7 @@ export async function POST(request: NextRequest) {
         role: "assistant",
         content: evidence.reply,
         intent: "audit_evidence_check",
-        details: { evidence, activeMission },
+        details: { evidence, activeMission, missionRelevance },
       });
 
       return NextResponse.json({
@@ -57,11 +84,11 @@ export async function POST(request: NextRequest) {
         shouldRun: false,
         conversationReply: evidence.reply,
         evidence,
-        mission: activeMission,
+        mission: missionForTurn,
       });
     }
 
-    const missionDirective = interpretDeveloperMissionInstruction({ mission: activeMission, instruction });
+    const missionDirective = interpretDeveloperMissionInstruction({ mission: missionForTurn, instruction });
 
     if (missionDirective.kind === "fix_active_pr" && missionDirective.mission) {
       const pr = missionDirective.mission.pull_request_url || String(missionDirective.mission.pull_request_number || "");
@@ -121,7 +148,7 @@ export async function POST(request: NextRequest) {
       instruction,
       conversationId,
       currentPlan,
-      history,
+      history: historyForTurn,
     });
 
     if (!orchestration.shouldPlan && !orchestration.shouldExecute) {
@@ -147,7 +174,7 @@ export async function POST(request: NextRequest) {
       instruction: orchestration.refinedInstruction || instruction,
       conversationId,
       currentPlan,
-      history,
+      history: historyForTurn,
     });
 
     if (!intelligence.shouldPlan) {
@@ -172,7 +199,7 @@ export async function POST(request: NextRequest) {
     const conversation = decideDeveloperConversation({
       instruction: intelligence.refinedInstruction || instruction,
       currentPlan,
-      history,
+      history: historyForTurn,
     });
 
     if (conversation.conversationOnly && intelligence.intent !== "new_task" && intelligence.intent !== "refinement") {
@@ -199,7 +226,7 @@ export async function POST(request: NextRequest) {
         risk: result.risk,
         pull_request_url: null,
         branch: null,
-        details: { ...result, conversationId, intelligence, orchestration, intentTransition },
+        details: { ...result, conversationId, intelligence, orchestration, intentTransition, missionRelevance },
       });
     } catch {
       // El log no debe bloquear el plan.
@@ -219,7 +246,7 @@ export async function POST(request: NextRequest) {
       status: "planning",
       currentStep: "plan_ready_waiting_approval",
       currentPlan: result,
-      details: { sessionPlanId, orchestration, intelligence, intentTransition },
+      details: { sessionPlanId, orchestration, intelligence, intentTransition, missionRelevance },
     });
 
     const resultWithSession = { ...result, sessionPlanId, orchestration, mission };
