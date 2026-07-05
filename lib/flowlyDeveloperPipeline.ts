@@ -1,9 +1,10 @@
 import { inspectPullRequestForQA, fixPullRequestWithQA } from "@/lib/flowlyQAAgent";
 import { planExecutorV3, runExecutorV3, runExecutorV3FromApprovedPlan, type ExecutorV3Plan, type ExecutorV3RunResult } from "@/lib/flowlyExecutorV3";
-import { getGitHubExecutorConfig } from "@/lib/flowlyGitHubExecutor";
+import { getGitHubExecutorConfig, listRepositoryTree } from "@/lib/flowlyGitHubExecutor";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph } from "@/lib/flowlyProjectGraph";
 import { buildDeveloperContextBundle, summarizeDeveloperContext, type DeveloperContextBundle } from "@/lib/flowlyDeveloperContextEngine";
 import type { DeveloperIntelligenceDecision } from "@/lib/flowlyDeveloperIntelligenceEngine";
+import { validatePlanGrounding } from "@/lib/flowlyGroundingGuard";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -273,8 +274,53 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
   };
 }
 
+async function listExistingRepositoryPaths() {
+  const tree = await listRepositoryTree();
+  return (tree.items || [])
+    .filter((item) => item.type === "blob")
+    .map((item) => item.path);
+}
+
 export async function runDeveloperPipeline(instruction: string, approved: boolean, approvedPlan?: DeveloperPipelinePlan): Promise<DeveloperPipelineRunResult> {
   const contextBundle = await buildDeveloperContextBundle(instruction);
+
+  if (approvedPlan) {
+    const existingPaths = await listExistingRepositoryPaths().catch(() => []);
+    const grounding = validatePlanGrounding({
+      objective: approvedPlan.instruction || instruction,
+      files: (approvedPlan.proposedFiles || []).map((file) => file.path),
+      existingPaths,
+    });
+
+    if (!grounding.allowed) {
+      const error = grounding.reasons.join(" ") || "Grounding Guard bloqueó la ejecución por seguridad.";
+      const safeFileSet = new Set(grounding.safeFiles);
+      const blockedResult = {
+        ...approvedPlan,
+        status: "planned" as const,
+        proposedFiles: (approvedPlan.proposedFiles || []).filter((file) => safeFileSet.has(file.path)),
+        preflight: {
+          ...approvedPlan.preflight,
+          ok: false,
+          status: "blocked" as const,
+          blockedReason: error,
+          checks: [
+            ...(approvedPlan.preflight?.checks || []),
+            { label: "Grounding Guard", ok: false, detail: error },
+          ],
+        },
+        error,
+      };
+
+      return {
+        ...blockedResult,
+        pipelineVersion: "developer_pipeline_v1",
+        stages: buildRunStages({ prCreated: false, error }),
+        nextAction: "Grounding Guard ha bloqueado la ejecución. Rehaz el plan usando únicamente archivos reales del Project Graph y manteniendo el objetivo aprobado.",
+      };
+    }
+  }
+
   const result = approvedPlan
     ? await runExecutorV3FromApprovedPlan(approvedPlan, approved)
     : await runExecutorV3(instruction, approved, summarizeDeveloperContext(contextBundle));
