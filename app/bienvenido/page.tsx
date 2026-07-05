@@ -6,13 +6,6 @@ import { CheckCircle2, LayoutDashboard, LogIn, Sparkles, TrendingUp } from "luci
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-declare global {
-  interface Window {
-    fbq?: (...args: unknown[]) => void;
-    gtag?: (...args: unknown[]) => void;
-  }
-}
-
 export default function BienvenidoPage() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
