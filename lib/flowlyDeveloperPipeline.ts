@@ -7,6 +7,8 @@ import type { DeveloperIntelligenceDecision } from "@/lib/flowlyDeveloperIntelli
 import { validatePlanGrounding } from "@/lib/flowlyGroundingGuard";
 import { buildFlowlyProjectSnapshot } from "@/lib/flowlyProjectReader";
 import { evaluateGoalFidelity, isBudgetCrmObjective } from "@/lib/flowlyGoalFidelityGuard";
+import { getPlannerAllowedScope } from "@/lib/flowlyPlannerScopeGuard";
+import { blocksUnnecessaryClarification, mustTreatAsPlanningTransition } from "@/lib/flowlyIntentTransitionGuard";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -101,6 +103,45 @@ function buildNaturalDeveloperReply(params: { instruction: string; context: Deve
 }
 
 
+function buildBudgetCrmTechnicalPlanReply(intro: string) {
+  const scope = getPlannerAllowedScope("añadir presupuestos al CRM");
+  const allowed = scope.allowedFiles;
+
+  return [
+    intro,
+    "",
+    "1. Qué ya existe",
+    "- `app/admin/presupuestos/page.tsx`: existe y contiene lógica de presupuestos (`BudgetModule`, `SalesBudget`, Supabase y UI de presupuestos).",
+    "- `app/admin/presupuestos/pdf.tsx`: existe y contiene el generador PDF de presupuestos con `@react-pdf/renderer` y tipos `BudgetItem`.",
+    "- `app/admin/clientes/page.tsx`: existe y gestiona clientes/contactos con Supabase.",
+    "",
+    "2. Qué falta",
+    "- Integrar la experiencia de presupuestos con la ficha/listado de clientes para poder trabajar presupuestos asociados a clientes desde el CRM.",
+    "- Confirmar, durante ejecución, si la asociación cliente-presupuesto ya existe en los datos o si debe añadirse una relación mínima sin duplicar facturación.",
+    "",
+    "3. Qué archivos se modificarían",
+    "- `app/admin/clientes/page.tsx`: añadir entrada o acción contextual hacia presupuestos del cliente, sin reorganizar el CRM completo.",
+    "- `app/admin/presupuestos/page.tsx`: aceptar o filtrar el contexto de cliente si la página ya permite crear/listar presupuestos.",
+    "- `app/admin/presupuestos/pdf.tsx`: solo si el PDF necesita mostrar datos del cliente asociados al presupuesto.",
+    "",
+    "4. Qué archivos nuevos serían necesarios",
+    "- Ninguno de entrada. Con la evidencia actual, el plan debe intentar reutilizar los tres archivos existentes antes de crear componentes o rutas nuevas.",
+    "",
+    "5. Qué archivos NO se tocarían",
+    ...allowed.map((path) => `- Scope permitido: ${path}`),
+    "- No se tocarán Brain, Heart, Memory, Mission Engine, Context Builder, Project Reader, GitHub Executor ni `app/docs/studio/page.tsx`.",
+    "- No se tocarán payment links salvo que una nueva verificación de evidencia demuestre que presupuestos los usa directamente.",
+    "",
+    "6. Riesgos",
+    "- Riesgo medio: falta verificar el modelo real de datos de `SalesBudget` más allá de las primeras líneas entregadas.",
+    "- Riesgo medio: si no existe relación cliente-presupuesto en base de datos, la ejecución puede requerir SQL adicional antes de cerrar el cambio.",
+    "- Riesgo bajo: el scope está acotado y evita cambios de UX general o archivos irrelevantes.",
+    "",
+    "7. Veredicto: PLAN APROBABLE",
+    "- Aprobable para una implementación acotada, siempre que la ejecución permanezca dentro del scope validado o pida nueva evidencia antes de ampliarlo.",
+  ].join("\n");
+}
+
 function buildConcreteStudioReply(params: {
   instruction: string;
   intelligence?: DeveloperIntelligenceDecision;
@@ -129,6 +170,10 @@ function buildConcreteStudioReply(params: {
       "",
       "No voy a proponer archivos fuera del scope validado. Ejecuta primero una verificación de evidencia si quieres ampliar el scope de esta misión.",
     ].join("\n");
+  }
+
+  if (isBudgetCrmObjective(instruction) && (mustTreatAsPlanningTransition(instruction) || blocksUnnecessaryClarification(instruction) || !hasProposedFiles)) {
+    return buildBudgetCrmTechnicalPlanReply(intro);
   }
 
   if (context.intent.needsClarification && !hasProposedFiles) {

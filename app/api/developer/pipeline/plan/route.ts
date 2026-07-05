@@ -8,6 +8,7 @@ import { orchestrateFlowRequest } from "@/lib/flowlyOrchestrator";
 import { buildMissionStatusReply, getActiveDeveloperMission, interpretDeveloperMissionInstruction, rememberDeveloperMission, updateDeveloperMission } from "@/lib/flowlyMissionEngine";
 import { fixDeveloperPipelinePullRequest } from "@/lib/flowlyDeveloperPipeline";
 import { isEvidenceCheckInstruction, runFlowlyEvidenceCheck } from "@/lib/flowlyEvidenceCheck";
+import { analyzeIntentTransition, mustTreatAsPlanningTransition } from "@/lib/flowlyIntentTransitionGuard";
 
 export const runtime = "nodejs";
 
@@ -37,7 +38,9 @@ export async function POST(request: NextRequest) {
       details: { source: "developer_page", activeMission },
     });
 
-    if (isEvidenceCheckInstruction(instruction)) {
+    const intentTransition = analyzeIntentTransition(instruction);
+
+    if (isEvidenceCheckInstruction(instruction) && !mustTreatAsPlanningTransition(instruction)) {
       const evidence = await runFlowlyEvidenceCheck(instruction);
       await logDeveloperConversationEvent({
         conversationId,
@@ -196,7 +199,7 @@ export async function POST(request: NextRequest) {
         risk: result.risk,
         pull_request_url: null,
         branch: null,
-        details: { ...result, conversationId, intelligence, orchestration },
+        details: { ...result, conversationId, intelligence, orchestration, intentTransition },
       });
     } catch {
       // El log no debe bloquear el plan.
@@ -216,7 +219,7 @@ export async function POST(request: NextRequest) {
       status: "planning",
       currentStep: "plan_ready_waiting_approval",
       currentPlan: result,
-      details: { sessionPlanId, orchestration, intelligence },
+      details: { sessionPlanId, orchestration, intelligence, intentTransition },
     });
 
     const resultWithSession = { ...result, sessionPlanId, orchestration, mission };
