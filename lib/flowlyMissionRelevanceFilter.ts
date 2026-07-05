@@ -49,7 +49,6 @@ const STATUS_PATTERNS = [
 
 const INDEPENDENT_ARCHITECTURE_PATTERNS = [
   /\b(actua\s+como\s+cto|actúa\s+como\s+cto|como\s+cto)\b/,
-  /\b(no\s+planifiques|no\s+implementes|no\s+abras\s+pr)\b/,
   /\b(lo\s+apruebas\s+o\s+lo\s+rechazas|apruebas\s+o\s+rechazas|critica\s+mi\s+idea|critiques\s+la\s+idea)\b/,
   /\b(segundo\s+brain|otro\s+brain|budgetengine|nuevo\s+engine|motor\s+nuevo)\b/,
 ];

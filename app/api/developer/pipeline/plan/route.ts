@@ -10,6 +10,7 @@ import { fixDeveloperPipelinePullRequest } from "@/lib/flowlyDeveloperPipeline";
 import { isEvidenceCheckInstruction, runFlowlyEvidenceCheck } from "@/lib/flowlyEvidenceCheck";
 import { analyzeIntentTransition, mustTreatAsPlanningTransition } from "@/lib/flowlyIntentTransitionGuard";
 import { analyzeMissionRelevance, buildIndependentArchitectureCritiqueReply, isIndependentArchitectureCritiqueInstruction } from "@/lib/flowlyMissionRelevanceFilter";
+import { analyzeTurnIsolation } from "@/lib/flowlyTurnIsolationGuard";
 
 export const runtime = "nodejs";
 
@@ -28,7 +29,8 @@ export async function POST(request: NextRequest) {
     ].slice(-24);
     const rememberedPlan = await getLatestDeveloperSessionPlan(conversationId);
     const activeMission = await getActiveDeveloperMission(conversationId);
-    const missionRelevance = analyzeMissionRelevance({ mission: activeMission, instruction });
+    const turnIsolation = analyzeTurnIsolation(instruction);
+    const missionRelevance = analyzeMissionRelevance({ mission: turnIsolation.mustIgnoreCurrentMission ? null : activeMission, instruction });
     const missionForTurn = missionRelevance.relevant ? activeMission : null;
     const historyForTurn = missionRelevance.relevant ? history : [];
     const currentPlan = missionRelevance.relevant
@@ -41,40 +43,19 @@ export async function POST(request: NextRequest) {
       conversationId,
       role: "user",
       content: instruction,
-      details: { source: "developer_page", activeMission, missionRelevance },
+      details: { source: "developer_page", activeMission, missionRelevance, turnIsolation },
     });
 
     const intentTransition = analyzeIntentTransition(instruction);
 
-    if (!missionRelevance.relevant && isIndependentArchitectureCritiqueInstruction(instruction)) {
-      const reply = buildIndependentArchitectureCritiqueReply(instruction);
-      await logDeveloperConversationEvent({
-        conversationId,
-        role: "assistant",
-        content: reply,
-        intent: "architecture_critique",
-        details: { activeMission, missionRelevance },
-      });
-
-      return NextResponse.json({
-        ok: true,
-        conversationOnly: true,
-        conversationIntent: "architecture_critique",
-        shouldRun: false,
-        conversationReply: reply,
-        mission: null,
-        missionRelevance,
-      });
-    }
-
-    if (isEvidenceCheckInstruction(instruction) && !mustTreatAsPlanningTransition(instruction)) {
+    if ((turnIsolation.intent === "audit_evidence_check" || isEvidenceCheckInstruction(instruction)) && !mustTreatAsPlanningTransition(instruction)) {
       const evidence = await runFlowlyEvidenceCheck(instruction);
       await logDeveloperConversationEvent({
         conversationId,
         role: "assistant",
         content: evidence.reply,
         intent: "audit_evidence_check",
-        details: { evidence, activeMission, missionRelevance },
+        details: { evidence, activeMission, missionRelevance, turnIsolation },
       });
 
       return NextResponse.json({
@@ -85,6 +66,29 @@ export async function POST(request: NextRequest) {
         conversationReply: evidence.reply,
         evidence,
         mission: missionForTurn,
+        turnIsolation,
+      });
+    }
+
+    if (!missionRelevance.relevant && turnIsolation.intent === "architecture_critique" && isIndependentArchitectureCritiqueInstruction(instruction)) {
+      const reply = buildIndependentArchitectureCritiqueReply(instruction);
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: reply,
+        intent: "architecture_critique",
+        details: { activeMission, missionRelevance, turnIsolation },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: "architecture_critique",
+        shouldRun: false,
+        conversationReply: reply,
+        mission: null,
+        missionRelevance,
+        turnIsolation,
       });
     }
 
@@ -157,7 +161,7 @@ export async function POST(request: NextRequest) {
         role: "assistant",
         content: orchestration.reply,
         intent: orchestration.intent,
-        details: { orchestration },
+        details: { orchestration, turnIsolation },
       });
 
       return NextResponse.json({
@@ -183,7 +187,7 @@ export async function POST(request: NextRequest) {
         role: "assistant",
         content: intelligence.directReply,
         intent: intelligence.intent,
-        details: { intelligence },
+        details: { intelligence, turnIsolation },
       });
 
       return NextResponse.json({
