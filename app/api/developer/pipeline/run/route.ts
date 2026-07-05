@@ -3,6 +3,7 @@ import { runDeveloperPipeline } from "@/lib/flowlyDeveloperPipeline";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { logDeveloperConversationEvent } from "@/lib/flowlyDeveloperIntelligenceEngine";
 import { getLatestDeveloperSessionPlan, updateLatestDeveloperSessionPlanStatus } from "@/lib/flowlyDeveloperSessionEngine";
+import { rememberDeveloperMission, updateDeveloperMission } from "@/lib/flowlyMissionEngine";
 import type { DeveloperPipelinePlan } from "@/lib/flowlyDeveloperPipeline";
 
 export const runtime = "nodejs";
@@ -29,6 +30,15 @@ export async function POST(request: NextRequest) {
     }
 
     await updateLatestDeveloperSessionPlanStatus(conversationId, "approved", { approvedAt: new Date().toISOString() });
+    await rememberDeveloperMission({
+      conversationId,
+      objective: executionInstruction,
+      status: "approved",
+      currentStep: "approval_received",
+      currentPlan: approvedPlan,
+      approvedPlan,
+      details: { approvedAt: new Date().toISOString() },
+    });
 
     await logDeveloperConversationEvent({
       conversationId,
@@ -40,6 +50,16 @@ export async function POST(request: NextRequest) {
 
     const result = await runDeveloperPipeline(executionInstruction, approved, approvedPlan);
     await updateLatestDeveloperSessionPlanStatus(conversationId, result.error ? "error" : result.pullRequestUrl ? "completed" : "running", result);
+    await updateDeveloperMission({
+      conversationId,
+      status: result.error ? "failed" : result.pullRequestUrl ? "executing" : "failed",
+      currentStep: result.error ? "execution_failed" : result.pullRequestUrl ? "pull_request_created_waiting_checks" : "execution_finished_without_pr",
+      branch: result.branch || null,
+      pullRequestUrl: result.pullRequestUrl || null,
+      pullRequestNumber: result.pullRequestNumber || null,
+      lastError: result.error || null,
+      details: result,
+    });
 
     try {
       await supabaseAdmin.from("flowly_developer_pipeline_runs").insert({
