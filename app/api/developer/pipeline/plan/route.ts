@@ -7,6 +7,7 @@ import { getLatestDeveloperSessionPlan, getRecentDeveloperSessionMessages, remem
 import { orchestrateFlowRequest } from "@/lib/flowlyOrchestrator";
 import { buildMissionStatusReply, getActiveDeveloperMission, interpretDeveloperMissionInstruction, rememberDeveloperMission, updateDeveloperMission } from "@/lib/flowlyMissionEngine";
 import { fixDeveloperPipelinePullRequest } from "@/lib/flowlyDeveloperPipeline";
+import { isEvidenceCheckInstruction, runFlowlyEvidenceCheck } from "@/lib/flowlyEvidenceCheck";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,27 @@ export async function POST(request: NextRequest) {
       content: instruction,
       details: { source: "developer_page", activeMission },
     });
+
+    if (isEvidenceCheckInstruction(instruction)) {
+      const evidence = await runFlowlyEvidenceCheck(instruction);
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: evidence.reply,
+        intent: "audit_evidence_check",
+        details: { evidence, activeMission },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: "audit_evidence_check",
+        shouldRun: false,
+        conversationReply: evidence.reply,
+        evidence,
+        mission: activeMission,
+      });
+    }
 
     const missionDirective = interpretDeveloperMissionInstruction({ mission: activeMission, instruction });
 
