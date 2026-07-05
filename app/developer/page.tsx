@@ -85,6 +85,7 @@ type DeveloperIntelligence = {
 
 type DeveloperPlan = {
   ok?: boolean;
+  sessionPlanId?: string | null;
   error?: string;
   conversationOnly?: boolean;
   conversationIntent?: string;
