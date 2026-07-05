@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { runDeveloperPipeline } from "@/lib/flowlyDeveloperPipeline";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { logDeveloperConversationEvent } from "@/lib/flowlyDeveloperIntelligenceEngine";
+import { getLatestDeveloperSessionPlan, updateLatestDeveloperSessionPlanStatus } from "@/lib/flowlyDeveloperSessionEngine";
+import type { DeveloperPipelinePlan } from "@/lib/flowlyDeveloperPipeline";
 
 export const runtime = "nodejs";
 
@@ -10,24 +12,38 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const instruction = String(body.instruction || "").trim();
     const approved = Boolean(body.approved);
-    const approvedPlan = body.approvedPlan && typeof body.approvedPlan === "object" ? body.approvedPlan : undefined;
+    const approvedPlanFromBody = body.approvedPlan && typeof body.approvedPlan === "object" ? (body.approvedPlan as DeveloperPipelinePlan) : undefined;
     const conversationId = typeof body.conversationId === "string" ? body.conversationId : undefined;
     if (!instruction) return NextResponse.json({ ok: false, error: "Falta la instrucción para ejecutar Developer Pipeline." }, { status: 400 });
     if (!approved) return NextResponse.json({ ok: false, error: "Necesito aprobación explícita antes de crear rama y Pull Request." }, { status: 400 });
+
+    const latestSessionPlan = approvedPlanFromBody ? null : await getLatestDeveloperSessionPlan(conversationId);
+    const approvedPlan = approvedPlanFromBody || (latestSessionPlan?.plan as DeveloperPipelinePlan | undefined);
+    const executionInstruction = approvedPlan?.instruction || instruction;
+
+    if (!approvedPlan) {
+      return NextResponse.json(
+        { ok: false, error: "No encuentro un plan aprobado/congelado para esta sesión. Pide primero una propuesta y después pulsa aprobar." },
+        { status: 400 }
+      );
+    }
+
+    await updateLatestDeveloperSessionPlanStatus(conversationId, "approved", { approvedAt: new Date().toISOString() });
 
     await logDeveloperConversationEvent({
       conversationId,
       role: "system",
       content: "Aprobación recibida. Developer ejecuta el plan congelado en una rama segura.",
       intent: "approval",
-      details: { instruction, approvedPlanSummary: approvedPlan?.summary || null },
+      details: { instruction: executionInstruction, approvedPlanSummary: approvedPlan?.summary || null },
     });
 
-    const result = await runDeveloperPipeline(instruction, approved, approvedPlan);
+    const result = await runDeveloperPipeline(executionInstruction, approved, approvedPlan);
+    await updateLatestDeveloperSessionPlanStatus(conversationId, result.error ? "error" : result.pullRequestUrl ? "completed" : "running", result);
 
     try {
       await supabaseAdmin.from("flowly_developer_pipeline_runs").insert({
-        instruction,
+        instruction: executionInstruction,
         phase: "run",
         status: result.status || (result.error ? "error" : "created"),
         risk: result.risk,

@@ -96,6 +96,76 @@ function buildNaturalDeveloperReply(params: { instruction: string; context: Deve
   return `${base} También he cargado ${context.loadedSources.length} documentos relevantes (${sources.join(", ") || "Flowly Knowledge"}). Tengo una propuesta segura y te explicaré el cambio en lenguaje de producto, no solo como lista de archivos.${changePreview} Solo si das el OK crearé una rama y un Pull Request.`;
 }
 
+
+function buildConcreteStudioReply(params: {
+  intelligence?: DeveloperIntelligenceDecision;
+  context: DeveloperContextBundle;
+  hasProposedFiles: boolean;
+  humanChanges: Array<{ title: string; description: string; userImpact?: string; safetyNote?: string }>;
+  proposedFiles: Array<{ path: string; message?: string }>;
+  target?: string;
+}) {
+  const { intelligence, context, humanChanges, proposedFiles, hasProposedFiles } = params;
+  const target = params.target || context.intent.target || "Flowly OS";
+  const docs = context.loadedSources.slice(0, 4).map((source) => source.title).filter(Boolean);
+  const intro =
+    intelligence?.directReply && !/voy a investigar|consultando|preparar[eé] una propuesta/i.test(intelligence.directReply)
+      ? intelligence.directReply.trim()
+      : `He analizado la petición dentro de Flowly OS y la enfoco sobre ${target}.`;
+
+  if (context.intent.needsClarification && !hasProposedFiles) {
+    return [
+      intro,
+      "",
+      "Antes de tocar código necesito una precisión para no crear un cambio falso:",
+      `- Qué pantalla o flujo exacto quieres modificar dentro de ${target}.`,
+      "- Qué debe ver el usuario cuando el cambio esté terminado.",
+      "- Qué no quieres que toque.",
+    ].join("\n");
+  }
+
+  if (!hasProposedFiles) {
+    return [
+      intro,
+      "",
+      "Todavía no tengo un cambio de código suficientemente seguro para ejecutar.",
+      `He leído ${context.loadedSources.length} documentos (${docs.join(", ") || "Flowly Docs"}) y prefiero pedirte una instrucción más concreta antes que crear archivos duplicados o un PR vacío.`,
+    ].join("\n");
+  }
+
+  const changes = humanChanges.length
+    ? humanChanges
+        .slice(0, 5)
+        .map((item, index) => {
+          const impact = item.userImpact ? ` Impacto: ${item.userImpact}` : "";
+          return `${index + 1}. ${item.title}: ${item.description}${impact}`;
+        })
+        .join("\n")
+    : proposedFiles
+        .slice(0, 5)
+        .map((file, index) => `${index + 1}. ${file.message || `Ajustaré ${file.path} para cumplir la petición sin crear una pieza paralela.`}`)
+        .join("\n");
+
+  const safety = [
+    "No tocaré producción directamente.",
+    "No modificaré main.",
+    "No crearé motores duplicados.",
+    "No cambiaré Brain, Memory, Heart, Voice o GitHub Executor salvo que la petición lo exija claramente.",
+  ].join(" ");
+
+  return [
+    intro,
+    "",
+    "Mi propuesta concreta es:",
+    changes,
+    "",
+    `Documentación usada: ${docs.join(", ") || "AI_BOOTSTRAP + docs/SUMMARY"}.`,
+    `Seguridad: ${safety}`,
+    "",
+    "Si lo apruebas, crearé una rama y un Pull Request con exactamente este plan.",
+  ].join("\n");
+}
+
 function stage(id: DeveloperPipelineStageId, label: string, description: string, status: DeveloperPipelineStageStatus, details?: string[]): DeveloperPipelineStage {
   return { id, label, description, status, details };
 }
@@ -160,7 +230,14 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
   return {
     ...executorPlan,
     humanChangePlan,
-    conversationReply: options.intelligence?.directReply || buildNaturalDeveloperReply({ instruction: clean, context: contextBundle, hasProposedFiles, target: executorPlan.projectMap.modules[0], humanChanges: humanChangePlan }),
+    conversationReply: buildConcreteStudioReply({
+      intelligence: options.intelligence,
+      context: contextBundle,
+      hasProposedFiles,
+      target: executorPlan.projectMap.modules[0],
+      humanChanges: humanChangePlan,
+      proposedFiles: executorPlan.proposedFiles,
+    }),
     intelligence: options.intelligence,
     needsMoreContext: contextBundle.intent.needsClarification && !hasProposedFiles,
     pipelineVersion: "developer_pipeline_v1",

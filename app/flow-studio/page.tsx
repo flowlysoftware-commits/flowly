@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -60,6 +60,7 @@ type Stage = {
 
 type DeveloperPlan = {
   ok?: boolean;
+  sessionPlanId?: string | null;
   error?: string;
   instruction?: string;
   summary?: string;
@@ -228,6 +229,38 @@ export default function FlowStudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [showTechnical, setShowTechnical] = useState(false);
 
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("flowly-flow-studio-session");
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as {
+        conversationId?: string;
+        messages?: ChatMessage[];
+        plan?: DeveloperPlan | null;
+        mode?: typeof mode;
+      };
+      if (parsed.conversationId) setConversationId(parsed.conversationId);
+      if (Array.isArray(parsed.messages) && parsed.messages.length) setMessages(parsed.messages.slice(-20));
+      if (parsed.plan) {
+        setPlan(parsed.plan);
+        setMode(parsed.mode === "planned" || parsed.mode === "done" ? parsed.mode : "planned");
+      }
+    } catch {
+      // La sesión local nunca debe bloquear la pantalla.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "flowly-flow-studio-session",
+        JSON.stringify({ conversationId, messages: messages.slice(-20), plan, mode })
+      );
+    } catch {
+      // No bloquear si el navegador no permite localStorage.
+    }
+  }, [conversationId, messages, mode, plan]);
+
   const stages = useMemo(() => buildStages(mode, plan, run, error), [mode, plan, run, error]);
   const changes = useMemo(() => naturalChangePlan(plan), [plan]);
   const isBusy = mode === "planning" || mode === "running";
@@ -305,6 +338,7 @@ export default function FlowStudioPage() {
           instruction: plan.instruction || instruction,
           approved: true,
           approvedPlan: plan,
+          sessionPlanId: plan.sessionPlanId || null,
           conversationId,
         }),
       });
@@ -344,6 +378,11 @@ export default function FlowStudioPage() {
     setRun(null);
     setMode("idle");
     setError(null);
+    try {
+      window.localStorage.removeItem("flowly-flow-studio-session");
+    } catch {
+      // noop
+    }
   }
 
   return (

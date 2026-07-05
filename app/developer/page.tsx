@@ -271,6 +271,35 @@ export default function DeveloperControlCenterPage() {
     },
   ]);
 
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("flowly-developer-session");
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as {
+        conversationId?: string;
+        history?: Array<{ role: "user" | "brain"; text: string }>;
+        plan?: DeveloperPlan | null;
+        mode?: typeof mode;
+      };
+      if (parsed.conversationId) setConversationId(parsed.conversationId);
+      if (Array.isArray(parsed.history) && parsed.history.length) setHistory(parsed.history.slice(-24));
+      if (parsed.plan) {
+        setPlan(parsed.plan);
+        setMode(parsed.mode === "done" ? "done" : "planned");
+      }
+    } catch {
+      // La memoria local no debe bloquear Developer.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("flowly-developer-session", JSON.stringify({ conversationId, history: history.slice(-24), plan, mode }));
+    } catch {
+      // No bloquear si el navegador no permite localStorage.
+    }
+  }, [conversationId, history, mode, plan]);
+
   const explanation = useMemo(() => explainPlan(plan), [plan]);
   const timeline = useMemo(() => (run?.stages?.length ? run.stages : plan?.stages?.length ? plan.stages : buildTimeline(mode, plan, run, error)), [mode, plan, run, error]);
   const isBusy = mode === "planning" || mode === "running";
@@ -355,7 +384,7 @@ export default function DeveloperControlCenterPage() {
       const response = await fetch("/api/developer/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: clean, approved: true, approvedPlan: plan, conversationId }),
+        body: JSON.stringify({ instruction: clean, approved: true, approvedPlan: plan, sessionPlanId: plan.sessionPlanId || null, conversationId }),
       });
       const data = (await response.json()) as DeveloperRun;
       if (!response.ok || data.error) throw new Error(data.error || "No he podido ejecutar los cambios.");

@@ -3,6 +3,7 @@ import { planDeveloperPipeline } from "@/lib/flowlyDeveloperPipeline";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { decideDeveloperConversation } from "@/lib/flowlyDeveloperConversationEngine";
 import { logDeveloperConversationEvent, thinkWithDeveloperIntelligence } from "@/lib/flowlyDeveloperIntelligenceEngine";
+import { getLatestDeveloperSessionPlan, getRecentDeveloperSessionMessages, rememberDeveloperSessionPlan } from "@/lib/flowlyDeveloperSessionEngine";
 
 export const runtime = "nodejs";
 
@@ -13,8 +14,14 @@ export async function POST(request: NextRequest) {
     const conversationId = typeof body.conversationId === "string" ? body.conversationId : undefined;
     if (!instruction) return NextResponse.json({ ok: false, error: "Falta la instrucción para Developer Pipeline." }, { status: 400 });
 
-    const history = Array.isArray(body.history) ? body.history : [];
-    const currentPlan = body.currentPlan && typeof body.currentPlan === "object" ? body.currentPlan : null;
+    const clientHistory = Array.isArray(body.history) ? body.history : [];
+    const rememberedHistory = await getRecentDeveloperSessionMessages(conversationId);
+    const history = [
+      ...rememberedHistory.map((item) => ({ role: item.role, text: item.content })),
+      ...clientHistory,
+    ].slice(-24);
+    const rememberedPlan = await getLatestDeveloperSessionPlan(conversationId);
+    const currentPlan = body.currentPlan && typeof body.currentPlan === "object" ? body.currentPlan : rememberedPlan?.plan || null;
 
     await logDeveloperConversationEvent({
       conversationId,
@@ -85,6 +92,15 @@ export async function POST(request: NextRequest) {
       // El log no debe bloquear el plan.
     }
 
+    const sessionPlanId = await rememberDeveloperSessionPlan({
+      conversationId,
+      instruction: mergedInstruction,
+      plan: result,
+      summary: result.summary,
+      risk: result.risk,
+    });
+    const resultWithSession = { ...result, sessionPlanId };
+
     await logDeveloperConversationEvent({
       conversationId,
       role: "assistant",
@@ -93,7 +109,7 @@ export async function POST(request: NextRequest) {
       details: { planSummary: result.summary, risk: result.risk, proposedFiles: result.proposedFiles?.map((file) => file.path), intelligence },
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(resultWithSession);
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
