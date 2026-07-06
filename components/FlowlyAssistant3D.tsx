@@ -1,10 +1,20 @@
 "use client";
 
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows, useGLTF } from "@react-three/drei";
-import type { Group, Object3D, SkinnedMesh, Mesh, MeshStandardMaterial } from "three";
-import { Box3, Color, Vector3 } from "three";
+import { ContactShadows, Html, useFBX, useGLTF } from "@react-three/drei";
+import type {
+  AnimationAction,
+  AnimationClip,
+  Bone,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  SkinnedMesh,
+} from "three";
+import { AnimationMixer, Box3, Color, LoopRepeat, Vector3 } from "three";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FlowlyCompanionSkinTone } from "@/lib/flowlyCompanionSkins";
 
 export type { FlowlyCompanionSkinTone } from "@/lib/flowlyCompanionSkins";
@@ -38,8 +48,19 @@ type RuntimeSkin = {
   accent: string;
   light: string;
   emissive: string;
-  camera: [number, number, number];
   rotationY: number;
+};
+
+type RigBones = {
+  head?: Bone;
+  neck?: Bone;
+  spine?: Bone;
+  leftUpperArm?: Bone;
+  leftLowerArm?: Bone;
+  rightUpperArm?: Bone;
+  rightLowerArm?: Bone;
+  leftUpperLeg?: Bone;
+  rightUpperLeg?: Bone;
 };
 
 const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
@@ -49,8 +70,7 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
     accent: "#7c3aed",
     light: "#22d3ee",
     emissive: "#151a44",
-    camera: [0, 1.32, 4.1],
-    rotationY: 0,
+    rotationY: -Math.PI / 2,
   },
   cosmic: {
     key: "cosmic",
@@ -58,8 +78,7 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
     accent: "#a855f7",
     light: "#38bdf8",
     emissive: "#1e1148",
-    camera: [0, 1.32, 4.1],
-    rotationY: 0,
+    rotationY: -Math.PI / 2,
   },
   business: {
     key: "business",
@@ -67,8 +86,7 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
     accent: "#94a3b8",
     light: "#e5e7eb",
     emissive: "#111827",
-    camera: [0, 1.32, 4.1],
-    rotationY: 0,
+    rotationY: -Math.PI / 2,
   },
   neon: {
     key: "neon",
@@ -76,8 +94,7 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
     accent: "#14b8a6",
     light: "#67e8f9",
     emissive: "#052e2b",
-    camera: [0, 1.32, 4.1],
-    rotationY: 0,
+    rotationY: -Math.PI / 2,
   },
   expert: {
     key: "expert",
@@ -85,8 +102,7 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
     accent: "#d946ef",
     light: "#f0abfc",
     emissive: "#30105f",
-    camera: [0, 1.32, 4.1],
-    rotationY: 0,
+    rotationY: -Math.PI / 2,
   },
   chef: {
     key: "chef",
@@ -94,19 +110,36 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
     accent: "#f97316",
     light: "#fef3c7",
     emissive: "#431407",
-    camera: [0, 1.32, 4.1],
-    rotationY: 0,
+    rotationY: -Math.PI / 2,
   },
 };
+
+const ANIMATION_URLS = {
+  idle: "/avatars/Idle.fbx",
+  walk: "/avatars/Walking.fbx",
+  wave: "/avatars/Waving.fbx",
+  talk: "/avatars/Talking.fbx",
+  point: "/avatars/Pointing.fbx",
+} as const;
 
 function normalizeMode(mode?: AssistantMode) {
   if (mode === "tour") return "point";
   if (mode === "sit") return "idle";
+  if (mode === "attention") return "wave";
+  if (mode === "thinking") return "idle";
+  if (mode === "typing") return "talk";
+  if (mode === "reading") return "idle";
+  if (mode === "concerned") return "idle";
+  if (mode === "celebrating") return "wave";
   return mode || "idle";
 }
 
 function isMesh(object: Object3D): object is Mesh | SkinnedMesh {
   return "isMesh" in object && Boolean((object as Mesh).isMesh);
+}
+
+function isBone(object: Object3D): object is Bone {
+  return "isBone" in object && Boolean((object as Bone).isBone);
 }
 
 function cloneMaterial(material: unknown, skin: RuntimeSkin) {
@@ -116,10 +149,10 @@ function cloneMaterial(material: unknown, skin: RuntimeSkin) {
 
   const update = (mat: MeshStandardMaterial) => {
     const next = mat.clone();
-    if (next.color) next.color.lerp(tint, skin.key === "flowly" ? 0.08 : 0.22);
+    if (next.color) next.color.lerp(tint, skin.key === "flowly" ? 0.04 : 0.18);
     if ("emissive" in next && next.emissive) {
       next.emissive.copy(glow);
-      next.emissiveIntensity = skin.key === "flowly" ? 0.08 : 0.18;
+      next.emissiveIntensity = skin.key === "flowly" ? 0.06 : 0.16;
     }
     next.needsUpdate = true;
     return next;
@@ -130,51 +163,195 @@ function cloneMaterial(material: unknown, skin: RuntimeSkin) {
   return original;
 }
 
-function FlowlyModel({ modelUrl, mode, skinTone, facing }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "skinTone" | "facing">>) {
-  const groupRef = useRef<Group>(null);
-  const { scene } = useGLTF(modelUrl);
+function findRigBones(root: Object3D): RigBones {
+  const bones: RigBones = {};
+  const matches = (name: string, terms: string[]) => {
+    const clean = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return terms.some((term) => clean.includes(term));
+  };
+
+  root.traverse((object) => {
+    if (!isBone(object)) return;
+    const name = object.name;
+    if (!bones.head && matches(name, ["head"])) bones.head = object;
+    if (!bones.neck && matches(name, ["neck"])) bones.neck = object;
+    if (!bones.spine && matches(name, ["spine2", "chest", "spine"])) bones.spine = object;
+    if (!bones.leftUpperArm && matches(name, ["leftarm", "leftuparm", "leftshoulder", "mixamorigleftarm"])) bones.leftUpperArm = object;
+    if (!bones.leftLowerArm && matches(name, ["leftforearm", "leftlowerarm"])) bones.leftLowerArm = object;
+    if (!bones.rightUpperArm && matches(name, ["rightarm", "rightuparm", "rightshoulder", "mixamorigrigharm", "mixamorigrightarm"])) bones.rightUpperArm = object;
+    if (!bones.rightLowerArm && matches(name, ["rightforearm", "rightlowerarm"])) bones.rightLowerArm = object;
+    if (!bones.leftUpperLeg && matches(name, ["leftupleg", "leftleg", "leftthigh"])) bones.leftUpperLeg = object;
+    if (!bones.rightUpperLeg && matches(name, ["rightupleg", "rightleg", "rightthigh"])) bones.rightUpperLeg = object;
+  });
+
+  return bones;
+}
+
+function useCompanionFbxAnimations() {
+  const idle = useFBX(ANIMATION_URLS.idle);
+  const walk = useFBX(ANIMATION_URLS.walk);
+  const wave = useFBX(ANIMATION_URLS.wave);
+  const talk = useFBX(ANIMATION_URLS.talk);
+  const point = useFBX(ANIMATION_URLS.point);
+
+  return useMemo(() => {
+    const firstClip = (group: Group, name: string) => {
+      const clip = group.animations?.[0];
+      if (!clip) return null;
+      clip.name = name;
+      return clip;
+    };
+
+    return {
+      idle: firstClip(idle, "idle"),
+      walk: firstClip(walk, "walk"),
+      wave: firstClip(wave, "wave"),
+      talk: firstClip(talk, "talk"),
+      point: firstClip(point, "point"),
+    } satisfies Partial<Record<ReturnType<typeof normalizeMode>, AnimationClip | null>>;
+  }, [idle, point, talk, walk, wave]);
+}
+
+function FlowlyCharacterEngine({
+  modelUrl,
+  mode,
+  skinTone,
+  facing,
+}: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "skinTone" | "facing">>) {
+  const rootRef = useRef<Group>(null);
+  const modelRef = useRef<Group | null>(null);
+  const bonesRef = useRef<RigBones>({});
+  const mixerRef = useRef<AnimationMixer | null>(null);
+  const actionRef = useRef<AnimationAction | null>(null);
+  const { scene, animations: glbAnimations } = useGLTF(modelUrl);
+  const fbxAnimations = useCompanionFbxAnimations();
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
+  const targetMode = normalizeMode(mode);
 
   const normalizedScene = useMemo(() => {
-    const cloned = scene.clone(true);
+    const cloned = cloneSkeleton(scene) as Group;
     const box = new Box3().setFromObject(cloned);
     const size = new Vector3();
     const center = new Vector3();
     box.getSize(size);
     box.getCenter(center);
-    const largest = Math.max(size.x, size.y, size.z) || 1;
-    const scale = 2.45 / largest;
 
-    cloned.position.set(-center.x * scale, -box.min.y * scale - 1.28, -center.z * scale);
+    const height = size.y || 1;
+    const scale = 3.15 / height;
+
+    cloned.position.set(-center.x * scale, -box.min.y * scale - 1.48, -center.z * scale);
     cloned.scale.setScalar(scale);
+    cloned.rotation.y = skin.rotationY;
+
     cloned.traverse((object) => {
       if (isMesh(object)) {
         object.castShadow = true;
         object.receiveShadow = true;
+        object.frustumCulled = false;
         object.material = cloneMaterial(object.material, skin) as typeof object.material;
       }
     });
+
+    modelRef.current = cloned;
+    bonesRef.current = findRigBones(cloned);
     return cloned;
   }, [scene, skin]);
 
-  useFrame((state) => {
-    const group = groupRef.current;
-    if (!group) return;
-    const t = state.clock.elapsedTime;
-    const baseFacing = facing === "left" ? -0.2 : facing === "right" ? 0.2 : 0;
-    const talkPulse = mode === "talk" ? Math.sin(t * 14) * 0.012 : 0;
-    const walkStep = mode === "walk" ? Math.sin(t * 9) * 0.035 : 0;
-    const thinkingTurn = mode === "thinking" ? Math.sin(t * 1.2) * 0.08 : 0;
-    const pointTurn = mode === "point" || mode === "attention" ? Math.sin(t * 2.1) * 0.035 : 0;
+  const clipMap = useMemo(() => {
+    const map: Partial<Record<ReturnType<typeof normalizeMode>, AnimationClip>> = {};
+    const modelClip = glbAnimations?.[0];
+    if (modelClip) map.idle = modelClip;
+    Object.entries(fbxAnimations).forEach(([key, clip]) => {
+      if (clip) map[key as ReturnType<typeof normalizeMode>] = clip;
+    });
+    return map;
+  }, [fbxAnimations, glbAnimations]);
 
-    group.rotation.y = skin.rotationY + baseFacing + thinkingTurn + pointTurn;
-    group.rotation.z = walkStep;
-    group.position.y = Math.sin(t * 2.1) * 0.025 + talkPulse;
-    group.scale.setScalar(1 + (mode === "celebrating" ? Math.sin(t * 7) * 0.015 : 0));
+  useEffect(() => {
+    const root = normalizedScene;
+    mixerRef.current?.stopAllAction();
+    mixerRef.current = new AnimationMixer(root);
+    actionRef.current = null;
+    return () => {
+      mixerRef.current?.stopAllAction();
+      mixerRef.current = null;
+      actionRef.current = null;
+    };
+  }, [normalizedScene]);
+
+  useEffect(() => {
+    const mixer = mixerRef.current;
+    if (!mixer) return;
+    const clip = clipMap[targetMode] || clipMap.idle;
+    if (!clip) return;
+
+    const next = mixer.clipAction(clip, normalizedScene);
+    next.reset();
+    next.setLoop(LoopRepeat, Number.POSITIVE_INFINITY);
+    next.enabled = true;
+    next.clampWhenFinished = false;
+    next.timeScale = targetMode === "walk" ? 0.86 : targetMode === "talk" ? 1.05 : 0.72;
+    next.setEffectiveWeight(1);
+
+    const previous = actionRef.current;
+    if (previous && previous !== next) {
+      previous.fadeOut(0.22);
+      next.fadeIn(0.22).play();
+    } else {
+      next.play();
+    }
+    actionRef.current = next;
+  }, [clipMap, normalizedScene, targetMode]);
+
+  useFrame((state, delta) => {
+    const root = rootRef.current;
+    const model = modelRef.current;
+    if (!root || !model) return;
+
+    mixerRef.current?.update(delta);
+
+    const t = state.clock.elapsedTime;
+    const baseFacing = facing === "left" ? -0.22 : facing === "right" ? 0.22 : 0;
+    const isWalking = targetMode === "walk";
+    const isTalking = targetMode === "talk";
+    const isPointing = targetMode === "point";
+    const isWaving = targetMode === "wave";
+    const breathe = Math.sin(t * 2.0) * 0.018;
+    const weightShift = Math.sin(t * 0.86) * 0.026;
+    const talkPulse = isTalking ? Math.sin(t * 11) * 0.018 : 0;
+
+    root.position.y = breathe + talkPulse;
+    root.rotation.y = baseFacing + Math.sin(t * 0.55) * 0.035;
+    root.rotation.z = weightShift * 0.35;
+
+    const bones = bonesRef.current;
+    const headNod = Math.sin(t * (isTalking ? 6.5 : 1.4)) * (isTalking ? 0.075 : 0.035);
+    const headLook = Math.sin(t * 0.9) * 0.075;
+    if (bones.head) {
+      bones.head.rotation.x += headNod * delta * 4.5;
+      bones.head.rotation.y += headLook * delta * 3.2;
+    }
+    if (bones.neck) bones.neck.rotation.y += headLook * delta * 1.6;
+    if (bones.spine) bones.spine.rotation.z += weightShift * delta * 2.2;
+
+    const armSwing = Math.sin(t * (isWalking ? 7.5 : 1.8)) * (isWalking ? 0.26 : 0.045);
+    if (bones.leftUpperArm) bones.leftUpperArm.rotation.x += armSwing * delta * 6;
+    if (bones.rightUpperArm) bones.rightUpperArm.rotation.x -= armSwing * delta * 6;
+    if (bones.leftUpperLeg) bones.leftUpperLeg.rotation.x -= armSwing * delta * 4;
+    if (bones.rightUpperLeg) bones.rightUpperLeg.rotation.x += armSwing * delta * 4;
+
+    if (isWaving && bones.rightUpperArm) {
+      bones.rightUpperArm.rotation.z += Math.sin(t * 7.6) * delta * 8;
+      bones.rightUpperArm.rotation.x -= 0.85 * delta * 4;
+    }
+    if (isPointing && bones.rightUpperArm) {
+      bones.rightUpperArm.rotation.x -= 0.62 * delta * 4;
+      bones.rightUpperArm.rotation.z -= 0.3 * delta * 4;
+    }
   });
 
   return (
-    <group ref={groupRef}>
+    <group ref={rootRef}>
       <primitive object={normalizedScene} />
     </group>
   );
@@ -182,19 +359,18 @@ function FlowlyModel({ modelUrl, mode, skinTone, facing }: Required<Pick<FlowlyA
 
 function FlowlyV3Loading() {
   return (
-    <div className="flowly-v3-loading" aria-hidden="true">
-      <span />
-    </div>
+    <Html center className="flowly-v3-loading-label">
+      <span>Cargando Flow…</span>
+    </Html>
   );
 }
 
 /**
- * Companion V3: renderizador único real.
+ * Companion Engine V3.
  *
- * Esta versión aparca el avatar CSS antiguo y vuelve al cuerpo Flow real en GLB.
- * El componente es la única entrada visual: no hay muñeco blanco, no hay fallback
- * superpuesto y no hay burbuja arrastrable. El usuario arrastra el propio cuerpo
- * del Companion mediante la clase `flowly-v3-drag-handle`.
+ * Motor real GLB + FBX: normaliza el modelo por BoundingBox, lo orienta hacia
+ * cámara, reproduce animaciones con AnimationMixer y añade micro-presencia aunque
+ * el clip no tenga suficientes huesos animados.
  */
 export default function FlowlyAssistant3D({
   modelUrl = "/avatars/flowly.glb",
@@ -218,22 +394,23 @@ export default function FlowlyAssistant3D({
     >
       <Canvas
         className="flowly-v3-canvas"
-        camera={{ position: skin.camera, fov: 32, near: 0.1, far: 100 }}
+        orthographic
+        camera={{ position: [0, 1.35, 8], zoom: 92, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
       >
-        <ambientLight intensity={1.35} />
-        <directionalLight position={[2.4, 3.8, 4.2]} intensity={2.4} castShadow />
-        <pointLight position={[-2, 1.6, 2]} color={skin.light} intensity={1.2} />
-        <Suspense fallback={null}>
-          <FlowlyModel modelUrl={modelUrl} mode={safeMode} skinTone={skin.key} facing={facing} />
-          <ContactShadows position={[0, -1.25, 0]} opacity={0.28} scale={4} blur={2.6} far={3.5} />
+        <ambientLight intensity={1.45} />
+        <directionalLight position={[2.4, 4.2, 5.2]} intensity={2.25} castShadow />
+        <pointLight position={[-2.2, 2.2, 3]} color={skin.light} intensity={1.18} />
+        <Suspense fallback={<FlowlyV3Loading />}>
+          <FlowlyCharacterEngine modelUrl={modelUrl} mode={safeMode} skinTone={skin.key} facing={facing} />
+          <ContactShadows position={[0, -1.46, 0]} opacity={0.26} scale={3.8} blur={2.8} far={3.4} />
         </Suspense>
       </Canvas>
-      <FlowlyV3Loading />
     </button>
   );
 }
 
 useGLTF.preload("/avatars/flowly.glb");
+Object.values(ANIMATION_URLS).forEach((url) => useFBX.preload(url));

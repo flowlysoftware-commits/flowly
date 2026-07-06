@@ -4105,8 +4105,8 @@ input[type="date"].input-dark { color-scheme: dark; }
 }
 
 .flowly-companion-runtime .flowly-companion-avatar-shell {
-  width: clamp(174px, 15vw, 238px) !important;
-  height: clamp(238px, 28vh, 332px) !important;
+  width: clamp(220px, 20vw, 320px) !important;
+  height: clamp(318px, 39vh, 460px) !important;
   max-width: calc(100vw - 20px) !important;
   max-height: calc(100dvh - 20px) !important;
   overflow: visible !important;
@@ -4193,17 +4193,17 @@ input[type="date"].input-dark { color-scheme: dark; }
 }
 
 .flowly-companion-runtime .flowly-companion-status-avatar {
-  width: 64px !important;
-  height: 82px !important;
-  min-width: 64px !important;
+  width: 78px !important;
+  height: 104px !important;
+  min-width: 78px !important;
   display: block !important;
   position: relative !important;
   overflow: visible !important;
 }
 
 .flowly-companion-runtime .flowly-companion-status-avatar .flowly-v3-stage {
-  min-width: 64px !important;
-  min-height: 82px !important;
+  min-width: 78px !important;
+  min-height: 104px !important;
   cursor: default !important;
 }
 
@@ -4217,12 +4217,12 @@ input[type="date"].input-dark { color-scheme: dark; }
 }
 
 .flowly-companion-runtime .flowly-companion-bubble {
-  right: clamp(12rem, 15vw, 17rem) !important;
-  bottom: clamp(12rem, 17vw, 19rem) !important;
+  right: clamp(14rem, 21vw, 22rem) !important;
+  bottom: clamp(15rem, 24vw, 25rem) !important;
 }
 
 .flowly-companion-runtime .flowly-companion-panel {
-  bottom: clamp(14rem, 20vw, 21rem) !important;
+  bottom: clamp(17rem, 27vw, 27rem) !important;
 }
 
 @keyframes flowlyV3Presence {
@@ -4237,10 +4237,22 @@ input[type="date"].input-dark { color-scheme: dark; }
 
 @media (max-width: 820px) {
   .flowly-companion-runtime .flowly-companion-avatar-shell {
-    width: clamp(142px, 42vw, 174px) !important;
-    height: clamp(196px, 34vh, 244px) !important;
+    width: clamp(168px, 48vw, 220px) !important;
+    height: clamp(236px, 42vh, 310px) !important;
   }
   .flowly-companion-runtime .flowly-companion-panel {
     bottom: 11rem !important;
   }
+}
+
+.flowly-v3-loading-label span {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(7, 10, 22, .72);
+  color: rgba(219, 234, 254, .92);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  white-space: nowrap;
 }
