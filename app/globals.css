@@ -3429,3 +3429,53 @@ input[type="date"].input-dark { color-scheme: dark; }
   0%, 100% { transform: translateY(0) scale(1); }
   45% { transform: translateY(-2.5%) scale(1.018); }
 }
+
+/* Companion V2: single renderer, no duplicate CSS fallback/avatar bubble. */
+.flowly-companion-runtime .flowly-css-avatar,
+.flowly-companion-runtime .flowly-css-avatar * {
+  display: none !important;
+}
+.flowly-companion-avatar-shell::before,
+.flowly-companion-avatar-shell::after,
+.flowly-companion-avatar-shell .evo-3d-aura-one,
+.flowly-companion-avatar-shell .evo-3d-aura-two,
+.flowly-companion-avatar-shell .evo-3d-pulse {
+  display: none !important;
+  content: none !important;
+}
+.flowly-companion-runtime .flowly-companion-avatar-shell {
+  overflow: visible !important;
+  isolation: isolate;
+}
+.flowly-companion-runtime .flowly-3d-stage,
+.flowly-companion-runtime .evo-companion-3d {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.flowly-companion-runtime .flowly-3d-stage canvas,
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-3d-stage canvas {
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+.flowly-companion-runtime .flowly-companion-status-avatar .evo-companion-3d,
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-3d-stage {
+  width: 4.8rem !important;
+  height: 5.8rem !important;
+}
+.flowly-avatar-load-error {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: rgba(255,255,255,.74);
+  font-size: .7rem;
+  text-align: center;
+}

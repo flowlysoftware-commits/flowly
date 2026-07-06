@@ -25,6 +25,7 @@ import {
   Shirt,
 } from "lucide-react";
 import EvolutionaryCompanionAvatar from "@/components/EvolutionaryCompanionAvatar";
+import { FLOWLY_COMPANION_SKINS, getCompanionSkin } from "@/lib/flowlyCompanionSkins";
 import {
   companionStats,
   getCompanionContext,
@@ -52,19 +53,9 @@ export default function FlowlyCompanionRuntime() {
   const [thinking, setThinking] = useState(false);
   const [lifeMode, setLifeMode] = useState<string | null>(null);
   const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
-  const companionSkins = useMemo(
-    () => [
-      { id: "flowly", label: "Flow", modelUrl: "/avatars/flowly.glb", tone: "flowly" as const, hint: "Base" },
-      { id: "cosmic", label: "Cósmico", modelUrl: "/avatars/flowly.glb", tone: "cosmic" as const, hint: "Místico" },
-      { id: "business", label: "Business", modelUrl: "/avatars/flowly.glb", tone: "business" as const, hint: "Formal" },
-      { id: "neon", label: "Neón", modelUrl: "/avatars/flowly.glb", tone: "neon" as const, hint: "Energía" },
-      { id: "expert", label: "Experta", modelUrl: "/avatars/flowly.glb", tone: "expert" as const, hint: "Consejera" },
-      { id: "chef", label: "Chef Flow", modelUrl: "/avatars/flowly.glb", tone: "chef" as const, hint: "Creativo" },
-    ],
-    [],
-  );
+  const companionSkins = FLOWLY_COMPANION_SKINS;
   const [selectedSkin, setSelectedSkin] = useState("flowly");
-  const activeSkin = companionSkins.find((skin) => skin.id === selectedSkin) || companionSkins[0];
+  const activeSkin = getCompanionSkin(selectedSkin);
   const avatarUrl = activeSkin.modelUrl;
   const avatarTone = activeSkin.tone;
   const [entranceState, setEntranceState] = useState<"intro" | "settled">(
@@ -304,6 +295,12 @@ export default function FlowlyCompanionRuntime() {
     "--flow-x": `${travel.x}px`,
     "--flow-y": `${travel.y}px`,
   } as CSSProperties;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedSkin = window.localStorage.getItem("flowly_companion_skin");
+    if (savedSkin) setSelectedSkin(getCompanionSkin(savedSkin).id);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
