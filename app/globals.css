@@ -3114,3 +3114,56 @@ input[type="date"].input-dark { color-scheme: dark; }
 .flowly-companion-status-avatar .flowly-3d-stage {
   min-height: 4.5rem;
 }
+
+
+/* Companion skin viewport fix: el personaje manda, no la burbuja */
+.flowly-companion-avatar-shell {
+  width: clamp(15rem, 16vw, 19rem) !important;
+  height: clamp(21rem, 24vw, 28rem) !important;
+  overflow: visible !important;
+}
+.flowly-companion-avatar-shell::before,
+.flowly-companion-avatar-shell::after,
+.evo-3d-aura-one,
+.evo-3d-aura-two,
+.evo-3d-pulse {
+  opacity: 0 !important;
+  display: none !important;
+}
+.evo-companion-3d,
+.evo-companion-3d .flowly-3d-stage,
+.flowly-companion-avatar-shell .flowly-3d-stage {
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+}
+.flowly-companion-panel .flowly-companion-status-card .evo-companion-3d-compact,
+.flowly-companion-status-avatar .evo-companion-3d-compact {
+  width: 5.2rem !important;
+  height: 6.4rem !important;
+}
+.flowly-companion-panel .flowly-companion-status-card .flowly-3d-stage,
+.flowly-companion-status-avatar .flowly-3d-stage {
+  width: 5.2rem !important;
+  height: 6.4rem !important;
+}
+.flowly-companion-life-hud,
+.flowly-companion-avatar-cta,
+.flowly-companion-voice-cta {
+  display: none !important;
+}
+.flowly-companion-bubble {
+  right: clamp(13rem, 16vw, 18rem) !important;
+  bottom: clamp(13rem, 16vw, 18rem) !important;
+  width: min(20rem, calc(100vw - 18rem)) !important;
+}
+.flowly-companion-panel {
+  bottom: clamp(14rem, 18vw, 20rem) !important;
+}
+@media (max-width: 820px) {
+  .flowly-companion-avatar-shell {
+    width: 11rem !important;
+    height: 16rem !important;
+  }
+  .flowly-companion-panel { bottom: 11rem !important; }
+}

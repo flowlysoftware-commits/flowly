@@ -144,11 +144,15 @@ function softenTPose(basePose: Map<string, THREE.Quaternion>, rig: RigBones, mod
   aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm || rig.rightHand, rightTarget, influence);
 }
 
-function getFacingYaw(facing: Required<FlowlyAssistant3DProps>["facing"]) {
-  const modelForwardCorrection = -Math.PI / 2;
-  if (facing === "right") return modelForwardCorrection - 0.18;
-  if (facing === "left") return modelForwardCorrection + 0.18;
-  return modelForwardCorrection;
+function getModelProfile(modelUrl: string, facing: Required<FlowlyAssistant3DProps>["facing"]) {
+  const url = modelUrl.toLowerCase();
+  const baseTurn = facing === "right" ? -0.16 : facing === "left" ? 0.16 : 0;
+
+  // Cada skin puede venir de una herramienta distinta y con escala/orientación distinta.
+  // Normalizamos por bounding box y solo dejamos aquí una corrección visual de frente.
+  if (url.includes("grandma")) return { yaw: 0 + baseTurn, targetHeight: 2.95, lift: -1.42 };
+  if (url.includes("chef")) return { yaw: 0 + baseTurn, targetHeight: 3.05, lift: -1.46 };
+  return { yaw: -Math.PI / 2 + baseTurn, targetHeight: 3.05, lift: -1.46 };
 }
 
 function Model({
@@ -162,6 +166,21 @@ function Model({
   const fbx = useLoader(FBXLoader, isFbx ? modelUrl : "/avatars/Idle.fbx") as THREE.Group & { animations?: THREE.AnimationClip[] };
   const sourceScene = isFbx ? fbx : gltf.scene;
   const scene = useMemo(() => clone(sourceScene) as THREE.Group, [sourceScene]);
+  const profile = useMemo(() => getModelProfile(modelUrl, facing), [modelUrl, facing]);
+  const normalizedBounds = useMemo(() => {
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const height = size.y > 0.001 ? size.y : 1;
+    const scale = profile.targetHeight / height;
+    return {
+      scale,
+      position: new THREE.Vector3(-center.x, -box.min.y + profile.lift, -center.z),
+    };
+  }, [scene, profile]);
   const rig = useMemo(() => getRig(scene), [scene]);
   const basePose = useMemo(() => rememberBasePose(rig), [rig]);
   const activeMode = normalizeMode(mode);
@@ -231,7 +250,7 @@ function Model({
       applyOffset(basePose, rig.spine1, Math.sin(t * 3.2) * 0.014, 0, Math.sin(t * 2.4) * 0.02);
     }
 
-    const baseYaw = getFacingYaw(facing);
+    const baseYaw = profile.yaw;
     const concernedLean = mode === "concerned" ? -0.05 : 0;
     const readingLean = mode === "reading" || mode === "typing" ? 0.035 : 0;
     const attentiveLean = activeAttention ? 0.045 : concernedLean + readingLean;
@@ -241,12 +260,12 @@ function Model({
     // Movimiento del personaje completo. Las piernas no se fuerzan: el Runtime mueve el cuerpo por pantalla.
     group.current.position.set(Math.sin(t * 0.38) * 0.012, -1.1 + bodyBreath, 0);
     group.current.rotation.set(attentiveLean, baseYaw + looking, slow * 0.004);
-    group.current.scale.setScalar(isFbx ? 0.016 : 1.28);
+    group.current.scale.setScalar(normalizedBounds.scale);
   });
 
   return (
-    <group ref={group} position={[0, -1.1, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={isFbx ? 0.016 : 1.28}>
-      <primitive object={scene} />
+    <group ref={group} position={[0, -1.1, 0]} rotation={[0, profile.yaw, 0]} scale={normalizedBounds.scale}>
+      <primitive object={scene} position={normalizedBounds.position} />
     </group>
   );
 }
