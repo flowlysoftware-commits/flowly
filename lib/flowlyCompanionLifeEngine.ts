@@ -88,7 +88,18 @@ export const companionLifePhases = [
   { id: "relationship", title: "Relationship Engine", rule: "Ajusta estilo, memoria operativa y confianza según el uso del usuario." },
 ] as const;
 
-export function decideCompanionLife(pathname: string, options?: { thinking?: boolean; speaking?: boolean; listening?: boolean; moving?: boolean; open?: boolean; }): CompanionLifeDecision {
+export type CompanionLifeOptions = {
+  thinking?: boolean;
+  speaking?: boolean;
+  listening?: boolean;
+  moving?: boolean;
+  open?: boolean;
+  minimized?: boolean;
+  energy?: number;
+  level?: number;
+};
+
+export function decideCompanionLife(pathname: string, options?: CompanionLifeOptions): CompanionLifeDecision {
   const path = pathname.toLowerCase();
   if (options?.listening) {
     return { state: "Listening", label: "Te estoy escuchando", phase: "presence", spatialTarget: "lowerCenter", voiceStyle: { speed: 0.94, pauseMs: 420, tone: "warm", intensity: 0.68 } };
@@ -102,6 +113,13 @@ export function decideCompanionLife(pathname: string, options?: { thinking?: boo
   if (options?.moving) {
     return { state: "Walking", label: "Moviéndome por el espacio de trabajo", phase: "spatial", spatialTarget: "dock", voiceStyle: { speed: 1, pauseMs: 300, tone: "warm", intensity: 0.7 } };
   }
+  if (options?.minimized) {
+    return { state: "Breathing", label: "Presente en segundo plano", phase: "presence", spatialTarget: "dock", voiceStyle: { speed: 0.94, pauseMs: 420, tone: "soft", intensity: 0.54 } };
+  }
+  if (typeof options?.energy === "number" && options.energy < 35) {
+    return { state: "Concerned", label: "Bajando intensidad para acompañarte mejor", phase: "emotion", spatialTarget: "dock", voiceStyle: { speed: 0.9, pauseMs: 520, tone: "soft", intensity: 0.52 } };
+  }
+
   return routeMap.find((item) => item.test(path))?.decision || {
     state: options?.open ? "Looking" : "Breathing",
     label: options?.open ? "Mirando el trabajo contigo" : "Presente en Flowly",
