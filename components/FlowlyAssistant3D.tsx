@@ -485,9 +485,16 @@ export default function FlowlyAssistant3D({
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && onClick) {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       className={`flowly-avatar-renderer-v6 flowly-v6-skin-${skin.key}`}
       data-mode={safeMode}
       data-facing={facing}
@@ -511,7 +518,7 @@ export default function FlowlyAssistant3D({
           <ContactShadows position={[0, -1.84, 0]} opacity={0.28} scale={4.6} blur={2.8} far={3.4} />
         </Suspense>
       </Canvas>
-    </button>
+    </div>
   );
 }
 

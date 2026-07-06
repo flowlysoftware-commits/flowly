@@ -5820,3 +5820,112 @@ input[type="date"].input-dark { color-scheme: dark; }
   .flowly-v6-hud, .flowly-v6-talk { display:none; }
   .flowly-v6-panel { right:.5rem; top:4.6rem; width:calc(100vw - 1rem); }
 }
+
+/* ==========================================================
+   FLOWLY COMPANION V6.1 — HARD CLEANUP OVERRIDES
+   The runtime is now a full-screen stage and Flow is a single fixed actor.
+   Position, drag, bubble, shadow and HUD all belong to .flowly-v6-actor.
+   This deliberately neutralizes older overlay movement systems.
+   ========================================================== */
+.flowly-v6-runtime {
+  --flow-x: calc(100vw - 17.5rem);
+  --flow-y: calc(100vh - 25rem);
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  z-index: 120 !important;
+  pointer-events: none !important;
+  transform: none !important;
+  translate: none !important;
+  opacity: 0;
+  overflow: visible !important;
+  transition: opacity .22s ease !important;
+}
+.flowly-v6-runtime[data-ready="true"] { opacity: 1 !important; }
+.flowly-v6-actor {
+  position: fixed !important;
+  left: var(--flow-x) !important;
+  top: var(--flow-y) !important;
+  width: clamp(12.4rem, 13vw, 14.8rem) !important;
+  height: clamp(18.8rem, 36vh, 22.8rem) !important;
+  pointer-events: auto !important;
+  touch-action: none !important;
+  cursor: grab !important;
+  user-select: none !important;
+  transform: translate3d(0,0,0) !important;
+  transition: left .72s cubic-bezier(.22,1,.36,1), top .72s cubic-bezier(.22,1,.36,1) !important;
+  z-index: 2 !important;
+  overflow: visible !important;
+}
+.flowly-v6-runtime[data-dragging="true"] .flowly-v6-actor {
+  cursor: grabbing !important;
+  transition: none !important;
+}
+.flowly-v6-character {
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 1.15rem !important;
+  width: 100% !important;
+  height: calc(100% - 1.2rem) !important;
+  translate: -50% 0 !important;
+  z-index: 3 !important;
+  pointer-events: auto !important;
+  overflow: visible !important;
+}
+.flowly-avatar-renderer-v6,
+.flowly-avatar-renderer-v6 > div,
+.flowly-v3-canvas,
+.flowly-avatar-renderer-v6 canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+.flowly-avatar-renderer-v6 {
+  appearance: none !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  outline: none !important;
+  cursor: inherit !important;
+}
+.flowly-v6-shadow,
+.flowly-v6-bubble,
+.flowly-v6-hud,
+.flowly-v6-talk,
+.flowly-v6-close {
+  transform: translate3d(0,0,0);
+}
+.flowly-v6-bubble {
+  left: 50% !important;
+  bottom: calc(100% - 3.1rem) !important;
+  translate: -50% 0 !important;
+  z-index: 6 !important;
+}
+.flowly-v6-shadow {
+  left: 50% !important;
+  bottom: .55rem !important;
+  translate: -50% 0 !important;
+  z-index: 1 !important;
+}
+.flowly-v6-hud { z-index: 5 !important; }
+.flowly-v6-close,
+.flowly-v6-talk,
+.flowly-v6-panel,
+.flowly-v6-launcher { pointer-events: auto !important; }
+.flowly-v6-legacy-preview {
+  width: min(18rem, 78vw);
+  height: min(26rem, 52vh);
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
+.flowly-v6-legacy-preview .flowly-avatar-renderer-v6 { width: 100%; height: 100%; }
+@media (max-width: 820px) {
+  .flowly-v6-runtime { --flow-x: calc(100vw - 10.5rem); --flow-y: calc(100dvh - 16rem); }
+  .flowly-v6-actor { width: 9.4rem !important; height: 14.4rem !important; }
+}
