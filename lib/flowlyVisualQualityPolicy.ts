@@ -36,7 +36,7 @@ function touchesVisualFile(file: ExecutorFileChange) {
 }
 
 function hasResponsiveBound(content: string) {
-  return /clamp\(|min\(|max\(|max-width|max-height|calc\(100v[wh]|max\(0px|@media|overflow\s*:/i.test(content);
+  return /clamp\(|min\(|max\(|max-width|max-height|calc\(100(?:d|s)?v[wh]|100dvh|100svh|max\(0px|@media|overflow\s*:/i.test(content);
 }
 
 function hasSafeRemediationPattern(content: string) {
@@ -53,7 +53,7 @@ function hasUnsafeScale(content: string) {
 }
 
 function hasViewportRisk(content: string) {
-  return /(100vh|100vw|fixed|absolute)/i.test(content) && !/(max-height|max-width|overflow|clamp\(|calc\(100v[wh]|@media)/i.test(content);
+  return /(100vh|100vw|100dvh|100svh|fixed|absolute)/i.test(content) && !/(max-height|max-width|overflow|clamp\(|calc\(100(?:d|s)?v[wh]|100dvh|100svh|@media)/i.test(content);
 }
 
 function hasCompanionAvatarBounds(content: string) {

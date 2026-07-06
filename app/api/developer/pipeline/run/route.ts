@@ -7,6 +7,7 @@ import { getActiveDeveloperMission, rememberDeveloperMission, updateDeveloperMis
 import type { DeveloperPipelinePlan } from "@/lib/flowlyDeveloperPipeline";
 import { buildApprovedPlanMismatchReply, resolveApprovedPlanForTurn } from "@/lib/flowlyApprovedPlanResolver";
 import { attachExecutableApprovedPlanContract } from "@/lib/flowlyExecutableApprovedPlanContract";
+import { isVisualRemediationInstruction } from "@/lib/flowlyVisualQualityPolicy";
 
 export const runtime = "nodejs";
 
@@ -30,10 +31,14 @@ export async function POST(request: NextRequest) {
       recentPlans,
       bodyPlan: approvedPlanFromBody,
     });
+    const isVisualRemediation = isVisualRemediationInstruction(instruction);
     const approvedPlan = planResolution.safePlan
       ? attachExecutableApprovedPlanContract(planResolution.safePlan as DeveloperPipelinePlan, (planResolution.safePlan as DeveloperPipelinePlan).instruction || instruction) as DeveloperPipelinePlan
       : undefined;
-    const executionInstruction = approvedPlan?.instruction || instruction;
+    const executionInstruction = isVisualRemediation ? instruction : approvedPlan?.instruction || instruction;
+    const executionPlan = approvedPlan && isVisualRemediation
+      ? ({ ...approvedPlan, instruction: executionInstruction } as DeveloperPipelinePlan)
+      : approvedPlan;
 
     if (planResolution.shouldBlockExecution || planResolution.hasMismatch) {
       return NextResponse.json(
@@ -59,8 +64,8 @@ export async function POST(request: NextRequest) {
       objective: executionInstruction,
       status: "approved",
       currentStep: "approval_received",
-      currentPlan: approvedPlan,
-      approvedPlan,
+      currentPlan: executionPlan,
+      approvedPlan: executionPlan,
       details: { approvedAt: new Date().toISOString() },
     });
 
@@ -72,7 +77,7 @@ export async function POST(request: NextRequest) {
       details: { instruction: executionInstruction, approvedPlanSummary: approvedPlan?.summary || null },
     });
 
-    const result = await runDeveloperPipeline(executionInstruction, approved, approvedPlan);
+    const result = await runDeveloperPipeline(executionInstruction, approved, executionPlan);
     await updateLatestDeveloperSessionPlanStatus(conversationId, result.error ? "error" : result.pullRequestUrl ? "completed" : "running", result);
     await updateDeveloperMission({
       conversationId,

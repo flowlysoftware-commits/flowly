@@ -10,6 +10,7 @@ import { evaluateGoalFidelity, isBudgetCrmObjective } from "@/lib/flowlyGoalFide
 import { getPlannerAllowedScope } from "@/lib/flowlyPlannerScopeGuard";
 import { blocksUnnecessaryClarification, mustTreatAsPlanningTransition } from "@/lib/flowlyIntentTransitionGuard";
 import { attachExecutableApprovedPlanContract, buildExecutableApprovedPlanContract, buildExecutableContractSummary, getExecutablePlanFilePaths, type FlowlyExecutableApprovedPlanContract } from "@/lib/flowlyExecutableApprovedPlanContract";
+import { isVisualRemediationInstruction } from "@/lib/flowlyVisualQualityPolicy";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -374,6 +375,25 @@ async function listExistingRepositoryPaths() {
 
 export async function runDeveloperPipeline(instruction: string, approved: boolean, approvedPlan?: DeveloperPipelinePlan): Promise<DeveloperPipelineRunResult> {
   const contextBundle = await buildDeveloperContextBundle(instruction);
+
+  if (approvedPlan && isVisualRemediationInstruction(instruction)) {
+    const remediationExecutorPlan = await planExecutorV3(instruction, summarizeDeveloperContext(contextBundle));
+    approvedPlan = {
+      ...approvedPlan,
+      ...remediationExecutorPlan,
+      instruction,
+      humanChangePlan: remediationExecutorPlan.humanChangePlan,
+      proposedFiles: remediationExecutorPlan.proposedFiles,
+      preflight: remediationExecutorPlan.preflight,
+      projectMap: remediationExecutorPlan.projectMap,
+      summary: remediationExecutorPlan.summary,
+      risk: remediationExecutorPlan.risk,
+      executableContract: buildExecutableApprovedPlanContract({ instruction, plan: remediationExecutorPlan }) || approvedPlan.executableContract,
+      conversationReply: approvedPlan.conversationReply,
+      pipelineVersion: "developer_pipeline_v1",
+      pipelineReady: true,
+    } as DeveloperPipelinePlan;
+  }
 
   if (approvedPlan) {
     approvedPlan = attachExecutableApprovedPlanContract(approvedPlan as DeveloperPipelinePlan, approvedPlan.instruction || instruction) as DeveloperPipelinePlan;
