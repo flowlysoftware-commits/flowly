@@ -488,7 +488,7 @@ export default function FlowlyAssistant3D({
     <button
       type="button"
       onClick={onClick}
-      className={`flowly-3d-stage flowly-v3-stage flowly-v3-drag-handle flowly-v3-skin-${skin.key}`}
+      className={`flowly-avatar-renderer-v6 flowly-v6-skin-${skin.key}`}
       data-mode={safeMode}
       data-facing={facing}
       data-skin={skin.key}

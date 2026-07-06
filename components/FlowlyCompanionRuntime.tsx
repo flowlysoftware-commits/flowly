@@ -10,41 +10,27 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ChevronDown,
-  Code2,
-  MessageCircle,
-  Mic,
-  MicOff,
-  Minimize2,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  X,
-  Shirt,
-} from "lucide-react";
+import { ChevronDown, MessageCircle, Mic, MicOff, Send, ShieldCheck, Sparkles, X, Shirt } from "lucide-react";
 import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 import { FLOWLY_COMPANION_SKINS, getCompanionSkin } from "@/lib/flowlyCompanionSkins";
-import {
-  companionStats,
-  getCompanionContext,
-} from "@/lib/flowlyCompanionRuntime";
-import {
-  decideCompanionLife,
-  lifeStateToAvatarMode,
-} from "@/lib/flowlyCompanionLifeEngine";
+import { companionStats, getCompanionContext } from "@/lib/flowlyCompanionRuntime";
+import { decideCompanionLife, lifeStateToAvatarMode } from "@/lib/flowlyCompanionLifeEngine";
 import { getFlowlyRuntimeMode } from "@/lib/flowlyProductModes";
 import { useFlowlyVoiceRuntime } from "@/hooks/useFlowlyVoiceRuntime";
 
 const HIDDEN_PREFIXES = ["/login", "/registro", "/reservas", "/demo/login"];
 
-type FlowStageTarget = "dock" | "center" | "left" | "right" | "lowerCenter";
+type StageTarget = "habitable" | "center" | "left" | "right" | "manual";
+type StagePosition = { x: number; y: number; ready: boolean; moving: boolean; target: StageTarget };
 
 function shouldHide(pathname: string) {
   if (pathname === "/") return true;
   return HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+function normalizeText(value: string) {
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function mapAvatarMoodToAssistantMode(mood: string) {
@@ -63,177 +49,106 @@ function mapAvatarMoodToAssistantMode(mood: string) {
       return "attention";
     case "celebrating":
       return "celebrating";
-    case "jump":
-      return "jump";
-    case "spin":
-      return "spin";
     default:
       return "idle";
   }
 }
 
-function mapCompactAvatarMoodToAssistantMode(mood: string) {
-  switch (mood) {
-    case "talking":
-      return "talk";
-    case "thinking":
-      return "thinking";
-    case "wave":
-      return "wave";
-    default:
-      return "idle";
+function getCharacterSize() {
+  if (typeof window === "undefined") return { width: 230, height: 330 };
+  const mobile = window.innerWidth <= 820;
+  return {
+    width: mobile ? Math.min(170, Math.max(136, window.innerWidth * 0.36)) : Math.min(230, Math.max(190, window.innerWidth * 0.125)),
+    height: mobile ? Math.min(240, Math.max(196, window.innerHeight * 0.30)) : Math.min(340, Math.max(280, window.innerHeight * 0.38)),
+  };
+}
+
+function clampToViewport(x: number, y: number) {
+  const { width, height } = getCharacterSize();
+  const margin = 18;
+  const maxX = Math.max(margin, window.innerWidth - width - margin);
+  const maxY = Math.max(margin, window.innerHeight - height - margin);
+  return {
+    x: Math.min(Math.max(margin, x), maxX),
+    y: Math.min(Math.max(margin, y), maxY),
+  };
+}
+
+function findHabitablePosition(panelOpen: boolean) {
+  const { width, height } = getCharacterSize();
+  const margin = 28;
+  const reservedRight = panelOpen && window.innerWidth > 980 ? 360 : 0;
+  const maxX = Math.max(margin, window.innerWidth - reservedRight - width - margin);
+  const floorY = Math.max(margin, window.innerHeight - height - 34);
+
+  const interactive = Array.from(
+    document.querySelectorAll<HTMLElement>("form, main, [data-flowly-stage-anchor], button, input, textarea"),
+  ).find((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 120 && rect.height > 36 && rect.top > 80 && rect.left > 60;
+  });
+
+  if (interactive) {
+    const rect = interactive.getBoundingClientRect();
+    const rightCandidate = rect.right + 30;
+    const leftCandidate = rect.left - width - 30;
+    const hasSpaceRight = rightCandidate + width < maxX;
+    const x = hasSpaceRight ? rightCandidate : leftCandidate;
+    const y = Math.min(floorY, Math.max(margin, rect.bottom - height + 10));
+    return clampToViewport(x, y);
   }
+
+  return clampToViewport(Math.min(maxX, window.innerWidth * 0.62), floorY);
 }
 
 export default function FlowlyCompanionRuntime() {
   const pathname = usePathname() || "/";
+  const mode = getFlowlyRuntimeMode(pathname);
+  const isArchitect = mode === "arquitecto";
+  const context = useMemo(() => getCompanionContext(pathname), [pathname]);
+  const companionSkins = FLOWLY_COMPANION_SKINS;
+  const [selectedSkin, setSelectedSkin] = useState("flowly");
+  const activeSkin = getCompanionSkin(selectedSkin);
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [docked, setDocked] = useState(false);
   const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
   const [lifeMode, setLifeMode] = useState<string | null>(null);
-  const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
-  const companionSkins = FLOWLY_COMPANION_SKINS;
-  const [selectedSkin, setSelectedSkin] = useState("flowly");
-  const activeSkin = getCompanionSkin(selectedSkin);
-  const avatarUrl = activeSkin.modelUrl;
-  const avatarTone = activeSkin.tone;
-  const [entranceState, setEntranceState] = useState<"intro" | "settled">(
-    "intro",
-  );
-  const [voiceIntroResolved, setVoiceIntroResolved] = useState(false);
-  const [travel, setTravel] = useState({
-    x: -1,
-    y: -1,
-    moving: false,
-    label: "dock",
-  });
-  const [lastBrainRequest, setLastBrainRequest] = useState("");
-  const [lastBrainResponse, setLastBrainResponse] = useState("");
-  const lastTravelTargetRef = useRef("dock");
-  const userPlacedCompanionRef = useRef(false);
-  const dragStateRef = useRef({
-    active: false,
-    moved: false,
-    offsetX: 0,
-    offsetY: 0,
-  });
-  const suppressNextAvatarClickRef = useRef(false);
-  const [draggingAvatar, setDraggingAvatar] = useState(false);
-  const hasAutoVoiceStartedRef = useRef(false);
-  const context = useMemo(() => getCompanionContext(pathname), [pathname]);
-  const mode = getFlowlyRuntimeMode(pathname);
-  const isArchitect = mode === "arquitecto";
-  const xpPercent = Math.round(
-    (companionStats.xp / companionStats.nextLevelXp) * 100,
-  );
-  const [conversation, setConversation] = useState<
-    { role: "assistant" | "user"; content: string }[]
-  >([
-    {
-      role: "assistant",
-      content: isArchitect
-        ? "Estoy contigo dentro de Flowly OS. Dime qué quieres revisar."
-        : "Estoy contigo. Veo tu panel, tus objetivos y tu progreso.",
-    },
-  ]);
+  const [lifeLabel, setLifeLabel] = useState("Presente en Flowly");
+  const [position, setPosition] = useState<StagePosition>({ x: 0, y: 0, ready: false, moving: false, target: "habitable" });
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef({ active: false, moved: false, offsetX: 0, offsetY: 0 });
+  const userPlacedRef = useRef(false);
+  const suppressClickRef = useRef(false);
   const voiceSpeakRef = useRef<(text: string) => void>(() => undefined);
   const companionLiveContextRef = useRef<Record<string, unknown>>({});
+  const xpPercent = Math.round((companionStats.xp / companionStats.nextLevelXp) * 100);
 
-  const speakCleanly = useCallback(
-    (text: string) =>
-      text
-        .replace(/[#*_`>\[\]]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim(),
-    [],
-  );
+  const [conversation, setConversation] = useState<{ role: "assistant" | "user"; content: string }[]>([
+    { role: "assistant", content: isArchitect ? "Estoy contigo dentro de Flowly OS." : "Estoy contigo. Veo tu panel, tus objetivos y tu progreso." },
+  ]);
 
-  const askCompanion = useCallback(
-    async (clean: string, source: "text" | "voice" = "text") => {
-      if (!clean || thinking) return;
-      const text = clean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const wantsSkinChange = text.includes("skin") || text.includes("cambia a") || text.includes("ponte") || text.includes("cambiar aspecto");
-      const requestedSkin = wantsSkinChange
-        ? companionSkins.find((skin) => {
-            const label = skin.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            return text.includes(skin.id) || text.includes(label);
-          })
-        : null;
-      if (requestedSkin) {
-        setSelectedSkin(requestedSkin.id);
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem("flowly_companion_skin", requestedSkin.id);
-        }
-        const answer = `Listo, cambio mi skin a ${requestedSkin.label}.`;
-        setConversation((current) => [...current, { role: "user", content: clean }, { role: "assistant", content: answer }]);
-        setLifeMode("wave");
-        setLifeLabel(`Skin activo: ${requestedSkin.label}`);
-        voiceSpeakRef.current(answer);
-        return;
-      }
-      setThinking(true);
-      setLastBrainRequest(clean);
-      setLastBrainResponse("");
-      setLifeMode(source === "voice" ? "attention" : "talking");
-      setLifeLabel(
-        source === "voice" ? "Escuchando tu voz" : "Pensando con Flowly Brain",
-      );
+  const speakCleanly = useCallback((text: string) => text.replace(/[#*_`>\[\]]/g, " ").replace(/\s+/g, " ").trim(), []);
 
-      const nextConversation = [
-        ...conversation,
-        { role: "user" as const, content: clean },
-      ];
-      if (source === "text") {
-        setConversation(nextConversation);
-      }
+  const moveFlowTo = useCallback((target: StageTarget) => {
+    if (typeof window === "undefined" || userPlacedRef.current) return;
+    const next = target === "center"
+      ? clampToViewport((window.innerWidth - getCharacterSize().width) / 2, (window.innerHeight - getCharacterSize().height) / 2)
+      : target === "left"
+        ? clampToViewport(28, window.innerHeight - getCharacterSize().height - 34)
+        : target === "right"
+          ? clampToViewport(window.innerWidth - getCharacterSize().width - 28, window.innerHeight - getCharacterSize().height - 34)
+          : findHabitablePosition(open);
 
-      try {
-        const response = await fetch("/api/companion/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: clean,
-            pathname,
-            conversation: nextConversation,
-            extraContext: {
-              source,
-              companion: companionLiveContextRef.current,
-            },
-          }),
-        });
-        const data = await response.json();
-        const answer =
-          typeof data?.answer === "string"
-            ? data.answer
-            : "No he podido pensar bien la respuesta. Inténtalo otra vez en unos segundos.";
-        setLastBrainResponse(answer);
-        if (source === "text") {
-          setConversation((current) => [
-            ...current,
-            { role: "assistant", content: answer },
-          ]);
-        }
-        voiceSpeakRef.current(speakCleanly(answer));
-      } catch (error) {
-        console.error("Companion chat error", error);
-        const fallback =
-          "Ahora mismo no puedo conectar con mi motor de IA. Puedo seguir ayudándote si lo intentas de nuevo.";
-        setLastBrainResponse(fallback);
-        if (source === "text") {
-          setConversation((current) => [
-            ...current,
-            { role: "assistant", content: fallback },
-          ]);
-        }
-        voiceSpeakRef.current(fallback);
-      } finally {
-        setThinking(false);
-      }
-    },
-    [companionSkins, conversation, pathname, speakCleanly, thinking],
-  );
+    setPosition((current) => {
+      const distance = current.ready ? Math.hypot(current.x - next.x, current.y - next.y) : 999;
+      return { ...next, ready: true, moving: distance > 26, target };
+    });
+    window.setTimeout(() => {
+      setPosition((current) => current.target === target ? { ...current, moving: false } : current);
+    }, 900);
+  }, [open]);
 
   const handleVoiceWake = useCallback(() => {
     setOpen(true);
@@ -241,337 +156,125 @@ export default function FlowlyCompanionRuntime() {
     setLifeLabel("Flow te está escuchando");
   }, []);
 
-  const handleVoiceStatus = useCallback((status: string) => {
-    setLifeLabel(status);
+  const handleVoiceStatus = useCallback((status: string) => setLifeLabel(status), []);
+  const handleVoicePhase = useCallback((phase: "unsupported" | "disabled" | "permission" | "passive" | "waking" | "listening" | "thinking" | "speaking" | "error") => {
+    if (phase === "listening" || phase === "waking") setLifeMode("attention");
+    if (phase === "thinking") setLifeMode("thinking");
+    if (phase === "speaking") setLifeMode("talking");
+    if (phase === "passive") setLifeMode("idle");
   }, []);
 
-  const handleVoicePhase = useCallback(
-    (
-      phase:
-        | "unsupported"
-        | "disabled"
-        | "permission"
-        | "passive"
-        | "waking"
-        | "listening"
-        | "thinking"
-        | "speaking"
-        | "error",
-    ) => {
-      if (phase === "listening" || phase === "waking") setLifeMode("attention");
-      if (phase === "thinking") setLifeMode("thinking");
-      if (phase === "speaking") setLifeMode("talking");
-      if (phase === "passive") setLifeMode("idle");
-    },
-    [],
-  );
+  const askCompanion = useCallback(async (clean: string, source: "text" | "voice" = "text") => {
+    if (!clean || thinking) return;
+    const text = normalizeText(clean);
+    const requestedSkin = text.includes("skin") || text.includes("cambia") || text.includes("ponte")
+      ? companionSkins.find((skin) => text.includes(skin.id) || text.includes(normalizeText(skin.label)))
+      : null;
+
+    if (requestedSkin) {
+      setSelectedSkin(requestedSkin.id);
+      window.localStorage.setItem("flowly_companion_skin", requestedSkin.id);
+      const answer = `Listo, cambio mi skin a ${requestedSkin.label}.`;
+      setConversation((current) => [...current, { role: "user", content: clean }, { role: "assistant", content: answer }]);
+      setLifeMode("wave");
+      setLifeLabel(`Skin activo: ${requestedSkin.label}`);
+      voiceSpeakRef.current(answer);
+      return;
+    }
+
+    setThinking(true);
+    setLifeMode(source === "voice" ? "attention" : "talking");
+    setLifeLabel(source === "voice" ? "Escuchando tu voz" : "Pensando con Flowly Brain");
+    const nextConversation = [...conversation, { role: "user" as const, content: clean }];
+    if (source === "text") setConversation(nextConversation);
+
+    try {
+      const response = await fetch("/api/companion/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: clean, pathname, conversation: nextConversation, extraContext: { source, companion: companionLiveContextRef.current } }),
+      });
+      const data = await response.json();
+      const answer = typeof data?.answer === "string" ? data.answer : "No he podido pensar bien la respuesta. Inténtalo otra vez en unos segundos.";
+      if (source === "text") setConversation((current) => [...current, { role: "assistant", content: answer }]);
+      voiceSpeakRef.current(speakCleanly(answer));
+    } catch (error) {
+      console.error("Companion chat error", error);
+      const fallback = "Ahora mismo no puedo conectar con mi motor de IA. Puedo seguir ayudándote si lo intentas de nuevo.";
+      if (source === "text") setConversation((current) => [...current, { role: "assistant", content: fallback }]);
+      voiceSpeakRef.current(fallback);
+    } finally {
+      setThinking(false);
+    }
+  }, [companionSkins, conversation, pathname, speakCleanly, thinking]);
 
   const voice = useFlowlyVoiceRuntime({
     wakeWord: "flow",
     enabled: true,
     onWake: handleVoiceWake,
-    onCommand: async (text) => {
-      await askCompanion(text, "voice");
-    },
+    onCommand: async (text) => askCompanion(text, "voice"),
     onStatus: handleVoiceStatus,
     onPhase: handleVoicePhase,
   });
 
-  const moveFlowTo = useCallback(
-    (target: FlowStageTarget) => {
-      if (typeof window === "undefined") return;
+  const voiceNeedsActivation = false;
+  const lifeDecision = useMemo(() => decideCompanionLife(pathname, {
+    thinking,
+    speaking: lifeMode === "talking",
+    listening: voice.isAwake,
+    moving: position.moving,
+    open,
+    minimized,
+    energy: companionStats.energy,
+    level: companionStats.level,
+  }), [lifeMode, minimized, open, pathname, position.moving, thinking, voice.isAwake]);
 
-      const isMobileViewport = window.innerWidth <= 820;
-      const avatarWidth = Math.min(
-        window.innerWidth - 28,
-        isMobileViewport
-          ? Math.min(176, Math.max(140, window.innerWidth * 0.42))
-          : Math.min(236, Math.max(202, window.innerWidth * 0.13)),
-      );
-      const avatarHeight = Math.min(
-        window.innerHeight - 36,
-        isMobileViewport
-          ? Math.min(224, Math.max(170, window.innerHeight * 0.28))
-          : Math.min(318, Math.max(262, window.innerHeight * 0.31)),
-      );
-      const margin = isMobileViewport ? 14 : 28;
-      const panelReserve = open && !isMobileViewport ? 360 : 0;
-      const maxX = Math.max(margin, window.innerWidth - panelReserve - avatarWidth - margin);
-      const maxY = Math.max(margin, window.innerHeight - avatarHeight - margin);
-      const stageFloorY = Math.min(maxY, Math.max(margin, window.innerHeight - avatarHeight - 54));
-
-      const panelAdminCard = document.querySelector("[class*='admin'], [class*='login'], form") as HTMLElement | null;
-      const cardRect = panelAdminCard?.getBoundingClientRect();
-      const cardRight = cardRect ? Math.min(maxX, cardRect.right + 34) : Math.min(maxX, window.innerWidth * 0.56);
-      const cardLeft = cardRect ? Math.max(margin, cardRect.left - avatarWidth - 34) : Math.max(margin, window.innerWidth * 0.24);
-      const prefersRightOfCard = cardRect ? cardRight + avatarWidth < maxX : true;
-
-      const positions: Record<FlowStageTarget, { x: number; y: number }> = {
-        dock: {
-          x: prefersRightOfCard ? cardRight : cardLeft,
-          y: stageFloorY,
-        },
-        center: {
-          x: Math.max(margin, Math.min(maxX, (window.innerWidth - panelReserve - avatarWidth) / 2)),
-          y: Math.max(margin, Math.min(maxY, (window.innerHeight - avatarHeight) / 2)),
-        },
-        lowerCenter: {
-          x: Math.max(margin, Math.min(maxX, (window.innerWidth - panelReserve - avatarWidth) / 2)),
-          y: stageFloorY,
-        },
-        left: {
-          x: margin,
-          y: stageFloorY,
-        },
-        right: {
-          x: maxX,
-          y: stageFloorY,
-        },
-      };
-
-      const next = positions[target];
-      lastTravelTargetRef.current = target;
-      setTravel((current) => {
-        const distance = Math.hypot(current.x - next.x, current.y - next.y);
-        return { ...next, moving: distance > 28, label: target };
-      });
-      window.setTimeout(() => {
-        setTravel((current) =>
-          current.label === target ? { ...current, moving: false } : current,
-        );
-      }, 1500);
-    },
-    [open],
-  );
-
-
-  const clampCompanionPosition = useCallback((x: number, y: number) => {
-    if (typeof window === "undefined") return { x, y };
-    const isMobileViewport = window.innerWidth <= 820;
-    const avatarWidth = isMobileViewport
-      ? Math.min(176, Math.max(140, window.innerWidth * 0.42))
-      : Math.min(240, Math.max(192, window.innerWidth * 0.15));
-    const avatarHeight = isMobileViewport
-      ? Math.min(224, Math.max(170, window.innerHeight * 0.28))
-      : Math.min(304, Math.max(243, window.innerHeight * 0.34));
-    const margin = 10;
-    return {
-      x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - avatarWidth - margin)),
-      y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - avatarHeight - margin)),
-    };
-  }, []);
-
-  const handleAvatarPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      const target = event.target as HTMLElement | null;
-      if (!target?.closest(".flowly-v3-drag-handle")) return;
-      const rect = event.currentTarget.getBoundingClientRect();
-      dragStateRef.current = {
-        active: true,
-        moved: false,
-        offsetX: event.clientX - rect.left,
-        offsetY: event.clientY - rect.top,
-      };
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-      setDraggingAvatar(true);
-      setLifeMode("attention");
-      setLifeLabel("Puedes colocarme donde te vaya mejor");
-    },
-    [],
-  );
-
-  const handleAvatarPointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      const drag = dragStateRef.current;
-      if (!drag.active) return;
-      event.preventDefault();
-      const next = clampCompanionPosition(
-        event.clientX - drag.offsetX,
-        event.clientY - drag.offsetY,
-      );
-      drag.moved = true;
-      userPlacedCompanionRef.current = true;
-      lastTravelTargetRef.current = "dock";
-      setTravel({ ...next, moving: false, label: "manual" });
-    },
-    [clampCompanionPosition],
-  );
-
-  const handleAvatarPointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      const moved = dragStateRef.current.moved;
-      dragStateRef.current.active = false;
-      setDraggingAvatar(false);
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-      if (moved) {
-        suppressNextAvatarClickRef.current = true;
-        window.setTimeout(() => {
-          suppressNextAvatarClickRef.current = false;
-        }, 80);
-      }
-    },
-    [],
-  );
-
-  const toggleCompanionFromAvatar = useCallback(() => {
-    if (suppressNextAvatarClickRef.current) return;
-    setOpen((value) => !value);
-  }, []);
-
-  const voiceNeedsActivation =
-    !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
-  const lifeDecision = useMemo(
-    () =>
-      decideCompanionLife(pathname, {
-        thinking,
-        speaking: lifeMode === "talking",
-        listening: voice.isAwake || voiceNeedsActivation,
-        moving: travel.moving,
-        open,
-      }),
-    [lifeMode, open, pathname, thinking, travel.moving, voice.isAwake, voiceNeedsActivation],
-  );
   const avatarMood = lifeStateToAvatarMode(lifeDecision.state);
-  const effectiveAvatarMood = draggingAvatar
-    ? "attention"
-    : travel.moving
-      ? "walking"
-      : lifeMode || avatarMood;
-  const companionRuntimeStyle = (travel.x >= 0 && travel.y >= 0
-    ? {
-        "--flow-x": `${travel.x}px`,
-        "--flow-y": `${travel.y}px`,
-      }
-    : {}) as CSSProperties;
+  const effectiveAvatarMood = dragging ? "attention" : position.moving ? "walking" : lifeMode || avatarMood;
+
+  useEffect(() => { voiceSpeakRef.current = voice.speak; }, [voice.speak]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const savedSkin = window.localStorage.getItem("flowly_companion_skin");
+    const savedDock = window.localStorage.getItem("flowly_companion_docked") === "true";
     if (savedSkin) setSelectedSkin(getCompanionSkin(savedSkin).id);
+    setDocked(savedDock);
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const initial =
-      window.localStorage.getItem("flowly_voice_intro_resolved") === "true"
-        ? "dock"
-        : "center";
-    moveFlowTo(initial);
-    const onResize = () =>
-      moveFlowTo(
-        lastTravelTargetRef.current as
-          FlowStageTarget,
-      );
+    if (typeof window === "undefined" || docked) return;
+    moveFlowTo("habitable");
+    const onResize = () => moveFlowTo("habitable");
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [moveFlowTo]);
+  }, [docked, moveFlowTo]);
 
   useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      voice.state === "unsupported" ||
-      hasAutoVoiceStartedRef.current
-    )
+    if (userPlacedRef.current || docked) return;
+    const id = window.setInterval(() => moveFlowTo("habitable"), 14000);
+    return () => window.clearInterval(id);
+  }, [docked, moveFlowTo]);
+
+  useEffect(() => {
+    if (thinking) {
+      setLifeMode("talking");
+      setLifeLabel("Respondiendo con el Brain");
       return;
-    const shouldAutoStart =
-      window.localStorage.getItem("flowly_voice_enabled") === "true" ||
-      window.localStorage.getItem("flowly_voice_intro_resolved") === "true";
-    const tryStart = async () => {
-      const permissionsApi = navigator.permissions?.query;
-      try {
-        const status = permissionsApi
-          ? await permissionsApi.call(navigator.permissions, {
-              name: "microphone" as PermissionName,
-            })
-          : null;
-        if (status?.state === "granted" || shouldAutoStart) {
-          hasAutoVoiceStartedRef.current = true;
-          const activated = await voice.activate();
-          if (activated) {
-            window.localStorage.setItem("flowly_voice_enabled", "true");
-            window.localStorage.setItem("flowly_voice_intro_resolved", "true");
-            setVoiceIntroResolved(true);
-          } else {
-            hasAutoVoiceStartedRef.current = false;
-          }
-        }
-      } catch {
-        if (shouldAutoStart) {
-          hasAutoVoiceStartedRef.current = true;
-          const activated = await voice.activate();
-          if (activated) {
-            window.localStorage.setItem("flowly_voice_enabled", "true");
-            window.localStorage.setItem("flowly_voice_intro_resolved", "true");
-            setVoiceIntroResolved(true);
-          } else {
-            hasAutoVoiceStartedRef.current = false;
-          }
-        }
-      }
+    }
+    const behaviours = isArchitect
+      ? ["Presente en Flowly OS", "Leyendo el contexto", "Esperando contigo"]
+      : [context.mission, "Mirando el panel contigo", context.message];
+    let index = 0;
+    const apply = () => {
+      setLifeMode(index % 3 === 1 ? "thinking" : "idle");
+      setLifeLabel(behaviours[index % behaviours.length]);
+      index += 1;
     };
-    void tryStart();
-  }, [voice, voice.state]);
-
-  const toggleVoice = useCallback(async () => {
-    if (voice.active) {
-      voice.deactivate();
-      if (typeof window !== "undefined")
-        window.localStorage.removeItem("flowly_voice_enabled");
-      return;
-    }
-
-    const activated = await voice.activate();
-    if (activated && typeof window !== "undefined") {
-      window.localStorage.setItem("flowly_voice_intro_resolved", "true");
-      window.localStorage.setItem("flowly_voice_enabled", "true");
-      setVoiceIntroResolved(true);
-      moveFlowTo("dock");
-    }
-  }, [moveFlowTo, voice]);
-
-  const hideCompanionToDock = useCallback(() => {
-    setOpen(false);
-    setMinimized(false);
-    setDocked(true);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("flowly_companion_docked", "true");
-    }
-  }, []);
-
-  const restoreCompanionFromDock = useCallback(() => {
-    setDocked(false);
-    setOpen(true);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("flowly_companion_docked");
-    }
-    moveFlowTo("lowerCenter");
-  }, [moveFlowTo]);
-
-  useEffect(() => {
-    if (voiceNeedsActivation) {
-      userPlacedCompanionRef.current = false;
-      moveFlowTo("center");
-      return;
-    }
-    if (userPlacedCompanionRef.current) return;
-    if (voice.isAwake || thinking || open) {
-      moveFlowTo("lowerCenter");
-      return;
-    }
-    moveFlowTo(lifeDecision.spatialTarget);
-  }, [lifeDecision.spatialTarget, moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
-
-  useEffect(() => {
-    // Companion V3.1: Flow vive integrado en la página. Evitamos que deambule
-    // solo por encima del layout, porque eso lo hace parecer una capa pegada.
-    if (userPlacedCompanionRef.current || voiceNeedsActivation || open || thinking || voice.isAwake) return;
-    moveFlowTo("dock");
-  }, [moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
-
-  useEffect(() => {
-    voiceSpeakRef.current = voice.speak;
-  }, [voice.speak]);
+    apply();
+    const timer = window.setInterval(apply, open ? 9000 : 5600);
+    return () => window.clearInterval(timer);
+  }, [context.message, context.mission, isArchitect, open, thinking]);
 
   useEffect(() => {
     companionLiveContextRef.current = {
@@ -583,158 +286,81 @@ export default function FlowlyCompanionRuntime() {
       contextArea: context.area,
       contextMission: context.mission,
       lifeState: lifeDecision.state,
-      lifePhase: lifeDecision.phase,
-      voiceStyle: lifeDecision.voiceStyle,
       voiceState: voice.state,
       voiceActive: voice.active,
-      voiceAwake: voice.isAwake,
       runtimeMode: mode,
     };
-  }, [
-    effectiveAvatarMood,
-    context.area,
-    context.mission,
-    lifeLabel,
-    lifeDecision,
-    mode,
-    voice.active,
-    voice.isAwake,
-    voice.state,
-  ]);
+  }, [context.area, context.mission, effectiveAvatarMood, lifeDecision.state, lifeLabel, mode, voice.active, voice.state]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setVoiceIntroResolved(
-      window.localStorage.getItem("flowly_voice_intro_resolved") === "true",
-    );
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button, input, textarea, a, .flowly-v6-panel")) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragRef.current = { active: true, moved: false, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDragging(true);
+    setLifeMode("attention");
+    setLifeLabel("Puedes colocarme donde te vaya mejor");
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setDocked(
-      window.localStorage.getItem("flowly_companion_docked") === "true",
-    );
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag.active) return;
+    event.preventDefault();
+    const next = clampToViewport(event.clientX - drag.offsetX, event.clientY - drag.offsetY);
+    drag.moved = true;
+    userPlacedRef.current = true;
+    setPosition({ ...next, ready: true, moving: false, target: "manual" });
   }, []);
 
-  useEffect(() => {
-    if (!voice.active || typeof window === "undefined") return;
-    window.localStorage.setItem("flowly_voice_intro_resolved", "true");
-    setVoiceIntroResolved(true);
-  }, [voice.active]);
-
-  const activateVoiceFromIntro = useCallback(async () => {
-    const activated = await voice.activate();
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("flowly_voice_intro_resolved", "true");
-      if (activated)
-        window.localStorage.setItem("flowly_voice_enabled", "true");
+  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const moved = dragRef.current.moved;
+    dragRef.current.active = false;
+    setDragging(false);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (moved) {
+      suppressClickRef.current = true;
+      window.setTimeout(() => { suppressClickRef.current = false; }, 120);
     }
-    setVoiceIntroResolved(true);
-    if (activated) moveFlowTo("dock");
-    setLifeMode(activated ? "wave" : "idle");
-    setLifeLabel(
-      activated
-        ? "Voz activada. Di Flow cuando quieras hablar."
-        : "Puedes seguir escribiendo. La voz se puede activar luego.",
-    );
-    if (activated) {
-      voiceSpeakRef.current(
-        "Perfecto. Ya podemos hablar cuando quieras. Solo di Flow y te escucharé.",
-      );
-    }
-  }, [moveFlowTo, voice]);
-
-  useEffect(() => {
-    const intro = window.setTimeout(() => {
-      setEntranceState("settled");
-      setLifeMode("wave");
-      setLifeLabel("Hola, estoy vivo dentro de Flowly");
-    }, 2600);
-    return () => window.clearTimeout(intro);
   }, []);
 
-  useEffect(() => {
-    if (thinking) {
-      setLifeMode("talking");
-      setLifeLabel("Respondiendo con el Brain");
-      return;
-    }
-
-    const behaviours = isArchitect
-      ? [
-          { mode: "idle", label: "Presente en Flowly OS" },
-          { mode: "thinking", label: "Leyendo el contexto" },
-          { mode: "idle", label: "Esperando contigo" },
-        ]
-      : [
-          { mode: "idle", label: context.mission },
-          { mode: "thinking", label: "Mirando el panel contigo" },
-          { mode: "idle", label: context.message },
-        ];
-
-    let index = 0;
-    const applyBehaviour = () => {
-      const behaviour = behaviours[index % behaviours.length];
-      setLifeMode(behaviour.mode);
-      setLifeLabel(behaviour.label);
-      index += 1;
-    };
-
-    applyBehaviour();
-    const interval = window.setInterval(applyBehaviour, open ? 9000 : 5200);
-    return () => window.clearInterval(interval);
-  }, [
-    context.message,
-    context.mission,
-    context.mode,
-    isArchitect,
-    open,
-    thinking,
-  ]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const savedSkin = window.localStorage.getItem("flowly_companion_skin");
-    if (savedSkin && companionSkins.some((skin) => skin.id === savedSkin)) {
-      setSelectedSkin(savedSkin);
-    }
-  }, [companionSkins]);
+  const toggleFromCharacter = useCallback(() => {
+    if (suppressClickRef.current) return;
+    setOpen((value) => !value);
+  }, []);
 
   const changeSkin = useCallback((skinId: string) => {
     setSelectedSkin(skinId);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("flowly_companion_skin", skinId);
-    }
+    window.localStorage.setItem("flowly_companion_skin", skinId);
+    setLifeMode("wave");
+    setLifeLabel(`Skin activo: ${getCompanionSkin(skinId).label}`);
   }, []);
 
-  if (shouldHide(pathname)) return null;
+  const toggleVoice = useCallback(async () => {
+    if (voice.active) {
+      voice.deactivate();
+      window.localStorage.removeItem("flowly_voice_enabled");
+      return;
+    }
+    const activated = await voice.activate();
+    if (activated) window.localStorage.setItem("flowly_voice_enabled", "true");
+  }, [voice]);
 
-  if (docked) {
-    return (
-      <button
-        type="button"
-        className="flowly-companion-copilot-launcher"
-        onClick={restoreCompanionFromDock}
-        aria-label="Abrir Flow Companion"
-        data-voice={voice.active ? "active" : "inactive"}
-        data-awake={voice.isAwake}
-      >
-        <span className="flowly-companion-copilot-orb">
-          <Sparkles size={18} />
-        </span>
-        <span className="flowly-companion-copilot-copy">
-          <strong>Flow</strong>
-          <small>
-            {voice.isAwake
-              ? "Te escucho"
-              : voice.active
-                ? "Voz activa"
-                : "Abrir companion"}
-          </small>
-        </span>
-      </button>
-    );
-  }
+  const hideCompanionToDock = useCallback(() => {
+    setOpen(false);
+    setMinimized(false);
+    setDocked(true);
+    window.localStorage.setItem("flowly_companion_docked", "true");
+  }, []);
+
+  const restoreCompanionFromDock = useCallback(() => {
+    setDocked(false);
+    setOpen(true);
+    userPlacedRef.current = false;
+    window.localStorage.removeItem("flowly_companion_docked");
+    window.setTimeout(() => moveFlowTo("habitable"), 40);
+  }, [moveFlowTo]);
 
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault();
@@ -744,253 +370,93 @@ export default function FlowlyCompanionRuntime() {
     await askCompanion(clean, "text");
   };
 
+  if (shouldHide(pathname)) return null;
+
+  if (docked) {
+    return (
+      <button type="button" className="flowly-v6-launcher" onClick={restoreCompanionFromDock} aria-label="Abrir Flow Companion">
+        <Sparkles size={18} />
+        <span><strong>Flow</strong><small>{voice.active ? "Voz activa" : "Abrir companion"}</small></span>
+      </button>
+    );
+  }
+
+  const runtimeStyle = position.ready ? ({ "--flow-x": `${position.x}px`, "--flow-y": `${position.y}px` } as CSSProperties) : undefined;
+
   return (
-    <div
-      className="flowly-companion-runtime flowly-stage-v5"
-      style={companionRuntimeStyle}
-      data-open={open}
-      data-minimized={minimized}
-      data-mode={mode}
-      data-life-mode={effectiveAvatarMood}
-      data-entrance={entranceState}
-      data-voice={voice.state}
-      data-voice-awake={voice.isAwake}
-      data-voice-prompt={voiceNeedsActivation}
-      data-travel={travel.moving ? "moving" : travel.label}
-      data-dragging={draggingAvatar}
-    >
-      <div className="flowly-stage-v5-world" aria-hidden="true">
-        <span className="flowly-stage-v5-floor" />
-        <span className="flowly-stage-v5-depth-grid" />
-        <span className="flowly-stage-v5-target-glow" />
-      </div>
-
-
-      <div
-        className="flowly-companion-avatar-shell"
-        onPointerDown={handleAvatarPointerDown}
-        onPointerMove={handleAvatarPointerMove}
-        onPointerUp={handleAvatarPointerUp}
-        onPointerCancel={handleAvatarPointerUp}
+    <div className="flowly-v6-runtime" data-ready={position.ready} data-open={open} data-dragging={dragging} data-moving={position.moving} style={runtimeStyle}>
+      <div className="flowly-v6-world" aria-hidden="true" />
+      <section
+        className="flowly-v6-actor"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        aria-label="Flow Companion"
       >
-        <span className="flowly-stage-v5-character-shadow" aria-hidden="true" />
-        <span className="flowly-stage-v5-speech-tether" aria-hidden="true" />
-        <button
-          type="button"
-          className="flowly-companion-dock-toggle"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            hideCompanionToDock();
-          }}
-          aria-label="Ocultar Flow Companion"
-        >
-          <X size={14} />
-        </button>
         {!minimized && (
-          <div className="flowly-companion-bubble" role="status">
-          <span className="flowly-companion-bubble-kicker">
-            {voiceNeedsActivation
-              ? "Flow por voz"
-              : isArchitect
-                ? "Companion Arquitecto"
-                : context.area}
-          </span>
-          <strong>
-            {voiceNeedsActivation
-              ? "Activa los permisos de voz para poder hablar conmigo"
-              : isArchitect
-                ? "Estoy en modo desarrollo"
-                : lifeDecision.label}
-          </strong>
-          <p>
-            {voiceNeedsActivation
-              ? "Pulsa el botón y acepta el micrófono. Después solo tendrás que decir Flow y te escucharé."
-              : isArchitect
-                ? "Aquí sí puedo ayudarte con Studio, Builder, Kernel y cambios internos."
-                : lifeDecision.initiative || context.message}
-          </p>
-          {voiceNeedsActivation && (
-            <button
-              type="button"
-              className="flowly-companion-voice-primary"
-              onClick={activateVoiceFromIntro}
-            >
-              <Mic size={15} /> Activar voz
-            </button>
-          )}
+          <div className="flowly-v6-bubble" role="status">
+            <span>{isArchitect ? "Flowly OS" : context.area}</span>
+            <strong>{isArchitect ? "Presente en Flowly OS" : lifeDecision.label}</strong>
+            <p>{lifeDecision.initiative || context.message}</p>
           </div>
         )}
-
-        <div className="flowly-companion-character" data-skin={avatarTone} data-mood={effectiveAvatarMood}>
-          <FlowlyAssistant3D
-            modelUrl={avatarUrl}
-            mode={mapAvatarMoodToAssistantMode(effectiveAvatarMood)}
-            facing="front"
-            skinTone={avatarTone}
-            onClick={toggleCompanionFromAvatar}
-          />
-        </div>
-        <div className="flowly-companion-life-hud" aria-hidden="true">
-          <span className="flowly-life-dot" />
-          <strong>{isArchitect ? "OS vivo" : "Misión activa"}</strong>
-          <small>{lifeLabel}</small>
-          <i>
-            <span style={{ width: `${xpPercent}%` }} />
-          </i>
-        </div>
-        <button
-          type="button"
-          className="flowly-companion-avatar-cta"
-          onClick={() => setOpen((value) => !value)}
-        >
-          <MessageCircle size={15} />
-          Hablar
+        <button type="button" className="flowly-v6-close" onClick={(event) => { event.stopPropagation(); hideCompanionToDock(); }} aria-label="Ocultar Flow Companion">
+          <X size={14} />
         </button>
-        <button
-          type="button"
-          className="flowly-companion-voice-cta"
-          onClick={toggleVoice}
-          aria-label={
-            voice.active ? "Desactivar voz de Flow" : "Activar voz de Flow"
-          }
-        >
-          {voice.active ? <Mic size={14} /> : <MicOff size={14} />}
-          {voice.active ? "Escucha Flow" : "Activar voz"}
+        <div className="flowly-v6-character" onClick={toggleFromCharacter}>
+          <FlowlyAssistant3D modelUrl={activeSkin.modelUrl} mode={mapAvatarMoodToAssistantMode(effectiveAvatarMood)} facing="front" skinTone={activeSkin.tone} />
+        </div>
+        <span className="flowly-v6-shadow" aria-hidden="true" />
+        <div className="flowly-v6-hud" aria-hidden="true">
+          <strong>{lifeLabel}</strong>
+          <i><span style={{ width: `${xpPercent}%` }} /></i>
+        </div>
+        <button type="button" className="flowly-v6-talk" onClick={() => setOpen((value) => !value)}>
+          <MessageCircle size={14} /> Hablar
         </button>
-      </div>
+      </section>
 
       {open && (
-        <aside
-          className="flowly-companion-panel"
-          aria-label={
-            isArchitect
-              ? "Flowly Architect Companion"
-              : "Flowly Customer Companion"
-          }
-        >
-          <header className="flowly-companion-panel-header">
-            <div>
-              <span>{isArchitect ? "Flowly OS" : "Panel cliente"}</span>
-              <h3>
-                {isArchitect ? "Companion Arquitecto" : "Companion del cliente"}
-              </h3>
-            </div>
-            <div className="flowly-companion-panel-actions">
-              <button
-                type="button"
-                onClick={() => setMinimized((value) => !value)}
-                aria-label="Minimizar Companion"
-              >
-                {minimized ? (
-                  <ChevronDown size={16} />
-                ) : (
-                  <Minimize2 size={16} />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  hideCompanionToDock();
-                }}
-                aria-label="Ocultar Companion en burbuja"
-              >
-                <X size={16} />
-              </button>
-            </div>
+        <aside className="flowly-v6-panel" aria-label={isArchitect ? "Flowly Architect Companion" : "Flowly Customer Companion"}>
+          <header>
+            <div><span>{isArchitect ? "Flowly OS" : "Panel cliente"}</span><h3>{isArchitect ? "Companion Arquitecto" : "Companion del cliente"}</h3></div>
+            <nav>
+              <button type="button" onClick={() => setMinimized((value) => !value)} aria-label="Minimizar Companion"><ChevronDown size={16} /></button>
+              <button type="button" onClick={hideCompanionToDock} aria-label="Ocultar Companion"><X size={16} /></button>
+            </nav>
           </header>
 
-          <section className="flowly-companion-status-card">
-            <div className="flowly-companion-status-avatar flowly-companion-status-orb" aria-hidden="true">
-              <span />
-            </div>
-            <div>
-              <strong>{isArchitect ? "Modo arquitecto" : `Nivel ${companionStats.level}`}</strong>
-              <p>{isArchitect ? "Companion técnico de Flowly OS." : `Energía ${companionStats.energy}% · ${context.mood}`}</p>
-              <div className="flowly-companion-progress">
-                <span style={{ width: `${xpPercent}%` }} />
-              </div>
-            </div>
+          <section className="flowly-v6-card flowly-v6-level">
+            <strong>{isArchitect ? "Modo arquitecto" : `Nivel ${companionStats.level}`}</strong>
+            <p>{isArchitect ? "Companion técnico de Flowly OS." : `Energía ${companionStats.energy}% · ${context.mood}`}</p>
+            <i><span style={{ width: `${xpPercent}%` }} /></i>
           </section>
 
-          <section className="flowly-companion-skin-card">
-            <span className="flowly-companion-section-title">
-              <Shirt size={14} /> Skin del Companion
-            </span>
-            <div className="flowly-companion-skin-grid">
+          <section className="flowly-v6-card">
+            <b><Shirt size={14} /> Skin del Companion</b>
+            <div className="flowly-v6-skins">
               {companionSkins.map((skin) => (
-                <button
-                  key={skin.id}
-                  type="button"
-                  data-active={selectedSkin === skin.id}
-                  data-tone={skin.tone}
-                  onClick={() => changeSkin(skin.id)}
-                >
-                  <strong>{skin.label}</strong>
-                  <small>{skin.hint}</small>
+                <button key={skin.id} type="button" data-active={selectedSkin === skin.id} onClick={() => changeSkin(skin.id)}>
+                  <strong>{skin.label}</strong><small>{skin.hint}</small>
                 </button>
               ))}
             </div>
-            <small className="flowly-companion-skin-tip">También puedes escribir: “cambia skin a Neón”.</small>
           </section>
 
-          <section className="flowly-companion-chat-card">
-            <span className="flowly-companion-section-title">
-              <Sparkles size={14} /> {isArchitect ? "Flowly OS" : "Subida de nivel"}
-            </span>
-            <div className="flowly-companion-level-focus">
-              <strong>{lifeDecision.label}</strong>
-              <p>{lifeDecision.initiative || context.message}</p>
-              <small>{context.mission}</small>
-            </div>
-            <div className="flowly-companion-conversation">
-              {conversation.slice(-3).map((item, index) => (
-                <p key={`${item.role}-${index}`} data-role={item.role}>
-                  {item.content}
-                </p>
-              ))}
+          <section className="flowly-v6-card flowly-v6-chat">
+            <b><Sparkles size={14} /> {isArchitect ? "Flowly OS" : "Subida de nivel"}</b>
+            <div className="flowly-v6-focus"><strong>{lifeDecision.label}</strong><p>{lifeDecision.initiative || context.message}</p><small>{context.mission}</small></div>
+            <div className="flowly-v6-conversation">
+              {conversation.slice(-3).map((item, index) => <p key={`${item.role}-${index}`} data-role={item.role}>{item.content}</p>)}
               {thinking && <p data-role="assistant">Estoy pensándolo...</p>}
             </div>
-
-            {!voice.active && voice.state !== "unsupported" && (
-              <button
-                type="button"
-                className="flowly-companion-voice-primary"
-                onClick={toggleVoice}
-              >
-                <Mic size={14} /> Activar voz
-              </button>
-            )}
-            {voice.active && (
-              <small className="flowly-companion-safe-note">
-                {voice.isAwake ? "Te escucho ahora." : 'Di "Flow" para llamarme.'}
-              </small>
-            )}
-
-            <form className="flowly-companion-chat-input" onSubmit={sendMessage}>
-              <input
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder={isArchitect ? "¿Qué revisamos?" : "Pídeme ayuda..."}
-                disabled={thinking}
-              />
-              <button type="submit" disabled={thinking}>
-                <Send size={14} />
-              </button>
+            <button type="button" className="flowly-v6-voice" onClick={toggleVoice}>{voice.active ? <Mic size={14} /> : <MicOff size={14} />}{voice.active ? "Voz activa" : "Activar voz"}</button>
+            <form onSubmit={sendMessage}>
+              <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isArchitect ? "¿Qué revisamos?" : "Pídeme ayuda..."} disabled={thinking} />
+              <button type="submit" disabled={thinking}><Send size={14} /></button>
             </form>
-
-            {isArchitect ? (
-              <Link href="/asistente" className="flowly-companion-architect-link">
-                <Code2 size={14} /> Abrir Asistente Arquitecto
-              </Link>
-            ) : (
-              <small className="flowly-companion-safe-note">
-                <ShieldCheck size={13} /> Companion conectado al Brain de Flowly.
-              </small>
-            )}
+            <small><ShieldCheck size={13} /> Companion conectado al Brain de Flowly.</small>
           </section>
         </aside>
       )}
