@@ -1,3 +1,5 @@
+import { findLatestStructuredPendingAction } from "@/lib/flowlyStructuredPendingActionStore";
+
 export type FlowlyPendingActionResolution = {
   shouldContinuePendingAction: boolean;
   reason: string;
@@ -5,7 +7,7 @@ export type FlowlyPendingActionResolution = {
   detectedDomain: "budget_crm" | "companion_avatar" | "seo" | "unknown";
 };
 
-type HistoryItem = { role?: string; text?: string; content?: string };
+type HistoryItem = { role?: string; text?: string; content?: string; details?: unknown };
 
 function normalize(value: string) {
   return value
@@ -63,6 +65,16 @@ export function resolvePendingActionForTurn(params: {
       reason: "La instrucción actual no es una confirmación aislada.",
       instruction: params.instruction,
       detectedDomain: domain,
+    };
+  }
+
+  const structuredPendingAction = findLatestStructuredPendingAction(history);
+  if (structuredPendingAction) {
+    return {
+      shouldContinuePendingAction: true,
+      reason: `El usuario confirmó una acción pendiente estructurada (${structuredPendingAction.target}).`,
+      instruction: structuredPendingAction.instruction,
+      detectedDomain: structuredPendingAction.target === "budget_crm" || structuredPendingAction.target === "companion_avatar" || structuredPendingAction.target === "seo" ? structuredPendingAction.target : domain,
     };
   }
 

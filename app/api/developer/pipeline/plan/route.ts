@@ -15,6 +15,7 @@ import { analyzeGeneralConversationMode, buildGeneralConversationReply } from "@
 import { buildApprovedPlanMismatchReply, resolveApprovedPlanForTurn } from "@/lib/flowlyApprovedPlanResolver";
 import { analyzeApprovedPlanExecutionTrigger, buildApprovedPlanExecutionReply } from "@/lib/flowlyApprovedPlanExecutionTrigger";
 import { resolvePendingActionForTurn } from "@/lib/flowlyPendingActionResolver";
+import { buildStructuredPendingAction } from "@/lib/flowlyStructuredPendingActionStore";
 import { analyzeSeoPlanBlocker, buildSeoPlanBlockedReply } from "@/lib/flowlySeoPlanBlocker";
 
 export const runtime = "nodejs";
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     const clientHistory = Array.isArray(body.history) ? body.history : [];
     const rememberedHistory = await getRecentDeveloperSessionMessages(conversationId);
     const history = [
-      ...rememberedHistory.map((item) => ({ role: item.role, text: item.content })),
+      ...rememberedHistory.map((item) => ({ role: item.role, text: item.content, details: item.details })),
       ...clientHistory,
     ].slice(-24);
     const pendingAction = resolvePendingActionForTurn({ instruction, history });
@@ -362,12 +363,17 @@ export async function POST(request: NextRequest) {
     });
 
     if (!intelligence.shouldPlan) {
+      const structuredPendingAction = buildStructuredPendingAction({
+        instruction: intelligence.refinedInstruction || instructionForTurn,
+        reply: intelligence.directReply,
+      });
+
       await logDeveloperConversationEvent({
         conversationId,
         role: "assistant",
         content: intelligence.directReply,
         intent: intelligence.intent,
-        details: { intelligence, turnIsolation },
+        details: { intelligence, turnIsolation, pendingAction: structuredPendingAction },
       });
 
       return NextResponse.json({
@@ -377,6 +383,7 @@ export async function POST(request: NextRequest) {
         shouldRun: intelligence.intent === "approval",
         conversationReply: intelligence.directReply,
         intelligence,
+        pendingAction: structuredPendingAction,
       });
     }
 
@@ -388,7 +395,11 @@ export async function POST(request: NextRequest) {
 
     if (conversation.conversationOnly && intelligence.intent !== "new_task" && intelligence.intent !== "refinement") {
       const reply = intelligence.directReply || conversation.reply || "Sigo en la misma sesión. Dime cómo quieres ajustar el plan.";
-      await logDeveloperConversationEvent({ conversationId, role: "assistant", content: reply, intent: intelligence.intent, details: { intelligence, conversation } });
+      const structuredPendingAction = buildStructuredPendingAction({
+        instruction: intelligence.refinedInstruction || instructionForTurn,
+        reply,
+      });
+      await logDeveloperConversationEvent({ conversationId, role: "assistant", content: reply, intent: intelligence.intent, details: { intelligence, conversation, pendingAction: structuredPendingAction } });
       return NextResponse.json({
         ok: true,
         conversationOnly: true,
@@ -396,6 +407,7 @@ export async function POST(request: NextRequest) {
         shouldRun: conversation.shouldRun || false,
         conversationReply: reply,
         intelligence,
+        pendingAction: structuredPendingAction,
       });
     }
 
@@ -435,15 +447,20 @@ export async function POST(request: NextRequest) {
 
     const resultWithSession = { ...result, sessionPlanId, orchestration, mission };
 
+    const structuredPendingAction = buildStructuredPendingAction({
+      instruction: mergedInstruction,
+      reply: result.conversationReply,
+    });
+
     await logDeveloperConversationEvent({
       conversationId,
       role: "assistant",
       content: result.conversationReply,
       intent: intelligence.intent,
-      details: { planSummary: result.summary, risk: result.risk, proposedFiles: result.proposedFiles?.map((file) => file.path), intelligence, orchestration },
+      details: { planSummary: result.summary, risk: result.risk, proposedFiles: result.proposedFiles?.map((file) => file.path), intelligence, orchestration, pendingAction: structuredPendingAction },
     });
 
-    return NextResponse.json(resultWithSession);
+    return NextResponse.json({ ...resultWithSession, pendingAction: structuredPendingAction });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
