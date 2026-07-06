@@ -45,6 +45,40 @@ function shouldHide(pathname: string) {
   return HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+function mapAvatarMoodToAssistantMode(mood: string) {
+  switch (mood) {
+    case "walking":
+      return "walk";
+    case "talking":
+      return "talk";
+    case "thinking":
+      return "thinking";
+    case "wave":
+      return "wave";
+    case "point":
+      return "point";
+    case "attention":
+      return "attention";
+    case "celebrating":
+      return "celebrating";
+    default:
+      return "idle";
+  }
+}
+
+function mapCompactAvatarMoodToAssistantMode(mood: string) {
+  switch (mood) {
+    case "talking":
+      return "talk";
+    case "thinking":
+      return "thinking";
+    case "wave":
+      return "wave";
+    default:
+      return "idle";
+  }
+}
+
 export default function FlowlyCompanionRuntime() {
   const pathname = usePathname() || "/";
   const [open, setOpen] = useState(false);
@@ -760,7 +794,7 @@ export default function FlowlyCompanionRuntime() {
         <div className="flowly-companion-character" data-skin={avatarTone} data-mood={avatarMood}>
           <FlowlyAssistant3D
             modelUrl={avatarUrl}
-            mode={avatarMood === "walking" ? "walk" : avatarMood === "talking" ? "talk" : avatarMood === "thinking" ? "thinking" : avatarMood === "wave" ? "wave" : avatarMood === "point" ? "point" : avatarMood === "attention" ? "attention" : avatarMood === "celebrating" ? "celebrating" : "idle"}
+            mode={mapAvatarMoodToAssistantMode(avatarMood)}
             facing="front"
             skinTone={avatarTone}
             onClick={toggleCompanionFromAvatar}
@@ -837,7 +871,7 @@ export default function FlowlyCompanionRuntime() {
             <div className="flowly-companion-status-avatar">
               <FlowlyAssistant3D
                 modelUrl={avatarUrl}
-                mode={avatarMood === "talking" ? "talk" : avatarMood === "thinking" ? "thinking" : avatarMood === "wave" ? "wave" : "idle"}
+                mode={mapCompactAvatarMoodToAssistantMode(avatarMood)}
                 facing="front"
                 skinTone={avatarTone}
               />
