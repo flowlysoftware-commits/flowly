@@ -814,24 +814,6 @@ export default function FlowlyCompanionRuntime() {
             onClick={toggleCompanionFromAvatar}
           />
         </div>
-        <div
-          className="flowly-companion-quick-skins"
-          onPointerDown={(event) => event.stopPropagation()}
-          aria-label="Cambiar skin de Flow"
-        >
-          <span>Skin</span>
-          {companionSkins.map((skin) => (
-            <button
-              key={skin.id}
-              type="button"
-              data-active={selectedSkin === skin.id}
-              onClick={() => changeSkin(skin.id)}
-              title={`Cambiar a ${skin.label}`}
-            >
-              {skin.label}
-            </button>
-          ))}
-        </div>
         <div className="flowly-companion-life-hud" aria-hidden="true">
           <span className="flowly-life-dot" />
           <strong>{isArchitect ? "OS vivo" : "Misión activa"}</strong>
@@ -910,6 +892,7 @@ export default function FlowlyCompanionRuntime() {
                 mode={mapCompactAvatarMoodToAssistantMode(effectiveAvatarMood)}
                 facing="front"
                 skinTone={avatarTone}
+                compact
               />
             </div>
             <div>

@@ -33,6 +33,7 @@ type FlowlyAssistant3DProps = {
   facing?: "left" | "right" | "front";
   skinTone?: FlowlyCompanionSkinTone;
   onClick?: () => void;
+  compact?: boolean;
 };
 
 type RuntimeSkin = {
@@ -327,8 +328,10 @@ function FlowlyCharacterEngine({
     const look = Math.sin(t * 0.86);
 
     // El modelo base llega en T-pose. Bajamos brazos y añadimos vida procedimental.
-    const leftArmDown = 1.22;
-    const rightArmDown = 1.22;
+    // La pose base de Flow llega con brazos abiertos. Cada lado necesita signo opuesto.
+    // Si ambos usan el mismo signo, un brazo queda en cruz.
+    const leftArmDown = 1.18;
+    const rightArmDown = -1.18;
     const armSwing = isWalking ? walk * 0.32 : idleArm;
     const legSwing = isWalking ? walk * 0.34 : Math.sin(t * 0.9) * 0.025;
 
@@ -336,26 +339,26 @@ function FlowlyCharacterEngine({
     applyRotation(bones.neck, base, 0, look * 0.035, 0);
     applyRotation(bones.spine, base, 0, 0, weightShift * 0.38);
 
-    applyRotation(bones.leftUpperArm, base, armSwing * 0.45, 0, leftArmDown + armSwing * 0.2);
-    applyRotation(bones.rightUpperArm, base, -armSwing * 0.45, 0, rightArmDown + armSwing * 0.2);
+    applyRotation(bones.leftUpperArm, base, armSwing * 0.28, 0, leftArmDown + armSwing * 0.12);
+    applyRotation(bones.rightUpperArm, base, -armSwing * 0.28, 0, rightArmDown - armSwing * 0.12);
     applyRotation(bones.leftLowerArm, base, 0, 0, 0.2 + Math.sin(t * 1.7) * 0.04);
     applyRotation(bones.rightLowerArm, base, 0, 0, 0.2 + Math.sin(t * 1.7) * 0.04);
     applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
     applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
 
     if (isTalking) {
-      applyRotation(bones.leftUpperArm, base, 0.08 + talk * 0.07, 0, leftArmDown + 0.12 + talk * 0.04);
-      applyRotation(bones.rightUpperArm, base, -0.08 - talk * 0.07, 0, rightArmDown + 0.12 + talk * 0.04);
+      applyRotation(bones.leftUpperArm, base, 0.06 + talk * 0.045, 0, leftArmDown + 0.09 + talk * 0.035);
+      applyRotation(bones.rightUpperArm, base, -0.06 - talk * 0.045, 0, rightArmDown - 0.09 - talk * 0.035);
     }
 
     if (isWaving) {
-      applyRotation(bones.rightUpperArm, base, -0.45, 0.12, 0.62 + Math.sin(t * 7.8) * 0.28);
-      applyRotation(bones.rightLowerArm, base, -0.28, 0, 0.75 + Math.sin(t * 7.8) * 0.18);
+      applyRotation(bones.rightUpperArm, base, -0.42, 0.12, -0.55 + Math.sin(t * 7.8) * 0.22);
+      applyRotation(bones.rightLowerArm, base, -0.28, 0, -0.68 + Math.sin(t * 7.8) * 0.14);
       applyRotation(bones.leftUpperArm, base, 0, 0, leftArmDown);
     }
 
     if (isPointing) {
-      applyRotation(bones.rightUpperArm, base, -0.28, -0.15, 0.82);
+      applyRotation(bones.rightUpperArm, base, -0.25, -0.15, -0.78);
       applyRotation(bones.rightLowerArm, base, -0.1, 0, 0.25);
       applyRotation(bones.head, base, -0.02, 0.12, 0);
     }
@@ -466,6 +469,7 @@ export default function FlowlyAssistant3D({
   facing = "front",
   skinTone = "flowly",
   onClick,
+  compact = false,
 }: FlowlyAssistant3DProps) {
   const safeMode = normalizeMode(mode);
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
@@ -478,12 +482,13 @@ export default function FlowlyAssistant3D({
       data-mode={safeMode}
       data-facing={facing}
       data-skin={skin.key}
+      data-compact={compact ? "true" : "false"}
       aria-label={`Abrir Companion ${skin.label}`}
     >
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.35, 8], zoom: 72, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.25, 8], zoom: compact ? 40 : 58, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
