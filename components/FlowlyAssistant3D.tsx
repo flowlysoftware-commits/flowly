@@ -285,9 +285,9 @@ function FlowlyCharacterEngine({
     box.getCenter(center);
 
     const height = size.y || 1;
-    const targetHeight = compact ? 2.65 : 3.72;
+    const targetHeight = compact ? 2.05 : 3.25;
     const scale = targetHeight / height;
-    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.32 : 1.84), -center.z * scale);
+    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.02 : 1.62), -center.z * scale);
     cloned.scale.setScalar(scale);
     cloned.rotation.y = skin.rotationY;
 
@@ -334,54 +334,18 @@ function FlowlyCharacterEngine({
     const talk = Math.sin(t * 8.8);
     const look = Math.sin(t * 0.86);
 
-    // Companion V3 se comporta como personaje de videojuego: el FBX aporta clip y
-    // esta capa corrige la pose para que nunca vuelva a T-pose ni brazos levantados.
+    // Companion V3.1: el personaje no se anima como una burbuja ni forzando huesos
+    // agresivamente. Los clips FBX mandan; esta capa solo añade microvida segura
+    // en cabeza, cuello y torso para evitar cortes de brazos/piernas.
     applyRotation(
       bones.head,
       base,
-      (isTalking ? talk * 0.038 : Math.sin(t * 1.25) * 0.018) + (isThinking ? 0.045 : 0),
-      look * 0.052,
+      (isTalking ? talk * 0.032 : Math.sin(t * 1.15) * 0.014) + (isThinking ? 0.035 : 0),
+      look * 0.045,
       0,
     );
-    applyRotation(bones.neck, base, 0, look * 0.028, 0);
-    applyRotation(bones.spine, base, isThinking ? 0.035 : 0, 0, weightShift * 0.16);
-
-    const actionCycle = Math.floor(t / 8.5) % 4;
-    const naturalWave = companionMode === "wave" || (!isWalking && companionMode === "idle" && actionCycle === 1);
-    const naturalPoint = companionMode === "point" || (!isWalking && companionMode === "idle" && actionCycle === 2);
-    const naturalThink = isThinking || (!isWalking && companionMode === "idle" && actionCycle === 3);
-    const armSwing = isWalking ? walk * 0.28 : Math.sin(t * 1.35) * 0.028;
-    const legSwing = isWalking ? walk * 0.34 : Math.sin(t * 0.9) * 0.018;
-
-    // Valores base: brazos relajados pegados al cuerpo.
-    let leftArmZ = -0.88 + armSwing * 0.045;
-    let rightArmZ = 0.88 - armSwing * 0.045;
-    let leftArmX = 0.04 + armSwing * 0.18;
-    let rightArmX = -0.04 - armSwing * 0.18;
-    let leftForearmZ = 0.18;
-    let rightForearmZ = -0.18;
-
-    if (naturalWave) {
-      rightArmZ = 0.16 + Math.sin(t * 6.4) * 0.08;
-      rightArmX = -0.62 + Math.sin(t * 5.8) * 0.09;
-      rightForearmZ = -0.58 + Math.sin(t * 7.2) * 0.12;
-      leftArmZ = -0.9;
-    } else if (naturalPoint) {
-      rightArmZ = 0.34;
-      rightArmX = -0.44 + Math.sin(t * 2.2) * 0.02;
-      rightForearmZ = -0.08;
-    } else if (naturalThink) {
-      rightArmZ = 0.55;
-      rightArmX = -0.18;
-      rightForearmZ = -0.36;
-    }
-
-    applyRotation(bones.leftUpperArm, base, leftArmX, 0, leftArmZ);
-    applyRotation(bones.rightUpperArm, base, rightArmX, 0, rightArmZ);
-    applyRotation(bones.leftLowerArm, base, 0, 0, leftForearmZ + Math.sin(t * 1.7) * 0.018);
-    applyRotation(bones.rightLowerArm, base, 0, 0, rightForearmZ - Math.sin(t * 1.7) * 0.018);
-    applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
-    applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
+    applyRotation(bones.neck, base, 0, look * 0.022, 0);
+    applyRotation(bones.spine, base, isThinking ? 0.022 : 0, 0, weightShift * 0.075);
   });
 
   return (
@@ -508,7 +472,7 @@ export default function FlowlyAssistant3D({
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.28, 8], zoom: compact ? 68 : 74, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.18, 8], zoom: compact ? 82 : 72, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}

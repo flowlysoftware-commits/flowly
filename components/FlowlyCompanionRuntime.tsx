@@ -542,20 +542,10 @@ export default function FlowlyCompanionRuntime() {
   }, [lifeDecision.spatialTarget, moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
 
   useEffect(() => {
+    // Companion V3.1: Flow vive integrado en la página. Evitamos que deambule
+    // solo por encima del layout, porque eso lo hace parecer una capa pegada.
     if (userPlacedCompanionRef.current || voiceNeedsActivation || open || thinking || voice.isAwake) return;
-    const path: Array<"dock" | "left" | "center" | "right" | "lowerCenter"> = [
-      "dock",
-      "left",
-      "lowerCenter",
-      "right",
-      "dock",
-    ];
-    let index = 0;
-    const interval = window.setInterval(() => {
-      index = (index + 1) % path.length;
-      moveFlowTo(path[index]);
-    }, 12000);
-    return () => window.clearInterval(interval);
+    moveFlowTo("dock");
   }, [moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
 
   useEffect(() => {
@@ -651,19 +641,14 @@ export default function FlowlyCompanionRuntime() {
 
     const behaviours = isArchitect
       ? [
-          { mode: "thinking", label: "Conectado a Brain" },
-          { mode: "walking", label: "Explorando el OS" },
-          { mode: "point", label: "Listo para ejecutar" },
-          { mode: "wave", label: "Esperando instrucciones" },
-          { mode: "idle", label: "Presente en Flowly" },
+          { mode: "idle", label: "Presente en Flowly OS" },
+          { mode: "thinking", label: "Leyendo el contexto" },
+          { mode: "idle", label: "Esperando contigo" },
         ]
       : [
           { mode: "idle", label: context.mission },
-          { mode: "walking", label: "Buscando oportunidades" },
-          { mode: "wave", label: "Saludando al equipo" },
-          { mode: "thinking", label: "Pensando objetivos" },
-          { mode: "point", label: "Señalando el siguiente paso" },
-          { mode: context.mode, label: context.message },
+          { mode: "thinking", label: "Mirando el panel contigo" },
+          { mode: "idle", label: context.message },
         ];
 
     let index = 0;
