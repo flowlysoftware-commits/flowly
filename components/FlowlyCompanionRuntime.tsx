@@ -205,15 +205,20 @@ export default function FlowlyCompanionRuntime() {
   const moveFlowTo = useCallback(
     (target: "dock" | "center" | "left" | "right" | "lowerCenter") => {
       if (typeof window === "undefined") return;
+      const isMobileViewport = window.innerWidth <= 820;
       const avatarWidth = Math.min(
-        220,
-        Math.max(150, window.innerWidth * 0.14),
+        window.innerWidth - 28,
+        isMobileViewport
+          ? Math.min(176, Math.max(140, window.innerWidth * 0.42))
+          : Math.min(240, Math.max(192, window.innerWidth * 0.15)),
       );
       const avatarHeight = Math.min(
-        290,
-        Math.max(190, window.innerHeight * 0.26),
+        window.innerHeight - 36,
+        isMobileViewport
+          ? Math.min(224, Math.max(170, window.innerHeight * 0.28))
+          : Math.min(304, Math.max(243, window.innerHeight * 0.34)),
       );
-      const margin = 22;
+      const margin = isMobileViewport ? 14 : 22;
       const maxX = Math.max(margin, window.innerWidth - avatarWidth - margin);
       const maxY = Math.max(margin, window.innerHeight - avatarHeight - margin);
       const positions: Record<typeof target, { x: number; y: number }> = {

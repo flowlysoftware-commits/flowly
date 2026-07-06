@@ -4,6 +4,7 @@ import { flowlyMigrationModules } from "@/lib/flowlyOSMigration";
 import { analyzeFlowlyImpact, buildFlowlyProjectGraph, summarizeProjectGraph, type FlowlyImpactAnalysis } from "@/lib/flowlyProjectGraph";
 import { evaluateGoalFidelity, isBudgetCrmObjective } from "@/lib/flowlyGoalFidelityGuard";
 import { buildPlannerScopePrompt, filterFilesToPlannerScope, validatePlannerScope, type FlowlyPlannerScopeGuardResult } from "@/lib/flowlyPlannerScopeGuard";
+import { buildVisualQualityPolicyPrompt, evaluateVisualQualityPolicy } from "@/lib/flowlyVisualQualityPolicy";
 
 export type ExecutorV3Risk = "bajo" | "medio" | "alto";
 
@@ -439,6 +440,7 @@ async function buildAIFiles(params: {
     "- Si no puedes estar seguro, devuelve {\"files\":[]} y NO crees documentación ni archivos de plan.",
     "- Grounding obligatorio: usa solo archivos reales incluidos en projectMap.candidates, projectGraph, impact o developerContext.projectSnapshot.",
     buildPlannerScopePrompt(params.plan.instruction) || "- Planner Scope Guard: sin scope cerrado para esta misión.",
+    buildVisualQualityPolicyPrompt(params.plan.instruction) || "- Visual Quality Policy: no aplica a esta petición.",
     "- Este repositorio usa Next.js App Router si developerContext.projectSnapshot.framework.router='app-router'. Nunca inventes index.html, about.html, blog.html, header.php ni archivos de otros frameworks.",
     "- Para SEO/metadata/Open Graph prioriza app/layout.tsx, app/page.tsx, app/sitemap.ts, app/robots.ts, app/manifest.ts, app/opengraph-image.tsx, app/twitter-image.tsx, app/icon.png o public/favicon.ico SOLO si aparecen como rutas reales en developerContext.projectSnapshot.",
     "- Usa projectGraph e impact para decidir. Si impact.avoidCreating contiene archivos, revisa esos archivos antes de crear otros.",
@@ -602,6 +604,20 @@ export function runExecutorPreflight(files: ExecutorFileChange[], options?: { ap
       ok: scope.ok,
       detail: scope.summary,
     });
+
+    const visual = evaluateVisualQualityPolicy({ instruction: options.instruction, files });
+    checks.push({
+      label: "Visual QA Policy",
+      ok: visual.ok,
+      detail: visual.summary,
+    });
+    for (const item of visual.checks) {
+      checks.push({
+        label: `Visual QA · ${item.label}`,
+        ok: item.ok,
+        detail: item.detail,
+      });
+    }
   }
 
   checks.push({ label: "Build Guard", ok: buildGuard.ok, detail: buildGuard.summary });
