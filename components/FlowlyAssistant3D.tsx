@@ -190,11 +190,11 @@ function getModelProfile(modelUrl: string, facing: Required<FlowlyAssistant3DPro
   const url = modelUrl.toLowerCase();
   const baseTurn = facing === "right" ? -0.16 : facing === "left" ? 0.16 : 0;
 
-  // Cada skin puede venir de una herramienta distinta y con escala/orientación distinta.
-  // Normalizamos por bounding box y solo dejamos aquí una corrección visual de frente.
-  if (url.includes("grandma")) return { yaw: 0 + baseTurn, targetHeight: 2.95, lift: -1.42 };
-  if (url.includes("chef")) return { yaw: 0 + baseTurn, targetHeight: 3.05, lift: -1.46 };
-  return { yaw: -Math.PI / 2 + baseTurn, targetHeight: 3.05, lift: -1.46 };
+  // El modelo base de Flow viene de lado. Los skins actuales usan el MISMO modelo,
+  // solo cambia el material. El runtime debe garantizar que siempre aparece entero.
+  if (url.includes("grandma")) return { yaw: 0 + baseTurn, targetHeight: 3.15, footY: -1.52 };
+  if (url.includes("chef")) return { yaw: 0 + baseTurn, targetHeight: 3.15, footY: -1.52 };
+  return { yaw: -Math.PI / 2 + baseTurn, targetHeight: 3.15, footY: -1.52 };
 }
 
 function Model({
@@ -225,7 +225,9 @@ function Model({
     const scale = profile.targetHeight / height;
     return {
       scale,
-      position: new THREE.Vector3(-center.x, -box.min.y + profile.lift, -center.z),
+      // Antes el grupo completo se colocaba demasiado abajo y el modelo quedaba
+      // fuera de cámara. Fijamos los pies en una altura estable para todos los skins.
+      position: new THREE.Vector3(-center.x, -box.min.y + profile.footY, -center.z),
     };
   }, [scene, profile]);
   const rig = useMemo(() => getRig(scene), [scene]);
@@ -305,13 +307,13 @@ function Model({
     const bodyBreath = activeSpeaking ? breathe * 0.018 : breathe * 0.01;
 
     // Movimiento del personaje completo. Las piernas no se fuerzan: el Runtime mueve el cuerpo por pantalla.
-    group.current.position.set(Math.sin(t * 0.38) * 0.012, -1.1 + bodyBreath, 0);
+    group.current.position.set(Math.sin(t * 0.38) * 0.012, bodyBreath, 0);
     group.current.rotation.set(attentiveLean, baseYaw + looking, slow * 0.004);
     group.current.scale.setScalar(normalizedBounds.scale);
   });
 
   return (
-    <group ref={group} position={[0, -1.1, 0]} rotation={[0, profile.yaw, 0]} scale={normalizedBounds.scale}>
+    <group ref={group} position={[0, 0, 0]} rotation={[0, profile.yaw, 0]} scale={normalizedBounds.scale}>
       <primitive object={scene} position={normalizedBounds.position} />
     </group>
   );
@@ -335,7 +337,7 @@ export default function FlowlyAssistant3D({
 }: FlowlyAssistant3DProps) {
   return (
     <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
-      <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 1.08, 5.25], fov: 34 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
+      <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 0.72, 5.45], fov: 32 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
         <ambientLight intensity={1.35} />
         <directionalLight position={[2.4, 4, 3]} intensity={2.05} castShadow />
         <pointLight position={[-2.2, 2.8, 2]} intensity={1.05} color="#8b5cf6" />

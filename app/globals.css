@@ -3226,3 +3226,55 @@ input[type="date"].input-dark { color-scheme: dark; }
     height: clamp(13rem, 28vh, 18rem) !important;
   }
 }
+
+
+/* Flowly Companion Skin Fix - avatar siempre visible y sin aura/burbuja falsa */
+.flowly-companion-avatar-shell,
+.flowly-companion-status-avatar {
+  isolation: isolate;
+}
+.flowly-companion-avatar-shell .evo-3d-aura-one,
+.flowly-companion-avatar-shell .evo-3d-aura-two,
+.flowly-companion-avatar-shell .evo-3d-pulse,
+.flowly-companion-status-avatar .evo-3d-aura-one,
+.flowly-companion-status-avatar .evo-3d-aura-two,
+.flowly-companion-status-avatar .evo-3d-pulse {
+  display: none !important;
+}
+.flowly-companion-avatar-shell .flowly-3d-stage,
+.flowly-companion-status-avatar .flowly-3d-stage {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+.flowly-companion-avatar-shell .flowly-3d-stage canvas,
+.flowly-companion-status-avatar .flowly-3d-stage canvas {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+.flowly-companion-status-avatar {
+  width: 5.4rem !important;
+  height: 6.4rem !important;
+  min-width: 5.4rem !important;
+  overflow: visible !important;
+}
+.flowly-companion-status-avatar .evo-companion-3d-compact,
+.flowly-companion-status-avatar .evo-companion-3d,
+.flowly-companion-status-avatar .flowly-3d-stage {
+  width: 100% !important;
+  height: 100% !important;
+}
+.flowly-companion-avatar-shell {
+  z-index: 8 !important;
+}
+.flowly-companion-panel {
+  z-index: 12 !important;
+}
+.flowly-companion-bubble {
+  z-index: 11 !important;
+  pointer-events: none;
+}
