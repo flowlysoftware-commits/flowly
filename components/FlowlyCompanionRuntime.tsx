@@ -20,7 +20,7 @@ import { useFlowlyVoiceRuntime } from "@/hooks/useFlowlyVoiceRuntime";
 
 const HIDDEN_PREFIXES = ["/login", "/registro", "/reservas", "/demo/login"];
 
-type StageTarget = "habitable" | "center" | "left" | "right" | "manual";
+type StageTarget = "habitable" | "center" | "left" | "right" | "manual" | "play" | "mouse";
 type StagePosition = { x: number; y: number; ready: boolean; moving: boolean; target: StageTarget };
 
 function shouldHide(pathname: string) {
@@ -118,6 +118,9 @@ export default function FlowlyCompanionRuntime() {
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef({ active: false, moved: false, offsetX: 0, offsetY: 0 });
   const userPlacedRef = useRef(false);
+  const manualPauseUntilRef = useRef(0);
+  const mouseRef = useRef({ x: 0, y: 0, lastFace: 0, lastChase: 0 });
+  const [faceDirection, setFaceDirection] = useState<"left" | "right" | "front">("front");
   const suppressClickRef = useRef(false);
   const voiceSpeakRef = useRef<(text: string) => void>(() => undefined);
   const companionLiveContextRef = useRef<Record<string, unknown>>({});
@@ -130,14 +133,19 @@ export default function FlowlyCompanionRuntime() {
   const speakCleanly = useCallback((text: string) => text.replace(/[#*_`>\[\]]/g, " ").replace(/\s+/g, " ").trim(), []);
 
   const moveFlowTo = useCallback((target: StageTarget) => {
-    if (typeof window === "undefined" || userPlacedRef.current) return;
+    if (typeof window === "undefined" || Date.now() < manualPauseUntilRef.current) return;
     const next = target === "center"
       ? clampToViewport((window.innerWidth - getCharacterSize().width) / 2, (window.innerHeight - getCharacterSize().height) / 2)
       : target === "left"
         ? clampToViewport(28, window.innerHeight - getCharacterSize().height - 34)
         : target === "right"
           ? clampToViewport(window.innerWidth - getCharacterSize().width - 28, window.innerHeight - getCharacterSize().height - 34)
-          : findHabitablePosition(open);
+          : target === "play"
+            ? clampToViewport(
+                window.innerWidth * (0.18 + Math.random() * 0.64),
+                window.innerHeight * (0.38 + Math.random() * 0.42),
+              )
+            : findHabitablePosition(open);
 
     setPosition((current) => {
       const distance = current.ready ? Math.hypot(current.x - next.x, current.y - next.y) : 999;
@@ -147,6 +155,23 @@ export default function FlowlyCompanionRuntime() {
       setPosition((current) => current.target === target ? { ...current, moving: false } : current);
     }, 900);
   }, [open]);
+
+  const moveFlowNearMouse = useCallback((mouseX: number, mouseY: number, playful = false) => {
+    if (typeof window === "undefined" || Date.now() < manualPauseUntilRef.current) return;
+    const size = getCharacterSize();
+    const offset = playful ? (mouseX < window.innerWidth / 2 ? 78 : -78) : 0;
+    const next = clampToViewport(mouseX - size.width / 2 + offset, mouseY - size.height * 0.72);
+    setPosition((current) => {
+      const distance = current.ready ? Math.hypot(current.x - next.x, current.y - next.y) : 999;
+      const travelMs = Math.min(1600, Math.max(720, distance * 3.2));
+      window.setTimeout(() => {
+        setPosition((latest) => latest.target === "mouse" ? { ...latest, moving: false } : latest);
+      }, travelMs);
+      return { ...next, ready: true, moving: distance > 22, target: "mouse" };
+    });
+    setLifeMode("walking");
+    setLifeLabel(playful ? "Voy detrás de ti" : "Te sigo de cerca");
+  }, []);
 
   const handleVoiceWake = useCallback(() => {
     setLifeMode("attention");
@@ -248,8 +273,8 @@ export default function FlowlyCompanionRuntime() {
   }, [docked, moveFlowTo]);
 
   useEffect(() => {
-    if (userPlacedRef.current || docked) return;
-    const id = window.setInterval(() => moveFlowTo("habitable"), 14000);
+    if (docked) return;
+    const id = window.setInterval(() => moveFlowTo(Math.random() > 0.45 ? "play" : "habitable"), 6200);
     return () => window.clearInterval(id);
   }, [docked, moveFlowTo]);
 
@@ -308,6 +333,7 @@ export default function FlowlyCompanionRuntime() {
     const next = clampToViewport(event.clientX - drag.offsetX, event.clientY - drag.offsetY);
     drag.moved = true;
     userPlacedRef.current = true;
+    manualPauseUntilRef.current = Date.now() + 8000;
     setPosition({ ...next, ready: true, moving: false, target: "manual" });
   }, []);
 
@@ -317,6 +343,7 @@ export default function FlowlyCompanionRuntime() {
     setDragging(false);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     if (moved) {
+      manualPauseUntilRef.current = Date.now() + 8000;
       suppressClickRef.current = true;
       window.setTimeout(() => { suppressClickRef.current = false; }, 120);
     }
@@ -356,9 +383,56 @@ export default function FlowlyCompanionRuntime() {
     setDocked(false);
     setOpen(false);
     userPlacedRef.current = false;
+    manualPauseUntilRef.current = 0;
     window.localStorage.removeItem("flowly_companion_docked");
     window.setTimeout(() => moveFlowTo("habitable"), 40);
   }, [moveFlowTo]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || docked) return;
+
+    const handlePointerFollow = (event: PointerEvent) => {
+      const now = Date.now();
+      mouseRef.current.x = event.clientX;
+      mouseRef.current.y = event.clientY;
+
+      if (now - mouseRef.current.lastFace > 90) {
+        mouseRef.current.lastFace = now;
+        const actorCenter = position.ready ? position.x + getCharacterSize().width / 2 : window.innerWidth / 2;
+        const delta = event.clientX - actorCenter;
+        setFaceDirection(Math.abs(delta) < 34 ? "front" : delta < 0 ? "left" : "right");
+      }
+
+      if (dragRef.current.active || thinking || now < manualPauseUntilRef.current) return;
+      const size = getCharacterSize();
+      const actorX = position.ready ? position.x + size.width / 2 : window.innerWidth * 0.62;
+      const actorY = position.ready ? position.y + size.height * 0.55 : window.innerHeight * 0.62;
+      const distance = Math.hypot(event.clientX - actorX, event.clientY - actorY);
+      const canChase = now - mouseRef.current.lastChase > 5200;
+
+      if (canChase && distance > 260 && distance < 760 && Math.random() < 0.035) {
+        mouseRef.current.lastChase = now;
+        moveFlowNearMouse(event.clientX, event.clientY, true);
+      }
+    };
+
+    window.addEventListener("pointermove", handlePointerFollow, { passive: true });
+    return () => window.removeEventListener("pointermove", handlePointerFollow);
+  }, [docked, moveFlowNearMouse, position.ready, position.x, position.y, thinking]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || docked) return;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const { x, y, lastChase } = mouseRef.current;
+      if (!x || !y || thinking || dragRef.current.active || now < manualPauseUntilRef.current) return;
+      if (now - lastChase < 7000) return;
+      if (Math.random() > 0.42) return;
+      mouseRef.current.lastChase = now;
+      moveFlowNearMouse(x, y, true);
+    }, 7200);
+    return () => window.clearInterval(timer);
+  }, [docked, moveFlowNearMouse, thinking]);
 
 
 
@@ -397,7 +471,7 @@ export default function FlowlyCompanionRuntime() {
           <X size={14} />
         </button>
         <div className="flowly-v6-character" onClick={toggleFromCharacter}>
-          <FlowlyAssistant3D modelUrl={activeSkin.modelUrl} mode={mapAvatarMoodToAssistantMode(effectiveAvatarMood)} facing="front" skinTone={activeSkin.tone} />
+          <FlowlyAssistant3D modelUrl={activeSkin.modelUrl} mode={mapAvatarMoodToAssistantMode(effectiveAvatarMood)} facing={position.moving ? faceDirection : faceDirection} skinTone={activeSkin.tone} />
         </div>
         <span className="flowly-v6-shadow" aria-hidden="true" />
         <div className="flowly-v6-hud" aria-hidden="true">
