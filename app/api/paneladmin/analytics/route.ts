@@ -176,6 +176,18 @@ function readManualGoogleClicks(request: NextRequest) {
   return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
 }
 
+function isPageLandingEvent(row: EventRow) {
+  return row.event_name === "page_view" || row.event_name === "page_load";
+}
+
+function uniqueSessionPathCount(events: EventRow[]) {
+  return new Set(
+    events
+      .map((row) => `${row.session_id || row.visitor_id || "anon"}::${row.path}`)
+      .filter(Boolean),
+  ).size;
+}
+
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request))
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -238,10 +250,11 @@ export async function GET(request: NextRequest) {
   ]);
 
   const events = (allEvents.data || []) as EventRow[];
-  const pageViews = events.filter((row) => row.event_name === "page_view");
+  const pageViews = events.filter(isPageLandingEvent);
+  const pageViewEventsToday = pageViews.filter((row) => row.created_at >= today);
   const sessions = sessions30.data || [];
   const visitorSet = new Set(
-    (visitorsToday.data || []).map((row) => row.visitor_id).filter(Boolean),
+    pageViewEventsToday.map((row) => row.visitor_id).filter(Boolean),
   );
   const allVisitorSet = new Set(
     pageViews.map((row) => row.visitor_id).filter(Boolean),
@@ -395,7 +408,11 @@ export async function GET(request: NextRequest) {
   const summary = {
     onlineNow: online.count || 0,
     eventsToday: eventsToday.count || 0,
-    visitsToday: pageViews.filter((row) => row.created_at >= today).length,
+    visitsToday: uniqueSessions(pageViewEventsToday, () => true),
+    pageViewsTodayRaw: pageViewEventsToday.length,
+    trackedLandingSessions: uniqueSessions(pageViews, () => true),
+    trackedPageLoads: pageViews.length,
+    uniqueSessionPages30Days: uniqueSessionPathCount(pageViews),
     visitorsToday: visitorSet.size,
     visitors30Days: allVisitorSet.size,
     sessions30Days: sessionSet.size,
@@ -414,6 +431,12 @@ export async function GET(request: NextRequest) {
       : 0,
     googleAdsTrackingRate: googleAdsReportedClicks
       ? Math.round((googleAdsClickEvents / googleAdsReportedClicks) * 100)
+      : 0,
+    websiteTrackingRate: googleAdsReportedClicks
+      ? Math.round((uniqueSessions(pageViews, () => true) / googleAdsReportedClicks) * 100)
+      : 0,
+    websiteMissingVisits: googleAdsReportedClicks
+      ? Math.max(0, googleAdsReportedClicks - uniqueSessions(pageViews, () => true))
       : 0,
     reachedCheckout: checkoutSessions,
     completedPurchase: purchaseSessions,
@@ -454,14 +477,21 @@ export async function GET(request: NextRequest) {
   }
   if (
     summary.googleAdsReportedClicks &&
+    summary.trackedLandingSessions < summary.googleAdsReportedClicks * 0.2
+  ) {
+    recommendations.unshift(
+      `Google Ads informa ${summary.googleAdsReportedClicks} clics y Flowly solo registra ${summary.trackedLandingSessions} sesiones web. Esto ya no depende solo del gclid: se ha añadido un pixel temprano page_load antes de React para contar aterrizajes aunque el usuario rebote rápido. Revisa que el anuncio apunte al dominio correcto y que la URL final no pase por redirecciones que bloqueen la carga.`,
+    );
+  } else if (
+    summary.googleAdsReportedClicks &&
     summary.googleAdsClickEvents < summary.googleAdsReportedClicks * 0.2
   ) {
     recommendations.unshift(
-      `Google Ads informa ${summary.googleAdsReportedClicks} clics, pero Flowly solo ha detectado ${summary.googleAdsClickEvents} llegadas atribuibles. El panel no puede recuperar clics históricos si no llegaron con gclid/UTM o si el evento fue bloqueado; ahora se registran aterrizajes de Google Ads con ad_click_landing para diagnosticar la pérdida.`,
+      `La web está recibiendo sesiones, pero solo ${summary.googleAdsClickEvents} aparecen atribuibles a Google Ads. Revisa autoetiquetado gclid y UTMs; las visitas sin gclid se cuentan como web, pero no se pueden atribuir a campaña.`,
     );
-  } else if (summary.googleAdsClickEvents === 0) {
+  } else if (summary.trackedLandingSessions === 0) {
     recommendations.push(
-      "Si Google Ads muestra clics pero aquí no aparecen, revisa que los anuncios conserven gclid o añadan UTM. Desde ahora Flowly registra un evento ad_click_landing al aterrizar desde Google Ads.",
+      "Si Google Ads muestra clics pero aquí no aparecen visitas, revisa que el anuncio apunte a esta web y que /api/analytics/track no esté bloqueado. Desde ahora Flowly usa page_load temprano + sendBeacon para contar mejor.",
     );
   }
   if (!recommendations.length)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const EVENT_NAMES = new Set([
+  "page_load",
   "page_view",
   "heartbeat",
   "page_leave",
@@ -21,7 +22,7 @@ const MAX_TEXT = 500;
 function dbReady() {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
 }
 
@@ -41,51 +42,73 @@ function getClientIp(request: NextRequest) {
 function cleanMetadata(body: Record<string, unknown>) {
   return {
     ...body,
-    // Nunca guardamos textos enormes por accidente.
     title: cleanText(body.title || body.page_title),
     label: cleanText(body.label),
     href: cleanText(body.href),
   };
 }
 
-export async function POST(request: NextRequest) {
-  if (!dbReady()) return NextResponse.json({ ok: true, stored: false });
+function inferFunnelStep(path: string, fullPath = path) {
+  const cleanPath = `${path} ${fullPath}`.toLowerCase();
+  if (path === "/" || path === "") return "landing";
+  if (
+    cleanPath.includes("precios") ||
+    cleanPath.includes("pricing") ||
+    cleanPath.includes("#precios")
+  )
+    return "pricing";
+  if (cleanPath.includes("registro") || cleanPath.includes("signup"))
+    return "signup";
+  if (cleanPath.includes("login")) return "login";
+  if (cleanPath.includes("onboarding")) return "onboarding";
+  if (
+    cleanPath.includes("checkout") ||
+    cleanPath.includes("carrito") ||
+    cleanPath.includes("stripe")
+  )
+    return "checkout";
+  if (cleanPath.includes("dashboard")) return "dashboard";
+  if (
+    cleanPath.includes("bienvenido") ||
+    cleanPath.includes("gracias") ||
+    cleanPath.includes("success") ||
+    cleanPath.includes("completed")
+  )
+    return "purchase";
+  return "other";
+}
 
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Payload inválido" },
-      { status: 400 },
-    );
-  }
+async function storeAnalyticsEvent(
+  request: NextRequest,
+  body: Record<string, unknown>,
+) {
+  if (!dbReady()) return { ok: true, stored: false };
 
   const eventName = cleanText(body.eventName || body.event_name, "page_view");
-  if (!EVENT_NAMES.has(eventName))
-    return NextResponse.json(
-      { ok: false, error: "Evento no permitido" },
-      { status: 400 },
-    );
+  if (!EVENT_NAMES.has(eventName)) {
+    return { ok: false, error: "Evento no permitido", status: 400 };
+  }
 
   const sessionId = cleanText(body.sessionId || body.session_id);
   const visitorId = cleanText(body.visitorId || body.visitor_id);
   const path = cleanText(body.path, "/");
+  const fullPath = cleanText(body.fullPath || body.full_path, path);
   const now = new Date().toISOString();
 
-  if (!sessionId || !visitorId)
-    return NextResponse.json(
-      { ok: false, error: "Falta sesión" },
-      { status: 400 },
-    );
+  if (!sessionId || !visitorId) {
+    return { ok: false, error: "Falta sesión", status: 400 };
+  }
 
   const eventPayload = {
     event_name: eventName,
     visitor_id: visitorId,
     session_id: sessionId,
     path,
-    full_path: cleanText(body.fullPath || body.full_path, path),
-    funnel_step: cleanText(body.funnelStep || body.funnel_step, "other"),
+    full_path: fullPath,
+    funnel_step: cleanText(
+      body.funnelStep || body.funnel_step,
+      inferFunnelStep(path, fullPath),
+    ),
     page_title: cleanText(body.title || body.page_title),
     referrer: body.referrer ? cleanText(body.referrer) : null,
     viewport: cleanText(body.viewport),
@@ -100,11 +123,7 @@ export async function POST(request: NextRequest) {
   const { error } = await supabaseAdmin
     .from("flowly_analytics_events")
     .insert(eventPayload);
-  if (error)
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 },
-    );
+  if (error) return { ok: false, error: error.message, status: 500 };
 
   const { data: existingSession } = await supabaseAdmin
     .from("flowly_analytics_sessions")
@@ -141,5 +160,65 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, stored: true });
+  return { ok: true, stored: true };
+}
+
+export async function POST(request: NextRequest) {
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Payload inválido" },
+      { status: 400 },
+    );
+  }
+
+  const result = await storeAnalyticsEvent(request, body);
+  if (!result.ok)
+    return NextResponse.json(
+      { ok: false, error: result.error },
+      { status: result.status || 500 },
+    );
+
+  return NextResponse.json(result);
+}
+
+export async function GET(request: NextRequest) {
+  const params = request.nextUrl.searchParams;
+  const body: Record<string, unknown> = {
+    eventName: params.get("event") || "page_load",
+    visitorId: params.get("visitorId") || params.get("visitor_id"),
+    sessionId: params.get("sessionId") || params.get("session_id"),
+    path: params.get("path") || "/",
+    fullPath: params.get("fullPath") || params.get("full_path") || "/",
+    funnelStep: params.get("funnelStep") || params.get("funnel_step") || undefined,
+    referrer: params.get("referrer"),
+    viewport: params.get("viewport"),
+    language: params.get("language"),
+    timezone: params.get("timezone"),
+    attribution: {
+      gclid: params.get("gclid"),
+      fbclid: params.get("fbclid"),
+      utm_source: params.get("utm_source"),
+      utm_medium: params.get("utm_medium"),
+      utm_campaign: params.get("utm_campaign"),
+      utm_content: params.get("utm_content"),
+      utm_term: params.get("utm_term"),
+    },
+  };
+
+  const result = await storeAnalyticsEvent(request, body);
+  const pixel = Buffer.from(
+    "R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==",
+    "base64",
+  );
+
+  return new NextResponse(pixel, {
+    status: result.ok ? 200 : result.status || 204,
+    headers: {
+      "Content-Type": "image/gif",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    },
+  });
 }

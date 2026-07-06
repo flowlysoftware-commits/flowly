@@ -20,6 +20,10 @@ type Summary = {
   onlineNow?: number;
   eventsToday?: number;
   visitsToday?: number;
+  pageViewsTodayRaw?: number;
+  trackedLandingSessions?: number;
+  trackedPageLoads?: number;
+  uniqueSessionPages30Days?: number;
   visitorsToday?: number;
   visitors30Days?: number;
   sessions30Days?: number;
@@ -35,6 +39,8 @@ type Summary = {
   googleAdsReportedClicks?: number;
   googleAdsMissingClicks?: number;
   googleAdsTrackingRate?: number;
+  websiteTrackingRate?: number;
+  websiteMissingVisits?: number;
   reachedCheckout?: number;
   completedPurchase?: number;
   pricingRate?: number;
@@ -279,9 +285,9 @@ export default function PanelAdminPage() {
           />
           <MetricCard
             icon={<Eye size={22} />}
-            label="Page views hoy"
+            label="Visitas web hoy"
             value={formatNumber(summary.visitsToday)}
-            hint={`${formatNumber(summary.visitorsToday)} visitantes únicos hoy · ${formatNumber(summary.eventsToday)} eventos`}
+            hint={`${formatNumber(summary.visitorsToday)} visitantes únicos · ${formatNumber(summary.pageViewsTodayRaw)} señales recibidas`}
             tone="cyan"
           />
           <MetricCard
@@ -305,7 +311,7 @@ export default function PanelAdminPage() {
             icon={<Users size={22} />}
             label="Visitantes 30 días"
             value={formatNumber(summary.visitors30Days)}
-            hint={`${formatNumber(summary.sessions30Days)} sesiones detectadas`}
+            hint={`${formatNumber(summary.sessions30Days)} sesiones · ${formatNumber(summary.trackedPageLoads)} señales de carga`}
             tone="purple"
           />
           <MetricCard
@@ -334,23 +340,28 @@ export default function PanelAdminPage() {
         <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
           <Panel
             title="Google Ads"
-            subtitle="Google cuenta clics en el anuncio; Flowly cuenta llegadas reales que cargan la web con gclid/UTM."
+            subtitle="Google cuenta clics en el anuncio; Flowly cuenta las llegadas reales que cargan la web, tengan o no gclid."
           >
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MiniStat
                 label="Según Google"
                 value={formatNumber(summary.googleAdsReportedClicks)}
                 hint="Dato introducido para comparar"
               />
               <MiniStat
-                label="Detectados por Flowly"
-                value={formatNumber(summary.googleAdsClickEvents)}
-                hint={`${formatNumber(summary.googleAdsClickEventsToday)} hoy · ${formatNumber(summary.googleAdsClickSessions)} sesiones`}
+                label="Visitas web registradas"
+                value={formatNumber(summary.trackedLandingSessions)}
+                hint={`${formatNumber(summary.trackedPageLoads)} señales page_load/page_view en 30 días`}
               />
               <MiniStat
-                label="Tasa detectada"
-                value={`${formatNumber(summary.googleAdsTrackingRate)}%`}
-                hint={`${formatNumber(summary.googleAdsMissingClicks)} clics no atribuibles`}
+                label="Cobertura web"
+                value={`${formatNumber(summary.websiteTrackingRate)}%`}
+                hint={`${formatNumber(summary.websiteMissingVisits)} clics de diferencia frente a Google`}
+              />
+              <MiniStat
+                label="Atribuidas a Google"
+                value={formatNumber(summary.googleAdsClickEvents)}
+                hint={`${formatNumber(summary.googleAdsClickEventsToday)} hoy · ${formatNumber(summary.googleAdsClickSessions)} sesiones con gclid/UTM`}
               />
             </div>
           </Panel>
@@ -381,10 +392,7 @@ export default function PanelAdminPage() {
               </button>
             </div>
             <p className="mt-3 text-xs leading-5 text-slate-400">
-              Si Google marca 508 y Flowly 3, no es que el panel sume mal:
-              significa que solo 3 llegadas llegaron con atribución detectable.
-              Revisa URL final, redirecciones, autoetiquetado gclid, UTM y
-              bloqueadores.
+              Si Google marca 508, ahora Flowly compara contra visitas web registradas, no solo contra gclid/UTM. Se añadió un pixel temprano de carga para contar aterrizajes aunque el usuario rebote rápido. Si sigue habiendo mucha diferencia, revisa URL final del anuncio, dominio, redirecciones y que el anuncio apunte realmente a esta web.
             </p>
           </Panel>
         </section>

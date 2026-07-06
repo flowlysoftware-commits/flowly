@@ -26,6 +26,48 @@ fbq('track', 'PageView');
 
 const googleAnalyticsId = "G-LEVMGKR303";
 
+const flowlyEarlyAnalyticsCode = `
+(function(){
+  try {
+    var path = window.location.pathname || "/";
+    if (path.indexOf("/paneladmin") === 0 || path.indexOf("/contabilidad") === 0 || path.indexOf("/api") === 0) return;
+    var params = new URLSearchParams(window.location.search || "");
+    function id(prefix){
+      if (window.crypto && crypto.randomUUID) return prefix + "_" + crypto.randomUUID();
+      return prefix + "_" + Date.now() + "_" + Math.random().toString(16).slice(2);
+    }
+    var visitorKey = "flowly_analytics_visitor_id";
+    var sessionKey = "flowly_analytics_session_id";
+    var startedKey = "flowly_analytics_session_started_at";
+    var visitorId = localStorage.getItem(visitorKey) || id("visitor");
+    localStorage.setItem(visitorKey, visitorId);
+    var startedAt = Number(sessionStorage.getItem(startedKey) || 0);
+    var sessionId = sessionStorage.getItem(sessionKey);
+    if (!sessionId || !startedAt || Date.now() - startedAt > 30 * 60 * 1000) {
+      sessionId = id("session");
+      sessionStorage.setItem(sessionKey, sessionId);
+    }
+    sessionStorage.setItem(startedKey, String(Date.now()));
+    var q = new URLSearchParams();
+    q.set("event", "page_load");
+    q.set("visitorId", visitorId);
+    q.set("sessionId", sessionId);
+    q.set("path", path);
+    q.set("fullPath", path + (window.location.search || "") + (window.location.hash || ""));
+    q.set("referrer", document.referrer || "");
+    q.set("viewport", window.innerWidth + "x" + window.innerHeight);
+    q.set("language", navigator.language || "");
+    q.set("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+    ["gclid","fbclid","utm_source","utm_medium","utm_campaign","utm_content","utm_term"].forEach(function(key){
+      var value = params.get(key);
+      if (value) q.set(key, value);
+    });
+    (new Image()).src = "/api/analytics/track?" + q.toString();
+  } catch (error) {}
+})();
+`;
+
+
 const googleTagCode = `
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
@@ -37,6 +79,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es">
       <head>
+        <Script id="flowly-early-analytics" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: flowlyEarlyAnalyticsCode }} />
         <Script async src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} />
         <Script id="google-analytics" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: googleTagCode }} />
         <Script id="meta-pixel" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: metaPixelCode }} />

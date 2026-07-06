@@ -6,9 +6,19 @@ import { usePathname } from "next/navigation";
 const SESSION_KEY = "flowly_analytics_session_id";
 const VISITOR_KEY = "flowly_analytics_visitor_id";
 const SESSION_STARTED_KEY = "flowly_analytics_session_started_at";
+const ATTRIBUTION_KEY = "flowly_analytics_first_attribution";
 const SCROLL_DEPTHS = [25, 50, 75, 100];
 
 type AnalyticsExtra = Record<string, unknown>;
+type Attribution = {
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_term: string | null;
+  fbclid: string | null;
+  gclid: string | null;
+};
 
 function createId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -87,7 +97,7 @@ function shouldSkipTracking(path: string) {
   );
 }
 
-function getAttribution() {
+function getCurrentAttribution(): Attribution {
   const params = new URLSearchParams(window.location.search);
   return {
     utm_source: params.get("utm_source"),
@@ -100,9 +110,28 @@ function getAttribution() {
   };
 }
 
-function isGoogleAdsAttribution(
-  attribution: ReturnType<typeof getAttribution>,
-) {
+function hasAnyAttribution(attribution: Attribution) {
+  return Object.values(attribution).some(Boolean);
+}
+
+function getAttribution() {
+  const current = getCurrentAttribution();
+  try {
+    const existingRaw = window.localStorage.getItem(ATTRIBUTION_KEY);
+    const existing = existingRaw ? JSON.parse(existingRaw) : null;
+    if (hasAnyAttribution(current)) {
+      const next = { ...existing, ...current, first_seen_at: new Date().toISOString() };
+      window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(next));
+      return next as Attribution;
+    }
+    if (existing) return existing as Attribution;
+  } catch {
+    // Attribution persistence is optional.
+  }
+  return current;
+}
+
+function isGoogleAdsAttribution(attribution: Attribution) {
   const source = String(attribution.utm_source || "").toLowerCase();
   const medium = String(attribution.utm_medium || "").toLowerCase();
   const campaign = String(attribution.utm_campaign || "").toLowerCase();
@@ -110,12 +139,12 @@ function isGoogleAdsAttribution(
 
   return Boolean(
     attribution.gclid ||
-    source.includes("google") ||
-    medium.includes("cpc") ||
-    medium.includes("paid") ||
-    campaign.includes("google") ||
-    referrer.includes("googleadservices") ||
-    referrer.includes("doubleclick"),
+      source.includes("google") ||
+      medium.includes("cpc") ||
+      medium.includes("paid") ||
+      campaign.includes("google") ||
+      referrer.includes("googleadservices") ||
+      referrer.includes("doubleclick"),
   );
 }
 
@@ -128,6 +157,25 @@ function getElementLabel(element: Element | null) {
     element.getAttribute("href") ||
     "sin etiqueta"
   );
+}
+
+function sendBeaconOrFetch(payload: Record<string, unknown>) {
+  try {
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: "application/json" });
+      const queued = navigator.sendBeacon("/api/analytics/track", blob);
+      if (queued) return;
+    }
+    void fetch("/api/analytics/track", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+  } catch {
+    // Analytics should never block the app.
+  }
 }
 
 export default function FlowlyAnalyticsTracker() {
@@ -145,35 +193,26 @@ export default function FlowlyAnalyticsTracker() {
     const startedAt = Date.now();
     const attribution = getAttribution();
 
-    async function send(eventName: string, extra?: AnalyticsExtra) {
-      try {
-        const nextFullPath = `${window.location.pathname}${window.location.search || ""}${window.location.hash || ""}`;
-        await fetch("/api/analytics/track", {
-          method: "POST",
-          keepalive: true,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            eventName,
-            visitorId,
-            sessionId,
-            path: window.location.pathname || pathname,
-            fullPath: nextFullPath || fullPath,
-            funnelStep: inferFunnelStep(
-              window.location.pathname || pathname,
-              nextFullPath || fullPath,
-            ),
-            title: document.title,
-            referrer: document.referrer || null,
-            viewport: `${window.innerWidth}x${window.innerHeight}`,
-            language: navigator.language,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            attribution,
-            ...extra,
-          }),
-        });
-      } catch {
-        // Analytics should never block the app.
-      }
+    function send(eventName: string, extra?: AnalyticsExtra) {
+      const nextFullPath = `${window.location.pathname}${window.location.search || ""}${window.location.hash || ""}`;
+      sendBeaconOrFetch({
+        eventName,
+        visitorId,
+        sessionId,
+        path: window.location.pathname || pathname,
+        fullPath: nextFullPath || fullPath,
+        funnelStep: inferFunnelStep(
+          window.location.pathname || pathname,
+          nextFullPath || fullPath,
+        ),
+        title: document.title,
+        referrer: document.referrer || null,
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        language: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        attribution,
+        ...extra,
+      });
     }
 
     send("page_view");
@@ -213,25 +252,25 @@ export default function FlowlyAnalyticsTracker() {
       const label = getElementLabel(target);
       const isCheckout = Boolean(
         href?.includes("checkout") ||
-        href?.includes("stripe") ||
-        label.toLowerCase().includes("checkout") ||
-        label.toLowerCase().includes("carrito"),
+          href?.includes("stripe") ||
+          label.toLowerCase().includes("checkout") ||
+          label.toLowerCase().includes("carrito"),
       );
       const isDemo = Boolean(
         href?.includes("demo") || label.toLowerCase().includes("demo"),
       );
       const isSignup = Boolean(
         href?.includes("registro") ||
-        href?.includes("signup") ||
-        label.toLowerCase().includes("empezar") ||
-        label.toLowerCase().includes("prueba") ||
-        label.toLowerCase().includes("gratis"),
+          href?.includes("signup") ||
+          label.toLowerCase().includes("empezar") ||
+          label.toLowerCase().includes("prueba") ||
+          label.toLowerCase().includes("gratis"),
       );
       const isPricing = Boolean(
         href?.includes("precios") ||
-        href?.includes("pricing") ||
-        label.toLowerCase().includes("plan") ||
-        label.toLowerCase().includes("precio"),
+          href?.includes("pricing") ||
+          label.toLowerCase().includes("plan") ||
+          label.toLowerCase().includes("precio"),
       );
 
       send("cta_click", {
