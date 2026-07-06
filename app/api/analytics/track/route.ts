@@ -57,7 +57,12 @@ function inferFunnelStep(path: string, fullPath = path) {
     cleanPath.includes("#precios")
   )
     return "pricing";
-  if (cleanPath.includes("registro") || cleanPath.includes("signup"))
+  if (
+    cleanPath.includes("registro") ||
+    cleanPath.includes("/registro") ||
+    cleanPath.includes("signup") ||
+    cleanPath.includes("register")
+  )
     return "signup";
   if (cleanPath.includes("login")) return "login";
   if (cleanPath.includes("onboarding")) return "onboarding";

@@ -1,8 +1,82 @@
 "use client";
 
 import Image from "next/image";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+
+
+const SESSION_KEY = "flowly_analytics_session_id";
+const VISITOR_KEY = "flowly_analytics_visitor_id";
+const SESSION_STARTED_KEY = "flowly_analytics_session_started_at";
+
+function createAnalyticsId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function trackRegistroVisit() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    let visitorId = window.localStorage.getItem(VISITOR_KEY);
+    if (!visitorId) {
+      visitorId = createAnalyticsId("visitor");
+      window.localStorage.setItem(VISITOR_KEY, visitorId);
+    }
+
+    const startedAt = Number(window.sessionStorage.getItem(SESSION_STARTED_KEY) || 0);
+    let sessionId = window.sessionStorage.getItem(SESSION_KEY);
+    if (!sessionId || !startedAt || Date.now() - startedAt > 30 * 60 * 1000) {
+      sessionId = createAnalyticsId("session");
+      window.sessionStorage.setItem(SESSION_KEY, sessionId);
+    }
+    window.sessionStorage.setItem(SESSION_STARTED_KEY, String(Date.now()));
+
+    const fullPath = `${window.location.pathname}${window.location.search || ""}${window.location.hash || ""}`;
+    const payload = {
+      eventName: "page_view",
+      visitorId,
+      sessionId,
+      path: window.location.pathname || "/registro",
+      fullPath,
+      funnelStep: "signup",
+      title: document.title || "Registro Flowly IA",
+      referrer: document.referrer || null,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      language: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      attribution: {
+        gclid: params.get("gclid"),
+        fbclid: params.get("fbclid"),
+        utm_source: params.get("utm_source"),
+        utm_medium: params.get("utm_medium"),
+        utm_campaign: params.get("utm_campaign"),
+        utm_content: params.get("utm_content"),
+        utm_term: params.get("utm_term"),
+      },
+      source: "registro_direct_tracker",
+    };
+
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      const queued = navigator.sendBeacon(
+        "/api/analytics/track",
+        new Blob([body], { type: "application/json" }),
+      );
+      if (queued) return;
+    }
+
+    fetch("/api/analytics/track", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body,
+    }).catch(() => undefined);
+  } catch {
+    // El tracking nunca debe bloquear el registro.
+  }
+}
 
 export default function RegistroPage() {
   return (
@@ -16,6 +90,10 @@ function RegistroContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get("session_id");
+
+  useEffect(() => {
+    trackRegistroVisit();
+  }, []);
 
   const [businessName, setBusinessName] = useState("");
   const [businessType, setBusinessType] = useState("Peluquería");
