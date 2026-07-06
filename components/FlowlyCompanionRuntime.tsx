@@ -2,7 +2,6 @@
 
 import {
   type CSSProperties,
-  type FormEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -11,7 +10,7 @@ import {
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
-import { ChevronDown, MessageCircle, Mic, MicOff, Send, ShieldCheck, Sparkles, X, Shirt } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 import { FLOWLY_COMPANION_SKINS, getCompanionSkin } from "@/lib/flowlyCompanionSkins";
 import { companionStats, getCompanionContext } from "@/lib/flowlyCompanionRuntime";
@@ -112,7 +111,6 @@ export default function FlowlyCompanionRuntime() {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [docked, setDocked] = useState(false);
-  const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
   const [lifeMode, setLifeMode] = useState<string | null>(null);
   const [lifeLabel, setLifeLabel] = useState("Presente en Flowly");
@@ -151,7 +149,6 @@ export default function FlowlyCompanionRuntime() {
   }, [open]);
 
   const handleVoiceWake = useCallback(() => {
-    setOpen(true);
     setLifeMode("attention");
     setLifeLabel("Flow te está escuchando");
   }, []);
@@ -327,7 +324,8 @@ export default function FlowlyCompanionRuntime() {
 
   const toggleFromCharacter = useCallback(() => {
     if (suppressClickRef.current) return;
-    setOpen((value) => !value);
+    setLifeMode("attention");
+    setLifeLabel("Estoy aquí contigo");
   }, []);
 
   const changeSkin = useCallback((skinId: string) => {
@@ -356,19 +354,13 @@ export default function FlowlyCompanionRuntime() {
 
   const restoreCompanionFromDock = useCallback(() => {
     setDocked(false);
-    setOpen(true);
+    setOpen(false);
     userPlacedRef.current = false;
     window.localStorage.removeItem("flowly_companion_docked");
     window.setTimeout(() => moveFlowTo("habitable"), 40);
   }, [moveFlowTo]);
 
-  const sendMessage = async (event: FormEvent) => {
-    event.preventDefault();
-    const clean = message.trim();
-    if (!clean || thinking) return;
-    setMessage("");
-    await askCompanion(clean, "text");
-  };
+
 
   if (shouldHide(pathname)) return null;
 
@@ -412,54 +404,7 @@ export default function FlowlyCompanionRuntime() {
           <strong>{lifeLabel}</strong>
           <i><span style={{ width: `${xpPercent}%` }} /></i>
         </div>
-        <button type="button" className="flowly-v6-talk" onClick={() => setOpen((value) => !value)}>
-          <MessageCircle size={14} /> Hablar
-        </button>
       </section>
-
-      {open && (
-        <aside className="flowly-v6-panel" aria-label={isArchitect ? "Flowly Architect Companion" : "Flowly Customer Companion"}>
-          <header>
-            <div><span>{isArchitect ? "Flowly OS" : "Panel cliente"}</span><h3>{isArchitect ? "Companion Arquitecto" : "Companion del cliente"}</h3></div>
-            <nav>
-              <button type="button" onClick={() => setMinimized((value) => !value)} aria-label="Minimizar Companion"><ChevronDown size={16} /></button>
-              <button type="button" onClick={hideCompanionToDock} aria-label="Ocultar Companion"><X size={16} /></button>
-            </nav>
-          </header>
-
-          <section className="flowly-v6-card flowly-v6-level">
-            <strong>{isArchitect ? "Modo arquitecto" : `Nivel ${companionStats.level}`}</strong>
-            <p>{isArchitect ? "Companion técnico de Flowly OS." : `Energía ${companionStats.energy}% · ${context.mood}`}</p>
-            <i><span style={{ width: `${xpPercent}%` }} /></i>
-          </section>
-
-          <section className="flowly-v6-card">
-            <b><Shirt size={14} /> Skin del Companion</b>
-            <div className="flowly-v6-skins">
-              {companionSkins.map((skin) => (
-                <button key={skin.id} type="button" data-active={selectedSkin === skin.id} onClick={() => changeSkin(skin.id)}>
-                  <strong>{skin.label}</strong><small>{skin.hint}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="flowly-v6-card flowly-v6-chat">
-            <b><Sparkles size={14} /> {isArchitect ? "Flowly OS" : "Subida de nivel"}</b>
-            <div className="flowly-v6-focus"><strong>{lifeDecision.label}</strong><p>{lifeDecision.initiative || context.message}</p><small>{context.mission}</small></div>
-            <div className="flowly-v6-conversation">
-              {conversation.slice(-3).map((item, index) => <p key={`${item.role}-${index}`} data-role={item.role}>{item.content}</p>)}
-              {thinking && <p data-role="assistant">Estoy pensándolo...</p>}
-            </div>
-            <button type="button" className="flowly-v6-voice" onClick={toggleVoice}>{voice.active ? <Mic size={14} /> : <MicOff size={14} />}{voice.active ? "Voz activa" : "Activar voz"}</button>
-            <form onSubmit={sendMessage}>
-              <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isArchitect ? "¿Qué revisamos?" : "Pídeme ayuda..."} disabled={thinking} />
-              <button type="submit" disabled={thinking}><Send size={14} /></button>
-            </form>
-            <small><ShieldCheck size={13} /> Companion conectado al Brain de Flowly.</small>
-          </section>
-        </aside>
-      )}
     </div>
   );
 }

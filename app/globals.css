@@ -5929,3 +5929,13 @@ input[type="date"].input-dark { color-scheme: dark; }
   .flowly-v6-runtime { --flow-x: calc(100vw - 10.5rem); --flow-y: calc(100dvh - 16rem); }
   .flowly-v6-actor { width: 9.4rem !important; height: 14.4rem !important; }
 }
+
+
+/* Flowly Companion V6 temporary clean mode: avatar + speech bubble only. */
+.flowly-v6-panel,
+.flowly-v6-talk {
+  display: none !important;
+}
+.flowly-v6-runtime[data-open="true"] .flowly-v6-panel {
+  display: none !important;
+}
