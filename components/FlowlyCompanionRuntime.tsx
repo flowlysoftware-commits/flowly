@@ -40,6 +40,8 @@ import { useFlowlyVoiceRuntime } from "@/hooks/useFlowlyVoiceRuntime";
 
 const HIDDEN_PREFIXES = ["/login", "/registro", "/reservas", "/demo/login"];
 
+type FlowStageTarget = "dock" | "center" | "left" | "right" | "lowerCenter";
+
 function shouldHide(pathname: string) {
   if (pathname === "/") return true;
   return HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
@@ -102,8 +104,8 @@ export default function FlowlyCompanionRuntime() {
   );
   const [voiceIntroResolved, setVoiceIntroResolved] = useState(false);
   const [travel, setTravel] = useState({
-    x: 0,
-    y: 0,
+    x: -1,
+    y: -1,
     moving: false,
     label: "dock",
   });
@@ -276,53 +278,70 @@ export default function FlowlyCompanionRuntime() {
   });
 
   const moveFlowTo = useCallback(
-    (target: "dock" | "center" | "left" | "right" | "lowerCenter") => {
+    (target: FlowStageTarget) => {
       if (typeof window === "undefined") return;
+
       const isMobileViewport = window.innerWidth <= 820;
       const avatarWidth = Math.min(
         window.innerWidth - 28,
         isMobileViewport
           ? Math.min(176, Math.max(140, window.innerWidth * 0.42))
-          : Math.min(240, Math.max(192, window.innerWidth * 0.15)),
+          : Math.min(236, Math.max(202, window.innerWidth * 0.13)),
       );
       const avatarHeight = Math.min(
         window.innerHeight - 36,
         isMobileViewport
           ? Math.min(224, Math.max(170, window.innerHeight * 0.28))
-          : Math.min(304, Math.max(243, window.innerHeight * 0.34)),
+          : Math.min(318, Math.max(262, window.innerHeight * 0.31)),
       );
-      const margin = isMobileViewport ? 14 : 22;
-      const maxX = Math.max(margin, window.innerWidth - avatarWidth - margin);
+      const margin = isMobileViewport ? 14 : 28;
+      const panelReserve = open && !isMobileViewport ? 360 : 0;
+      const maxX = Math.max(margin, window.innerWidth - panelReserve - avatarWidth - margin);
       const maxY = Math.max(margin, window.innerHeight - avatarHeight - margin);
-      const positions: Record<typeof target, { x: number; y: number }> = {
-        dock: { x: maxX, y: maxY },
+      const stageFloorY = Math.min(maxY, Math.max(margin, window.innerHeight - avatarHeight - 54));
+
+      const panelAdminCard = document.querySelector("[class*='admin'], [class*='login'], form") as HTMLElement | null;
+      const cardRect = panelAdminCard?.getBoundingClientRect();
+      const cardRight = cardRect ? Math.min(maxX, cardRect.right + 34) : Math.min(maxX, window.innerWidth * 0.56);
+      const cardLeft = cardRect ? Math.max(margin, cardRect.left - avatarWidth - 34) : Math.max(margin, window.innerWidth * 0.24);
+      const prefersRightOfCard = cardRect ? cardRight + avatarWidth < maxX : true;
+
+      const positions: Record<FlowStageTarget, { x: number; y: number }> = {
+        dock: {
+          x: prefersRightOfCard ? cardRight : cardLeft,
+          y: stageFloorY,
+        },
         center: {
-          x: Math.max(margin, (window.innerWidth - avatarWidth) / 2),
-          y: Math.max(margin, (window.innerHeight - avatarHeight) / 2),
+          x: Math.max(margin, Math.min(maxX, (window.innerWidth - panelReserve - avatarWidth) / 2)),
+          y: Math.max(margin, Math.min(maxY, (window.innerHeight - avatarHeight) / 2)),
         },
         lowerCenter: {
-          x: Math.max(margin, (window.innerWidth - avatarWidth) / 2),
-          y: Math.min(maxY, window.innerHeight - avatarHeight - 36),
+          x: Math.max(margin, Math.min(maxX, (window.innerWidth - panelReserve - avatarWidth) / 2)),
+          y: stageFloorY,
         },
         left: {
           x: margin,
-          y: Math.min(maxY, Math.max(margin, window.innerHeight * 0.58)),
+          y: stageFloorY,
         },
         right: {
           x: maxX,
-          y: Math.min(maxY, Math.max(margin, window.innerHeight * 0.38)),
+          y: stageFloorY,
         },
       };
+
       const next = positions[target];
       lastTravelTargetRef.current = target;
-      setTravel({ ...next, moving: true, label: target });
+      setTravel((current) => {
+        const distance = Math.hypot(current.x - next.x, current.y - next.y);
+        return { ...next, moving: distance > 28, label: target };
+      });
       window.setTimeout(() => {
         setTravel((current) =>
           current.label === target ? { ...current, moving: false } : current,
         );
-      }, 1700);
+      }, 1500);
     },
-    [],
+    [open],
   );
 
 
@@ -419,10 +438,12 @@ export default function FlowlyCompanionRuntime() {
     : travel.moving
       ? "walking"
       : lifeMode || avatarMood;
-  const companionRuntimeStyle = {
-    "--flow-x": `${travel.x}px`,
-    "--flow-y": `${travel.y}px`,
-  } as CSSProperties;
+  const companionRuntimeStyle = (travel.x >= 0 && travel.y >= 0
+    ? {
+        "--flow-x": `${travel.x}px`,
+        "--flow-y": `${travel.y}px`,
+      }
+    : {}) as CSSProperties;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -440,7 +461,7 @@ export default function FlowlyCompanionRuntime() {
     const onResize = () =>
       moveFlowTo(
         lastTravelTargetRef.current as
-          "dock" | "center" | "left" | "right" | "lowerCenter",
+          FlowStageTarget,
       );
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -744,8 +765,31 @@ export default function FlowlyCompanionRuntime() {
         <span className="flowly-stage-v1-target-glow" />
       </div>
 
-      {!minimized && (
-        <div className="flowly-companion-bubble" role="status">
+
+      <div
+        className="flowly-companion-avatar-shell"
+        onPointerDown={handleAvatarPointerDown}
+        onPointerMove={handleAvatarPointerMove}
+        onPointerUp={handleAvatarPointerUp}
+        onPointerCancel={handleAvatarPointerUp}
+      >
+        <span className="flowly-stage-v1-character-shadow" aria-hidden="true" />
+        <span className="flowly-stage-v1-speech-tether" aria-hidden="true" />
+        <button
+          type="button"
+          className="flowly-companion-dock-toggle"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideCompanionToDock();
+          }}
+          aria-label="Ocultar Flow Companion"
+        >
+          <X size={14} />
+        </button>
+        {!minimized && (
+          <div className="flowly-companion-bubble" role="status">
           <span className="flowly-companion-bubble-kicker">
             {voiceNeedsActivation
               ? "Flow por voz"
@@ -776,31 +820,9 @@ export default function FlowlyCompanionRuntime() {
               <Mic size={15} /> Activar voz
             </button>
           )}
-        </div>
-      )}
+          </div>
+        )}
 
-      <div
-        className="flowly-companion-avatar-shell"
-        onPointerDown={handleAvatarPointerDown}
-        onPointerMove={handleAvatarPointerMove}
-        onPointerUp={handleAvatarPointerUp}
-        onPointerCancel={handleAvatarPointerUp}
-      >
-        <span className="flowly-stage-v1-character-shadow" aria-hidden="true" />
-        <span className="flowly-stage-v1-speech-tether" aria-hidden="true" />
-        <button
-          type="button"
-          className="flowly-companion-dock-toggle"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            hideCompanionToDock();
-          }}
-          aria-label="Ocultar Flow Companion"
-        >
-          <X size={14} />
-        </button>
         <div className="flowly-companion-character" data-skin={avatarTone} data-mood={effectiveAvatarMood}>
           <FlowlyAssistant3D
             modelUrl={avatarUrl}
