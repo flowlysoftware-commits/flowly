@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows, Html, useAnimations, useFBX, useGLTF } from "@react-three/drei";
+import { ContactShadows, Html, useAnimations, useGLTF } from "@react-three/drei";
 import type { Bone, Group, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh } from "three";
 import { Box3, Color, Euler, Vector3 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -206,63 +206,45 @@ function FlowlyCharacterEngine({
   mode,
   skinTone,
   facing,
-}: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "skinTone" | "facing">>) {
+  compact,
+}: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "skinTone" | "facing" | "compact">>) {
   const rootRef = useRef<Group>(null);
   const bonesRef = useRef<RigBones>({});
   const baseRotationsRef = useRef<Map<string, Euler>>(new Map());
   const { scene, animations: glbAnimations } = useGLTF(modelUrl);
-  const idleFbx = useFBX("/avatars/Idle.fbx");
-  const walkFbx = useFBX("/avatars/Walking.fbx");
-  const waveFbx = useFBX("/avatars/Waving.fbx");
-  const talkFbx = useFBX("/avatars/Talking.fbx");
-  const pointFbx = useFBX("/avatars/Pointing.fbx");
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
   const companionMode = normalizeMode(mode);
-  const clips = useMemo(() => {
-    const all = [
-      ...glbAnimations,
-      ...idleFbx.animations.map((clip) => clip.clone()),
-      ...walkFbx.animations.map((clip) => clip.clone()),
-      ...waveFbx.animations.map((clip) => clip.clone()),
-      ...talkFbx.animations.map((clip) => clip.clone()),
-      ...pointFbx.animations.map((clip) => clip.clone()),
-    ];
-
-    const rename = (from: number, name: string) => {
-      if (all[from]) all[from].name = name;
-    };
-    rename(glbAnimations.length, "idle");
-    rename(glbAnimations.length + idleFbx.animations.length, "walk");
-    rename(glbAnimations.length + idleFbx.animations.length + walkFbx.animations.length, "wave");
-    rename(glbAnimations.length + idleFbx.animations.length + walkFbx.animations.length + waveFbx.animations.length, "talk");
-    rename(glbAnimations.length + idleFbx.animations.length + walkFbx.animations.length + waveFbx.animations.length + talkFbx.animations.length, "point");
-    return all;
-  }, [glbAnimations, idleFbx.animations, pointFbx.animations, talkFbx.animations, walkFbx.animations, waveFbx.animations]);
+  const clips = useMemo(() => glbAnimations.map((clip) => clip.clone()), [glbAnimations]);
   const { actions, names } = useAnimations(clips, rootRef);
 
   useEffect(() => {
     if (!names.length) return;
-    const preferred =
-      companionMode === "walk"
-        ? ["walk", "walking", "nlatrack.004", "nlatrack.003"]
-        : companionMode === "wave"
-          ? ["wave", "waving", "nlatrack.005"]
-          : companionMode === "talk"
-            ? ["talk", "talking", "nlatrack.002"]
-            : companionMode === "point"
-              ? ["point", "pointing", "nlatrack.001"]
-              : ["idle", "nlatrack", names[0]];
+
+    const byExact = (value: string) => names.find((name) => name.toLowerCase() === value.toLowerCase());
+    const animationByMode: Record<CompanionMode, string[]> = {
+      idle: ["NlaTrack", names[0]],
+      thinking: ["NlaTrack.003", "NlaTrack", names[0]],
+      talk: ["NlaTrack.002", "NlaTrack.001", "NlaTrack"],
+      point: ["NlaTrack.001", "NlaTrack.002", "NlaTrack"],
+      walk: ["NlaTrack.004", "NlaTrack.003", "NlaTrack"],
+      wave: ["NlaTrack.005", "NlaTrack.001", "NlaTrack"],
+      jump: ["NlaTrack.005", "NlaTrack"],
+      spin: ["NlaTrack.003", "NlaTrack"],
+    };
+
     const nextName =
-      names.find((name) => preferred.some((candidate) => name.toLowerCase().includes(candidate))) ||
-      names[0];
+      animationByMode[companionMode]
+        .map((candidate) => byExact(candidate) || names.find((name) => name.toLowerCase().includes(candidate.toLowerCase())))
+        .find(Boolean) || names[0];
 
     Object.entries(actions).forEach(([name, action]) => {
       if (!action) return;
       if (name === nextName) {
-        action.reset().fadeIn(0.22).play();
-        action.timeScale = companionMode === "walk" ? 0.92 : companionMode === "wave" ? 0.86 : 0.72;
+        action.enabled = true;
+        action.reset().fadeIn(0.28).play();
+        action.timeScale = companionMode === "walk" ? 0.95 : companionMode === "talk" ? 0.88 : 0.78;
       } else {
-        action.fadeOut(0.2);
+        action.fadeOut(0.24);
       }
     });
   }, [actions, companionMode, names]);
@@ -276,8 +258,9 @@ function FlowlyCharacterEngine({
     box.getCenter(center);
 
     const height = size.y || 1;
-    const scale = 4.18 / height;
-    cloned.position.set(-center.x * scale, -box.min.y * scale - 2.05, -center.z * scale);
+    const targetHeight = compact ? 3.25 : 4.45;
+    const scale = targetHeight / height;
+    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.62 : 2.05), -center.z * scale);
     cloned.scale.setScalar(scale);
     cloned.rotation.y = skin.rotationY;
 
@@ -294,7 +277,7 @@ function FlowlyCharacterEngine({
     bonesRef.current = bones;
     baseRotationsRef.current = rememberBaseRotations(bones);
     return cloned;
-  }, [scene, skin]);
+  }, [compact, scene, skin]);
 
   useFrame((state) => {
     const root = rootRef.current;
@@ -306,8 +289,6 @@ function FlowlyCharacterEngine({
     const isSpinning = companionMode === "spin";
     const isTalking = companionMode === "talk";
     const isThinking = companionMode === "thinking";
-    const isWaving = companionMode === "wave";
-    const isPointing = companionMode === "point";
     const baseFacing = facing === "left" ? -0.28 : facing === "right" ? 0.28 : 0;
 
     const breathe = Math.sin(t * 2.1) * 0.022;
@@ -323,44 +304,33 @@ function FlowlyCharacterEngine({
     const bones = bonesRef.current;
     const base = baseRotationsRef.current;
     const walk = Math.sin(t * 5.6);
-    const idleArm = Math.sin(t * 1.8) * 0.035;
     const talk = Math.sin(t * 8.8);
     const look = Math.sin(t * 0.86);
 
-    // El modelo base llega en T-pose. Bajamos brazos y añadimos vida procedimental.
-    // La pose base de Flow llega con brazos abiertos. Cada lado necesita signo opuesto.
-    // Si ambos usan el mismo signo, un brazo queda en cruz.
-    const leftArmDown = 1.18;
-    const rightArmDown = -1.18;
-    const armSwing = isWalking ? walk * 0.32 : idleArm;
-    const legSwing = isWalking ? walk * 0.34 : Math.sin(t * 0.9) * 0.025;
+    // V3 no fuerza los brazos: deja que los clips del GLB manden.
+    // Solo añadimos microvida segura en cabeza/columna y pequeños gestos de manos.
+    applyRotation(
+      bones.head,
+      base,
+      (isTalking ? talk * 0.035 : Math.sin(t * 1.25) * 0.018) + (isThinking ? 0.045 : 0),
+      look * 0.045,
+      0,
+    );
+    applyRotation(bones.neck, base, 0, look * 0.025, 0);
+    applyRotation(bones.spine, base, isThinking ? 0.035 : 0, 0, weightShift * 0.18);
 
-    applyRotation(bones.head, base, (isTalking ? talk * 0.045 : Math.sin(t * 1.25) * 0.025) + (isThinking ? 0.05 : 0), look * 0.06, 0);
-    applyRotation(bones.neck, base, 0, look * 0.035, 0);
-    applyRotation(bones.spine, base, 0, 0, weightShift * 0.38);
-
-    applyRotation(bones.leftUpperArm, base, armSwing * 0.28, 0, leftArmDown + armSwing * 0.12);
-    applyRotation(bones.rightUpperArm, base, -armSwing * 0.28, 0, rightArmDown - armSwing * 0.12);
-    applyRotation(bones.leftLowerArm, base, 0, 0, 0.2 + Math.sin(t * 1.7) * 0.04);
-    applyRotation(bones.rightLowerArm, base, 0, 0, 0.2 + Math.sin(t * 1.7) * 0.04);
-    applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
-    applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
-
-    if (isTalking) {
-      applyRotation(bones.leftUpperArm, base, 0.06 + talk * 0.045, 0, leftArmDown + 0.09 + talk * 0.035);
-      applyRotation(bones.rightUpperArm, base, -0.06 - talk * 0.045, 0, rightArmDown - 0.09 - talk * 0.035);
-    }
-
-    if (isWaving) {
-      applyRotation(bones.rightUpperArm, base, -0.42, 0.12, -0.55 + Math.sin(t * 7.8) * 0.22);
-      applyRotation(bones.rightLowerArm, base, -0.28, 0, -0.68 + Math.sin(t * 7.8) * 0.14);
-      applyRotation(bones.leftUpperArm, base, 0, 0, leftArmDown);
-    }
-
-    if (isPointing) {
-      applyRotation(bones.rightUpperArm, base, -0.25, -0.15, -0.78);
-      applyRotation(bones.rightLowerArm, base, -0.1, 0, 0.25);
-      applyRotation(bones.head, base, -0.02, 0.12, 0);
+    if (!names.length) {
+      // Fallback mínimo si el modelo llega sin clips: pose relajada, nunca brazos en cruz.
+      const leftArmDown = -0.78;
+      const rightArmDown = 0.78;
+      const armSwing = isWalking ? walk * 0.22 : Math.sin(t * 1.4) * 0.025;
+      const legSwing = isWalking ? walk * 0.22 : Math.sin(t * 0.9) * 0.018;
+      applyRotation(bones.leftUpperArm, base, 0.05 + armSwing * 0.18, 0, leftArmDown + armSwing * 0.05);
+      applyRotation(bones.rightUpperArm, base, -0.05 - armSwing * 0.18, 0, rightArmDown - armSwing * 0.05);
+      applyRotation(bones.leftLowerArm, base, 0, 0, 0.12 + Math.sin(t * 1.7) * 0.025);
+      applyRotation(bones.rightLowerArm, base, 0, 0, -0.12 - Math.sin(t * 1.7) * 0.025);
+      applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
+      applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
     }
   });
 
@@ -488,7 +458,7 @@ export default function FlowlyAssistant3D({
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.25, 8], zoom: compact ? 40 : 58, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.35, 8], zoom: compact ? 58 : 64, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
@@ -497,7 +467,7 @@ export default function FlowlyAssistant3D({
         <directionalLight position={[2.4, 4.2, 5.2]} intensity={2.35} castShadow />
         <pointLight position={[-2.2, 2.2, 3]} color={skin.light} intensity={1.25} />
         <Suspense fallback={<FlowlyV3Loading />}>
-          <FlowlyCharacterEngine modelUrl={modelUrl} mode={safeMode} skinTone={skin.key} facing={facing} />
+          <FlowlyCharacterEngine modelUrl={modelUrl} mode={safeMode} skinTone={skin.key} facing={facing} compact={compact} />
           <ContactShadows position={[0, -1.84, 0]} opacity={0.28} scale={4.6} blur={2.8} far={3.4} />
         </Suspense>
       </Canvas>

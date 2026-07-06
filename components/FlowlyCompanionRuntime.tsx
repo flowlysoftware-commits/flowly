@@ -651,15 +651,14 @@ export default function FlowlyCompanionRuntime() {
           { mode: "walking", label: "Explorando el OS" },
           { mode: "point", label: "Listo para ejecutar" },
           { mode: "wave", label: "Esperando instrucciones" },
-          { mode: "spin", label: "Dando una vuelta por Flowly" },
+          { mode: "idle", label: "Presente en Flowly" },
         ]
       : [
           { mode: "idle", label: context.mission },
           { mode: "walking", label: "Buscando oportunidades" },
           { mode: "wave", label: "Saludando al equipo" },
-          { mode: "jump", label: "Celebrando progreso" },
-          { mode: "spin", label: "Dando una vuelta" },
           { mode: "thinking", label: "Pensando objetivos" },
+          { mode: "point", label: "Señalando el siguiente paso" },
           { mode: context.mode, label: context.message },
         ];
 
