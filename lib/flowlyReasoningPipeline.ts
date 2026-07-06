@@ -1,5 +1,6 @@
 import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
 import { buildCertificationFailureReply, buildFlowCertificationPrompt, certifyFlowReasoningResponse, type FlowCertificationResult } from "@/lib/flowlyCertificationEngine";
+import { buildAuditScopeInstructions, resolveFlowlyAuditScope } from "@/lib/flowlyAuditScopeResolver";
 import type { FlowlyIntelligenceContext } from "@/lib/flowlyIntelligenceContext";
 import type { FlowOrchestratorIntent, FlowOrchestratorMode, FlowOrchestratorEngineName } from "@/lib/flowlyOrchestrator";
 
@@ -85,6 +86,7 @@ function contextPayload(input: FlowReasoningPipelineInput) {
     projectSnapshotText: trimText(input.context.projectSnapshotText || "", 9000),
     docsSources: input.context.sources.slice(0, 18),
     docsContext: trimText(input.context.docsContext, 26000),
+    auditScope: input.mode === "audit" ? resolveFlowlyAuditScope(input.instruction) : null,
     certificationContract: buildFlowCertificationPrompt(input),
     warnings: input.context.warnings,
   };
@@ -93,10 +95,11 @@ function contextPayload(input: FlowReasoningPipelineInput) {
 function modeInstructions(mode: FlowOrchestratorMode) {
   if (mode === "audit") {
     return [
-      "El usuario ha pedido auditoría. Debes entregar una auditoría real, amplia y crítica.",
+      "El usuario ha pedido auditoría. Debes entregar una auditoría real, crítica y limitada al target auditado.",
       "No conviertas la auditoría en plan de PR. No propongas ejecutar ahora.",
-      "Cubre solo las áreas que puedas justificar con evidencias reales del contexto; si un área no tiene evidencia, márcala como no certificada.",
+      "Cubre solo dimensiones relevantes para el módulo auditado y justificadas con evidencias reales del contexto; si un área no tiene evidencia, márcala como no certificada.",
       "No uses una plantilla genérica. La auditoría debe citar archivos/docs/rutas reales y terminar con veredicto Flow Certification.",
+      "No introduzcas SEO, robots, sitemap, metadata o indexación en auditorías de módulos internos como Companion, CRM o Developer salvo que el usuario pida explícitamente auditoría SEO.",
     ].join("\n");
   }
 
@@ -165,7 +168,8 @@ async function runArchitectPass(input: FlowReasoningPipelineInput) {
     "GROUNDING OBLIGATORIO: este proyecto es Next.js App Router si el Project Snapshot lo indica. No menciones index.html, about.html, blog.html, header.php ni rutas genéricas de otros frameworks.",
     "Solo puedes mencionar archivos que aparezcan en projectSnapshot.keyPaths, projectSnapshot.seoRelevantPaths, projectSnapshot.publicRoutes, projectSnapshot.privateRoutes, projectSnapshot.apiRoutes, docsSources o Project Graph.",
     "Si no tienes archivos verificados para una propuesta técnica, dilo claramente y pide confirmación. No rellenes huecos con ejemplos genéricos.",
-    "Para SEO/metadata/Open Graph en Flowly, prioriza archivos reales como app/layout.tsx, app/page.tsx, app/sitemap.ts, app/robots.ts, app/manifest.ts, app/opengraph-image.tsx, app/twitter-image.tsx, app/icon.png o public/favicon.ico cuando existan en el snapshot.",
+    "Para SEO/metadata/Open Graph en Flowly, usa esas dimensiones solo si el usuario pidió auditoría SEO, marketing, landing pública o metadata. No las introduzcas en módulos internos.",
+    input.mode === "audit" ? buildAuditScopeInstructions(resolveFlowlyAuditScope(input.instruction)) : "",
     "Nunca inventes que has ejecutado código. Nunca propongas PR si el modo no lo permite.",
     modeInstructions(input.mode),
     buildFlowCertificationPrompt(input),
@@ -189,7 +193,7 @@ async function runCriticPass(input: FlowReasoningPipelineInput, draft: string) {
     "Tu tarea es revisar la respuesta del arquitecto antes de entregarla al usuario.",
     "Detecta si incumple intención, si es demasiado genérica, si propone ejecución prohibida, si repite auditorías cuando se pidió plan, o si le falta concreción.",
     "Detecta grounding débil: menciones a index.html, about.html, blog.html, header.php o archivos no verificados por Project Snapshot/Project Graph.",
-    "En modo audit, rechaza respuestas tipo checklist si no citan fuentes reales, si hablan de SEO sin relación con el target, o si no terminan con veredicto de certificación.",
+    "En modo audit, rechaza respuestas tipo checklist si no citan fuentes reales, si hablan de SEO/robots/sitemap/metadata fuera del target auditado, o si no terminan con veredicto de certificación.",
     "Devuelve una crítica breve y accionable en español. No reescribas toda la respuesta.",
   ].join("\n");
 
@@ -202,7 +206,8 @@ async function runCriticPass(input: FlowReasoningPipelineInput, draft: string) {
       intent: input.intent,
       guardrails: input.guardrails,
       blockedEngines: input.blockedEngines,
-      certificationContract: buildFlowCertificationPrompt(input),
+      auditScope: input.mode === "audit" ? resolveFlowlyAuditScope(input.instruction) : null,
+    certificationContract: buildFlowCertificationPrompt(input),
       draft: trimText(draft, 10000),
     }),
     temperature: 0.05,
@@ -235,7 +240,8 @@ async function runFinalPass(input: FlowReasoningPipelineInput, draft: string, cr
       payload: contextPayload(input),
       draft: trimText(draft, 14000),
       critique: trimText(critique, 4000),
-      certificationContract: buildFlowCertificationPrompt(input),
+      auditScope: input.mode === "audit" ? resolveFlowlyAuditScope(input.instruction) : null,
+    certificationContract: buildFlowCertificationPrompt(input),
     }),
     temperature: 0.08,
     maxOutputTokens: input.mode === "audit" ? 4600 : 2800,

@@ -4,6 +4,7 @@ import { evaluateGoalFidelity } from "@/lib/flowlyGoalFidelityGuard";
 import { analyzeIntentTransition } from "@/lib/flowlyIntentTransitionGuard";
 import { analyzeMissionRelevance, buildIndependentArchitectureCritiqueReply } from "@/lib/flowlyMissionRelevanceFilter";
 import { validatePlannerScope } from "@/lib/flowlyPlannerScopeGuard";
+import { buildAuditScopeInstructions, filterAuditPathsForScope, isForbiddenAuditTopic, resolveFlowlyAuditScope } from "@/lib/flowlyAuditScopeResolver";
 
 export type FlowCertificationCheckId =
   | "intent_gate"
@@ -12,6 +13,7 @@ export type FlowCertificationCheckId =
   | "evidence"
   | "genericity"
   | "audit_contract"
+  | "audit_scope"
   | "execution_block";
 
 export type FlowCertificationCheck = {
@@ -77,11 +79,13 @@ function unique<T>(items: T[]) {
 }
 
 function targetFromInstruction(instruction: string, context?: FlowlyIntelligenceContext | null) {
-  const text = normalize(instruction);
-  if (text.includes("crm") || text.includes("cliente") || text.includes("lead")) return "CRM";
-  if (text.includes("developer")) return "Developer";
-  if (text.includes("companion")) return "Companion";
-  if (text.includes("factur")) return "Facturación";
+  const scope = resolveFlowlyAuditScope(instruction);
+  if (scope.target === "crm") return "CRM";
+  if (scope.target === "developer") return "Developer";
+  if (scope.target === "companion") return "Companion";
+  if (scope.target === "billing") return "Facturación";
+  if (scope.target === "seo") return "SEO/metadata";
+  if (scope.target === "marketing") return "Marketing";
   return context?.contextSummary?.target || "Flowly OS";
 }
 
@@ -93,21 +97,13 @@ function sources(context?: FlowlyIntelligenceContext | null) {
   return context?.sources || [];
 }
 
-function pathsForTarget(target: string, context?: FlowlyIntelligenceContext | null) {
-  const targetText = normalize(target);
+function pathsForTarget(target: string, context?: FlowlyIntelligenceContext | null, instruction?: string) {
   const repoPaths = existingPaths(context);
   const sourcePaths = sources(context).map((source) => source.path);
   const all = unique([...repoPaths, ...sourcePaths]);
-
-  if (targetText.includes("crm")) {
-    return all.filter((path) => /crm|customer|cliente|lead|opportunit|contact/i.test(path)).slice(0, 24);
-  }
-
-  if (targetText.includes("developer")) {
-    return all.filter((path) => /developer|pipeline|executor|qa|mission|intent|reasoning|guard|projectreader/i.test(path)).slice(0, 24);
-  }
-
-  return all.slice(0, 24);
+  const scope = resolveFlowlyAuditScope(instruction || target);
+  const scoped = filterAuditPathsForScope(all, scope, 24);
+  return scoped.length ? scoped : all.slice(0, 24);
 }
 
 function hasForbiddenFile(reply: string) {
@@ -134,7 +130,8 @@ function scoreChecks(checks: FlowCertificationCheck[]) {
 
 export function buildFlowCertificationPrompt(input: FlowCertificationInput) {
   const target = targetFromInstruction(input.instruction, input.context);
-  const targetPaths = pathsForTarget(target, input.context);
+  const auditScope = resolveFlowlyAuditScope(input.instruction);
+  const targetPaths = pathsForTarget(target, input.context, input.instruction);
   const sourcePaths = sources(input.context).map((source) => source.path);
 
   if (input.mode !== "audit") {
@@ -151,6 +148,7 @@ export function buildFlowCertificationPrompt(input: FlowCertificationInput) {
   return [
     "FLOW CERTIFICATION CONTRACT PARA AUDITORÍAS",
     `Target auditado: ${target}.`,
+    buildAuditScopeInstructions(auditScope),
     `Motores activos permitidos: ${input.activeEngines.join(", ") || "ninguno"}.`,
     `Motores bloqueados: ${input.blockedEngines.join(", ") || "ninguno"}.`,
     "Formato obligatorio:",
@@ -163,7 +161,8 @@ export function buildFlowCertificationPrompt(input: FlowCertificationInput) {
     "7. Veredicto: CERTIFICADO o NO CERTIFICADO.",
     "Reglas:",
     "- No uses checklist genérico.",
-    "- No hables de SEO en auditoría CRM salvo que cites una fuente real y expliques por qué afecta al CRM.",
+    "- Respeta el Audit Scope Resolver: no introduzcas dimensiones bloqueadas para el target.",
+    "- No hables de SEO/robots/sitemap/metadata en auditorías de Companion, CRM, Developer o módulos internos salvo petición explícita de auditoría SEO.",
     "- No menciones index.html, about.html, blog.html, header.php ni archivos ajenos al snapshot.",
     "- Si no hay evidencia suficiente para auditar una capa, dilo; no rellenes huecos.",
     "Fuentes candidatas del target:",
@@ -177,7 +176,8 @@ export function certifyFlowReasoningResponse(input: FlowCertificationInput): Flo
   const reply = input.reply || "";
   const normalizedReply = normalize(reply);
   const target = targetFromInstruction(input.instruction, input.context);
-  const targetPaths = pathsForTarget(target, input.context);
+  const auditScope = resolveFlowlyAuditScope(input.instruction);
+  const targetPaths = pathsForTarget(target, input.context, input.instruction);
   const forbiddenFile = hasForbiddenFile(reply);
   const genericCount = countGenericAuditPhrases(reply);
   const sourcePaths = sources(input.context).map((source) => source.path);
@@ -185,6 +185,8 @@ export function certifyFlowReasoningResponse(input: FlowCertificationInput): Flo
   const mentionedAnySource = [...targetPaths, ...sourcePaths]
     .filter(Boolean)
     .some((path) => normalizedReply.includes(normalize(path)));
+  const forbiddenAuditTopic = input.mode === "audit" ? isForbiddenAuditTopic(reply, auditScope) : undefined;
+  const mentionsSeoOutOfScope = Boolean(forbiddenAuditTopic);
   const mentionsSeoInCrmAudit = input.mode === "audit" && target === "CRM" && /\bseo\b|robots\.ts|sitemap\.ts|open graph|twitter/i.test(reply);
   const hasSeoEvidence = mentionsSeoInCrmAudit && /app\/|docs\/|public\//i.test(reply) && /crm|cliente|lead|dashboard/i.test(reply);
 
@@ -235,6 +237,14 @@ export function certifyFlowReasoningResponse(input: FlowCertificationInput): Flo
         ? `Demasiadas frases de checklist genérico detectadas (${genericCount}).`
         : "No parece depender de un checklist genérico dominante.",
     }),
+    check(!mentionsSeoOutOfScope, {
+      id: "audit_scope",
+      title: "Scope de auditoría",
+      severity: "critical",
+      message: mentionsSeoOutOfScope
+        ? `La auditoría de ${auditScope.label} introduce un tema fuera de alcance: ${forbiddenAuditTopic}.`
+        : `La respuesta respeta el scope de auditoría para ${auditScope.label}.`,
+    }),
     check(!mentionsSeoInCrmAudit || hasSeoEvidence, {
       id: "evidence",
       title: "SEO contextualizado",
@@ -281,7 +291,7 @@ export function certifyFlowReasoningResponse(input: FlowCertificationInput): Flo
 
 export function buildCertificationFailureReply(input: FlowCertificationInput, result: FlowCertificationResult) {
   const failed = result.checks.filter((item) => !item.passed);
-  const targetPaths = pathsForTarget(result.target, input.context);
+  const targetPaths = pathsForTarget(result.target, input.context, input.instruction);
 
   return [
     `FLOW CERTIFICATION: NO CERTIFICADO (${result.score}/100)`,
@@ -440,6 +450,25 @@ export function runFlowCertificationSuite(): FlowCertificationSuiteResult {
       "Veredicto: NO CERTIFICADO.",
     ].join("\n"),
   });
+
+  const companionAuditWithSeo = certifyFlowReasoningResponse({
+    instruction: "Haz una auditoría del Companion.",
+    mode: "audit",
+    activeEngines: ["brain", "docs", "memory", "projectGraph"],
+    blockedEngines: ["planning", "executor", "github", "qa"],
+    context: {
+      sources: [{ path: "docs/architecture-bible/16-companion-os.md", title: "Companion", kind: "doc", summary: "Companion" }],
+      projectSnapshot: { existingPaths: ["components/FlowlyCompanionRuntime.tsx", "components/EvolutionaryCompanionAvatar.tsx", "hooks/useFlowlyVoiceRuntime.ts"] },
+    } as unknown as FlowlyIntelligenceContext,
+    reply: [
+      "Clasificación del intent: AUDIT.",
+      "Motores activados y bloqueados: brain/docs activos; planning/executor/github bloqueados.",
+      "Fuentes inspeccionadas: components/FlowlyCompanionRuntime.tsx y docs/architecture-bible/16-companion-os.md.",
+      "Hallazgo: el Companion debe revisarse en UX, avatar, conversación y voz.",
+      "Faltan robots.ts y sitemap.ts, lo que afecta al SEO.",
+      "Veredicto: NO CERTIFICADO.",
+    ].join("\n"),
+  });
   const genericAudit = certifyFlowReasoningResponse({
     instruction: "Haz una auditoría del CRM.",
     mode: "audit",
@@ -457,6 +486,16 @@ export function runFlowCertificationSuite(): FlowCertificationSuiteResult {
   });
 
   const cases: FlowCertificationSuiteCase[] = [
+    suiteCase({
+      id: "CERT-016",
+      title: "Audit Scope Companion",
+      layer: "architecture",
+      input: "Haz una auditoría del Companion.",
+      expected: "Debe bloquear SEO/robots/sitemap porque Companion requiere arquitectura, UX, conversación, voz, responsive y Visual QA.",
+      severity: "critical",
+      details: [companionAuditWithSeo.summary],
+      checks: [!companionAuditWithSeo.certified, companionAuditWithSeo.checks.some((item) => item.id === "audit_scope" && !item.passed)],
+    }),
     suiteCase({
       id: "CERT-001",
       title: "Intent transition: evidencia aceptada pasa a planificación",

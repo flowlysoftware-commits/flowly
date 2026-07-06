@@ -2,6 +2,7 @@ import { callFlowlyOpenAI } from "@/lib/flowlyOpenAI";
 import { classifyFlowlyIntent, type FlowlyIntent, type FlowlyIntentMode } from "@/lib/flowlyIntentEngine";
 import { buildFlowlyIntelligenceContext, type FlowlyIntelligenceContext } from "@/lib/flowlyIntelligenceContext";
 import { runFlowReasoningPipeline, type FlowReasoningPipelineResult } from "@/lib/flowlyReasoningPipeline";
+import { resolveFlowlyAuditScope } from "@/lib/flowlyAuditScopeResolver";
 
 export type FlowOrchestratorMode = FlowlyIntentMode;
 
@@ -231,7 +232,7 @@ async function askOpenAIForReply(params: {
     "Si el usuario prohibió código/PR/ejecución, no sugieras ejecutar todavía.",
     "Estructura útil: qué cambia en lenguaje normal, qué tocarías, riesgos, qué NO tocarás y siguiente paso.",
     "Grounding obligatorio: el contexto incluye Project Snapshot. Si indica Next.js App Router, no menciones index.html, about.html, blog.html, header.php ni archivos genéricos.",
-    "Para SEO/metadata/Open Graph usa solo rutas reales de projectSnapshot.keyPaths o projectSnapshot.seoRelevantPaths.",
+    "Para SEO/metadata/Open Graph usa solo rutas reales de projectSnapshot.keyPaths o projectSnapshot.seoRelevantPaths, y solo si el usuario pidió SEO/metadata/landing pública.",
     "Habla español, directo, profesional y sin frases de relleno.",
   ].join("\n");
 
@@ -318,6 +319,7 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
 
   if (mode === "audit") {
     const context = await buildFlowlyIntelligenceContext(input.instruction);
+    const auditScope = resolveFlowlyAuditScope(input.instruction);
     const audit = buildAuditReport(context);
     const reasoningPipeline = await runFlowReasoningPipeline({
       instruction: input.instruction,
@@ -342,12 +344,12 @@ export async function orchestrateFlowRequest(input: OrchestratorInput): Promise<
       requiresApproval: false,
       refinedInstruction: intentDecision.refinedInstruction,
       reply: reasoningPipeline.reply || buildAuditReply(audit),
-      currentObjective: "Auditar Flowly OS sin ejecutar cambios",
+      currentObjective: `Auditar ${auditScope.label} sin ejecutar cambios`,
       ...policy,
       guardrails,
       reasoning: [
         ...intentDecision.reasoning,
-        "Modo auditoría confirmado: se devuelve informe y roadmap, no plan de PR.",
+        `Modo auditoría confirmado para ${auditScope.label}: se devuelve informe dentro del scope, no plan de PR.`,
         "Flow Reasoning Pipeline ejecutó Architect Pass, Critic Pass y Final Pass antes de responder.",
       ],
       audit,
