@@ -14,11 +14,15 @@ const EVENT_NAMES = new Set([
   "demo_intent",
   "pricing_intent",
   "section_view",
+  "ad_click_landing",
 ]);
 const MAX_TEXT = 500;
 
 function dbReady() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
 }
 
 function cleanText(value: unknown, fallback = "") {
@@ -51,18 +55,29 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "Payload inválido" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Payload inválido" },
+      { status: 400 },
+    );
   }
 
   const eventName = cleanText(body.eventName || body.event_name, "page_view");
-  if (!EVENT_NAMES.has(eventName)) return NextResponse.json({ ok: false, error: "Evento no permitido" }, { status: 400 });
+  if (!EVENT_NAMES.has(eventName))
+    return NextResponse.json(
+      { ok: false, error: "Evento no permitido" },
+      { status: 400 },
+    );
 
   const sessionId = cleanText(body.sessionId || body.session_id);
   const visitorId = cleanText(body.visitorId || body.visitor_id);
   const path = cleanText(body.path, "/");
   const now = new Date().toISOString();
 
-  if (!sessionId || !visitorId) return NextResponse.json({ ok: false, error: "Falta sesión" }, { status: 400 });
+  if (!sessionId || !visitorId)
+    return NextResponse.json(
+      { ok: false, error: "Falta sesión" },
+      { status: 400 },
+    );
 
   const eventPayload = {
     event_name: eventName,
@@ -82,8 +97,14 @@ export async function POST(request: NextRequest) {
     metadata: cleanMetadata(body),
   };
 
-  const { error } = await supabaseAdmin.from("flowly_analytics_events").insert(eventPayload);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  const { error } = await supabaseAdmin
+    .from("flowly_analytics_events")
+    .insert(eventPayload);
+  if (error)
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
 
   const { data: existingSession } = await supabaseAdmin
     .from("flowly_analytics_sessions")

@@ -1,7 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, BarChart3, Brain, Eye, LockKeyhole, MousePointerClick, RefreshCw, ShoppingCart, Users } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Brain,
+  Eye,
+  LockKeyhole,
+  MousePointerClick,
+  RefreshCw,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 
 const ACCESS_PASSWORD = "Nosotrostarot1.";
 
@@ -15,13 +26,15 @@ type Summary = {
   landingSessions?: number;
   pricingSessions?: number;
   ctaClickSessions?: number;
-  ctaClickEvents?: number;
+  signupStartedSessions?: number;
+  scroll75Sessions?: number;
   googleAdsClickEvents?: number;
   googleAdsClickEventsToday?: number;
   googleAdsClickSessions?: number;
   paidClickSessions?: number;
-  signupStartedSessions?: number;
-  scroll75Sessions?: number;
+  googleAdsReportedClicks?: number;
+  googleAdsMissingClicks?: number;
+  googleAdsTrackingRate?: number;
   reachedCheckout?: number;
   completedPurchase?: number;
   pricingRate?: number;
@@ -32,9 +45,22 @@ type Summary = {
 
 type FunnelStep = { step: string; count: number; dropRate: number };
 type SimpleRow = { path: string; count?: number; views?: number };
-type CampaignRow = { source: string; campaign: string; sessions: number; ctaClicks: number; signupStarts: number };
+type CampaignRow = {
+  source: string;
+  campaign: string;
+  sessions: number;
+  ctaClicks: number;
+  signupStarts: number;
+};
 type CtaRow = { label: string; clicks: number };
-type RecentEvent = { event_name: string; path: string; funnel_step: string; created_at: string; viewport?: string; language?: string };
+type RecentEvent = {
+  event_name: string;
+  path: string;
+  funnel_step: string;
+  created_at: string;
+  viewport?: string;
+  language?: string;
+};
 
 type AnalyticsPayload = {
   dbReady?: boolean;
@@ -67,7 +93,10 @@ function formatNumber(value?: number) {
 
 function formatDate(value?: string) {
   if (!value) return "Sin datos";
-  return new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "medium" }).format(new Date(value));
+  return new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(new Date(value));
 }
 
 export default function PanelAdminPage() {
@@ -77,23 +106,37 @@ export default function PanelAdminPage() {
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [googleAdsReportedClicks, setGoogleAdsReportedClicks] = useState("");
 
   const summary = data?.summary || {};
-  const maxFunnel = useMemo(() => Math.max(...(data?.funnel || []).map((item) => item.count), 1), [data?.funnel]);
+  const maxFunnel = useMemo(
+    () => Math.max(...(data?.funnel || []).map((item) => item.count), 1),
+    [data?.funnel],
+  );
 
   async function loadAnalytics() {
     setLoading(true);
     setError("");
     try {
       const response = await fetch("/api/paneladmin/analytics", {
-        headers: { "x-paneladmin-password": ACCESS_PASSWORD },
+        headers: {
+          "x-paneladmin-password": ACCESS_PASSWORD,
+          ...(googleAdsReportedClicks.trim()
+            ? { "x-google-ads-reported-clicks": googleAdsReportedClicks.trim() }
+            : {}),
+        },
         cache: "no-store",
       });
       const payload = (await response.json()) as AnalyticsPayload;
-      if (!response.ok) throw new Error(payload.error || "No se pudieron cargar las métricas.");
+      if (!response.ok)
+        throw new Error(payload.error || "No se pudieron cargar las métricas.");
       setData(payload);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "No se pudieron cargar las métricas.");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No se pudieron cargar las métricas.",
+      );
     } finally {
       setLoading(false);
     }
@@ -104,7 +147,17 @@ export default function PanelAdminPage() {
     loadAnalytics();
     const interval = window.setInterval(loadAnalytics, 45000);
     return () => window.clearInterval(interval);
-  }, [unlocked]);
+  }, [unlocked, googleAdsReportedClicks]);
+
+  useEffect(() => {
+    try {
+      setGoogleAdsReportedClicks(
+        window.localStorage.getItem("flowly_google_ads_reported_clicks") || "",
+      );
+    } catch {
+      // Local comparison is optional.
+    }
+  }, []);
 
   const handleAccess = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -115,24 +168,65 @@ export default function PanelAdminPage() {
     }
     setAccessError("Contraseña incorrecta.");
   };
+  function saveGoogleAdsReportedClicks(value: string) {
+    const cleanValue = value.replace(/[^0-9]/g, "");
+    setGoogleAdsReportedClicks(cleanValue);
+    try {
+      if (cleanValue)
+        window.localStorage.setItem(
+          "flowly_google_ads_reported_clicks",
+          cleanValue,
+        );
+      else window.localStorage.removeItem("flowly_google_ads_reported_clicks");
+    } catch {
+      // Local comparison is optional.
+    }
+  }
 
   if (!unlocked) {
     return (
       <main className="flowly-app-shell min-h-screen px-6 py-10 text-white">
         <section className="mx-auto flex min-h-[78vh] max-w-xl items-center justify-center">
-          <form onSubmit={handleAccess} className="flowly-client-card w-full rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 shadow-2xl shadow-purple-950/30 backdrop-blur">
+          <form
+            onSubmit={handleAccess}
+            className="flowly-client-card w-full rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 shadow-2xl shadow-purple-950/30 backdrop-blur"
+          >
             <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-200">
               <LockKeyhole size={26} />
             </div>
-            <p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-200/70">Área privada</p>
-            <h1 className="mt-3 text-3xl font-black tracking-tight">Panel Admin</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-300">Métricas privadas de visitas, embudo, abandono y carrito de Flowly.</p>
+            <p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-200/70">
+              Área privada
+            </p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight">
+              Panel Admin
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              Métricas privadas de visitas, embudo, abandono y carrito de
+              Flowly.
+            </p>
             <div className="mt-8 space-y-3">
-              <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Contraseña</label>
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-4 text-white outline-none transition focus:border-cyan-300/70" placeholder="••••••••••••" />
-              {accessError ? <p className="text-sm font-semibold text-rose-300">{accessError}</p> : null}
+              <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                Contraseña
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-4 text-white outline-none transition focus:border-cyan-300/70"
+                placeholder="••••••••••••"
+              />
+              {accessError ? (
+                <p className="text-sm font-semibold text-rose-300">
+                  {accessError}
+                </p>
+              ) : null}
             </div>
-            <button type="submit" className="mt-6 w-full rounded-2xl bg-cyan-300 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-200">Entrar</button>
+            <button
+              type="submit"
+              className="mt-6 w-full rounded-2xl bg-cyan-300 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-200"
+            >
+              Entrar
+            </button>
           </form>
         </section>
       </main>
@@ -145,56 +239,199 @@ export default function PanelAdminPage() {
         <header className="flowly-client-hero overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/12 via-purple-500/10 to-black p-6 shadow-2xl shadow-cyan-950/20 sm:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.32em] text-cyan-200/75"><BarChart3 size={16} /> Inteligencia comercial</p>
-              <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Panel Admin</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Visitas reales, usuarios conectados, embudo comercial y páginas donde abandonan.</p>
-              <p className="mt-2 text-xs text-slate-500">Última actualización: {formatDate(data?.generatedAt)}</p>
+              <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.32em] text-cyan-200/75">
+                <BarChart3 size={16} /> Inteligencia comercial
+              </p>
+              <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
+                Panel Admin
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                Visitas reales, usuarios conectados, embudo comercial y páginas
+                donde abandonan.
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Última actualización: {formatDate(data?.generatedAt)}
+              </p>
             </div>
-            <button onClick={loadAnalytics} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60">
-              <RefreshCw size={17} className={loading ? "animate-spin" : ""} /> Actualizar
+            <button
+              onClick={loadAnalytics}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
+            >
+              <RefreshCw size={17} className={loading ? "animate-spin" : ""} />{" "}
+              Actualizar
             </button>
           </div>
         </header>
 
         {error ? <Warning text={error} /> : null}
-        {data?.dbReady === false ? <Warning text="Supabase no está configurado o falta ejecutar el SQL de analítica." /> : null}
+        {data?.dbReady === false ? (
+          <Warning text="Supabase no está configurado o falta ejecutar el SQL de analítica." />
+        ) : null}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard icon={<Activity size={22} />} label="Usuarios ahora" value={formatNumber(summary.onlineNow)} hint="Activos en los últimos 5 minutos" tone="emerald" />
-          <MetricCard icon={<Eye size={22} />} label="Page views hoy" value={formatNumber(summary.visitsToday)} hint={`${formatNumber(summary.visitorsToday)} visitantes únicos hoy · ${formatNumber(summary.eventsToday)} eventos`} tone="cyan" />
-          <MetricCard icon={<MousePointerClick size={22} />} label="Clics Google Ads" value={formatNumber(summary.googleAdsClickSessions)} hint={`${formatNumber(summary.googleAdsClickEventsToday)} hoy · ${formatNumber(summary.googleAdsClickEvents)} eventos atribuidos a Google`} tone="purple" />
-          <MetricCard icon={<ShoppingCart size={22} />} label="Llegaron al carrito" value={formatNumber(summary.reachedCheckout)} hint={`${formatNumber(summary.checkoutConversion)}% conversión desde checkout`} tone="amber" />
+          <MetricCard
+            icon={<Activity size={22} />}
+            label="Usuarios ahora"
+            value={formatNumber(summary.onlineNow)}
+            hint="Activos en los últimos 5 minutos"
+            tone="emerald"
+          />
+          <MetricCard
+            icon={<Eye size={22} />}
+            label="Page views hoy"
+            value={formatNumber(summary.visitsToday)}
+            hint={`${formatNumber(summary.visitorsToday)} visitantes únicos hoy · ${formatNumber(summary.eventsToday)} eventos`}
+            tone="cyan"
+          />
+          <MetricCard
+            icon={<MousePointerClick size={22} />}
+            label="Clics en CTA"
+            value={formatNumber(summary.ctaClickSessions)}
+            hint={`${formatNumber(summary.ctaRate)}% de sesiones de landing hacen clic`}
+            tone="purple"
+          />
+          <MetricCard
+            icon={<ShoppingCart size={22} />}
+            label="Llegaron al carrito"
+            value={formatNumber(summary.reachedCheckout)}
+            hint={`${formatNumber(summary.checkoutConversion)}% conversión desde checkout`}
+            tone="amber"
+          />
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard icon={<Users size={22} />} label="Visitantes 30 días" value={formatNumber(summary.visitors30Days)} hint={`${formatNumber(summary.sessions30Days)} sesiones detectadas`} tone="purple" />
-          <MetricCard icon={<BarChart3 size={22} />} label="Llegan a precios" value={`${formatNumber(summary.pricingRate)}%`} hint={`${formatNumber(summary.pricingSessions)} sesiones llegan a precios · ${formatNumber(summary.ctaClickEvents)} clics CTA`} tone="cyan" />
-          <MetricCard icon={<MousePointerClick size={22} />} label="Empiezan registro" value={`${formatNumber(summary.signupRate)}%`} hint={`${formatNumber(summary.signupStartedSessions)} sesiones con intención de registro`} tone="emerald" />
-          <MetricCard icon={<Activity size={22} />} label="Scroll 75%" value={formatNumber(summary.scroll75Sessions)} hint="Sesiones que consumieron casi toda la home" tone="amber" />
+          <MetricCard
+            icon={<Users size={22} />}
+            label="Visitantes 30 días"
+            value={formatNumber(summary.visitors30Days)}
+            hint={`${formatNumber(summary.sessions30Days)} sesiones detectadas`}
+            tone="purple"
+          />
+          <MetricCard
+            icon={<BarChart3 size={22} />}
+            label="Llegan a precios"
+            value={`${formatNumber(summary.pricingRate)}%`}
+            hint={`${formatNumber(summary.pricingSessions)} sesiones llegan a precios`}
+            tone="cyan"
+          />
+          <MetricCard
+            icon={<MousePointerClick size={22} />}
+            label="Empiezan registro"
+            value={`${formatNumber(summary.signupRate)}%`}
+            hint={`${formatNumber(summary.signupStartedSessions)} sesiones con intención de registro`}
+            tone="emerald"
+          />
+          <MetricCard
+            icon={<Activity size={22} />}
+            label="Scroll 75%"
+            value={formatNumber(summary.scroll75Sessions)}
+            hint="Sesiones que consumieron casi toda la home"
+            tone="amber"
+          />
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <Panel
+            title="Google Ads"
+            subtitle="Google cuenta clics en el anuncio; Flowly cuenta llegadas reales que cargan la web con gclid/UTM."
+          >
+            <div className="grid gap-3 sm:grid-cols-3">
+              <MiniStat
+                label="Según Google"
+                value={formatNumber(summary.googleAdsReportedClicks)}
+                hint="Dato introducido para comparar"
+              />
+              <MiniStat
+                label="Detectados por Flowly"
+                value={formatNumber(summary.googleAdsClickEvents)}
+                hint={`${formatNumber(summary.googleAdsClickEventsToday)} hoy · ${formatNumber(summary.googleAdsClickSessions)} sesiones`}
+              />
+              <MiniStat
+                label="Tasa detectada"
+                value={`${formatNumber(summary.googleAdsTrackingRate)}%`}
+                hint={`${formatNumber(summary.googleAdsMissingClicks)} clics no atribuibles`}
+              />
+            </div>
+          </Panel>
+
+          <Panel
+            title="Comparar con Google"
+            subtitle="Pega aquí el número que ves en Google Ads para detectar pérdidas de tracking."
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="flex-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                Clics reportados por Google Ads
+                <input
+                  value={googleAdsReportedClicks}
+                  onChange={(event) =>
+                    saveGoogleAdsReportedClicks(event.target.value)
+                  }
+                  inputMode="numeric"
+                  placeholder="Ej: 508"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-base font-black text-white outline-none transition focus:border-cyan-300/70"
+                />
+              </label>
+              <button
+                onClick={loadAnalytics}
+                disabled={loading}
+                className="rounded-2xl bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:bg-white/15 disabled:opacity-60"
+              >
+                Actualizar comparación
+              </button>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-slate-400">
+              Si Google marca 508 y Flowly 3, no es que el panel sume mal:
+              significa que solo 3 llegadas llegaron con atribución detectable.
+              Revisa URL final, redirecciones, autoetiquetado gclid, UTM y
+              bloqueadores.
+            </p>
+          </Panel>
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
-          <Panel title="Embudo comercial" subtitle="Mide cuántas sesiones llegan a cada fase.">
+          <Panel
+            title="Embudo comercial"
+            subtitle="Mide cuántas sesiones llegan a cada fase."
+          >
             <div className="space-y-4">
               {(data?.funnel || []).map((step) => (
                 <div key={step.step}>
                   <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                    <span className="font-bold text-slate-200">{funnelLabels[step.step] || step.step}</span>
-                    <span className="text-slate-400">{formatNumber(step.count)} sesiones · abandono {step.dropRate}%</span>
+                    <span className="font-bold text-slate-200">
+                      {funnelLabels[step.step] || step.step}
+                    </span>
+                    <span className="text-slate-400">
+                      {formatNumber(step.count)} sesiones · abandono{" "}
+                      {step.dropRate}%
+                    </span>
                   </div>
                   <div className="h-3 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full bg-cyan-300" style={{ width: `${Math.max(4, Math.round((step.count / maxFunnel) * 100))}%` }} />
+                    <div
+                      className="h-full rounded-full bg-cyan-300"
+                      style={{
+                        width: `${Math.max(4, Math.round((step.count / maxFunnel) * 100))}%`,
+                      }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           </Panel>
 
-          <Panel title="IA de análisis" subtitle="Lectura rápida de los datos actuales.">
+          <Panel
+            title="IA de análisis"
+            subtitle="Lectura rápida de los datos actuales."
+          >
             <div className="space-y-3">
               {(data?.recommendations || []).map((item) => (
-                <div key={item} className="rounded-2xl border border-cyan-300/15 bg-cyan-300/10 p-4 text-sm leading-6 text-cyan-50">
-                  <div className="mb-2 flex items-center gap-2 font-black"><Brain size={16} /> Recomendación</div>
+                <div
+                  key={item}
+                  className="rounded-2xl border border-cyan-300/15 bg-cyan-300/10 p-4 text-sm leading-6 text-cyan-50"
+                >
+                  <div className="mb-2 flex items-center gap-2 font-black">
+                    <Brain size={16} /> Recomendación
+                  </div>
                   {item}
                 </div>
               ))}
@@ -203,24 +440,47 @@ export default function PanelAdminPage() {
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
-          <Panel title="Dónde abandonan" subtitle="Última página conocida por sesión.">
-            <SimpleTable rows={data?.abandonments || []} valueKey="count" valueLabel="Sesiones" />
+          <Panel
+            title="Dónde abandonan"
+            subtitle="Última página conocida por sesión."
+          >
+            <SimpleTable
+              rows={data?.abandonments || []}
+              valueKey="count"
+              valueLabel="Sesiones"
+            />
           </Panel>
-          <Panel title="Páginas más vistas" subtitle="Ranking de page views de los últimos 30 días.">
-            <SimpleTable rows={data?.pages || []} valueKey="views" valueLabel="Vistas" />
+          <Panel
+            title="Páginas más vistas"
+            subtitle="Ranking de page views de los últimos 30 días."
+          >
+            <SimpleTable
+              rows={data?.pages || []}
+              valueKey="views"
+              valueLabel="Vistas"
+            />
           </Panel>
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
-          <Panel title="Campañas y origen" subtitle={`Detectado con UTM, fbclid/gclid o tráfico directo · ${formatNumber(summary.paidClickSessions)} sesiones pagadas`} >
+          <Panel
+            title="Campañas y origen"
+            subtitle="Detectado con UTM, fbclid/gclid o tráfico directo."
+          >
             <CampaignTable rows={data?.campaigns || []} />
           </Panel>
-          <Panel title="CTAs más pulsados" subtitle="Botones y enlaces que generan intención comercial.">
+          <Panel
+            title="CTAs más pulsados"
+            subtitle="Botones y enlaces que generan intención comercial."
+          >
             <CtaTable rows={data?.ctas || []} />
           </Panel>
         </section>
 
-        <Panel title="Actividad reciente" subtitle="Últimos eventos recibidos por Flowly Analytics.">
+        <Panel
+          title="Actividad reciente"
+          subtitle="Últimos eventos recibidos por Flowly Analytics."
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="text-xs uppercase tracking-[0.18em] text-slate-500">
@@ -234,17 +494,28 @@ export default function PanelAdminPage() {
               </thead>
               <tbody className="divide-y divide-white/10">
                 {(data?.recentEvents || []).map((event, index) => (
-                  <tr key={`${event.created_at}-${index}`} className="text-slate-300">
-                    <td className="px-4 py-3 font-bold text-white">{event.event_name}</td>
+                  <tr
+                    key={`${event.created_at}-${index}`}
+                    className="text-slate-300"
+                  >
+                    <td className="px-4 py-3 font-bold text-white">
+                      {event.event_name}
+                    </td>
                     <td className="px-4 py-3">{event.path}</td>
-                    <td className="px-4 py-3">{funnelLabels[event.funnel_step] || event.funnel_step}</td>
-                    <td className="px-4 py-3">{formatDate(event.created_at)}</td>
+                    <td className="px-4 py-3">
+                      {funnelLabels[event.funnel_step] || event.funnel_step}
+                    </td>
+                    <td className="px-4 py-3">
+                      {formatDate(event.created_at)}
+                    </td>
                     <td className="px-4 py-3">{event.viewport || "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!data?.recentEvents?.length ? <Empty text="Todavía no hay eventos. Navega la web unos minutos y vuelve a actualizar." /> : null}
+            {!data?.recentEvents?.length ? (
+              <Empty text="Todavía no hay eventos. Navega la web unos minutos y vuelve a actualizar." />
+            ) : null}
           </div>
         </Panel>
       </section>
@@ -252,44 +523,145 @@ export default function PanelAdminPage() {
   );
 }
 
-function Warning({ text }: { text: string }) {
-  return <div className="flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100"><AlertTriangle size={18} /> {text}</div>;
+function MiniStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black text-white">{value}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-400">{hint}</p>
+    </div>
+  );
 }
 
-function MetricCard({ icon, label, value, hint, tone }: { icon: React.ReactNode; label: string; value: string; hint: string; tone: "emerald" | "cyan" | "purple" | "amber" }) {
+function Warning({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100">
+      <AlertTriangle size={18} /> {text}
+    </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+  tone: "emerald" | "cyan" | "purple" | "amber";
+}) {
   const classes = {
     emerald: "border-emerald-300/20 bg-emerald-300/10 text-emerald-100",
     cyan: "border-cyan-300/20 bg-cyan-300/10 text-cyan-100",
     purple: "border-purple-300/20 bg-purple-300/10 text-purple-100",
     amber: "border-amber-300/25 bg-amber-300/10 text-amber-100",
   }[tone];
-  return <div className={`rounded-[1.6rem] border p-5 ${classes}`}><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-black/20">{icon}</div><p className="text-xs font-black uppercase tracking-[0.18em] opacity-75">{label}</p><p className="mt-2 text-3xl font-black">{value}</p><p className="mt-2 text-xs opacity-75">{hint}</p></div>;
+  return (
+    <div className={`rounded-[1.6rem] border p-5 ${classes}`}>
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-black/20">
+        {icon}
+      </div>
+      <p className="text-xs font-black uppercase tracking-[0.18em] opacity-75">
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-black">{value}</p>
+      <p className="mt-2 text-xs opacity-75">{hint}</p>
+    </div>
+  );
 }
 
-function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return <section className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur"><div className="mb-5 flex items-start justify-between gap-4"><div><h2 className="text-xl font-black">{title}</h2><p className="mt-1 text-xs text-slate-400">{subtitle}</p></div><MousePointerClick size={18} className="text-cyan-200/60" /></div>{children}</section>;
+function Panel({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black">{title}</h2>
+          <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
+        </div>
+        <MousePointerClick size={18} className="text-cyan-200/60" />
+      </div>
+      {children}
+    </section>
+  );
 }
 
-function SimpleTable({ rows, valueKey, valueLabel }: { rows: SimpleRow[]; valueKey: "count" | "views"; valueLabel: string }) {
+function SimpleTable({
+  rows,
+  valueKey,
+  valueLabel,
+}: {
+  rows: SimpleRow[];
+  valueKey: "count" | "views";
+  valueLabel: string;
+}) {
   if (!rows.length) return <Empty text="Todavía no hay datos suficientes." />;
-  return <div className="space-y-2">{rows.map((row) => <div key={row.path} className="flex items-center justify-between gap-4 rounded-2xl bg-black/20 px-4 py-3 text-sm"><span className="truncate font-semibold text-slate-200">{row.path}</span><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-cyan-100">{formatNumber(row[valueKey])} {valueLabel}</span></div>)}</div>;
-}
-
-
-function CampaignTable({ rows }: { rows: CampaignRow[] }) {
-  if (!rows.length) return <Empty text="Todavía no hay datos de campañas. Añade UTM a los anuncios o espera nuevos eventos." />;
   return (
     <div className="space-y-2">
       {rows.map((row) => (
-        <div key={`${row.source}-${row.campaign}`} className="grid gap-2 rounded-2xl bg-black/20 px-4 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
+        <div
+          key={row.path}
+          className="flex items-center justify-between gap-4 rounded-2xl bg-black/20 px-4 py-3 text-sm"
+        >
+          <span className="truncate font-semibold text-slate-200">
+            {row.path}
+          </span>
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-cyan-100">
+            {formatNumber(row[valueKey])} {valueLabel}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CampaignTable({ rows }: { rows: CampaignRow[] }) {
+  if (!rows.length)
+    return (
+      <Empty text="Todavía no hay datos de campañas. Añade UTM a los anuncios o espera nuevos eventos." />
+    );
+  return (
+    <div className="space-y-2">
+      {rows.map((row) => (
+        <div
+          key={`${row.source}-${row.campaign}`}
+          className="grid gap-2 rounded-2xl bg-black/20 px-4 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center"
+        >
           <div className="min-w-0">
             <p className="truncate font-black text-slate-100">{row.source}</p>
             <p className="truncate text-xs text-slate-500">{row.campaign}</p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs font-black">
-            <span className="rounded-full bg-white/10 px-3 py-1 text-cyan-100">{formatNumber(row.sessions)} sesiones</span>
-            <span className="rounded-full bg-white/10 px-3 py-1 text-purple-100">{formatNumber(row.ctaClicks)} clics</span>
-            <span className="rounded-full bg-white/10 px-3 py-1 text-emerald-100">{formatNumber(row.signupStarts)} registros</span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-cyan-100">
+              {formatNumber(row.sessions)} sesiones
+            </span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-purple-100">
+              {formatNumber(row.ctaClicks)} clics
+            </span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-emerald-100">
+              {formatNumber(row.signupStarts)} registros
+            </span>
           </div>
         </div>
       ))}
@@ -298,20 +670,33 @@ function CampaignTable({ rows }: { rows: CampaignRow[] }) {
 }
 
 function CtaTable({ rows }: { rows: CtaRow[] }) {
-  if (!rows.length) return <Empty text="Todavía no hay clics en CTA. Revisa la home desde una ventana nueva y pulsa botones principales." />;
+  if (!rows.length)
+    return (
+      <Empty text="Todavía no hay clics en CTA. Revisa la home desde una ventana nueva y pulsa botones principales." />
+    );
   return (
     <div className="space-y-2">
       {rows.map((row) => (
-        <div key={row.label} className="flex items-center justify-between gap-4 rounded-2xl bg-black/20 px-4 py-3 text-sm">
-          <span className="truncate font-semibold text-slate-200">{row.label}</span>
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-cyan-100">{formatNumber(row.clicks)} clics</span>
+        <div
+          key={row.label}
+          className="flex items-center justify-between gap-4 rounded-2xl bg-black/20 px-4 py-3 text-sm"
+        >
+          <span className="truncate font-semibold text-slate-200">
+            {row.label}
+          </span>
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-cyan-100">
+            {formatNumber(row.clicks)} clics
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-
 function Empty({ text }: { text: string }) {
-  return <div className="rounded-3xl border border-dashed border-white/15 bg-black/20 p-8 text-center text-sm text-slate-400">{text}</div>;
+  return (
+    <div className="rounded-3xl border border-dashed border-white/15 bg-black/20 p-8 text-center text-sm text-slate-400">
+      {text}
+    </div>
+  );
 }
