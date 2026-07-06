@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const SESSION_KEY = "flowly_analytics_session_id";
 const VISITOR_KEY = "flowly_analytics_visitor_id";
 const SESSION_STARTED_KEY = "flowly_analytics_session_started_at";
+const ATTRIBUTION_KEY = "flowly_analytics_attribution";
 const SCROLL_DEPTHS = [25, 50, 75, 100];
 
 type AnalyticsExtra = Record<string, unknown>;
@@ -66,7 +67,7 @@ function shouldSkipTracking(path: string) {
 
 function getAttribution() {
   const params = new URLSearchParams(window.location.search);
-  return {
+  const current = {
     utm_source: params.get("utm_source"),
     utm_medium: params.get("utm_medium"),
     utm_campaign: params.get("utm_campaign"),
@@ -74,7 +75,24 @@ function getAttribution() {
     utm_term: params.get("utm_term"),
     fbclid: params.get("fbclid"),
     gclid: params.get("gclid"),
+    landing_path: `${window.location.pathname}${window.location.search || ""}`,
   };
+  const hasCampaignData = Boolean(current.utm_source || current.utm_medium || current.utm_campaign || current.fbclid || current.gclid);
+
+  try {
+    if (hasCampaignData) {
+      window.sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(current));
+      window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(current));
+      return current;
+    }
+
+    const stored = window.sessionStorage.getItem(ATTRIBUTION_KEY) || window.localStorage.getItem(ATTRIBUTION_KEY);
+    if (stored) return JSON.parse(stored) as typeof current;
+  } catch {
+    // Attribution should never block analytics.
+  }
+
+  return current;
 }
 
 function getElementLabel(element: Element | null) {

@@ -15,6 +15,11 @@ type Summary = {
   landingSessions?: number;
   pricingSessions?: number;
   ctaClickSessions?: number;
+  ctaClickEvents?: number;
+  googleAdsClickEvents?: number;
+  googleAdsClickEventsToday?: number;
+  googleAdsClickSessions?: number;
+  paidClickSessions?: number;
   signupStartedSessions?: number;
   scroll75Sessions?: number;
   reachedCheckout?: number;
@@ -157,13 +162,13 @@ export default function PanelAdminPage() {
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard icon={<Activity size={22} />} label="Usuarios ahora" value={formatNumber(summary.onlineNow)} hint="Activos en los últimos 5 minutos" tone="emerald" />
           <MetricCard icon={<Eye size={22} />} label="Page views hoy" value={formatNumber(summary.visitsToday)} hint={`${formatNumber(summary.visitorsToday)} visitantes únicos hoy · ${formatNumber(summary.eventsToday)} eventos`} tone="cyan" />
-          <MetricCard icon={<MousePointerClick size={22} />} label="Clics en CTA" value={formatNumber(summary.ctaClickSessions)} hint={`${formatNumber(summary.ctaRate)}% de sesiones de landing hacen clic`} tone="purple" />
+          <MetricCard icon={<MousePointerClick size={22} />} label="Clics Google Ads" value={formatNumber(summary.googleAdsClickSessions)} hint={`${formatNumber(summary.googleAdsClickEventsToday)} hoy · ${formatNumber(summary.googleAdsClickEvents)} eventos atribuidos a Google`} tone="purple" />
           <MetricCard icon={<ShoppingCart size={22} />} label="Llegaron al carrito" value={formatNumber(summary.reachedCheckout)} hint={`${formatNumber(summary.checkoutConversion)}% conversión desde checkout`} tone="amber" />
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard icon={<Users size={22} />} label="Visitantes 30 días" value={formatNumber(summary.visitors30Days)} hint={`${formatNumber(summary.sessions30Days)} sesiones detectadas`} tone="purple" />
-          <MetricCard icon={<BarChart3 size={22} />} label="Llegan a precios" value={`${formatNumber(summary.pricingRate)}%`} hint={`${formatNumber(summary.pricingSessions)} sesiones llegan a precios`} tone="cyan" />
+          <MetricCard icon={<BarChart3 size={22} />} label="Llegan a precios" value={`${formatNumber(summary.pricingRate)}%`} hint={`${formatNumber(summary.pricingSessions)} sesiones llegan a precios · ${formatNumber(summary.ctaClickEvents)} clics CTA`} tone="cyan" />
           <MetricCard icon={<MousePointerClick size={22} />} label="Empiezan registro" value={`${formatNumber(summary.signupRate)}%`} hint={`${formatNumber(summary.signupStartedSessions)} sesiones con intención de registro`} tone="emerald" />
           <MetricCard icon={<Activity size={22} />} label="Scroll 75%" value={formatNumber(summary.scroll75Sessions)} hint="Sesiones que consumieron casi toda la home" tone="amber" />
         </section>
@@ -207,7 +212,7 @@ export default function PanelAdminPage() {
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
-          <Panel title="Campañas y origen" subtitle="Detectado con UTM, fbclid/gclid o tráfico directo.">
+          <Panel title="Campañas y origen" subtitle={`Detectado con UTM, fbclid/gclid o tráfico directo · ${formatNumber(summary.paidClickSessions)} sesiones pagadas`} >
             <CampaignTable rows={data?.campaigns || []} />
           </Panel>
           <Panel title="CTAs más pulsados" subtitle="Botones y enlaces que generan intención comercial.">

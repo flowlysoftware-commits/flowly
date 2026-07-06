@@ -51,9 +51,22 @@ function uniqueVisitors(events: EventRow[], predicate: (row: EventRow) => boolea
 function readAttribution(row: EventRow) {
   const metadata = row.metadata || {};
   const attribution = (metadata.attribution || {}) as Record<string, unknown>;
-  const source = String(attribution.utm_source || "directo");
-  const campaign = String(attribution.utm_campaign || "sin campaña");
-  return { source, campaign };
+  const gclid = String(attribution.gclid || "");
+  const fbclid = String(attribution.fbclid || "");
+  const source = String(attribution.utm_source || (gclid ? "google_ads" : fbclid ? "meta_ads" : "directo"));
+  const campaign = String(attribution.utm_campaign || (gclid ? "gclid detectado" : fbclid ? "fbclid detectado" : "sin campaña"));
+  return { source, campaign, gclid, fbclid };
+}
+
+function hasGoogleAdsClick(row: EventRow) {
+  const { source, gclid } = readAttribution(row);
+  return Boolean(gclid || source.toLowerCase().includes("google"));
+}
+
+function hasPaidClick(row: EventRow) {
+  const { source, gclid, fbclid } = readAttribution(row);
+  const normalizedSource = source.toLowerCase();
+  return Boolean(gclid || fbclid || normalizedSource.includes("google") || normalizedSource.includes("meta") || normalizedSource.includes("facebook") || normalizedSource.includes("instagram") || normalizedSource.includes("ads"));
 }
 
 export async function GET(request: NextRequest) {
@@ -136,6 +149,12 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.clicks - a.clicks)
     .slice(0, 10);
 
+  const googleAdsClickEvents = pageViews.filter(hasGoogleAdsClick).length;
+  const googleAdsClickEventsToday = pageViews.filter((row) => row.created_at >= today && hasGoogleAdsClick(row)).length;
+  const googleAdsClickSessions = uniqueSessions(pageViews, hasGoogleAdsClick);
+  const paidClickSessions = uniqueSessions(pageViews, hasPaidClick);
+  const ctaClickEvents = events.filter((row) => row.event_name === "cta_click").length;
+
   const checkoutSessions = uniqueSessions(events, (row) => row.funnel_step === "checkout" || row.event_name === "checkout_started");
   const purchaseSessions = uniqueSessions(events, (row) => row.funnel_step === "purchase" || row.event_name === "checkout_completed");
   const landingSessions = uniqueSessions(events, (row) => row.funnel_step === "landing");
@@ -154,6 +173,11 @@ export async function GET(request: NextRequest) {
     landingSessions,
     pricingSessions,
     ctaClickSessions,
+    ctaClickEvents,
+    googleAdsClickEvents,
+    googleAdsClickEventsToday,
+    googleAdsClickSessions,
+    paidClickSessions,
     signupStartedSessions,
     scroll75Sessions,
     reachedCheckout: checkoutSessions,
@@ -176,6 +200,9 @@ export async function GET(request: NextRequest) {
   }
   if ((summary.reachedCheckout || 0) > 0 && summary.checkoutConversion < 40) {
     recommendations.push("Hay usuarios llegando al carrito/checkout, pero la conversión es baja. Revisa precio, confianza y pasos de pago.");
+  }
+  if (summary.googleAdsClickEvents === 0) {
+    recommendations.push("Si Google Ads muestra clics pero aquí no aparecen, revisa que los anuncios conserven el parámetro gclid o añadan UTM. Desde ahora Flowly conserva la atribución durante toda la sesión.");
   }
   if (!recommendations.length) recommendations.push("Todavía faltan datos para una recomendación sólida. Deja el tracking activo unas horas y revisa CTA, scroll y campañas.");
 
