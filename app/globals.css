@@ -3796,3 +3796,136 @@ input[type="date"].input-dark { color-scheme: dark; }
     height: 180px !important;
   }
 }
+
+
+/* Companion V2.1 — avatar real visible + arrastre del cuerpo, no de una burbuja */
+.flowly-companion-runtime:not([data-voice-prompt="true"]) {
+  left: var(--flow-x, calc(100vw - 15rem)) !important;
+  top: var(--flow-y, calc(100vh - 20rem)) !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+.flowly-companion-runtime[data-dragging="true"] {
+  transition: none !important;
+  z-index: 9999 !important;
+}
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-bubble,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-panel,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-life-hud,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-avatar-cta,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-voice-cta {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.flowly-companion-runtime .flowly-companion-avatar-shell {
+  width: clamp(168px, 14vw, 224px) !important;
+  height: clamp(228px, 24vh, 318px) !important;
+  max-width: calc(100vw - 20px) !important;
+  max-height: calc(100dvh - 20px) !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+  cursor: grab !important;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  background: transparent !important;
+  filter: none !important;
+}
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-avatar-shell {
+  cursor: grabbing !important;
+}
+.flowly-companion-runtime .flowly-companion-character {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 2 !important;
+  transform-origin: 50% 92% !important;
+  animation: flowlyCompanionBodyAlive 3.2s ease-in-out infinite !important;
+}
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-character {
+  animation: flowlyCompanionHeldAlive .72s ease-in-out infinite !important;
+}
+.flowly-companion-runtime .flowly-companion-character .flowly-css-stage,
+.flowly-companion-runtime .flowly-companion-character .flowly-3d-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 140px !important;
+  min-height: 200px !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+.flowly-companion-runtime .flowly-companion-character .flowly-css-avatar {
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 4px !important;
+  width: 72% !important;
+  height: 94% !important;
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  overflow: visible !important;
+  transform: translateX(-50%) !important;
+  transform-origin: 50% 100% !important;
+  z-index: 3 !important;
+}
+.flowly-companion-runtime .flowly-companion-character .flowly-css-avatar-shadow {
+  opacity: .38 !important;
+}
+.flowly-companion-runtime .flowly-companion-status-avatar {
+  width: 58px !important;
+  height: 78px !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: visible !important;
+}
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-css-stage,
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-3d-stage {
+  width: 58px !important;
+  height: 78px !important;
+  min-width: 58px !important;
+  min-height: 78px !important;
+  display: block !important;
+  overflow: visible !important;
+}
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-css-avatar {
+  width: 74% !important;
+  height: 94% !important;
+}
+.flowly-companion-runtime .flowly-companion-dock-toggle {
+  z-index: 6 !important;
+}
+.flowly-companion-runtime .flowly-companion-bubble {
+  pointer-events: auto !important;
+}
+@keyframes flowlyCompanionBodyAlive {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-5px) rotate(.45deg); }
+}
+@keyframes flowlyCompanionHeldAlive {
+  0%, 100% { transform: translateY(0) rotate(-1deg) scale(1.015); }
+  50% { transform: translateY(-3px) rotate(1deg) scale(1.025); }
+}
+@media (max-width: 820px) {
+  .flowly-companion-runtime .flowly-companion-avatar-shell {
+    width: 150px !important;
+    height: 214px !important;
+  }
+}

@@ -2,7 +2,8 @@
 
 import {
   type CSSProperties,
-  FormEvent,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -24,7 +25,7 @@ import {
   X,
   Shirt,
 } from "lucide-react";
-import EvolutionaryCompanionAvatar from "@/components/EvolutionaryCompanionAvatar";
+import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 import { FLOWLY_COMPANION_SKINS, getCompanionSkin } from "@/lib/flowlyCompanionSkins";
 import {
   companionStats,
@@ -71,6 +72,15 @@ export default function FlowlyCompanionRuntime() {
   const [lastBrainRequest, setLastBrainRequest] = useState("");
   const [lastBrainResponse, setLastBrainResponse] = useState("");
   const lastTravelTargetRef = useRef("dock");
+  const userPlacedCompanionRef = useRef(false);
+  const dragStateRef = useRef({
+    active: false,
+    moved: false,
+    offsetX: 0,
+    offsetY: 0,
+  });
+  const suppressNextAvatarClickRef = useRef(false);
+  const [draggingAvatar, setDraggingAvatar] = useState(false);
   const hasAutoVoiceStartedRef = useRef(false);
   const context = useMemo(() => getCompanionContext(pathname), [pathname]);
   const mode = getFlowlyRuntimeMode(pathname);
@@ -277,6 +287,79 @@ export default function FlowlyCompanionRuntime() {
     [],
   );
 
+
+  const clampCompanionPosition = useCallback((x: number, y: number) => {
+    if (typeof window === "undefined") return { x, y };
+    const isMobileViewport = window.innerWidth <= 820;
+    const avatarWidth = isMobileViewport
+      ? Math.min(176, Math.max(140, window.innerWidth * 0.42))
+      : Math.min(240, Math.max(192, window.innerWidth * 0.15));
+    const avatarHeight = isMobileViewport
+      ? Math.min(224, Math.max(170, window.innerHeight * 0.28))
+      : Math.min(304, Math.max(243, window.innerHeight * 0.34));
+    const margin = 10;
+    return {
+      x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - avatarWidth - margin)),
+      y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - avatarHeight - margin)),
+    };
+  }, []);
+
+  const handleAvatarPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      dragStateRef.current = {
+        active: true,
+        moved: false,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+      };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      setDraggingAvatar(true);
+      setLifeMode("attention");
+      setLifeLabel("Puedes colocarme donde te vaya mejor");
+    },
+    [],
+  );
+
+  const handleAvatarPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const drag = dragStateRef.current;
+      if (!drag.active) return;
+      event.preventDefault();
+      const next = clampCompanionPosition(
+        event.clientX - drag.offsetX,
+        event.clientY - drag.offsetY,
+      );
+      drag.moved = true;
+      userPlacedCompanionRef.current = true;
+      lastTravelTargetRef.current = "dock";
+      setTravel({ ...next, moving: false, label: "manual" });
+    },
+    [clampCompanionPosition],
+  );
+
+  const handleAvatarPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const moved = dragStateRef.current.moved;
+      dragStateRef.current.active = false;
+      setDraggingAvatar(false);
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      if (moved) {
+        suppressNextAvatarClickRef.current = true;
+        window.setTimeout(() => {
+          suppressNextAvatarClickRef.current = false;
+        }, 80);
+      }
+    },
+    [],
+  );
+
+  const toggleCompanionFromAvatar = useCallback(() => {
+    if (suppressNextAvatarClickRef.current) return;
+    setOpen((value) => !value);
+  }, []);
+
   const voiceNeedsActivation =
     !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
   const lifeDecision = useMemo(
@@ -401,9 +484,11 @@ export default function FlowlyCompanionRuntime() {
 
   useEffect(() => {
     if (voiceNeedsActivation) {
+      userPlacedCompanionRef.current = false;
       moveFlowTo("center");
       return;
     }
+    if (userPlacedCompanionRef.current) return;
     if (voice.isAwake || thinking || open) {
       moveFlowTo("lowerCenter");
       return;
@@ -412,7 +497,7 @@ export default function FlowlyCompanionRuntime() {
   }, [lifeDecision.spatialTarget, moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
 
   useEffect(() => {
-    if (voiceNeedsActivation || open || thinking || voice.isAwake) return;
+    if (userPlacedCompanionRef.current || voiceNeedsActivation || open || thinking || voice.isAwake) return;
     const path: Array<"dock" | "left" | "center" | "right" | "lowerCenter"> = [
       "dock",
       "left",
@@ -619,6 +704,7 @@ export default function FlowlyCompanionRuntime() {
       data-voice-awake={voice.isAwake}
       data-voice-prompt={voiceNeedsActivation}
       data-travel={travel.moving ? "moving" : travel.label}
+      data-dragging={draggingAvatar}
     >
       {!minimized && (
         <div className="flowly-companion-bubble" role="status">
@@ -655,25 +741,31 @@ export default function FlowlyCompanionRuntime() {
         </div>
       )}
 
-      <div className="flowly-companion-avatar-shell">
+      <div
+        className="flowly-companion-avatar-shell"
+        onPointerDown={handleAvatarPointerDown}
+        onPointerMove={handleAvatarPointerMove}
+        onPointerUp={handleAvatarPointerUp}
+        onPointerCancel={handleAvatarPointerUp}
+      >
         <button
           type="button"
           className="flowly-companion-dock-toggle"
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={hideCompanionToDock}
           aria-label="Ocultar Flow Companion"
         >
           <X size={14} />
         </button>
-        <EvolutionaryCompanionAvatar
-          name={companionStats.name}
-          level={companionStats.level}
-          xpPercent={xpPercent}
-          mood={avatarMood}
-          memory={lifeLabel}
-          modelUrl={avatarUrl}
-          skinTone={avatarTone}
-          onClick={() => setOpen((value) => !value)}
-        />
+        <div className="flowly-companion-character" data-skin={avatarTone} data-mood={avatarMood}>
+          <FlowlyAssistant3D
+            modelUrl={avatarUrl}
+            mode={avatarMood === "walking" ? "walk" : avatarMood === "talking" ? "talk" : avatarMood === "thinking" ? "thinking" : avatarMood === "wave" ? "wave" : avatarMood === "point" ? "point" : avatarMood === "attention" ? "attention" : avatarMood === "celebrating" ? "celebrating" : "idle"}
+            facing="front"
+            skinTone={avatarTone}
+            onClick={toggleCompanionFromAvatar}
+          />
+        </div>
         <div className="flowly-companion-life-hud" aria-hidden="true">
           <span className="flowly-life-dot" />
           <strong>{isArchitect ? "OS vivo" : "Misión activa"}</strong>
@@ -743,15 +835,11 @@ export default function FlowlyCompanionRuntime() {
 
           <section className="flowly-companion-status-card">
             <div className="flowly-companion-status-avatar">
-              <EvolutionaryCompanionAvatar
-                name={companionStats.name}
-                level={companionStats.level}
-                xpPercent={xpPercent}
-                mood={avatarMood}
-                memory={context.mission}
+              <FlowlyAssistant3D
                 modelUrl={avatarUrl}
+                mode={avatarMood === "talking" ? "talk" : avatarMood === "thinking" ? "thinking" : avatarMood === "wave" ? "wave" : "idle"}
+                facing="front"
                 skinTone={avatarTone}
-                compact
               />
             </div>
             <div>
