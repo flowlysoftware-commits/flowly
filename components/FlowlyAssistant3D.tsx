@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows, Html, useGLTF } from "@react-three/drei";
+import { ContactShadows, Html, useAnimations, useFBX, useGLTF } from "@react-three/drei";
 import type { Bone, Group, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh } from "three";
 import { Box3, Color, Euler, Vector3 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -23,7 +23,9 @@ type AssistantMode =
   | "reading"
   | "typing"
   | "concerned"
-  | "celebrating";
+  | "celebrating"
+  | "jump"
+  | "spin";
 
 type FlowlyAssistant3DProps = {
   modelUrl?: string;
@@ -43,6 +45,7 @@ type RuntimeSkin = {
 };
 
 type RigBones = {
+  root?: Bone;
   head?: Bone;
   neck?: Bone;
   spine?: Bone;
@@ -54,7 +57,7 @@ type RigBones = {
   rightUpperLeg?: Bone;
 };
 
-type CompanionMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking";
+type CompanionMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "jump" | "spin";
 
 const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
   flowly: {
@@ -109,6 +112,8 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
 
 function normalizeMode(mode?: AssistantMode): CompanionMode {
   if (mode === "walk") return "walk";
+  if (mode === "jump") return "jump";
+  if (mode === "spin") return "spin";
   if (mode === "wave" || mode === "attention" || mode === "celebrating") return "wave";
   if (mode === "talk" || mode === "typing") return "talk";
   if (mode === "point" || mode === "tour") return "point";
@@ -151,27 +156,31 @@ function cloneMaterial(material: unknown, skin: RuntimeSkin) {
 
 function findRigBones(root: Object3D): RigBones {
   const bones: RigBones = {};
+  const byName = new Map<string, Bone>();
 
   root.traverse((object) => {
     if (!isBone(object)) return;
-    const clean = cleanBoneName(object.name);
-    const isLeft = clean.includes("left") || clean.includes("larm") || clean.startsWith("l");
-    const isRight = clean.includes("right") || clean.includes("rarm") || clean.startsWith("r");
-    const isForearm = clean.includes("forearm") || clean.includes("lowerarm") || clean.includes("elbow");
-    const isUpperArm = clean.includes("upperarm") || clean.includes("uparm") || clean.endsWith("arm") || clean.includes("shoulder");
-    const isUpperLeg = clean.includes("upperleg") || clean.includes("upleg") || clean.includes("thigh");
-
-    if (!bones.head && clean.includes("head")) bones.head = object;
-    if (!bones.neck && clean.includes("neck")) bones.neck = object;
-    if (!bones.spine && (clean.includes("spine2") || clean.includes("chest") || clean.includes("spine"))) bones.spine = object;
-
-    if (!bones.leftLowerArm && isLeft && isForearm) bones.leftLowerArm = object;
-    if (!bones.rightLowerArm && isRight && isForearm) bones.rightLowerArm = object;
-    if (!bones.leftUpperArm && isLeft && isUpperArm && !isForearm) bones.leftUpperArm = object;
-    if (!bones.rightUpperArm && isRight && isUpperArm && !isForearm) bones.rightUpperArm = object;
-    if (!bones.leftUpperLeg && isLeft && isUpperLeg) bones.leftUpperLeg = object;
-    if (!bones.rightUpperLeg && isRight && isUpperLeg) bones.rightUpperLeg = object;
+    byName.set(cleanBoneName(object.name), object);
   });
+
+  const pick = (...names: string[]) => {
+    for (const name of names) {
+      const bone = byName.get(cleanBoneName(name));
+      if (bone) return bone;
+    }
+    return undefined;
+  };
+
+  bones.root = pick("Armature", "Hips", "Root");
+  bones.head = pick("Head");
+  bones.neck = pick("Neck");
+  bones.spine = pick("Spine02", "Spine01", "Spine", "Chest");
+  bones.leftUpperArm = pick("L_Upperarm", "LeftUpperArm", "mixamorigLeftArm");
+  bones.leftLowerArm = pick("L_Forearm", "LeftForeArm", "mixamorigLeftForeArm");
+  bones.rightUpperArm = pick("R_Upperarm", "RightUpperArm", "mixamorigRightArm");
+  bones.rightLowerArm = pick("R_Forearm", "RightForeArm", "mixamorigRightForeArm");
+  bones.leftUpperLeg = pick("L_Thigh", "LeftUpLeg", "mixamorigLeftUpLeg");
+  bones.rightUpperLeg = pick("R_Thigh", "RightUpLeg", "mixamorigRightUpLeg");
 
   return bones;
 }
@@ -200,9 +209,62 @@ function FlowlyCharacterEngine({
   const rootRef = useRef<Group>(null);
   const bonesRef = useRef<RigBones>({});
   const baseRotationsRef = useRef<Map<string, Euler>>(new Map());
-  const { scene } = useGLTF(modelUrl);
+  const { scene, animations: glbAnimations } = useGLTF(modelUrl);
+  const idleFbx = useFBX("/avatars/Idle.fbx");
+  const walkFbx = useFBX("/avatars/Walking.fbx");
+  const waveFbx = useFBX("/avatars/Waving.fbx");
+  const talkFbx = useFBX("/avatars/Talking.fbx");
+  const pointFbx = useFBX("/avatars/Pointing.fbx");
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
   const companionMode = normalizeMode(mode);
+  const clips = useMemo(() => {
+    const all = [
+      ...glbAnimations,
+      ...idleFbx.animations.map((clip) => clip.clone()),
+      ...walkFbx.animations.map((clip) => clip.clone()),
+      ...waveFbx.animations.map((clip) => clip.clone()),
+      ...talkFbx.animations.map((clip) => clip.clone()),
+      ...pointFbx.animations.map((clip) => clip.clone()),
+    ];
+
+    const rename = (from: number, name: string) => {
+      if (all[from]) all[from].name = name;
+    };
+    rename(glbAnimations.length, "idle");
+    rename(glbAnimations.length + idleFbx.animations.length, "walk");
+    rename(glbAnimations.length + idleFbx.animations.length + walkFbx.animations.length, "wave");
+    rename(glbAnimations.length + idleFbx.animations.length + walkFbx.animations.length + waveFbx.animations.length, "talk");
+    rename(glbAnimations.length + idleFbx.animations.length + walkFbx.animations.length + waveFbx.animations.length + talkFbx.animations.length, "point");
+    return all;
+  }, [glbAnimations, idleFbx.animations, pointFbx.animations, talkFbx.animations, walkFbx.animations, waveFbx.animations]);
+  const { actions, names } = useAnimations(clips, rootRef);
+
+  useEffect(() => {
+    if (!names.length) return;
+    const preferred =
+      companionMode === "walk"
+        ? ["walk", "walking", "nlatrack.004", "nlatrack.003"]
+        : companionMode === "wave"
+          ? ["wave", "waving", "nlatrack.005"]
+          : companionMode === "talk"
+            ? ["talk", "talking", "nlatrack.002"]
+            : companionMode === "point"
+              ? ["point", "pointing", "nlatrack.001"]
+              : ["idle", "nlatrack", names[0]];
+    const nextName =
+      names.find((name) => preferred.some((candidate) => name.toLowerCase().includes(candidate))) ||
+      names[0];
+
+    Object.entries(actions).forEach(([name, action]) => {
+      if (!action) return;
+      if (name === nextName) {
+        action.reset().fadeIn(0.22).play();
+        action.timeScale = companionMode === "walk" ? 0.92 : companionMode === "wave" ? 0.86 : 0.72;
+      } else {
+        action.fadeOut(0.2);
+      }
+    });
+  }, [actions, companionMode, names]);
 
   const normalizedScene = useMemo(() => {
     const cloned = cloneSkeleton(scene) as Group;
@@ -213,8 +275,8 @@ function FlowlyCharacterEngine({
     box.getCenter(center);
 
     const height = size.y || 1;
-    const scale = 3.8 / height;
-    cloned.position.set(-center.x * scale, -box.min.y * scale - 1.84, -center.z * scale);
+    const scale = 4.18 / height;
+    cloned.position.set(-center.x * scale, -box.min.y * scale - 2.05, -center.z * scale);
     cloned.scale.setScalar(scale);
     cloned.rotation.y = skin.rotationY;
 
@@ -239,6 +301,8 @@ function FlowlyCharacterEngine({
 
     const t = state.clock.elapsedTime;
     const isWalking = companionMode === "walk";
+    const isJumping = companionMode === "jump";
+    const isSpinning = companionMode === "spin";
     const isTalking = companionMode === "talk";
     const isThinking = companionMode === "thinking";
     const isWaving = companionMode === "wave";
@@ -249,9 +313,10 @@ function FlowlyCharacterEngine({
     const weightShift = Math.sin(t * 0.95) * 0.035;
     const talkPulse = isTalking ? Math.sin(t * 10.5) * 0.014 : 0;
     const walkPulse = isWalking ? Math.abs(Math.sin(t * 5.6)) * 0.045 : 0;
+    const jumpPulse = isJumping ? Math.max(0, Math.sin(t * 5.2)) * 0.32 : 0;
 
-    root.position.y = breathe + talkPulse + walkPulse;
-    root.rotation.y = baseFacing + Math.sin(t * 0.7) * 0.045;
+    root.position.y = breathe + talkPulse + walkPulse + jumpPulse;
+    root.rotation.y = baseFacing + Math.sin(t * 0.7) * 0.045 + (isSpinning ? t * 1.35 : 0);
     root.rotation.z = weightShift * 0.25;
 
     const bones = bonesRef.current;
@@ -262,8 +327,8 @@ function FlowlyCharacterEngine({
     const look = Math.sin(t * 0.86);
 
     // El modelo base llega en T-pose. Bajamos brazos y añadimos vida procedimental.
-    const leftArmDown = 1.18;
-    const rightArmDown = -1.18;
+    const leftArmDown = 1.22;
+    const rightArmDown = 1.22;
     const armSwing = isWalking ? walk * 0.32 : idleArm;
     const legSwing = isWalking ? walk * 0.34 : Math.sin(t * 0.9) * 0.025;
 
@@ -272,26 +337,26 @@ function FlowlyCharacterEngine({
     applyRotation(bones.spine, base, 0, 0, weightShift * 0.38);
 
     applyRotation(bones.leftUpperArm, base, armSwing * 0.45, 0, leftArmDown + armSwing * 0.2);
-    applyRotation(bones.rightUpperArm, base, -armSwing * 0.45, 0, rightArmDown - armSwing * 0.2);
+    applyRotation(bones.rightUpperArm, base, -armSwing * 0.45, 0, rightArmDown + armSwing * 0.2);
     applyRotation(bones.leftLowerArm, base, 0, 0, 0.2 + Math.sin(t * 1.7) * 0.04);
-    applyRotation(bones.rightLowerArm, base, 0, 0, -0.2 - Math.sin(t * 1.7) * 0.04);
+    applyRotation(bones.rightLowerArm, base, 0, 0, 0.2 + Math.sin(t * 1.7) * 0.04);
     applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
     applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
 
     if (isTalking) {
       applyRotation(bones.leftUpperArm, base, 0.08 + talk * 0.07, 0, leftArmDown + 0.12 + talk * 0.04);
-      applyRotation(bones.rightUpperArm, base, -0.08 - talk * 0.07, 0, rightArmDown - 0.12 - talk * 0.04);
+      applyRotation(bones.rightUpperArm, base, -0.08 - talk * 0.07, 0, rightArmDown + 0.12 + talk * 0.04);
     }
 
     if (isWaving) {
-      applyRotation(bones.rightUpperArm, base, -0.45, 0.12, -0.62 + Math.sin(t * 7.8) * 0.28);
-      applyRotation(bones.rightLowerArm, base, -0.28, 0, -0.75 + Math.sin(t * 7.8) * 0.18);
+      applyRotation(bones.rightUpperArm, base, -0.45, 0.12, 0.62 + Math.sin(t * 7.8) * 0.28);
+      applyRotation(bones.rightLowerArm, base, -0.28, 0, 0.75 + Math.sin(t * 7.8) * 0.18);
       applyRotation(bones.leftUpperArm, base, 0, 0, leftArmDown);
     }
 
     if (isPointing) {
-      applyRotation(bones.rightUpperArm, base, -0.28, -0.15, -0.82);
-      applyRotation(bones.rightLowerArm, base, -0.1, 0, -0.25);
+      applyRotation(bones.rightUpperArm, base, -0.28, -0.15, 0.82);
+      applyRotation(bones.rightLowerArm, base, -0.1, 0, 0.25);
       applyRotation(bones.head, base, -0.02, 0.12, 0);
     }
   });
@@ -299,8 +364,92 @@ function FlowlyCharacterEngine({
   return (
     <group ref={rootRef}>
       <primitive object={normalizedScene} />
+      <FlowlySkinAccessories skin={skin} />
     </group>
   );
+}
+
+
+function FlowlySkinAccessories({ skin }: { skin: RuntimeSkin }) {
+  if (skin.key === "chef") {
+    return (
+      <group>
+        <mesh position={[0, 1.72, 0.02]} scale={[0.44, 0.08, 0.3]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#fff7ed" roughness={0.72} />
+        </mesh>
+        <mesh position={[0, 1.55, 0.02]} scale={[0.32, 0.17, 0.24]}>
+          <sphereGeometry args={[1, 18, 12]} />
+          <meshStandardMaterial color="#ffffff" roughness={0.78} />
+        </mesh>
+        <mesh position={[0, 0.35, 0.06]} scale={[0.38, 0.7, 0.035]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#f8fafc" roughness={0.82} />
+        </mesh>
+        <mesh position={[0.58, 0.25, 0.08]} rotation={[0.1, 0, -0.42]} scale={[0.035, 0.62, 0.035]}>
+          <cylinderGeometry args={[1, 1, 1, 12]} />
+          <meshStandardMaterial color="#a16207" roughness={0.65} />
+        </mesh>
+        <mesh position={[0.76, 0.7, 0.09]} rotation={[0.1, 0, -0.42]} scale={[0.1, 0.17, 0.025]}>
+          <sphereGeometry args={[1, 16, 8]} />
+          <meshStandardMaterial color="#b45309" roughness={0.72} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (skin.key === "business") {
+    return (
+      <group>
+        <mesh position={[0, 0.62, 0.08]} scale={[0.08, 0.48, 0.035]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#e5e7eb" roughness={0.55} />
+        </mesh>
+        <mesh position={[0, 0.48, 0.105]} rotation={[0, 0, 0.78]} scale={[0.1, 0.1, 0.035]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.5} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (skin.key === "expert") {
+    return (
+      <group position={[0, 1.33, 0.11]}>
+        <mesh position={[-0.105, 0, 0]} scale={[0.095, 0.045, 0.01]}>
+          <torusGeometry args={[1, 0.08, 8, 18]} />
+          <meshStandardMaterial color="#f0abfc" emissive="#581c87" emissiveIntensity={0.22} />
+        </mesh>
+        <mesh position={[0.105, 0, 0]} scale={[0.095, 0.045, 0.01]}>
+          <torusGeometry args={[1, 0.08, 8, 18]} />
+          <meshStandardMaterial color="#f0abfc" emissive="#581c87" emissiveIntensity={0.22} />
+        </mesh>
+        <mesh scale={[0.11, 0.01, 0.01]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#f0abfc" />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (skin.key === "cosmic") {
+    return (
+      <group>
+        <mesh position={[0, 1.84, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.36, 0.36, 0.02]}>
+          <torusGeometry args={[1, 0.035, 8, 42]} />
+          <meshStandardMaterial color="#c084fc" emissive="#7c3aed" emissiveIntensity={0.7} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (skin.key === "neon") {
+    return (
+      <pointLight position={[0, 0.7, 0.5]} color="#67e8f9" intensity={0.95} distance={3.4} />
+    );
+  }
+
+  return null;
 }
 
 function FlowlyV3Loading() {
@@ -334,7 +483,7 @@ export default function FlowlyAssistant3D({
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.4, 8], zoom: 82, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.35, 8], zoom: 72, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}

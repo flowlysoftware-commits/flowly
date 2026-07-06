@@ -61,6 +61,10 @@ function mapAvatarMoodToAssistantMode(mood: string) {
       return "attention";
     case "celebrating":
       return "celebrating";
+    case "jump":
+      return "jump";
+    case "spin":
+      return "spin";
     default:
       return "idle";
   }
@@ -410,6 +414,7 @@ export default function FlowlyCompanionRuntime() {
     [lifeMode, open, pathname, thinking, travel.moving, voice.isAwake, voiceNeedsActivation],
   );
   const avatarMood = lifeStateToAvatarMode(lifeDecision.state);
+  const effectiveAvatarMood = lifeMode || avatarMood;
   const companionRuntimeStyle = {
     "--flow-x": `${travel.x}px`,
     "--flow-y": `${travel.y}px`,
@@ -555,7 +560,7 @@ export default function FlowlyCompanionRuntime() {
 
   useEffect(() => {
     companionLiveContextRef.current = {
-      mood: avatarMood,
+      mood: effectiveAvatarMood,
       lifeLabel,
       xp: companionStats.xp,
       level: companionStats.level,
@@ -571,7 +576,7 @@ export default function FlowlyCompanionRuntime() {
       runtimeMode: mode,
     };
   }, [
-    avatarMood,
+    effectiveAvatarMood,
     context.area,
     context.mission,
     lifeLabel,
@@ -646,11 +651,14 @@ export default function FlowlyCompanionRuntime() {
           { mode: "walking", label: "Explorando el OS" },
           { mode: "point", label: "Listo para ejecutar" },
           { mode: "wave", label: "Esperando instrucciones" },
+          { mode: "spin", label: "Dando una vuelta por Flowly" },
         ]
       : [
           { mode: "idle", label: context.mission },
           { mode: "walking", label: "Buscando oportunidades" },
           { mode: "wave", label: "Saludando al equipo" },
+          { mode: "jump", label: "Celebrando progreso" },
+          { mode: "spin", label: "Dando una vuelta" },
           { mode: "thinking", label: "Pensando objetivos" },
           { mode: context.mode, label: context.message },
         ];
@@ -734,7 +742,7 @@ export default function FlowlyCompanionRuntime() {
       data-open={open}
       data-minimized={minimized}
       data-mode={mode}
-      data-life-mode={avatarMood}
+      data-life-mode={effectiveAvatarMood}
       data-entrance={entranceState}
       data-voice={voice.state}
       data-voice-awake={voice.isAwake}
@@ -788,15 +796,19 @@ export default function FlowlyCompanionRuntime() {
           type="button"
           className="flowly-companion-dock-toggle"
           onPointerDown={(event) => event.stopPropagation()}
-          onClick={hideCompanionToDock}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideCompanionToDock();
+          }}
           aria-label="Ocultar Flow Companion"
         >
           <X size={14} />
         </button>
-        <div className="flowly-companion-character" data-skin={avatarTone} data-mood={avatarMood}>
+        <div className="flowly-companion-character" data-skin={avatarTone} data-mood={effectiveAvatarMood}>
           <FlowlyAssistant3D
             modelUrl={avatarUrl}
-            mode={mapAvatarMoodToAssistantMode(avatarMood)}
+            mode={mapAvatarMoodToAssistantMode(effectiveAvatarMood)}
             facing="front"
             skinTone={avatarTone}
             onClick={toggleCompanionFromAvatar}
@@ -879,7 +891,11 @@ export default function FlowlyCompanionRuntime() {
               </button>
               <button
                 type="button"
-                onClick={hideCompanionToDock}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  hideCompanionToDock();
+                }}
                 aria-label="Ocultar Companion en burbuja"
               >
                 <X size={16} />
@@ -891,7 +907,7 @@ export default function FlowlyCompanionRuntime() {
             <div className="flowly-companion-status-avatar">
               <FlowlyAssistant3D
                 modelUrl={avatarUrl}
-                mode={mapCompactAvatarMoodToAssistantMode(avatarMood)}
+                mode={mapCompactAvatarMoodToAssistantMode(effectiveAvatarMood)}
                 facing="front"
                 skinTone={avatarTone}
               />

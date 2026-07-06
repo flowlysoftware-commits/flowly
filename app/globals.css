@@ -4377,3 +4377,62 @@ input[type="date"].input-dark { color-scheme: dark; }
   background: linear-gradient(135deg, rgba(34, 211, 238, .24), rgba(124, 58, 237, .22));
   color: #fff;
 }
+
+/* Companion V3 patch: contained stage, visible controls, no escaping card */
+.flowly-companion-runtime .flowly-companion-avatar-shell {
+  width: 268px !important;
+  height: 374px !important;
+  overflow: visible !important;
+  contain: layout style !important;
+}
+
+.flowly-companion-runtime .flowly-companion-character {
+  left: 18px !important;
+  right: auto !important;
+  bottom: 18px !important;
+  top: auto !important;
+  width: 178px !important;
+  height: 266px !important;
+  overflow: visible !important;
+}
+
+.flowly-companion-runtime .flowly-companion-character .flowly-v3-stage,
+.flowly-companion-runtime .flowly-companion-character .flowly-3d-stage {
+  width: 178px !important;
+  height: 266px !important;
+  min-width: 178px !important;
+  min-height: 266px !important;
+}
+
+.flowly-companion-quick-skins {
+  right: 2px !important;
+  bottom: 76px !important;
+  width: 148px !important;
+  opacity: .72 !important;
+  transform: none !important;
+}
+
+.flowly-companion-avatar-shell:hover .flowly-companion-quick-skins,
+.flowly-companion-quick-skins:focus-within {
+  opacity: 1 !important;
+}
+
+.flowly-companion-dock-toggle {
+  z-index: 18 !important;
+  pointer-events: auto !important;
+}
+
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-character {
+  transform: rotate(-1deg) translateY(-3px) scale(1.025) !important;
+}
+
+.flowly-companion-runtime .flowly-companion-life-hud,
+.flowly-companion-runtime .flowly-companion-avatar-cta,
+.flowly-companion-runtime .flowly-companion-voice-cta {
+  display: none !important;
+}
+
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-v3-stage,
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-3d-stage {
+  transform: scale(.96) !important;
+}

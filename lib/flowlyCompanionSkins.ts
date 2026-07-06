@@ -24,7 +24,7 @@ export const FLOWLY_COMPANION_SKINS: FlowlyCompanionSkin[] = [
     hint: "Místico",
     modelUrl: "/avatars/flowly.glb",
     tone: "cosmic",
-    description: "Mismo cuerpo base con materiales más oscuros y energéticos.",
+    description: "Mismo cuerpo base con aro cósmico y materiales más energéticos.",
   },
   {
     id: "business",
@@ -32,7 +32,7 @@ export const FLOWLY_COMPANION_SKINS: FlowlyCompanionSkin[] = [
     hint: "Formal",
     modelUrl: "/avatars/flowly.glb",
     tone: "business",
-    description: "Apariencia más seria para empresas.",
+    description: "Apariencia formal con detalle tipo corbata.",
   },
   {
     id: "neon",
@@ -40,7 +40,7 @@ export const FLOWLY_COMPANION_SKINS: FlowlyCompanionSkin[] = [
     hint: "Energía",
     modelUrl: "/avatars/flowly.glb",
     tone: "neon",
-    description: "Skin más tecnológica y llamativa.",
+    description: "Skin tecnológica con luz neón adicional.",
   },
   {
     id: "expert",
@@ -48,7 +48,7 @@ export const FLOWLY_COMPANION_SKINS: FlowlyCompanionSkin[] = [
     hint: "Consejera",
     modelUrl: "/avatars/flowly.glb",
     tone: "expert",
-    description: "Skin orientada a acompañamiento y asesoría.",
+    description: "Skin de consejera con detalle visual de gafas.",
   },
   {
     id: "chef",
@@ -56,7 +56,7 @@ export const FLOWLY_COMPANION_SKINS: FlowlyCompanionSkin[] = [
     hint: "Creativo",
     modelUrl: "/avatars/flowly.glb",
     tone: "chef",
-    description: "Skin creativa basada en el modelo Flow para evitar modelos duplicados o fallos de carga.",
+    description: "Skin creativa con gorro de chef, delantal blanco y cuchara de madera.",
   },
 ];
 
