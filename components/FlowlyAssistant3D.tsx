@@ -57,7 +57,7 @@ export default function FlowlyAssistant3D({
     <button
       type="button"
       onClick={onClick}
-      className={`flowly-3d-stage flowly-css-stage flowly-css-stage-${skinTone}`}
+      className={`flowly-3d-stage flowly-css-stage flowly-css-avatar-${skinTone}`}
       data-mode={safeMode}
       data-facing={facing}
       aria-label="Abrir Companion de Flowly"
@@ -75,15 +75,15 @@ export default function FlowlyAssistant3D({
           <span className="flowly-css-avatar-hair hair-c" />
           <span className="flowly-css-avatar-chef-hat" />
           <span className="flowly-css-avatar-face">
-            <span className="flowly-css-avatar-eye eye-left" />
-            <span className="flowly-css-avatar-eye eye-right" />
-            <span className="flowly-css-avatar-mouth" />
+            <span className="flowly-css-avatar-eye flowly-css-avatar-eye-left" />
+            <span className="flowly-css-avatar-eye flowly-css-avatar-eye-right" />
+            <span className="flowly-css-avatar-smile" />
           </span>
         </span>
-        <span className="flowly-css-avatar-arm arm-left" />
-        <span className="flowly-css-avatar-arm arm-right" />
-        <span className="flowly-css-avatar-leg leg-left" />
-        <span className="flowly-css-avatar-leg leg-right" />
+        <span className="flowly-css-avatar-arm flowly-css-avatar-arm-left" />
+        <span className="flowly-css-avatar-arm flowly-css-avatar-arm-right" />
+        <span className="flowly-css-avatar-leg flowly-css-avatar-leg-left" />
+        <span className="flowly-css-avatar-leg flowly-css-avatar-leg-right" />
         <span className="flowly-css-avatar-spark spark-a" />
         <span className="flowly-css-avatar-spark spark-b" />
       </span>

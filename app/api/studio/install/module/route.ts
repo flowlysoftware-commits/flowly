@@ -38,10 +38,10 @@ export async function POST(request: NextRequest) {
   const review = reviewModuleGeneration(generation);
   if (!review.approved && body.force !== true) return NextResponse.json({ error: "La revisión automática ha bloqueado la instalación.", review }, { status: 422 });
   const files = buildModuleFiles(generation);
-  const root = process.cwd();
+  const root = path.join(/*turbopackIgnore: true*/ process.cwd(), "");
   const written: string[] = [];
   for (const file of files) {
-    const target = path.join(root, file.path);
+    const target = path.join(/*turbopackIgnore: true*/ root, file.path);
     if (!target.startsWith(root)) continue;
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, file.content, "utf8");
