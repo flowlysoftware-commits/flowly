@@ -746,7 +746,7 @@ export default function FlowlyCompanionRuntime() {
 
   return (
     <div
-      className="flowly-companion-runtime flowly-stage-v1"
+      className="flowly-companion-runtime flowly-stage-v5"
       style={companionRuntimeStyle}
       data-open={open}
       data-minimized={minimized}
@@ -759,10 +759,10 @@ export default function FlowlyCompanionRuntime() {
       data-travel={travel.moving ? "moving" : travel.label}
       data-dragging={draggingAvatar}
     >
-      <div className="flowly-stage-v1-world" aria-hidden="true">
-        <span className="flowly-stage-v1-floor" />
-        <span className="flowly-stage-v1-depth-grid" />
-        <span className="flowly-stage-v1-target-glow" />
+      <div className="flowly-stage-v5-world" aria-hidden="true">
+        <span className="flowly-stage-v5-floor" />
+        <span className="flowly-stage-v5-depth-grid" />
+        <span className="flowly-stage-v5-target-glow" />
       </div>
 
 
@@ -773,8 +773,8 @@ export default function FlowlyCompanionRuntime() {
         onPointerUp={handleAvatarPointerUp}
         onPointerCancel={handleAvatarPointerUp}
       >
-        <span className="flowly-stage-v1-character-shadow" aria-hidden="true" />
-        <span className="flowly-stage-v1-speech-tether" aria-hidden="true" />
+        <span className="flowly-stage-v5-character-shadow" aria-hidden="true" />
+        <span className="flowly-stage-v5-speech-tether" aria-hidden="true" />
         <button
           type="button"
           className="flowly-companion-dock-toggle"
