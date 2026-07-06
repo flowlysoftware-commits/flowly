@@ -110,6 +110,17 @@ type DeveloperPlan = {
   stages?: DeveloperStage[];
   buildVerification?: { message?: string; automaticFixAvailable?: boolean };
   unifiedEngines?: Record<string, string>;
+  executableContract?: {
+    version?: string;
+    goal?: string;
+    domain?: string;
+    filesToModify?: string[];
+    allowedFiles?: string[];
+    forbiddenFiles?: string[];
+    risks?: string[];
+    requiresSqlCheck?: boolean;
+    executionConditions?: string[];
+  };
   projectMap?: {
     analyzedFiles?: number;
     relatedFiles?: number;

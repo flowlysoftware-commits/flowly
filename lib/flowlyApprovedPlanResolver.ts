@@ -1,5 +1,6 @@
 import type { FlowlyMission } from "@/lib/flowlyMissionEngine";
 import type { DeveloperSessionPlan } from "@/lib/flowlyDeveloperSessionEngine";
+import { attachExecutableApprovedPlanContract } from "@/lib/flowlyExecutableApprovedPlanContract";
 
 export type FlowlyPlanDomain = "budget_crm" | "seo" | "engine_architecture" | "general_flowly" | "unknown";
 
@@ -163,7 +164,10 @@ export function resolveApprovedPlanForTurn(params: {
   const recentMatchingPlan = !domainsCompatible(requestedDomain, initialPlanDomain)
     ? findRecentPlanForDomain(params.recentPlans, requestedDomain)
     : null;
-  const candidatePlan = recentMatchingPlan?.plan || initialCandidatePlan;
+  const rawCandidatePlan = recentMatchingPlan?.plan || initialCandidatePlan;
+  const candidatePlan = rawCandidatePlan && typeof rawCandidatePlan === "object" && !Array.isArray(rawCandidatePlan)
+    ? attachExecutableApprovedPlanContract(rawCandidatePlan as Record<string, unknown>, params.instruction)
+    : rawCandidatePlan;
   const planDomain = detectFlowlyPlanDomain(candidatePlan || "");
   const isResume = isResumeOrExecutionRequest(params.instruction);
   const hasMismatch = isResume && requestedDomain !== "unknown" && planDomain !== "unknown" && !domainsCompatible(requestedDomain, planDomain);

@@ -6,6 +6,7 @@ import { getLatestDeveloperSessionPlan, getRecentDeveloperSessionPlans, updateLa
 import { getActiveDeveloperMission, rememberDeveloperMission, updateDeveloperMission } from "@/lib/flowlyMissionEngine";
 import type { DeveloperPipelinePlan } from "@/lib/flowlyDeveloperPipeline";
 import { buildApprovedPlanMismatchReply, resolveApprovedPlanForTurn } from "@/lib/flowlyApprovedPlanResolver";
+import { attachExecutableApprovedPlanContract } from "@/lib/flowlyExecutableApprovedPlanContract";
 
 export const runtime = "nodejs";
 
@@ -29,7 +30,9 @@ export async function POST(request: NextRequest) {
       recentPlans,
       bodyPlan: approvedPlanFromBody,
     });
-    const approvedPlan = planResolution.safePlan as DeveloperPipelinePlan | undefined;
+    const approvedPlan = planResolution.safePlan
+      ? attachExecutableApprovedPlanContract(planResolution.safePlan as DeveloperPipelinePlan, (planResolution.safePlan as DeveloperPipelinePlan).instruction || instruction) as DeveloperPipelinePlan
+      : undefined;
     const executionInstruction = approvedPlan?.instruction || instruction;
 
     if (planResolution.shouldBlockExecution || planResolution.hasMismatch) {

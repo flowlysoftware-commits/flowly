@@ -9,6 +9,7 @@ import { buildFlowlyProjectSnapshot } from "@/lib/flowlyProjectReader";
 import { evaluateGoalFidelity, isBudgetCrmObjective } from "@/lib/flowlyGoalFidelityGuard";
 import { getPlannerAllowedScope } from "@/lib/flowlyPlannerScopeGuard";
 import { blocksUnnecessaryClarification, mustTreatAsPlanningTransition } from "@/lib/flowlyIntentTransitionGuard";
+import { attachExecutableApprovedPlanContract, buildExecutableApprovedPlanContract, buildExecutableContractSummary, getExecutablePlanFilePaths, type FlowlyExecutableApprovedPlanContract } from "@/lib/flowlyExecutableApprovedPlanContract";
 
 export type DeveloperPipelineStageId =
   | "intake"
@@ -54,6 +55,7 @@ export type DeveloperPipelinePlan = ExecutorV3Plan & {
     message: string;
     automaticFixAvailable: boolean;
   };
+  executableContract?: FlowlyExecutableApprovedPlanContract;
   unifiedEngines: {
     developer: string;
     planner: string;
@@ -309,7 +311,8 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
   const graphSummary = graph ? summarizeProjectGraph(graph) : executorPlan.projectMap.projectGraph;
   const protocol = toKnowledgeSources(contextBundle);
   const protocolLoaded = contextBundle.loadedSources.length > 0;
-  const hasProposedFiles = executorPlan.proposedFiles.length > 0;
+  const executableContract = buildExecutableApprovedPlanContract({ instruction: clean, plan: executorPlan });
+  const hasProposedFiles = executorPlan.proposedFiles.length > 0 || Boolean(executableContract?.filesToModify.length);
   const intelligenceChanges = options.intelligence?.productChangePlan?.length ? options.intelligence.productChangePlan : null;
   const humanChangePlan = intelligenceChanges || executorPlan.humanChangePlan;
 
@@ -326,6 +329,7 @@ export async function planDeveloperPipeline(instruction: string, options: { inte
       proposedFiles: executorPlan.proposedFiles,
       preflight: executorPlan.preflight,
     }),
+    executableContract: executableContract || undefined,
     intelligence: options.intelligence,
     needsMoreContext: contextBundle.intent.needsClarification && !hasProposedFiles,
     pipelineVersion: "developer_pipeline_v1",
@@ -372,10 +376,12 @@ export async function runDeveloperPipeline(instruction: string, approved: boolea
   const contextBundle = await buildDeveloperContextBundle(instruction);
 
   if (approvedPlan) {
+    approvedPlan = attachExecutableApprovedPlanContract(approvedPlan as DeveloperPipelinePlan, approvedPlan.instruction || instruction) as DeveloperPipelinePlan;
     const existingPaths = await listExistingRepositoryPaths().catch(() => []);
+    const groundingFiles = getExecutablePlanFilePaths(approvedPlan);
     const grounding = validatePlanGrounding({
       objective: approvedPlan.instruction || instruction,
-      files: (approvedPlan.proposedFiles || []).map((file) => file.path),
+      files: groundingFiles,
       existingPaths,
     });
 
@@ -394,6 +400,7 @@ export async function runDeveloperPipeline(instruction: string, approved: boolea
           checks: [
             ...(approvedPlan.preflight?.checks || []),
             { label: "Grounding Guard", ok: false, detail: error },
+            { label: "Executable Plan Contract", ok: false, detail: buildExecutableContractSummary(approvedPlan.executableContract || null) },
           ],
         },
         error,
