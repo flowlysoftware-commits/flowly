@@ -3048,3 +3048,69 @@ input[type="date"].input-dark { color-scheme: dark; }
 }
 .flowly-life-engine-phases strong { display: block; color: #fff; font-size: .72rem; }
 .flowly-life-engine-phases small { display: block; margin-top: .2rem; color: rgba(255,255,255,.56); font-size: .63rem; line-height: 1.35; }
+
+
+/* Companion client panel simplification: level first, no technical debug noise */
+.flowly-companion-panel {
+  width: min(23rem, calc(100vw - 2rem)) !important;
+  max-height: min(34rem, calc(100vh - 2rem)) !important;
+  scrollbar-width: thin;
+}
+.flowly-companion-skin-card,
+.flowly-companion-level-focus {
+  margin-top: .8rem;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 1.15rem;
+  background: rgba(255,255,255,.045);
+  padding: .85rem;
+}
+.flowly-companion-skin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .45rem;
+  margin-top: .65rem;
+}
+.flowly-companion-skin-grid button {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: .85rem;
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.76);
+  padding: .55rem .45rem;
+  font-size: .72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.flowly-companion-skin-grid button[data-active="true"] {
+  border-color: rgba(103,232,249,.55);
+  background: linear-gradient(135deg, rgba(34,211,238,.22), rgba(167,139,250,.18));
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(34,211,238,.12);
+}
+.flowly-companion-level-focus {
+  background: radial-gradient(circle at 10% 0%, rgba(34,211,238,.16), transparent 42%), rgba(255,255,255,.045);
+}
+.flowly-companion-level-focus strong {
+  display: block;
+  color: #fff;
+  font-size: .95rem;
+}
+.flowly-companion-level-focus p {
+  margin: .4rem 0 0;
+  color: rgba(255,255,255,.72);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+.flowly-companion-level-focus small {
+  display: block;
+  margin-top: .55rem;
+  color: #a5f3fc;
+  font-size: .68rem;
+  font-weight: 800;
+}
+.flowly-companion-chat-card .flowly-companion-conversation {
+  max-height: 9.5rem;
+  overflow: auto;
+}
+.flowly-companion-status-avatar .flowly-3d-stage {
+  min-height: 4.5rem;
+}

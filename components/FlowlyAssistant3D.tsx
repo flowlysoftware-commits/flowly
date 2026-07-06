@@ -159,7 +159,7 @@ function Model({
   const group = useRef<THREE.Group>(null);
   const isFbx = modelUrl.toLowerCase().endsWith(".fbx");
   const gltf = useGLTF(isFbx ? "/avatars/flowly.glb" : modelUrl) as unknown as { scene: THREE.Group; animations?: THREE.AnimationClip[] };
-  const fbx = useLoader(FBXLoader, isFbx ? modelUrl : "/avatars/chef-flow/tripo_convert_dc01529f-55d8-49e5-b527-4862cb1db118.fbx") as THREE.Group & { animations?: THREE.AnimationClip[] };
+  const fbx = useLoader(FBXLoader, isFbx ? modelUrl : "/avatars/Idle.fbx") as THREE.Group & { animations?: THREE.AnimationClip[] };
   const sourceScene = isFbx ? fbx : gltf.scene;
   const scene = useMemo(() => clone(sourceScene) as THREE.Group, [sourceScene]);
   const rig = useMemo(() => getRig(scene), [scene]);

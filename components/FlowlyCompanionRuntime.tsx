@@ -21,20 +21,15 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
-  Target,
-  Trophy,
   X,
-  Zap,
+  Shirt,
 } from "lucide-react";
 import EvolutionaryCompanionAvatar from "@/components/EvolutionaryCompanionAvatar";
 import {
-  companionMissions,
-  companionRewards,
   companionStats,
   getCompanionContext,
 } from "@/lib/flowlyCompanionRuntime";
 import {
-  companionLifePhases,
   decideCompanionLife,
   lifeStateToAvatarMode,
 } from "@/lib/flowlyCompanionLifeEngine";
@@ -57,7 +52,18 @@ export default function FlowlyCompanionRuntime() {
   const [thinking, setThinking] = useState(false);
   const [lifeMode, setLifeMode] = useState<string | null>(null);
   const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
-  const [avatarUrl, setAvatarUrl] = useState("/avatars/chef-flow/tripo_convert_dc01529f-55d8-49e5-b527-4862cb1db118.fbx");
+  const companionSkins = useMemo(
+    () => [
+      { id: "flowly", label: "Flowly", modelUrl: "/avatars/flowly.glb" },
+      { id: "grandma", label: "Experta", modelUrl: "/avatars/flowly-grandma.glb" },
+      { id: "chef", label: "Chef Flow", modelUrl: "/avatars/chef-flow/chef-flow.fbx" },
+    ],
+    [],
+  );
+  const [selectedSkin, setSelectedSkin] = useState("flowly");
+  const avatarUrl =
+    companionSkins.find((skin) => skin.id === selectedSkin)?.modelUrl ||
+    "/avatars/flowly.glb";
   const [entranceState, setEntranceState] = useState<"intro" | "settled">(
     "intro",
   );
@@ -84,8 +90,8 @@ export default function FlowlyCompanionRuntime() {
     {
       role: "assistant",
       content: isArchitect
-        ? "Hola. Soy el Companion Arquitecto. Puedo ayudarte a analizar Flowly OS sin mezclarlo con el panel de clientes."
-        : "Hola. Soy el Companion del panel. Puedo ayudarte con clientes, tareas, objetivos, facturas, WhatsApp y recomendaciones sin mostrarte herramientas técnicas.",
+        ? "Estoy contigo dentro de Flowly OS. Dime qué quieres revisar."
+        : "Estoy contigo. Veo tu panel, tus objetivos y tu progreso.",
     },
   ]);
   const voiceSpeakRef = useRef<(text: string) => void>(() => undefined);
@@ -529,20 +535,18 @@ export default function FlowlyCompanionRuntime() {
   ]);
 
   useEffect(() => {
-    let mounted = true;
-    fetch("/api/avatar/config", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
-        const url =
-          typeof data?.avatar?.modelUrl === "string"
-            ? data.avatar.modelUrl
-            : null;
-        if (mounted && url && !url.includes("flowly.glb")) setAvatarUrl(url);
-      })
-      .catch(() => undefined);
-    return () => {
-      mounted = false;
-    };
+    if (typeof window === "undefined") return;
+    const savedSkin = window.localStorage.getItem("flowly_companion_skin");
+    if (savedSkin && companionSkins.some((skin) => skin.id === savedSkin)) {
+      setSelectedSkin(savedSkin);
+    }
+  }, [companionSkins]);
+
+  const changeSkin = useCallback((skinId: string) => {
+    setSelectedSkin(skinId);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("flowly_companion_skin", skinId);
+    }
   }, []);
 
   if (shouldHide(pathname)) return null;
@@ -729,156 +733,70 @@ export default function FlowlyCompanionRuntime() {
               />
             </div>
             <div>
-              <strong>
-                {isArchitect
-                  ? "Modo arquitecto"
-                  : `Nivel ${companionStats.level}`}
-              </strong>
-              <p>
-                {isArchitect
-                  ? "Puede abrir herramientas internas. No aparece en paneles de clientes."
-                  : `Ánimo: ${context.mood} · Energía ${companionStats.energy}%`}
-              </p>
+              <strong>{isArchitect ? "Modo arquitecto" : `Nivel ${companionStats.level}`}</strong>
+              <p>{isArchitect ? "Companion técnico de Flowly OS." : `Energía ${companionStats.energy}% · ${context.mood}`}</p>
               <div className="flowly-companion-progress">
                 <span style={{ width: `${xpPercent}%` }} />
               </div>
             </div>
           </section>
 
+          <section className="flowly-companion-skin-card">
+            <span className="flowly-companion-section-title">
+              <Shirt size={14} /> Skin del Companion
+            </span>
+            <div className="flowly-companion-skin-grid">
+              {companionSkins.map((skin) => (
+                <button
+                  key={skin.id}
+                  type="button"
+                  data-active={selectedSkin === skin.id}
+                  onClick={() => changeSkin(skin.id)}
+                >
+                  {skin.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section className="flowly-companion-chat-card">
             <span className="flowly-companion-section-title">
-              <Sparkles size={14} />{" "}
-              {isArchitect ? "Asistente técnico" : "Ayuda del panel"}
+              <Sparkles size={14} /> {isArchitect ? "Flowly OS" : "Subida de nivel"}
             </span>
+            <div className="flowly-companion-level-focus">
+              <strong>{lifeDecision.label}</strong>
+              <p>{lifeDecision.initiative || context.message}</p>
+              <small>{context.mission}</small>
+            </div>
             <div className="flowly-companion-conversation">
-              {conversation.slice(-5).map((item, index) => (
+              {conversation.slice(-3).map((item, index) => (
                 <p key={`${item.role}-${index}`} data-role={item.role}>
                   {item.content}
                 </p>
               ))}
-              {thinking && (
-                <p data-role="assistant">
-                  Estoy pensando con el contexto de Flowly...
-                </p>
-              )}
-            </div>
-            <div
-              className="flowly-companion-voice-card"
-              data-active={voice.active}
-            >
-              <span>{voice.active ? "Voz activa" : "Voz apagada"}</span>
-              <strong>
-                {voice.active
-                  ? voice.isAwake
-                    ? "Te escucho"
-                    : `Di "Flow" para llamarme`
-                  : "Activa el micrófono una vez"}
-              </strong>
-              {!voice.active && voice.state !== "unsupported" && (
-                <button
-                  type="button"
-                  className="flowly-companion-voice-primary"
-                  onClick={toggleVoice}
-                >
-                  <Mic size={14} /> Activar voz ahora
-                </button>
-              )}
-              {voice.transcript && <small>He oído: {voice.transcript}</small>}
-              <small>
-                Estado: {voice.state} · Grabaciones: {voice.debug.ticks} ·
-                Audio: {voice.debug.lastAudioKb} KB
-              </small>
-              {voice.debug.lastTranscription && (
-                <small>
-                  Última transcripción: {voice.debug.lastTranscription}
-                </small>
-              )}
-              {voice.debug.lastError && (
-                <small>Error voz: {voice.debug.lastError}</small>
-              )}
+              {thinking && <p data-role="assistant">Estoy pensándolo...</p>}
             </div>
 
-            <div
-              className="flowly-companion-voice-card"
-              data-active={voice.active}
-              style={{ display: "grid", gap: "0.45rem", fontSize: "0.76rem" }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
+            {!voice.active && voice.state !== "unsupported" && (
+              <button
+                type="button"
+                className="flowly-companion-voice-primary"
+                onClick={toggleVoice}
               >
-                <span>Debug de voz</span>
-                <button
-                  type="button"
-                  onClick={() => voice.refreshDebug()}
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    background: "rgba(255,255,255,0.08)",
-                    color: "inherit",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.45rem",
-                    fontSize: "0.7rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Refresh
-                </button>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: "0.35rem",
-                }}
-              >
-                <div>
-                  <strong>Enabled:</strong> {voice.active ? "true" : "false"}
-                </div>
-                <div>
-                  <strong>Phase:</strong> {voice.state}
-                </div>
-                <div>
-                  <strong>Recording:</strong>{" "}
-                  {voice.debug.isRecording ? "true" : "false"}
-                </div>
-                <div>
-                  <strong>Loop active:</strong>{" "}
-                  {voice.debug.loopActive ? "true" : "false"}
-                </div>
-                <div>
-                  <strong>Last audio:</strong> {voice.debug.lastAudioKb} KB
-                </div>
-                <div>
-                  <strong>Last transcript:</strong>{" "}
-                  {voice.debug.lastTranscription || "—"}
-                </div>
-                <div>
-                  <strong>Last error:</strong> {voice.debug.lastError || "—"}
-                </div>
-                <div>
-                  <strong>Last brain req:</strong> {lastBrainRequest || "—"}
-                </div>
-                <div>
-                  <strong>Last brain res:</strong> {lastBrainResponse || "—"}
-                </div>
-              </div>
-            </div>
-            <form
-              className="flowly-companion-chat-input"
-              onSubmit={sendMessage}
-            >
+                <Mic size={14} /> Activar voz
+              </button>
+            )}
+            {voice.active && (
+              <small className="flowly-companion-safe-note">
+                {voice.isAwake ? "Te escucho ahora." : 'Di "Flow" para llamarme.'}
+              </small>
+            )}
+
+            <form className="flowly-companion-chat-input" onSubmit={sendMessage}>
               <input
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder={
-                  isArchitect
-                    ? "Describe el cambio técnico..."
-                    : "Pídeme ayuda sobre tu negocio..."
-                }
+                placeholder={isArchitect ? "¿Qué revisamos?" : "Pídeme ayuda..."}
                 disabled={thinking}
               />
               <button type="submit" disabled={thinking}>
@@ -886,89 +804,16 @@ export default function FlowlyCompanionRuntime() {
               </button>
             </form>
 
-          <section className="flowly-companion-life-engine-card">
-            <span className="flowly-companion-section-title">
-              <Sparkles size={14} /> Companion vivo
-            </span>
-            <div className="flowly-life-engine-current">
-              <strong>{lifeDecision.state}</strong>
-              <small>{lifeDecision.label}</small>
-            </div>
-            <div className="flowly-life-engine-phases">
-              {companionLifePhases.map((phase) => (
-                <article key={phase.id} data-active={phase.id === lifeDecision.phase}>
-                  <strong>{phase.title}</strong>
-                  <small>{phase.rule}</small>
-                </article>
-              ))}
-            </div>
-          </section>
             {isArchitect ? (
-              <Link
-                href="/asistente"
-                className="flowly-companion-architect-link"
-              >
+              <Link href="/asistente" className="flowly-companion-architect-link">
                 <Code2 size={14} /> Abrir Asistente Arquitecto
               </Link>
             ) : (
               <small className="flowly-companion-safe-note">
-                <ShieldCheck size={13} /> Este Companion no puede programar ni
-                abrir Studio. Solo ayuda al cliente con su panel.
+                <ShieldCheck size={13} /> Companion conectado al Brain de Flowly.
               </small>
             )}
           </section>
-
-          {!isArchitect && (
-            <>
-              <section className="flowly-companion-grid">
-                <div>
-                  <span className="flowly-companion-section-title">
-                    <Target size={14} /> Misión activa
-                  </span>
-                  <p>{context.mission}</p>
-                </div>
-                <div>
-                  <span className="flowly-companion-section-title">
-                    <Zap size={14} /> XP
-                  </span>
-                  <strong>
-                    {companionStats.xp}/{companionStats.nextLevelXp}
-                  </strong>
-                </div>
-              </section>
-
-              <section className="flowly-companion-list">
-                <span className="flowly-companion-section-title">
-                  <Target size={14} /> Misiones
-                </span>
-                {companionMissions.map((mission) => (
-                  <div key={mission.id} className="flowly-companion-list-item">
-                    <div>
-                      <strong>{mission.label}</strong>
-                      <small>+{mission.xp} XP</small>
-                    </div>
-                    <div className="flowly-companion-mini-progress">
-                      <span style={{ width: `${mission.progress}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </section>
-
-              <section className="flowly-companion-rewards">
-                <span className="flowly-companion-section-title">
-                  <Trophy size={14} /> Recompensas
-                </span>
-                <div>
-                  {companionRewards.map((reward) => (
-                    <article key={reward.id} data-unlocked={reward.unlocked}>
-                      <strong>{reward.label}</strong>
-                      <small>{reward.description}</small>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </>
-          )}
         </aside>
       )}
     </div>
