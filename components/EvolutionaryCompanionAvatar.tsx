@@ -63,6 +63,10 @@ export default function EvolutionaryCompanionAvatar({
       className={`evo-companion-3d evo-companion-3d-${stage} evo-companion-3d-${normalizedMood} ${compact ? "evo-companion-3d-compact" : ""}`}
       data-mood={normalizedMood}
       data-stage={stage}
+      style={{
+        maxWidth: 'calc(clamp(384px, 50vw, 480px))',
+        maxHeight: 'calc(clamp(486px, 68vw, 608px))',
+      }}
     >
       <span className="evo-3d-aura evo-3d-aura-one" />
       <span className="evo-3d-aura evo-3d-aura-two" />
