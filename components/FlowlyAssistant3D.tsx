@@ -231,7 +231,7 @@ function FlowlyCharacterEngine({
   const rootRef = useRef<Group>(null);
   const bonesRef = useRef<RigBones>({});
   const baseRotationsRef = useRef<Map<string, Euler>>(new Map());
-  const { scene } = useGLTF(modelUrl);
+  const { scene, animations: embeddedAnimations = [] } = useGLTF(modelUrl) as { scene: Group; animations?: AnimationClip[] };
   const idleFbx = useFBX(FLOWLY_MOTION_CLIPS.idle);
   const walkFbx = useFBX(FLOWLY_MOTION_CLIPS.walk);
   const waveFbx = useFBX(FLOWLY_MOTION_CLIPS.wave);
@@ -241,6 +241,32 @@ function FlowlyCharacterEngine({
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
   const companionMode = normalizeMode(mode);
   const clips = useMemo(() => {
+    if (embeddedAnimations.length) {
+      const fallbackByMode: Record<CompanionMode, number> = {
+        idle: 0,
+        walk: Math.min(1, embeddedAnimations.length - 1),
+        wave: Math.min(2, embeddedAnimations.length - 1),
+        talk: Math.min(3, embeddedAnimations.length - 1),
+        point: Math.min(4, embeddedAnimations.length - 1),
+        thinking: Math.min(5, embeddedAnimations.length - 1),
+        jump: Math.min(2, embeddedAnimations.length - 1),
+        spin: 0,
+      };
+
+      const used = new Set<number>();
+      return (Object.keys(fallbackByMode) as CompanionMode[])
+        .map((modeName) => {
+          const index = fallbackByMode[modeName];
+          const sourceClip = embeddedAnimations[index] || embeddedAnimations[0];
+          if (!sourceClip) return null;
+          const clip = sourceClip.clone();
+          clip.name = `flowly-${modeName}`;
+          used.add(index);
+          return clip;
+        })
+        .filter((clip): clip is AnimationClip => Boolean(clip));
+    }
+
     const entries: Array<[CompanionMode, { animations?: AnimationClip[] }]> = [
       ["idle", idleFbx],
       ["walk", walkFbx],
@@ -254,7 +280,7 @@ function FlowlyCharacterEngine({
     return entries
       .map(([name, fbx]) => getPrimaryClip(fbx, `flowly-${name}`))
       .filter((clip): clip is AnimationClip => Boolean(clip));
-  }, [idleFbx, walkFbx, waveFbx, talkFbx, pointFbx, thinkingFbx]);
+  }, [embeddedAnimations, idleFbx, walkFbx, waveFbx, talkFbx, pointFbx, thinkingFbx]);
   const { actions, names } = useAnimations(clips, rootRef);
 
   useEffect(() => {
@@ -269,7 +295,7 @@ function FlowlyCharacterEngine({
         action.loop = LoopRepeat;
         action.clampWhenFinished = false;
         action.reset().fadeIn(0.22).play();
-        action.timeScale = companionMode === "walk" ? 1.05 : companionMode === "talk" ? 0.92 : 0.82;
+        action.timeScale = companionMode === "walk" ? 0.92 : companionMode === "talk" ? 0.84 : 0.72;
       } else {
         action.fadeOut(0.18);
       }
@@ -285,7 +311,7 @@ function FlowlyCharacterEngine({
     box.getCenter(center);
 
     const height = size.y || 1;
-    const targetHeight = compact ? 2.05 : 3.25;
+    const targetHeight = compact ? 1.85 : 3.05;
     const scale = targetHeight / height;
     cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.02 : 1.62), -center.z * scale);
     cloned.scale.setScalar(scale);
@@ -472,7 +498,7 @@ export default function FlowlyAssistant3D({
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.18, 8], zoom: compact ? 82 : 72, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.22, 8], zoom: compact ? 94 : 78, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}

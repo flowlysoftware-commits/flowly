@@ -725,7 +725,7 @@ export default function FlowlyCompanionRuntime() {
 
   return (
     <div
-      className="flowly-companion-runtime"
+      className="flowly-companion-runtime flowly-stage-v1"
       style={companionRuntimeStyle}
       data-open={open}
       data-minimized={minimized}
@@ -738,6 +738,12 @@ export default function FlowlyCompanionRuntime() {
       data-travel={travel.moving ? "moving" : travel.label}
       data-dragging={draggingAvatar}
     >
+      <div className="flowly-stage-v1-world" aria-hidden="true">
+        <span className="flowly-stage-v1-floor" />
+        <span className="flowly-stage-v1-depth-grid" />
+        <span className="flowly-stage-v1-target-glow" />
+      </div>
+
       {!minimized && (
         <div className="flowly-companion-bubble" role="status">
           <span className="flowly-companion-bubble-kicker">
@@ -780,6 +786,8 @@ export default function FlowlyCompanionRuntime() {
         onPointerUp={handleAvatarPointerUp}
         onPointerCancel={handleAvatarPointerUp}
       >
+        <span className="flowly-stage-v1-character-shadow" aria-hidden="true" />
+        <span className="flowly-stage-v1-speech-tether" aria-hidden="true" />
         <button
           type="button"
           className="flowly-companion-dock-toggle"
@@ -874,14 +882,8 @@ export default function FlowlyCompanionRuntime() {
           </header>
 
           <section className="flowly-companion-status-card">
-            <div className="flowly-companion-status-avatar">
-              <FlowlyAssistant3D
-                modelUrl={avatarUrl}
-                mode={mapCompactAvatarMoodToAssistantMode(effectiveAvatarMood)}
-                facing="front"
-                skinTone={avatarTone}
-                compact
-              />
+            <div className="flowly-companion-status-avatar flowly-companion-status-orb" aria-hidden="true">
+              <span />
             </div>
             <div>
               <strong>{isArchitect ? "Modo arquitecto" : `Nivel ${companionStats.level}`}</strong>
