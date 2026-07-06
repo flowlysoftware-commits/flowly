@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Environment, useGLTF } from "@react-three/drei";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
@@ -18,6 +18,46 @@ type FlowlyAssistant3DProps = {
   skinTone?: FlowlyCompanionSkinTone;
   onClick?: () => void;
 };
+
+
+class Flowly3DErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("Flowly Companion 3D fallback activo", error);
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+function FlowlyCssAvatar({ skinTone }: { skinTone: FlowlyCompanionSkinTone }) {
+  return (
+    <span className={`flowly-css-avatar flowly-css-avatar-${skinTone}`} aria-hidden="true">
+      <span className="flowly-css-avatar-shadow" />
+      <span className="flowly-css-avatar-body">
+        <span className="flowly-css-avatar-neck" />
+        <span className="flowly-css-avatar-head">
+          <span className="flowly-css-avatar-hair" />
+          <span className="flowly-css-avatar-eye flowly-css-avatar-eye-left" />
+          <span className="flowly-css-avatar-eye flowly-css-avatar-eye-right" />
+          <span className="flowly-css-avatar-smile" />
+        </span>
+        <span className="flowly-css-avatar-arm flowly-css-avatar-arm-left" />
+        <span className="flowly-css-avatar-arm flowly-css-avatar-arm-right" />
+        <span className="flowly-css-avatar-core" />
+        <span className="flowly-css-avatar-leg flowly-css-avatar-leg-left" />
+        <span className="flowly-css-avatar-leg flowly-css-avatar-leg-right" />
+      </span>
+    </span>
+  );
+}
 
 type RigBones = {
   hips?: THREE.Object3D;
@@ -192,9 +232,9 @@ function getModelProfile(modelUrl: string, facing: Required<FlowlyAssistant3DPro
 
   // El modelo base de Flow viene de lado. Los skins actuales usan el MISMO modelo,
   // solo cambia el material. El runtime debe garantizar que siempre aparece entero.
-  if (url.includes("grandma")) return { yaw: 0 + baseTurn, targetHeight: 3.15, footY: -1.52 };
-  if (url.includes("chef")) return { yaw: 0 + baseTurn, targetHeight: 3.15, footY: -1.52 };
-  return { yaw: -Math.PI / 2 + baseTurn, targetHeight: 3.15, footY: -1.52 };
+  if (url.includes("grandma")) return { yaw: 0 + baseTurn, targetHeight: 2.75, footY: -1.15 };
+  if (url.includes("chef")) return { yaw: 0 + baseTurn, targetHeight: 2.75, footY: -1.15 };
+  return { yaw: -Math.PI / 2 + baseTurn, targetHeight: 2.75, footY: -1.15 };
 }
 
 function Model({
@@ -336,17 +376,31 @@ export default function FlowlyAssistant3D({
   onClick,
 }: FlowlyAssistant3DProps) {
   return (
-    <button type="button" onClick={onClick} className="flowly-3d-stage" aria-label="Abrir asistente 3D de Flowly">
-      <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 0.72, 5.45], fov: 32 }} gl={{ alpha: true, antialias: true }} style={{ pointerEvents: "none" }}>
-        <ambientLight intensity={1.35} />
-        <directionalLight position={[2.4, 4, 3]} intensity={2.05} castShadow />
-        <pointLight position={[-2.2, 2.8, 2]} intensity={1.05} color="#8b5cf6" />
-        <pointLight position={[2.4, 1.2, 2.6]} intensity={0.9} color="#22d3ee" />
-        <Suspense fallback={<ModelFallback />}>
-          <Model modelUrl={modelUrl} mode={mode} facing={facing} skinTone={skinTone} />
-          <Environment preset="city" />
-        </Suspense>
-      </Canvas>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flowly-3d-stage flowly-3d-stage-${skinTone}`}
+      aria-label="Abrir asistente 3D de Flowly"
+    >
+      <FlowlyCssAvatar skinTone={skinTone} />
+      <Flowly3DErrorBoundary>
+        <Canvas
+          shadows
+          dpr={[1, 1.75]}
+          camera={{ position: [0, 0.28, 6.2], fov: 36 }}
+          gl={{ alpha: true, antialias: true }}
+          style={{ pointerEvents: "none", position: "absolute", inset: 0, zIndex: 2 }}
+        >
+          <ambientLight intensity={1.65} />
+          <directionalLight position={[2.4, 4, 3]} intensity={2.15} castShadow />
+          <pointLight position={[-2.2, 2.8, 2]} intensity={1.05} color="#8b5cf6" />
+          <pointLight position={[2.4, 1.2, 2.6]} intensity={0.9} color="#22d3ee" />
+          <Suspense fallback={<ModelFallback />}>
+            <Model modelUrl={modelUrl} mode={mode} facing={facing} skinTone={skinTone} />
+            <Environment preset="city" />
+          </Suspense>
+        </Canvas>
+      </Flowly3DErrorBoundary>
     </button>
   );
 }
