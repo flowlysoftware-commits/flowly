@@ -1,12 +1,13 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Environment, useGLTF } from "@react-three/drei";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import * as THREE from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
-type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" | "attention";
+type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" | "attention" | "reading" | "typing" | "concerned" | "celebrating";
 
 type FlowlyAssistant3DProps = {
   modelUrl?: string;
@@ -33,7 +34,8 @@ type RigBones = {
 };
 
 function normalizeMode(mode: AssistantMode) {
-  if (mode === "thinking" || mode === "attention") return "idle";
+  if (mode === "thinking" || mode === "attention" || mode === "reading" || mode === "typing" || mode === "concerned") return "idle";
+  if (mode === "celebrating") return "wave";
   if (mode === "tour") return "point";
   if (mode === "sit") return "idle";
   return mode;
@@ -155,14 +157,17 @@ function Model({
   facing = "front",
 }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing">>) {
   const group = useRef<THREE.Group>(null);
-  const gltf = useGLTF(modelUrl) as unknown as { scene: THREE.Group; animations?: THREE.AnimationClip[] };
-  const scene = useMemo(() => clone(gltf.scene) as THREE.Group, [gltf.scene]);
+  const isFbx = modelUrl.toLowerCase().endsWith(".fbx");
+  const gltf = useGLTF(isFbx ? "/avatars/flowly.glb" : modelUrl) as unknown as { scene: THREE.Group; animations?: THREE.AnimationClip[] };
+  const fbx = useLoader(FBXLoader, isFbx ? modelUrl : "/avatars/chef-flow/tripo_convert_dc01529f-55d8-49e5-b527-4862cb1db118.fbx") as THREE.Group & { animations?: THREE.AnimationClip[] };
+  const sourceScene = isFbx ? fbx : gltf.scene;
+  const scene = useMemo(() => clone(sourceScene) as THREE.Group, [sourceScene]);
   const rig = useMemo(() => getRig(scene), [scene]);
   const basePose = useMemo(() => rememberBasePose(rig), [rig]);
   const activeMode = normalizeMode(mode);
   const mixer = useMemo(() => new THREE.AnimationMixer(scene), [scene]);
-  const clips = gltf.animations || [];
-  const hasNativeAnimations = false; // Flow se mueve como personaje completo; evitamos clips que giraban piernas/brazos.
+  const clips = (isFbx ? fbx.animations : gltf.animations) || [];
+  const hasNativeAnimations = clips.length > 0 && isFbx; // Chef puede traer clips propios; el GLB original sigue con micro estados seguros.
 
   useEffect(() => {
     if (!hasNativeAnimations) return;
@@ -227,18 +232,20 @@ function Model({
     }
 
     const baseYaw = getFacingYaw(facing);
-    const attentiveLean = activeAttention ? 0.045 : 0;
+    const concernedLean = mode === "concerned" ? -0.05 : 0;
+    const readingLean = mode === "reading" || mode === "typing" ? 0.035 : 0;
+    const attentiveLean = activeAttention ? 0.045 : concernedLean + readingLean;
     const looking = activeSpeaking ? Math.sin(t * 2.8) * 0.05 : Math.sin(t * 0.45) * 0.02;
     const bodyBreath = activeSpeaking ? breathe * 0.018 : breathe * 0.01;
 
     // Movimiento del personaje completo. Las piernas no se fuerzan: el Runtime mueve el cuerpo por pantalla.
     group.current.position.set(Math.sin(t * 0.38) * 0.012, -1.1 + bodyBreath, 0);
     group.current.rotation.set(attentiveLean, baseYaw + looking, slow * 0.004);
-    group.current.scale.setScalar(1.28);
+    group.current.scale.setScalar(isFbx ? 0.016 : 1.28);
   });
 
   return (
-    <group ref={group} position={[0, -1.1, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={1.28}>
+    <group ref={group} position={[0, -1.1, 0]} rotation={[0, getFacingYaw(facing), 0]} scale={isFbx ? 0.016 : 1.28}>
       <primitive object={scene} />
     </group>
   );

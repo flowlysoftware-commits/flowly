@@ -33,6 +33,11 @@ import {
   companionStats,
   getCompanionContext,
 } from "@/lib/flowlyCompanionRuntime";
+import {
+  companionLifePhases,
+  decideCompanionLife,
+  lifeStateToAvatarMode,
+} from "@/lib/flowlyCompanionLifeEngine";
 import { getFlowlyRuntimeMode } from "@/lib/flowlyProductModes";
 import { useFlowlyVoiceRuntime } from "@/hooks/useFlowlyVoiceRuntime";
 
@@ -52,7 +57,7 @@ export default function FlowlyCompanionRuntime() {
   const [thinking, setThinking] = useState(false);
   const [lifeMode, setLifeMode] = useState<string | null>(null);
   const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
-  const [avatarUrl, setAvatarUrl] = useState("/avatars/flowly.glb");
+  const [avatarUrl, setAvatarUrl] = useState("/avatars/chef-flow/tripo_convert_dc01529f-55d8-49e5-b527-4862cb1db118.fbx");
   const [entranceState, setEntranceState] = useState<"intro" | "settled">(
     "intro",
   );
@@ -254,15 +259,18 @@ export default function FlowlyCompanionRuntime() {
 
   const voiceNeedsActivation =
     !voiceIntroResolved && !voice.active && voice.state !== "unsupported";
-  const avatarMood = travel.moving
-    ? "walking"
-    : voiceNeedsActivation
-      ? "attention"
-      : voice.isAwake
-        ? "attention"
-        : thinking
-          ? "talking"
-          : lifeMode || (isArchitect ? "thinking" : context.mode);
+  const lifeDecision = useMemo(
+    () =>
+      decideCompanionLife(pathname, {
+        thinking,
+        speaking: lifeMode === "talking",
+        listening: voice.isAwake || voiceNeedsActivation,
+        moving: travel.moving,
+        open,
+      }),
+    [lifeMode, open, pathname, thinking, travel.moving, voice.isAwake, voiceNeedsActivation],
+  );
+  const avatarMood = lifeStateToAvatarMode(lifeDecision.state);
   const companionRuntimeStyle = {
     "--flow-x": `${travel.x}px`,
     "--flow-y": `${travel.y}px`,
@@ -374,7 +382,8 @@ export default function FlowlyCompanionRuntime() {
       moveFlowTo("lowerCenter");
       return;
     }
-  }, [moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
+    moveFlowTo(lifeDecision.spatialTarget);
+  }, [lifeDecision.spatialTarget, moveFlowTo, open, thinking, voice.isAwake, voiceNeedsActivation]);
 
   useEffect(() => {
     if (voiceNeedsActivation || open || thinking || voice.isAwake) return;
@@ -406,6 +415,9 @@ export default function FlowlyCompanionRuntime() {
       energy: companionStats.energy,
       contextArea: context.area,
       contextMission: context.mission,
+      lifeState: lifeDecision.state,
+      lifePhase: lifeDecision.phase,
+      voiceStyle: lifeDecision.voiceStyle,
       voiceState: voice.state,
       voiceActive: voice.active,
       voiceAwake: voice.isAwake,
@@ -416,6 +428,7 @@ export default function FlowlyCompanionRuntime() {
     context.area,
     context.mission,
     lifeLabel,
+    lifeDecision,
     mode,
     voice.active,
     voice.isAwake,
@@ -468,7 +481,7 @@ export default function FlowlyCompanionRuntime() {
     const intro = window.setTimeout(() => {
       setEntranceState("settled");
       setLifeMode("wave");
-      setLifeLabel("Hola, estoy listo para ayudarte");
+      setLifeLabel("Hola, estoy vivo dentro de Flowly");
     }, 2600);
     return () => window.clearTimeout(intro);
   }, []);
@@ -524,7 +537,7 @@ export default function FlowlyCompanionRuntime() {
           typeof data?.avatar?.modelUrl === "string"
             ? data.avatar.modelUrl
             : null;
-        if (mounted && url) setAvatarUrl(url);
+        if (mounted && url && !url.includes("flowly.glb")) setAvatarUrl(url);
       })
       .catch(() => undefined);
     return () => {
@@ -597,14 +610,14 @@ export default function FlowlyCompanionRuntime() {
               ? "Activa los permisos de voz para poder hablar conmigo"
               : isArchitect
                 ? "Estoy en modo desarrollo"
-                : context.title}
+                : lifeDecision.label}
           </strong>
           <p>
             {voiceNeedsActivation
               ? "Pulsa el botón y acepta el micrófono. Después solo tendrás que decir Flow y te escucharé."
               : isArchitect
                 ? "Aquí sí puedo ayudarte con Studio, Builder, Kernel y cambios internos."
-                : context.message}
+                : lifeDecision.initiative || context.message}
           </p>
           {voiceNeedsActivation && (
             <button
@@ -872,6 +885,24 @@ export default function FlowlyCompanionRuntime() {
                 <Send size={14} />
               </button>
             </form>
+
+          <section className="flowly-companion-life-engine-card">
+            <span className="flowly-companion-section-title">
+              <Sparkles size={14} /> Companion vivo
+            </span>
+            <div className="flowly-life-engine-current">
+              <strong>{lifeDecision.state}</strong>
+              <small>{lifeDecision.label}</small>
+            </div>
+            <div className="flowly-life-engine-phases">
+              {companionLifePhases.map((phase) => (
+                <article key={phase.id} data-active={phase.id === lifeDecision.phase}>
+                  <strong>{phase.title}</strong>
+                  <small>{phase.rule}</small>
+                </article>
+              ))}
+            </div>
+          </section>
             {isArchitect ? (
               <Link
                 href="/asistente"

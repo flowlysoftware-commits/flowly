@@ -2,7 +2,7 @@
 
 import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 
-type CompanionMood = "idle" | "happy" | "thinking" | "talking" | "celebrating" | "working" | "sleeping" | "walking" | "wave" | "point" | "attention";
+type CompanionMood = "idle" | "happy" | "thinking" | "talking" | "celebrating" | "working" | "sleeping" | "walking" | "wave" | "point" | "attention" | "reading" | "typing" | "concerned";
 
 type EvolutionaryCompanionAvatarProps = {
   name?: string;
@@ -19,6 +19,9 @@ function normalizeMood(value?: CompanionMood | string): CompanionMood {
   const mood = String(value || "idle").toLowerCase();
   if (mood.includes("feliz") || mood.includes("happy")) return "happy";
   if (mood.includes("atent") || mood.includes("attention")) return "attention";
+  if (mood.includes("concern") || mood.includes("preocup")) return "concerned";
+  if (mood.includes("read") || mood.includes("ley")) return "reading";
+  if (mood.includes("typ") || mood.includes("escrib")) return "typing";
   if (mood.includes("pens") || mood.includes("thinking")) return "thinking";
   if (mood.includes("habl") || mood.includes("talk")) return "talking";
   if (mood.includes("wave") || mood.includes("salud")) return "wave";
@@ -30,13 +33,17 @@ function normalizeMood(value?: CompanionMood | string): CompanionMood {
   return "idle";
 }
 
-function moodTo3DMode(mood: CompanionMood): "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" | "attention" {
+function moodTo3DMode(mood: CompanionMood): "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" | "attention" | "reading" | "typing" | "concerned" | "celebrating" {
   if (mood === "attention") return "attention";
   if (mood === "talking") return "talk";
+  if (mood === "reading") return "reading";
+  if (mood === "typing") return "typing";
+  if (mood === "concerned") return "concerned";
   if (mood === "walking") return "walk";
   if (mood === "wave") return "wave";
   if (mood === "point") return "point";
-  if (mood === "happy" || mood === "celebrating") return "wave";
+  if (mood === "happy") return "wave";
+  if (mood === "celebrating") return "celebrating";
   if (mood === "working") return "point";
   if (mood === "sleeping") return "sit";
   if (mood === "thinking") return "thinking";

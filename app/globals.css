@@ -3012,3 +3012,39 @@ input[type="date"].input-dark { color-scheme: dark; }
     overflow: clip;
   }
 }
+
+.flowly-companion-life-engine-card {
+  border: 1px solid rgba(103,232,249,.16);
+  border-radius: 1.1rem;
+  background: linear-gradient(135deg, rgba(15,23,42,.78), rgba(8,13,28,.88));
+  padding: .8rem;
+  margin-top: .75rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+.flowly-life-engine-current {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  align-items: center;
+  margin-top: .55rem;
+  padding: .55rem .65rem;
+  border-radius: .85rem;
+  background: rgba(34,211,238,.08);
+}
+.flowly-life-engine-current strong { color: #cffafe; font-size: .82rem; }
+.flowly-life-engine-current small { color: rgba(255,255,255,.62); font-size: .68rem; text-align: right; }
+.flowly-life-engine-phases { display: grid; gap: .45rem; margin-top: .6rem; }
+.flowly-life-engine-phases article {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: .85rem;
+  padding: .55rem .6rem;
+  opacity: .62;
+  background: rgba(255,255,255,.035);
+}
+.flowly-life-engine-phases article[data-active="true"] {
+  opacity: 1;
+  border-color: rgba(103,232,249,.35);
+  background: rgba(34,211,238,.09);
+}
+.flowly-life-engine-phases strong { display: block; color: #fff; font-size: .72rem; }
+.flowly-life-engine-phases small { display: block; margin-top: .2rem; color: rgba(255,255,255,.56); font-size: .63rem; line-height: 1.35; }
