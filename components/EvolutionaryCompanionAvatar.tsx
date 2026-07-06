@@ -64,8 +64,8 @@ export default function EvolutionaryCompanionAvatar({
       data-mood={normalizedMood}
       data-stage={stage}
       style={{
-        maxWidth: 'calc(clamp(192px, 25vw, 240px))',
-        maxHeight: 'calc(clamp(243px, 34vw, 304px))',
+        maxWidth: 'calc(clamp(384px, 50vw, 480px))',
+        maxHeight: 'calc(clamp(486px, 68vw, 608px))',
       }}
     >
       <span className="evo-3d-aura evo-3d-aura-one" />
