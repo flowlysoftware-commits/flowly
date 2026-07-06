@@ -4089,3 +4089,158 @@ input[type="date"].input-dark { color-scheme: dark; }
 .flowly-companion-runtime .flowly-css-stage-chef .flowly-css-avatar-chef-hat {
   display: block !important;
 }
+
+/* Companion V3 — motor real Flow GLB. Debe ser el último bloque del Companion. */
+.flowly-companion-runtime:not([data-voice-prompt="true"]) {
+  left: var(--flow-x, calc(100vw - 238px)) !important;
+  top: var(--flow-y, calc(100vh - 318px)) !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  height: auto !important;
+  transform: none !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+  z-index: 90 !important;
+}
+
+.flowly-companion-runtime .flowly-companion-avatar-shell {
+  width: clamp(174px, 15vw, 238px) !important;
+  height: clamp(238px, 28vh, 332px) !important;
+  max-width: calc(100vw - 20px) !important;
+  max-height: calc(100dvh - 20px) !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 25px 42px rgba(0,0,0,.36)) !important;
+  cursor: default !important;
+  pointer-events: auto !important;
+  touch-action: none !important;
+}
+
+.flowly-companion-runtime .flowly-companion-avatar-shell::before,
+.flowly-companion-runtime .flowly-companion-avatar-shell::after,
+.flowly-companion-runtime .flowly-css-avatar,
+.flowly-companion-runtime .flowly-css-avatar *,
+.flowly-companion-runtime .evo-3d-aura-one,
+.flowly-companion-runtime .evo-3d-aura-two,
+.flowly-companion-runtime .evo-3d-pulse,
+.flowly-companion-runtime .flowly-v3-loading {
+  display: none !important;
+  content: none !important;
+}
+
+.flowly-companion-runtime .flowly-companion-character {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 6 !important;
+  transform-origin: 50% 92% !important;
+  animation: flowlyV3Presence 4.2s ease-in-out infinite !important;
+}
+
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-character {
+  animation: flowlyV3Held 0.72s ease-in-out infinite !important;
+}
+
+.flowly-v3-stage,
+.flowly-companion-runtime .flowly-companion-character .flowly-v3-stage,
+.flowly-companion-status-avatar .flowly-v3-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 120px !important;
+  min-height: 170px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  cursor: grab !important;
+  pointer-events: auto !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+
+.flowly-companion-runtime[data-dragging="true"] .flowly-v3-stage {
+  cursor: grabbing !important;
+}
+
+.flowly-v3-canvas,
+.flowly-v3-stage canvas,
+.flowly-companion-runtime .flowly-v3-stage canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  background: transparent !important;
+}
+
+.flowly-companion-runtime .flowly-companion-status-avatar {
+  width: 64px !important;
+  height: 82px !important;
+  min-width: 64px !important;
+  display: block !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-v3-stage {
+  min-width: 64px !important;
+  min-height: 82px !important;
+  cursor: default !important;
+}
+
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-bubble,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-panel,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-life-hud,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-avatar-cta,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-voice-cta {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.flowly-companion-runtime .flowly-companion-bubble {
+  right: clamp(12rem, 15vw, 17rem) !important;
+  bottom: clamp(12rem, 17vw, 19rem) !important;
+}
+
+.flowly-companion-runtime .flowly-companion-panel {
+  bottom: clamp(14rem, 20vw, 21rem) !important;
+}
+
+@keyframes flowlyV3Presence {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-5px) rotate(.35deg); }
+}
+
+@keyframes flowlyV3Held {
+  0%, 100% { transform: translateY(0) rotate(-1.2deg) scale(1.018); }
+  50% { transform: translateY(-4px) rotate(1.2deg) scale(1.028); }
+}
+
+@media (max-width: 820px) {
+  .flowly-companion-runtime .flowly-companion-avatar-shell {
+    width: clamp(142px, 42vw, 174px) !important;
+    height: clamp(196px, 34vh, 244px) !important;
+  }
+  .flowly-companion-runtime .flowly-companion-panel {
+    bottom: 11rem !important;
+  }
+}

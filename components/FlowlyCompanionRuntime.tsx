@@ -341,6 +341,8 @@ export default function FlowlyCompanionRuntime() {
   const handleAvatarPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest(".flowly-v3-drag-handle")) return;
       const rect = event.currentTarget.getBoundingClientRect();
       dragStateRef.current = {
         active: true,
