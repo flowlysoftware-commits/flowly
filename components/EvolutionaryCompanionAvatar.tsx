@@ -1,6 +1,6 @@
 "use client";
 
-import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
+import FlowlyAssistant3D, { type FlowlyCompanionSkinTone } from "@/components/FlowlyAssistant3D";
 
 type CompanionMood = "idle" | "happy" | "thinking" | "talking" | "celebrating" | "working" | "sleeping" | "walking" | "wave" | "point" | "attention" | "reading" | "typing" | "concerned";
 
@@ -13,6 +13,7 @@ type EvolutionaryCompanionAvatarProps = {
   onClick?: () => void;
   memory?: string;
   modelUrl?: string;
+  skinTone?: FlowlyCompanionSkinTone;
 };
 
 function normalizeMood(value?: CompanionMood | string): CompanionMood {
@@ -59,6 +60,7 @@ export default function EvolutionaryCompanionAvatar({
   onClick,
   memory,
   modelUrl = "/avatars/flowly.glb",
+  skinTone = "flowly",
 }: EvolutionaryCompanionAvatarProps) {
   const normalizedMood = normalizeMood(mood);
   const stage = level >= 20 ? "legendary" : level >= 10 ? "evolved" : level >= 5 ? "growing" : "starter";
@@ -71,13 +73,11 @@ export default function EvolutionaryCompanionAvatar({
       data-mood={normalizedMood}
       data-stage={stage}
     >
-      <span className="evo-3d-aura evo-3d-aura-one" />
-      <span className="evo-3d-aura evo-3d-aura-two" />
-      <span className="evo-3d-pulse" />
       <FlowlyAssistant3D
         modelUrl={modelUrl}
         mode={mode}
         facing="front"
+        skinTone={skinTone}
         onClick={onClick}
       />
       {!compact && (

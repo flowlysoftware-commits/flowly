@@ -54,16 +54,19 @@ export default function FlowlyCompanionRuntime() {
   const [lifeLabel, setLifeLabel] = useState("Observando Flowly");
   const companionSkins = useMemo(
     () => [
-      { id: "flowly", label: "Flowly", modelUrl: "/avatars/flowly.glb" },
-      { id: "grandma", label: "Experta", modelUrl: "/avatars/flowly-grandma.glb" },
-      { id: "chef", label: "Chef Flow", modelUrl: "/avatars/chef-flow/chef-flow.fbx" },
+      { id: "flowly", label: "Flow", modelUrl: "/avatars/flowly.glb", tone: "flowly" as const, hint: "Base" },
+      { id: "cosmic", label: "Cósmico", modelUrl: "/avatars/flowly.glb", tone: "cosmic" as const, hint: "Místico" },
+      { id: "business", label: "Business", modelUrl: "/avatars/flowly.glb", tone: "business" as const, hint: "Formal" },
+      { id: "neon", label: "Neón", modelUrl: "/avatars/flowly.glb", tone: "neon" as const, hint: "Energía" },
+      { id: "expert", label: "Experta", modelUrl: "/avatars/flowly.glb", tone: "expert" as const, hint: "Consejera" },
+      { id: "chef", label: "Chef Flow", modelUrl: "/avatars/flowly.glb", tone: "chef" as const, hint: "Creativo" },
     ],
     [],
   );
   const [selectedSkin, setSelectedSkin] = useState("flowly");
-  const avatarUrl =
-    companionSkins.find((skin) => skin.id === selectedSkin)?.modelUrl ||
-    "/avatars/flowly.glb";
+  const activeSkin = companionSkins.find((skin) => skin.id === selectedSkin) || companionSkins[0];
+  const avatarUrl = activeSkin.modelUrl;
+  const avatarTone = activeSkin.tone;
   const [entranceState, setEntranceState] = useState<"intro" | "settled">(
     "intro",
   );
@@ -109,6 +112,26 @@ export default function FlowlyCompanionRuntime() {
   const askCompanion = useCallback(
     async (clean: string, source: "text" | "voice" = "text") => {
       if (!clean || thinking) return;
+      const text = clean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const wantsSkinChange = text.includes("skin") || text.includes("cambia a") || text.includes("ponte") || text.includes("cambiar aspecto");
+      const requestedSkin = wantsSkinChange
+        ? companionSkins.find((skin) => {
+            const label = skin.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return text.includes(skin.id) || text.includes(label);
+          })
+        : null;
+      if (requestedSkin) {
+        setSelectedSkin(requestedSkin.id);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("flowly_companion_skin", requestedSkin.id);
+        }
+        const answer = `Listo, cambio mi skin a ${requestedSkin.label}.`;
+        setConversation((current) => [...current, { role: "user", content: clean }, { role: "assistant", content: answer }]);
+        setLifeMode("wave");
+        setLifeLabel(`Skin activo: ${requestedSkin.label}`);
+        voiceSpeakRef.current(answer);
+        return;
+      }
       setThinking(true);
       setLastBrainRequest(clean);
       setLastBrainResponse("");
@@ -168,7 +191,7 @@ export default function FlowlyCompanionRuntime() {
         setThinking(false);
       }
     },
-    [conversation, pathname, speakCleanly, thinking],
+    [companionSkins, conversation, pathname, speakCleanly, thinking],
   );
 
   const handleVoiceWake = useCallback(() => {
@@ -651,6 +674,7 @@ export default function FlowlyCompanionRuntime() {
           mood={avatarMood}
           memory={lifeLabel}
           modelUrl={avatarUrl}
+          skinTone={avatarTone}
           onClick={() => setOpen((value) => !value)}
         />
         <div className="flowly-companion-life-hud" aria-hidden="true">
@@ -729,6 +753,7 @@ export default function FlowlyCompanionRuntime() {
                 mood={avatarMood}
                 memory={context.mission}
                 modelUrl={avatarUrl}
+                skinTone={avatarTone}
                 compact
               />
             </div>
@@ -751,12 +776,15 @@ export default function FlowlyCompanionRuntime() {
                   key={skin.id}
                   type="button"
                   data-active={selectedSkin === skin.id}
+                  data-tone={skin.tone}
                   onClick={() => changeSkin(skin.id)}
                 >
-                  {skin.label}
+                  <strong>{skin.label}</strong>
+                  <small>{skin.hint}</small>
                 </button>
               ))}
             </div>
+            <small className="flowly-companion-skin-tip">También puedes escribir: “cambia skin a Neón”.</small>
           </section>
 
           <section className="flowly-companion-chat-card">

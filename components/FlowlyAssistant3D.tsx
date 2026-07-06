@@ -9,10 +9,13 @@ import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 type AssistantMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking" | "tour" | "sit" | "attention" | "reading" | "typing" | "concerned" | "celebrating";
 
+export type FlowlyCompanionSkinTone = "flowly" | "cosmic" | "business" | "neon" | "chef" | "expert";
+
 type FlowlyAssistant3DProps = {
   modelUrl?: string;
   mode?: AssistantMode;
   facing?: "left" | "right" | "front";
+  skinTone?: FlowlyCompanionSkinTone;
   onClick?: () => void;
 };
 
@@ -144,6 +147,45 @@ function softenTPose(basePose: Map<string, THREE.Quaternion>, rig: RigBones, mod
   aimBoneToWorldDirection(basePose, rig.rightArm, rig.rightForeArm || rig.rightHand, rightTarget, influence);
 }
 
+
+const skinToneProfiles: Record<FlowlyCompanionSkinTone, { primary: string; secondary: string; emissive: string; metalness: number; roughness: number; }> = {
+  flowly: { primary: "#7c3aed", secondary: "#22d3ee", emissive: "#0e7490", metalness: 0.22, roughness: 0.58 },
+  cosmic: { primary: "#111827", secondary: "#a855f7", emissive: "#7e22ce", metalness: 0.32, roughness: 0.44 },
+  business: { primary: "#0f172a", secondary: "#e5e7eb", emissive: "#0891b2", metalness: 0.2, roughness: 0.52 },
+  neon: { primary: "#020617", secondary: "#14b8a6", emissive: "#22d3ee", metalness: 0.42, roughness: 0.3 },
+  chef: { primary: "#f8fafc", secondary: "#0f172a", emissive: "#f97316", metalness: 0.16, roughness: 0.64 },
+  expert: { primary: "#312e81", secondary: "#f0abfc", emissive: "#c026d3", metalness: 0.24, roughness: 0.5 },
+};
+
+function applySkinTone(scene: THREE.Object3D, skinTone: FlowlyCompanionSkinTone) {
+  const profile = skinToneProfiles[skinTone] || skinToneProfiles.flowly;
+  scene.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.material) return;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const nextMaterials = materials.map((sourceMaterial, index) => {
+      const material = sourceMaterial.clone() as THREE.MeshStandardMaterial;
+      const name = `${mesh.name} ${material.name}`.toLowerCase();
+      const looksLikeSkin = name.includes("skin") || name.includes("face") || name.includes("head") || name.includes("hand") || name.includes("body");
+      const looksLikeHair = name.includes("hair") || name.includes("eyebrow");
+      const looksLikeEye = name.includes("eye") || name.includes("iris");
+      if (!looksLikeSkin && !looksLikeEye) {
+        const chosen = looksLikeHair ? profile.secondary : index % 2 === 0 ? profile.primary : profile.secondary;
+        material.color = new THREE.Color(chosen).lerp(material.color || new THREE.Color("#ffffff"), 0.38);
+        material.emissive = new THREE.Color(profile.emissive).multiplyScalar(skinTone === "neon" ? 0.18 : 0.08);
+        material.metalness = profile.metalness;
+        material.roughness = profile.roughness;
+      }
+      material.needsUpdate = true;
+      return material;
+    });
+    mesh.material = Array.isArray(mesh.material) ? nextMaterials : nextMaterials[0];
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+  });
+}
+
 function getModelProfile(modelUrl: string, facing: Required<FlowlyAssistant3DProps>["facing"]) {
   const url = modelUrl.toLowerCase();
   const baseTurn = facing === "right" ? -0.16 : facing === "left" ? 0.16 : 0;
@@ -159,13 +201,18 @@ function Model({
   modelUrl = "/avatars/flowly.glb",
   mode = "idle",
   facing = "front",
-}: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing">>) {
+  skinTone = "flowly",
+}: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "facing" | "skinTone">>) {
   const group = useRef<THREE.Group>(null);
   const isFbx = modelUrl.toLowerCase().endsWith(".fbx");
   const gltf = useGLTF(isFbx ? "/avatars/flowly.glb" : modelUrl) as unknown as { scene: THREE.Group; animations?: THREE.AnimationClip[] };
   const fbx = useLoader(FBXLoader, isFbx ? modelUrl : "/avatars/Idle.fbx") as THREE.Group & { animations?: THREE.AnimationClip[] };
   const sourceScene = isFbx ? fbx : gltf.scene;
-  const scene = useMemo(() => clone(sourceScene) as THREE.Group, [sourceScene]);
+  const scene = useMemo(() => {
+    const cloned = clone(sourceScene) as THREE.Group;
+    applySkinTone(cloned, skinTone);
+    return cloned;
+  }, [sourceScene, skinTone]);
   const profile = useMemo(() => getModelProfile(modelUrl, facing), [modelUrl, facing]);
   const normalizedBounds = useMemo(() => {
     scene.updateMatrixWorld(true);
@@ -283,6 +330,7 @@ export default function FlowlyAssistant3D({
   modelUrl = "/avatars/flowly.glb",
   mode = "idle",
   facing = "front",
+  skinTone = "flowly",
   onClick,
 }: FlowlyAssistant3DProps) {
   return (
@@ -293,13 +341,9 @@ export default function FlowlyAssistant3D({
         <pointLight position={[-2.2, 2.8, 2]} intensity={1.05} color="#8b5cf6" />
         <pointLight position={[2.4, 1.2, 2.6]} intensity={0.9} color="#22d3ee" />
         <Suspense fallback={<ModelFallback />}>
-          <Model modelUrl={modelUrl} mode={mode} facing={facing} />
+          <Model modelUrl={modelUrl} mode={mode} facing={facing} skinTone={skinTone} />
           <Environment preset="city" />
         </Suspense>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.34, 0]} receiveShadow>
-          <circleGeometry args={[1.45, 64]} />
-          <meshStandardMaterial color="#020617" transparent opacity={0.18} />
-        </mesh>
       </Canvas>
     </button>
   );
