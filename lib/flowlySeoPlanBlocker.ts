@@ -10,10 +10,10 @@ export function analyzeSeoPlanBlocker(params: {
 }): FlowlySeoPlanBlockerResult {
   const { planResolution } = params;
 
-  if (planResolution.requestedDomain === "budget_crm" && planResolution.planDomain === "seo") {
+  if ((planResolution.requestedDomain === "budget_crm" || planResolution.requestedDomain === "companion_avatar") && planResolution.planDomain === "seo") {
     return {
       blocked: true,
-      reason: "La misión actual apunta a presupuestos del CRM, pero el plan recuperado es de SEO/robots/sitemap/metadata. Se bloquea para evitar ejecutar un plan contaminado.",
+      reason: `La misión actual apunta a ${planResolution.requestedDomain}, pero el plan recuperado es de SEO/robots/sitemap/metadata. Se bloquea para evitar ejecutar un plan contaminado.`,
     };
   }
 

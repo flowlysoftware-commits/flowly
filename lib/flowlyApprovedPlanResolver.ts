@@ -2,7 +2,7 @@ import type { FlowlyMission } from "@/lib/flowlyMissionEngine";
 import type { DeveloperSessionPlan } from "@/lib/flowlyDeveloperSessionEngine";
 import { attachExecutableApprovedPlanContract } from "@/lib/flowlyExecutableApprovedPlanContract";
 
-export type FlowlyPlanDomain = "budget_crm" | "seo" | "engine_architecture" | "general_flowly" | "unknown";
+export type FlowlyPlanDomain = "budget_crm" | "companion_avatar" | "seo" | "engine_architecture" | "general_flowly" | "unknown";
 
 export type FlowlyApprovedPlanResolution = {
   requestedDomain: FlowlyPlanDomain;
@@ -80,6 +80,10 @@ export function detectFlowlyPlanDomain(value: unknown): FlowlyPlanDomain {
   const hasBudget = /presupuesto|presupuestos|budget|salesbudget|budgetmodule|app\/admin\/presupuestos/.test(text);
   const hasCrm = /\bcrm\b|cliente|clientes|contacto|contactos|app\/admin\/clientes/.test(text);
   if (hasBudget && hasCrm) return "budget_crm";
+
+  if (/(companion|avatar|mascota|asistente|assistant|flowlycompanion|evolutionarycompanionavatar|flowlycompanionruntime)/.test(text)) {
+    return "companion_avatar";
+  }
 
   if (/\bseo\b|metadata|metadatos|robots\.ts|sitemap\.ts|open\s*graph|opengraph|twitter\s*image|indexacion|indexaci[oó]n|rutas\s+publicas|rutas\s+p[uú]blicas/.test(text)) {
     return "seo";

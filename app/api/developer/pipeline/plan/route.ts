@@ -34,6 +34,65 @@ export async function POST(request: NextRequest) {
     ].slice(-24);
     const pendingAction = resolvePendingActionForTurn({ instruction, history });
     const instructionForTurn = pendingAction.shouldContinuePendingAction ? pendingAction.instruction : instruction;
+
+    // Pending Action Priority Gate:
+    // Una confirmación como "sí/aprobado/adelante" pertenece a la acción pendiente del turno anterior.
+    // No debe volver a pasar por Mission/Planner porque puede recuperar planes antiguos contaminados.
+    if (pendingAction.shouldContinuePendingAction && pendingAction.detectedDomain !== "unknown") {
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "user",
+        content: instruction,
+        details: { source: "developer_page", pendingAction, pendingActionPriorityGate: true },
+      });
+
+      const approvedPlan = await planDeveloperPipeline(pendingAction.instruction);
+      const sessionPlanId = await rememberDeveloperSessionPlan({
+        conversationId,
+        instruction: pendingAction.instruction,
+        plan: approvedPlan,
+        summary: approvedPlan.summary,
+        risk: approvedPlan.risk,
+      });
+      const mission = await rememberDeveloperMission({
+        conversationId,
+        objective: pendingAction.instruction,
+        status: "approved",
+        currentStep: "pending_action_confirmed_execution_ready",
+        currentPlan: approvedPlan,
+        approvedPlan,
+        details: { sessionPlanId, pendingAction, pendingActionPriorityGate: true },
+      });
+      const planWithSession = { ...approvedPlan, sessionPlanId, mission };
+      const reply = [
+        "Confirmación recibida para la acción pendiente.",
+        "No vuelvo a pasar por Planner ni recupero planes antiguos.",
+        "Paso directamente a ejecución segura con Executor, Grounding Guard, Build Guard y QA.",
+        `Acción: ${pendingAction.instruction}`,
+      ].join("\n");
+
+      await logDeveloperConversationEvent({
+        conversationId,
+        role: "assistant",
+        content: reply,
+        intent: "pending_action_execution",
+        details: { pendingAction, sessionPlanId, mission },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        conversationOnly: true,
+        conversationIntent: "pending_action_execution",
+        shouldRun: true,
+        conversationReply: reply,
+        instruction: pendingAction.instruction,
+        currentPlan: planWithSession,
+        approvedPlan: planWithSession,
+        mission,
+        pendingAction,
+      });
+    }
+
     const rememberedPlan = await getLatestDeveloperSessionPlan(conversationId);
     const recentPlans = await getRecentDeveloperSessionPlans(conversationId);
     const activeMission = await getActiveDeveloperMission(conversationId);

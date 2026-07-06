@@ -2,7 +2,7 @@ export type FlowlyPendingActionResolution = {
   shouldContinuePendingAction: boolean;
   reason: string;
   instruction: string;
-  detectedDomain: "budget_crm" | "seo" | "unknown";
+  detectedDomain: "budget_crm" | "companion_avatar" | "seo" | "unknown";
 };
 
 type HistoryItem = { role?: string; text?: string; content?: string };
@@ -16,7 +16,8 @@ function normalize(value: string) {
 
 function isConfirmationOnly(value: string) {
   const text = normalize(value).trim();
-  return /^(si|sí|ok|vale|dale|adelante|correcto|confirmo|aprobado|apruebo|hazlo)$/.test(text);
+  return /^(si|sí|ok|vale|dale|adelante|correcto|confirmo|aprobado|apruebo|hazlo)$/.test(text)
+    || /^(si|sí|ok|vale|dale|adelante|correcto|confirmo|aprobado|apruebo)[,\s]+.*\b(implementa|ejecuta|hazlo|aplica|continua|continúa)\b/.test(text);
 }
 
 function textOf(item: HistoryItem) {
@@ -28,6 +29,7 @@ function detectDomainFromText(value: string): FlowlyPendingActionResolution["det
   const hasBudget = /presupuesto|presupuestos|budget|salesbudget|budgetmodule|app\/admin\/presupuestos/.test(text);
   const hasCrm = /\bcrm\b|cliente|clientes|contacto|contactos|app\/admin\/clientes/.test(text);
   if (hasBudget && hasCrm) return "budget_crm";
+  if (/(companion|avatar|mascota|asistente|assistant|flowlycompanion|evolutionarycompanionavatar|flowlycompanionruntime)/.test(text)) return "companion_avatar";
   if (/\bseo\b|robots\.ts|sitemap\.ts|metadata|metadatos|indexacion|indexaci[oó]n/.test(text)) return "seo";
   return "unknown";
 }
@@ -45,7 +47,7 @@ function hasPendingExecutionPrompt(history: HistoryItem[]) {
     .join("\n");
 
   const text = normalize(recentAssistant);
-  return /iniciar ejecucion|iniciar ejecución|paso a ejecucion|paso a ejecución|plan aprobado compatible recuperado|ejecuto exactamente el plan aprobado|esperando aprobacion|esperando aprobación|si lo apruebas|dame aprobacion|dame aprobación/.test(text);
+  return /iniciar ejecucion|iniciar ejecución|paso a ejecucion|paso a ejecución|plan aprobado compatible recuperado|ejecuto exactamente el plan aprobado|esperando aprobacion|esperando aprobación|si lo apruebas|si lo aprobas|apruebas este cambio|aprobas este cambio|dame aprobacion|dame aprobación/.test(text);
 }
 
 export function resolvePendingActionForTurn(params: {
@@ -78,6 +80,15 @@ export function resolvePendingActionForTurn(params: {
       shouldContinuePendingAction: true,
       reason: "El usuario confirmó una acción pendiente y el contexto reciente apunta a presupuestos del CRM.",
       instruction: "Implementa exactamente el plan aprobado de integración de presupuestos en el CRM. No vuelvas a planificar. Entra directamente en EXECUTION.",
+      detectedDomain: domain,
+    };
+  }
+
+  if (domain === "companion_avatar") {
+    return {
+      shouldContinuePendingAction: true,
+      reason: "El usuario confirmó una acción pendiente y el contexto reciente apunta al avatar del Companion.",
+      instruction: "Haz el avatar del Companion un 25% más grande en escritorio y móvil, sin modificar las animaciones ni la lógica de conversación. Implementa el cambio aprobado directamente.",
       detectedDomain: domain,
     };
   }
