@@ -1,19 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows, Html, useFBX, useGLTF } from "@react-three/drei";
-import type {
-  AnimationAction,
-  AnimationClip,
-  Bone,
-  Group,
-  Mesh,
-  MeshStandardMaterial,
-  Object3D,
-  SkinnedMesh,
-} from "three";
-import { AnimationMixer, Box3, Color, LoopRepeat, Vector3 } from "three";
+import { ContactShadows, Html, useGLTF } from "@react-three/drei";
+import type { Bone, Group, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh } from "three";
+import { Box3, Color, Euler, Vector3 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FlowlyCompanionSkinTone } from "@/lib/flowlyCompanionSkins";
 
@@ -62,6 +53,8 @@ type RigBones = {
   leftUpperLeg?: Bone;
   rightUpperLeg?: Bone;
 };
+
+type CompanionMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking";
 
 const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
   flowly: {
@@ -114,24 +107,13 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
   },
 };
 
-const ANIMATION_URLS = {
-  idle: "/avatars/Idle.fbx",
-  walk: "/avatars/Walking.fbx",
-  wave: "/avatars/Waving.fbx",
-  talk: "/avatars/Talking.fbx",
-  point: "/avatars/Pointing.fbx",
-} as const;
-
-function normalizeMode(mode?: AssistantMode) {
-  if (mode === "tour") return "point";
-  if (mode === "sit") return "idle";
-  if (mode === "attention") return "wave";
-  if (mode === "thinking") return "idle";
-  if (mode === "typing") return "talk";
-  if (mode === "reading") return "idle";
-  if (mode === "concerned") return "idle";
-  if (mode === "celebrating") return "wave";
-  return mode || "idle";
+function normalizeMode(mode?: AssistantMode): CompanionMode {
+  if (mode === "walk") return "walk";
+  if (mode === "wave" || mode === "attention" || mode === "celebrating") return "wave";
+  if (mode === "talk" || mode === "typing") return "talk";
+  if (mode === "point" || mode === "tour") return "point";
+  if (mode === "thinking" || mode === "reading" || mode === "concerned") return "thinking";
+  return "idle";
 }
 
 function isMesh(object: Object3D): object is Mesh | SkinnedMesh {
@@ -142,6 +124,10 @@ function isBone(object: Object3D): object is Bone {
   return "isBone" in object && Boolean((object as Bone).isBone);
 }
 
+function cleanBoneName(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function cloneMaterial(material: unknown, skin: RuntimeSkin) {
   const original = material as MeshStandardMaterial | MeshStandardMaterial[] | undefined;
   const tint = new Color(skin.accent);
@@ -149,10 +135,10 @@ function cloneMaterial(material: unknown, skin: RuntimeSkin) {
 
   const update = (mat: MeshStandardMaterial) => {
     const next = mat.clone();
-    if (next.color) next.color.lerp(tint, skin.key === "flowly" ? 0.04 : 0.18);
-    if ("emissive" in next && next.emissive) {
+    if (next.color) next.color.lerp(tint, skin.key === "flowly" ? 0.03 : 0.16);
+    if (next.emissive) {
       next.emissive.copy(glow);
-      next.emissiveIntensity = skin.key === "flowly" ? 0.06 : 0.16;
+      next.emissiveIntensity = skin.key === "flowly" ? 0.04 : 0.13;
     }
     next.needsUpdate = true;
     return next;
@@ -165,51 +151,44 @@ function cloneMaterial(material: unknown, skin: RuntimeSkin) {
 
 function findRigBones(root: Object3D): RigBones {
   const bones: RigBones = {};
-  const matches = (name: string, terms: string[]) => {
-    const clean = name.toLowerCase().replace(/[^a-z0-9]/g, "");
-    return terms.some((term) => clean.includes(term));
-  };
 
   root.traverse((object) => {
     if (!isBone(object)) return;
-    const name = object.name;
-    if (!bones.head && matches(name, ["head"])) bones.head = object;
-    if (!bones.neck && matches(name, ["neck"])) bones.neck = object;
-    if (!bones.spine && matches(name, ["spine2", "chest", "spine"])) bones.spine = object;
-    if (!bones.leftUpperArm && matches(name, ["leftarm", "leftuparm", "leftshoulder", "mixamorigleftarm"])) bones.leftUpperArm = object;
-    if (!bones.leftLowerArm && matches(name, ["leftforearm", "leftlowerarm"])) bones.leftLowerArm = object;
-    if (!bones.rightUpperArm && matches(name, ["rightarm", "rightuparm", "rightshoulder", "mixamorigrigharm", "mixamorigrightarm"])) bones.rightUpperArm = object;
-    if (!bones.rightLowerArm && matches(name, ["rightforearm", "rightlowerarm"])) bones.rightLowerArm = object;
-    if (!bones.leftUpperLeg && matches(name, ["leftupleg", "leftleg", "leftthigh"])) bones.leftUpperLeg = object;
-    if (!bones.rightUpperLeg && matches(name, ["rightupleg", "rightleg", "rightthigh"])) bones.rightUpperLeg = object;
+    const clean = cleanBoneName(object.name);
+    const isLeft = clean.includes("left") || clean.includes("larm") || clean.startsWith("l");
+    const isRight = clean.includes("right") || clean.includes("rarm") || clean.startsWith("r");
+    const isForearm = clean.includes("forearm") || clean.includes("lowerarm") || clean.includes("elbow");
+    const isUpperArm = clean.includes("upperarm") || clean.includes("uparm") || clean.endsWith("arm") || clean.includes("shoulder");
+    const isUpperLeg = clean.includes("upperleg") || clean.includes("upleg") || clean.includes("thigh");
+
+    if (!bones.head && clean.includes("head")) bones.head = object;
+    if (!bones.neck && clean.includes("neck")) bones.neck = object;
+    if (!bones.spine && (clean.includes("spine2") || clean.includes("chest") || clean.includes("spine"))) bones.spine = object;
+
+    if (!bones.leftLowerArm && isLeft && isForearm) bones.leftLowerArm = object;
+    if (!bones.rightLowerArm && isRight && isForearm) bones.rightLowerArm = object;
+    if (!bones.leftUpperArm && isLeft && isUpperArm && !isForearm) bones.leftUpperArm = object;
+    if (!bones.rightUpperArm && isRight && isUpperArm && !isForearm) bones.rightUpperArm = object;
+    if (!bones.leftUpperLeg && isLeft && isUpperLeg) bones.leftUpperLeg = object;
+    if (!bones.rightUpperLeg && isRight && isUpperLeg) bones.rightUpperLeg = object;
   });
 
   return bones;
 }
 
-function useCompanionFbxAnimations() {
-  const idle = useFBX(ANIMATION_URLS.idle);
-  const walk = useFBX(ANIMATION_URLS.walk);
-  const wave = useFBX(ANIMATION_URLS.wave);
-  const talk = useFBX(ANIMATION_URLS.talk);
-  const point = useFBX(ANIMATION_URLS.point);
+function rememberBaseRotations(bones: RigBones) {
+  const map = new Map<string, Euler>();
+  Object.values(bones).forEach((bone) => {
+    if (bone) map.set(bone.uuid, bone.rotation.clone());
+  });
+  return map;
+}
 
-  return useMemo(() => {
-    const firstClip = (group: Group, name: string) => {
-      const clip = group.animations?.[0];
-      if (!clip) return null;
-      clip.name = name;
-      return clip;
-    };
-
-    return {
-      idle: firstClip(idle, "idle"),
-      walk: firstClip(walk, "walk"),
-      wave: firstClip(wave, "wave"),
-      talk: firstClip(talk, "talk"),
-      point: firstClip(point, "point"),
-    } satisfies Partial<Record<ReturnType<typeof normalizeMode>, AnimationClip | null>>;
-  }, [idle, point, talk, walk, wave]);
+function applyRotation(bone: Bone | undefined, base: Map<string, Euler>, x = 0, y = 0, z = 0) {
+  if (!bone) return;
+  const initial = base.get(bone.uuid);
+  if (!initial) return;
+  bone.rotation.set(initial.x + x, initial.y + y, initial.z + z);
 }
 
 function FlowlyCharacterEngine({
@@ -219,14 +198,11 @@ function FlowlyCharacterEngine({
   facing,
 }: Required<Pick<FlowlyAssistant3DProps, "modelUrl" | "mode" | "skinTone" | "facing">>) {
   const rootRef = useRef<Group>(null);
-  const modelRef = useRef<Group | null>(null);
   const bonesRef = useRef<RigBones>({});
-  const mixerRef = useRef<AnimationMixer | null>(null);
-  const actionRef = useRef<AnimationAction | null>(null);
-  const { scene, animations: glbAnimations } = useGLTF(modelUrl);
-  const fbxAnimations = useCompanionFbxAnimations();
+  const baseRotationsRef = useRef<Map<string, Euler>>(new Map());
+  const { scene } = useGLTF(modelUrl);
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
-  const targetMode = normalizeMode(mode);
+  const companionMode = normalizeMode(mode);
 
   const normalizedScene = useMemo(() => {
     const cloned = cloneSkeleton(scene) as Group;
@@ -237,9 +213,8 @@ function FlowlyCharacterEngine({
     box.getCenter(center);
 
     const height = size.y || 1;
-    const scale = 3.15 / height;
-
-    cloned.position.set(-center.x * scale, -box.min.y * scale - 1.48, -center.z * scale);
+    const scale = 3.8 / height;
+    cloned.position.set(-center.x * scale, -box.min.y * scale - 1.84, -center.z * scale);
     cloned.scale.setScalar(scale);
     cloned.rotation.y = skin.rotationY;
 
@@ -252,101 +227,72 @@ function FlowlyCharacterEngine({
       }
     });
 
-    modelRef.current = cloned;
-    bonesRef.current = findRigBones(cloned);
+    const bones = findRigBones(cloned);
+    bonesRef.current = bones;
+    baseRotationsRef.current = rememberBaseRotations(bones);
     return cloned;
   }, [scene, skin]);
 
-  const clipMap = useMemo(() => {
-    const map: Partial<Record<ReturnType<typeof normalizeMode>, AnimationClip>> = {};
-    const modelClip = glbAnimations?.[0];
-    if (modelClip) map.idle = modelClip;
-    Object.entries(fbxAnimations).forEach(([key, clip]) => {
-      if (clip) map[key as ReturnType<typeof normalizeMode>] = clip;
-    });
-    return map;
-  }, [fbxAnimations, glbAnimations]);
-
-  useEffect(() => {
-    const root = normalizedScene;
-    mixerRef.current?.stopAllAction();
-    mixerRef.current = new AnimationMixer(root);
-    actionRef.current = null;
-    return () => {
-      mixerRef.current?.stopAllAction();
-      mixerRef.current = null;
-      actionRef.current = null;
-    };
-  }, [normalizedScene]);
-
-  useEffect(() => {
-    const mixer = mixerRef.current;
-    if (!mixer) return;
-    const clip = clipMap[targetMode] || clipMap.idle;
-    if (!clip) return;
-
-    const next = mixer.clipAction(clip, normalizedScene);
-    next.reset();
-    next.setLoop(LoopRepeat, Number.POSITIVE_INFINITY);
-    next.enabled = true;
-    next.clampWhenFinished = false;
-    next.timeScale = targetMode === "walk" ? 0.86 : targetMode === "talk" ? 1.05 : 0.72;
-    next.setEffectiveWeight(1);
-
-    const previous = actionRef.current;
-    if (previous && previous !== next) {
-      previous.fadeOut(0.22);
-      next.fadeIn(0.22).play();
-    } else {
-      next.play();
-    }
-    actionRef.current = next;
-  }, [clipMap, normalizedScene, targetMode]);
-
-  useFrame((state, delta) => {
+  useFrame((state) => {
     const root = rootRef.current;
-    const model = modelRef.current;
-    if (!root || !model) return;
-
-    mixerRef.current?.update(delta);
+    if (!root) return;
 
     const t = state.clock.elapsedTime;
-    const baseFacing = facing === "left" ? -0.22 : facing === "right" ? 0.22 : 0;
-    const isWalking = targetMode === "walk";
-    const isTalking = targetMode === "talk";
-    const isPointing = targetMode === "point";
-    const isWaving = targetMode === "wave";
-    const breathe = Math.sin(t * 2.0) * 0.018;
-    const weightShift = Math.sin(t * 0.86) * 0.026;
-    const talkPulse = isTalking ? Math.sin(t * 11) * 0.018 : 0;
+    const isWalking = companionMode === "walk";
+    const isTalking = companionMode === "talk";
+    const isThinking = companionMode === "thinking";
+    const isWaving = companionMode === "wave";
+    const isPointing = companionMode === "point";
+    const baseFacing = facing === "left" ? -0.28 : facing === "right" ? 0.28 : 0;
 
-    root.position.y = breathe + talkPulse;
-    root.rotation.y = baseFacing + Math.sin(t * 0.55) * 0.035;
-    root.rotation.z = weightShift * 0.35;
+    const breathe = Math.sin(t * 2.1) * 0.022;
+    const weightShift = Math.sin(t * 0.95) * 0.035;
+    const talkPulse = isTalking ? Math.sin(t * 10.5) * 0.014 : 0;
+    const walkPulse = isWalking ? Math.abs(Math.sin(t * 5.6)) * 0.045 : 0;
+
+    root.position.y = breathe + talkPulse + walkPulse;
+    root.rotation.y = baseFacing + Math.sin(t * 0.7) * 0.045;
+    root.rotation.z = weightShift * 0.25;
 
     const bones = bonesRef.current;
-    const headNod = Math.sin(t * (isTalking ? 6.5 : 1.4)) * (isTalking ? 0.075 : 0.035);
-    const headLook = Math.sin(t * 0.9) * 0.075;
-    if (bones.head) {
-      bones.head.rotation.x += headNod * delta * 4.5;
-      bones.head.rotation.y += headLook * delta * 3.2;
-    }
-    if (bones.neck) bones.neck.rotation.y += headLook * delta * 1.6;
-    if (bones.spine) bones.spine.rotation.z += weightShift * delta * 2.2;
+    const base = baseRotationsRef.current;
+    const walk = Math.sin(t * 5.6);
+    const idleArm = Math.sin(t * 1.8) * 0.035;
+    const talk = Math.sin(t * 8.8);
+    const look = Math.sin(t * 0.86);
 
-    const armSwing = Math.sin(t * (isWalking ? 7.5 : 1.8)) * (isWalking ? 0.26 : 0.045);
-    if (bones.leftUpperArm) bones.leftUpperArm.rotation.x += armSwing * delta * 6;
-    if (bones.rightUpperArm) bones.rightUpperArm.rotation.x -= armSwing * delta * 6;
-    if (bones.leftUpperLeg) bones.leftUpperLeg.rotation.x -= armSwing * delta * 4;
-    if (bones.rightUpperLeg) bones.rightUpperLeg.rotation.x += armSwing * delta * 4;
+    // El modelo base llega en T-pose. Bajamos brazos y añadimos vida procedimental.
+    const leftArmDown = 1.18;
+    const rightArmDown = -1.18;
+    const armSwing = isWalking ? walk * 0.32 : idleArm;
+    const legSwing = isWalking ? walk * 0.34 : Math.sin(t * 0.9) * 0.025;
 
-    if (isWaving && bones.rightUpperArm) {
-      bones.rightUpperArm.rotation.z += Math.sin(t * 7.6) * delta * 8;
-      bones.rightUpperArm.rotation.x -= 0.85 * delta * 4;
+    applyRotation(bones.head, base, (isTalking ? talk * 0.045 : Math.sin(t * 1.25) * 0.025) + (isThinking ? 0.05 : 0), look * 0.06, 0);
+    applyRotation(bones.neck, base, 0, look * 0.035, 0);
+    applyRotation(bones.spine, base, 0, 0, weightShift * 0.38);
+
+    applyRotation(bones.leftUpperArm, base, armSwing * 0.45, 0, leftArmDown + armSwing * 0.2);
+    applyRotation(bones.rightUpperArm, base, -armSwing * 0.45, 0, rightArmDown - armSwing * 0.2);
+    applyRotation(bones.leftLowerArm, base, 0, 0, 0.2 + Math.sin(t * 1.7) * 0.04);
+    applyRotation(bones.rightLowerArm, base, 0, 0, -0.2 - Math.sin(t * 1.7) * 0.04);
+    applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
+    applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
+
+    if (isTalking) {
+      applyRotation(bones.leftUpperArm, base, 0.08 + talk * 0.07, 0, leftArmDown + 0.12 + talk * 0.04);
+      applyRotation(bones.rightUpperArm, base, -0.08 - talk * 0.07, 0, rightArmDown - 0.12 - talk * 0.04);
     }
-    if (isPointing && bones.rightUpperArm) {
-      bones.rightUpperArm.rotation.x -= 0.62 * delta * 4;
-      bones.rightUpperArm.rotation.z -= 0.3 * delta * 4;
+
+    if (isWaving) {
+      applyRotation(bones.rightUpperArm, base, -0.45, 0.12, -0.62 + Math.sin(t * 7.8) * 0.28);
+      applyRotation(bones.rightLowerArm, base, -0.28, 0, -0.75 + Math.sin(t * 7.8) * 0.18);
+      applyRotation(bones.leftUpperArm, base, 0, 0, leftArmDown);
+    }
+
+    if (isPointing) {
+      applyRotation(bones.rightUpperArm, base, -0.28, -0.15, -0.82);
+      applyRotation(bones.rightLowerArm, base, -0.1, 0, -0.25);
+      applyRotation(bones.head, base, -0.02, 0.12, 0);
     }
   });
 
@@ -365,13 +311,6 @@ function FlowlyV3Loading() {
   );
 }
 
-/**
- * Companion Engine V3.
- *
- * Motor real GLB + FBX: normaliza el modelo por BoundingBox, lo orienta hacia
- * cámara, reproduce animaciones con AnimationMixer y añade micro-presencia aunque
- * el clip no tenga suficientes huesos animados.
- */
 export default function FlowlyAssistant3D({
   modelUrl = "/avatars/flowly.glb",
   mode = "idle",
@@ -395,17 +334,17 @@ export default function FlowlyAssistant3D({
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.35, 8], zoom: 92, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.4, 8], zoom: 82, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
       >
-        <ambientLight intensity={1.45} />
-        <directionalLight position={[2.4, 4.2, 5.2]} intensity={2.25} castShadow />
-        <pointLight position={[-2.2, 2.2, 3]} color={skin.light} intensity={1.18} />
+        <ambientLight intensity={1.55} />
+        <directionalLight position={[2.4, 4.2, 5.2]} intensity={2.35} castShadow />
+        <pointLight position={[-2.2, 2.2, 3]} color={skin.light} intensity={1.25} />
         <Suspense fallback={<FlowlyV3Loading />}>
           <FlowlyCharacterEngine modelUrl={modelUrl} mode={safeMode} skinTone={skin.key} facing={facing} />
-          <ContactShadows position={[0, -1.46, 0]} opacity={0.26} scale={3.8} blur={2.8} far={3.4} />
+          <ContactShadows position={[0, -1.84, 0]} opacity={0.28} scale={4.6} blur={2.8} far={3.4} />
         </Suspense>
       </Canvas>
     </button>
@@ -413,4 +352,3 @@ export default function FlowlyAssistant3D({
 }
 
 useGLTF.preload("/avatars/flowly.glb");
-Object.values(ANIMATION_URLS).forEach((url) => useFBX.preload(url));
