@@ -3430,11 +3430,7 @@ input[type="date"].input-dark { color-scheme: dark; }
   45% { transform: translateY(-2.5%) scale(1.018); }
 }
 
-/* Companion V2: single renderer, no duplicate CSS fallback/avatar bubble. */
-.flowly-companion-runtime .flowly-css-avatar,
-.flowly-companion-runtime .flowly-css-avatar * {
-  display: none !important;
-}
+/* Companion V2: single renderer. Avatar CSS must remain visible. */
 .flowly-companion-avatar-shell::before,
 .flowly-companion-avatar-shell::after,
 .flowly-companion-avatar-shell .evo-3d-aura-one,
@@ -3928,4 +3924,168 @@ input[type="date"].input-dark { color-scheme: dark; }
     width: 150px !important;
     height: 214px !important;
   }
+}
+
+
+/* Companion V2.2 — definitive visible avatar renderer.
+   This is intentionally last: older Companion CSS blocks above are legacy. */
+.flowly-companion-runtime .flowly-companion-avatar-shell::before,
+.flowly-companion-runtime .flowly-companion-avatar-shell::after,
+.flowly-companion-runtime .evo-3d-aura-one,
+.flowly-companion-runtime .evo-3d-aura-two,
+.flowly-companion-runtime .evo-3d-pulse {
+  display: none !important;
+  content: none !important;
+}
+
+.flowly-companion-runtime:not([data-voice-prompt="true"]) {
+  left: var(--flow-x, calc(100vw - 15rem)) !important;
+  top: var(--flow-y, calc(100vh - 20rem)) !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+.flowly-companion-runtime .flowly-companion-avatar-shell {
+  position: relative !important;
+  width: clamp(168px, 14vw, 224px) !important;
+  height: clamp(228px, 24vh, 318px) !important;
+  max-width: calc(100vw - 20px) !important;
+  max-height: calc(100dvh - 20px) !important;
+  display: block !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  cursor: grab !important;
+  touch-action: none !important;
+  user-select: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  filter: none !important;
+}
+
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-avatar-shell {
+  cursor: grabbing !important;
+}
+
+.flowly-companion-runtime .flowly-companion-character {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 4 !important;
+  transform-origin: 50% 92% !important;
+  animation: flowlyCompanionBodyAlive 3.2s ease-in-out infinite !important;
+}
+
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-character {
+  animation: flowlyCompanionHeldAlive .72s ease-in-out infinite !important;
+}
+
+.flowly-companion-runtime .flowly-companion-character .flowly-css-stage,
+.flowly-companion-runtime .flowly-companion-character .flowly-3d-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 140px !important;
+  min-height: 200px !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
+.flowly-companion-runtime .flowly-css-avatar,
+.flowly-companion-runtime .flowly-css-avatar * {
+  display: block !important;
+  visibility: visible !important;
+}
+
+.flowly-companion-runtime .flowly-companion-character .flowly-css-avatar {
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 4px !important;
+  width: 72% !important;
+  height: 94% !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+  transform: translateX(-50%) !important;
+  transform-origin: 50% 100% !important;
+  z-index: 5 !important;
+  pointer-events: none !important;
+}
+
+.flowly-companion-runtime .flowly-css-avatar-eye-left,
+.flowly-companion-runtime .flowly-css-avatar-eye.eye-left { left: 28% !important; }
+.flowly-companion-runtime .flowly-css-avatar-eye-right,
+.flowly-companion-runtime .flowly-css-avatar-eye.eye-right { right: 28% !important; }
+.flowly-companion-runtime .flowly-css-avatar-smile,
+.flowly-companion-runtime .flowly-css-avatar-mouth {
+  position: absolute !important;
+  left: 41% !important;
+  top: 63% !important;
+  width: 18% !important;
+  height: 7% !important;
+  border-radius: 0 0 999px 999px !important;
+  border-bottom: 2px solid #7c2d12 !important;
+}
+.flowly-companion-runtime .flowly-css-avatar-arm-left,
+.flowly-companion-runtime .flowly-css-avatar-arm.arm-left { left: 13% !important; transform: rotate(7deg) !important; }
+.flowly-companion-runtime .flowly-css-avatar-arm-right,
+.flowly-companion-runtime .flowly-css-avatar-arm.arm-right { right: 13% !important; transform: rotate(-7deg) !important; }
+.flowly-companion-runtime .flowly-css-avatar-leg-left,
+.flowly-companion-runtime .flowly-css-avatar-leg.leg-left { left: 34% !important; }
+.flowly-companion-runtime .flowly-css-avatar-leg-right,
+.flowly-companion-runtime .flowly-css-avatar-leg.leg-right { right: 34% !important; }
+
+.flowly-companion-runtime .flowly-companion-status-avatar {
+  width: 58px !important;
+  height: 78px !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: visible !important;
+}
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-css-stage,
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-3d-stage {
+  width: 58px !important;
+  height: 78px !important;
+  min-width: 58px !important;
+  min-height: 78px !important;
+}
+.flowly-companion-runtime .flowly-companion-status-avatar .flowly-css-avatar {
+  width: 74% !important;
+  height: 94% !important;
+}
+
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-bubble,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-panel,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-life-hud,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-avatar-cta,
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-voice-cta {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.flowly-companion-runtime .flowly-css-stage-flowly .flowly-css-avatar {
+  --hair-a: #7c3aed; --hair-b: #22d3ee; --suit-a: #231942; --suit-b: #6d28d9; --accent: #67e8f9; --glow: rgba(34,211,238,.24);
+}
+.flowly-companion-runtime .flowly-css-stage-chef .flowly-css-avatar-hair {
+  display: none !important;
+}
+.flowly-companion-runtime .flowly-css-stage-chef .flowly-css-avatar-chef-hat {
+  display: block !important;
 }
