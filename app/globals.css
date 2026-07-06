@@ -4676,3 +4676,39 @@ input[type="date"].input-dark { color-scheme: dark; }
   .flowly-companion-runtime .flowly-companion-bubble { display: none !important; }
   .flowly-companion-runtime .flowly-companion-panel { left: auto !important; right: 0 !important; bottom: 250px !important; width: calc(100vw - 1rem) !important; }
 }
+
+
+/* Companion V3 Movement Controller - caminar sin patinar y UI anclada al cuerpo */
+.flowly-companion-runtime[data-travel="moving"] .flowly-companion-avatar-shell,
+.flowly-companion-runtime[data-travel="moving"] .flowly-companion-character {
+  animation: none !important;
+}
+.flowly-companion-runtime:not([data-voice-prompt="true"]) {
+  transition:
+    left 2.35s cubic-bezier(.18,.86,.22,1),
+    top 2.35s cubic-bezier(.18,.86,.22,1) !important;
+}
+.flowly-companion-runtime .flowly-companion-avatar-shell {
+  filter: drop-shadow(0 24px 46px rgba(0,0,0,.28)) drop-shadow(0 0 22px rgba(124,58,237,.10)) !important;
+}
+.flowly-companion-runtime .flowly-companion-character {
+  bottom: 14px !important;
+  transform-origin: 50% 95% !important;
+}
+.flowly-companion-runtime[data-dragging="true"] .flowly-companion-character {
+  transform: translateX(-50%) translateY(-8px) scale(1.018) rotate(-.6deg) !important;
+}
+.flowly-companion-runtime .flowly-companion-bubble {
+  left: -268px !important;
+  bottom: 226px !important;
+  transform-origin: 100% 100% !important;
+}
+.flowly-companion-runtime .flowly-companion-panel {
+  left: -318px !important;
+  bottom: 22px !important;
+}
+.flowly-companion-runtime .flowly-companion-character .flowly-v3-stage,
+.flowly-companion-runtime .flowly-companion-character .flowly-3d-stage {
+  overflow: visible !important;
+  pointer-events: auto !important;
+}

@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows, Html, useAnimations, useGLTF } from "@react-three/drei";
-import type { Bone, Group, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh } from "three";
-import { Box3, Color, Euler, Vector3 } from "three";
+import { ContactShadows, Html, useAnimations, useFBX, useGLTF } from "@react-three/drei";
+import type { AnimationClip, Bone, Group, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh } from "three";
+import { Box3, Color, Euler, LoopRepeat, Vector3 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FlowlyCompanionSkinTone } from "@/lib/flowlyCompanionSkins";
 
@@ -111,6 +111,26 @@ const FLOWLY_SKINS: Record<FlowlyCompanionSkinTone, RuntimeSkin> = {
   },
 };
 
+const FLOWLY_MOTION_CLIPS: Record<CompanionMode, string> = {
+  idle: "/avatars/Idle.fbx",
+  walk: "/avatars/Walking.fbx",
+  wave: "/avatars/Waving.fbx",
+  talk: "/avatars/Talking.fbx",
+  point: "/avatars/Pointing.fbx",
+  thinking: "/avatars/Sitting Talking.fbx",
+  jump: "/avatars/Waving.fbx",
+  spin: "/avatars/Idle.fbx",
+};
+
+function getPrimaryClip(fbx: { animations?: AnimationClip[] }, fallbackName: string) {
+  const clip = fbx.animations?.[0]?.clone();
+  if (clip) {
+    clip.name = fallbackName;
+    return clip;
+  }
+  return null;
+}
+
 function normalizeMode(mode?: AssistantMode): CompanionMode {
   if (mode === "walk") return "walk";
   if (mode === "jump") return "jump";
@@ -211,40 +231,47 @@ function FlowlyCharacterEngine({
   const rootRef = useRef<Group>(null);
   const bonesRef = useRef<RigBones>({});
   const baseRotationsRef = useRef<Map<string, Euler>>(new Map());
-  const { scene, animations: glbAnimations } = useGLTF(modelUrl);
+  const { scene } = useGLTF(modelUrl);
+  const idleFbx = useFBX(FLOWLY_MOTION_CLIPS.idle);
+  const walkFbx = useFBX(FLOWLY_MOTION_CLIPS.walk);
+  const waveFbx = useFBX(FLOWLY_MOTION_CLIPS.wave);
+  const talkFbx = useFBX(FLOWLY_MOTION_CLIPS.talk);
+  const pointFbx = useFBX(FLOWLY_MOTION_CLIPS.point);
+  const thinkingFbx = useFBX(FLOWLY_MOTION_CLIPS.thinking);
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
   const companionMode = normalizeMode(mode);
-  const clips = useMemo(() => glbAnimations.map((clip) => clip.clone()), [glbAnimations]);
+  const clips = useMemo(() => {
+    const entries: Array<[CompanionMode, { animations?: AnimationClip[] }]> = [
+      ["idle", idleFbx],
+      ["walk", walkFbx],
+      ["wave", waveFbx],
+      ["talk", talkFbx],
+      ["point", pointFbx],
+      ["thinking", thinkingFbx],
+      ["jump", waveFbx],
+      ["spin", idleFbx],
+    ];
+    return entries
+      .map(([name, fbx]) => getPrimaryClip(fbx, `flowly-${name}`))
+      .filter((clip): clip is AnimationClip => Boolean(clip));
+  }, [idleFbx, walkFbx, waveFbx, talkFbx, pointFbx, thinkingFbx]);
   const { actions, names } = useAnimations(clips, rootRef);
 
   useEffect(() => {
     if (!names.length) return;
-
-    const byExact = (value: string) => names.find((name) => name.toLowerCase() === value.toLowerCase());
-    const animationByMode: Record<CompanionMode, string[]> = {
-      idle: ["NlaTrack", names[0]],
-      thinking: ["NlaTrack.003", "NlaTrack", names[0]],
-      talk: ["NlaTrack.002", "NlaTrack.001", "NlaTrack"],
-      point: ["NlaTrack.001", "NlaTrack.002", "NlaTrack"],
-      walk: ["NlaTrack.004", "NlaTrack.003", "NlaTrack"],
-      wave: ["NlaTrack.005", "NlaTrack.001", "NlaTrack"],
-      jump: ["NlaTrack.005", "NlaTrack"],
-      spin: ["NlaTrack.003", "NlaTrack"],
-    };
-
-    const nextName =
-      animationByMode[companionMode]
-        .map((candidate) => byExact(candidate) || names.find((name) => name.toLowerCase().includes(candidate.toLowerCase())))
-        .find(Boolean) || names[0];
+    const requestedName = `flowly-${companionMode}`;
+    const nextName = names.includes(requestedName) ? requestedName : names[0];
 
     Object.entries(actions).forEach(([name, action]) => {
       if (!action) return;
       if (name === nextName) {
         action.enabled = true;
-        action.reset().fadeIn(0.28).play();
-        action.timeScale = companionMode === "walk" ? 0.95 : companionMode === "talk" ? 0.88 : 0.78;
+        action.loop = LoopRepeat;
+        action.clampWhenFinished = false;
+        action.reset().fadeIn(0.22).play();
+        action.timeScale = companionMode === "walk" ? 1.05 : companionMode === "talk" ? 0.92 : 0.82;
       } else {
-        action.fadeOut(0.24);
+        action.fadeOut(0.18);
       }
     });
   }, [actions, companionMode, names]);
@@ -258,9 +285,9 @@ function FlowlyCharacterEngine({
     box.getCenter(center);
 
     const height = size.y || 1;
-    const targetHeight = compact ? 3.25 : 4.45;
+    const targetHeight = compact ? 2.65 : 3.72;
     const scale = targetHeight / height;
-    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.62 : 2.05), -center.z * scale);
+    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.32 : 1.84), -center.z * scale);
     cloned.scale.setScalar(scale);
     cloned.rotation.y = skin.rotationY;
 
@@ -307,31 +334,54 @@ function FlowlyCharacterEngine({
     const talk = Math.sin(t * 8.8);
     const look = Math.sin(t * 0.86);
 
-    // V3 no fuerza los brazos: deja que los clips del GLB manden.
-    // Solo añadimos microvida segura en cabeza/columna y pequeños gestos de manos.
+    // Companion V3 se comporta como personaje de videojuego: el FBX aporta clip y
+    // esta capa corrige la pose para que nunca vuelva a T-pose ni brazos levantados.
     applyRotation(
       bones.head,
       base,
-      (isTalking ? talk * 0.035 : Math.sin(t * 1.25) * 0.018) + (isThinking ? 0.045 : 0),
-      look * 0.045,
+      (isTalking ? talk * 0.038 : Math.sin(t * 1.25) * 0.018) + (isThinking ? 0.045 : 0),
+      look * 0.052,
       0,
     );
-    applyRotation(bones.neck, base, 0, look * 0.025, 0);
-    applyRotation(bones.spine, base, isThinking ? 0.035 : 0, 0, weightShift * 0.18);
+    applyRotation(bones.neck, base, 0, look * 0.028, 0);
+    applyRotation(bones.spine, base, isThinking ? 0.035 : 0, 0, weightShift * 0.16);
 
-    if (!names.length) {
-      // Fallback mínimo si el modelo llega sin clips: pose relajada, nunca brazos en cruz.
-      const leftArmDown = -0.78;
-      const rightArmDown = 0.78;
-      const armSwing = isWalking ? walk * 0.22 : Math.sin(t * 1.4) * 0.025;
-      const legSwing = isWalking ? walk * 0.22 : Math.sin(t * 0.9) * 0.018;
-      applyRotation(bones.leftUpperArm, base, 0.05 + armSwing * 0.18, 0, leftArmDown + armSwing * 0.05);
-      applyRotation(bones.rightUpperArm, base, -0.05 - armSwing * 0.18, 0, rightArmDown - armSwing * 0.05);
-      applyRotation(bones.leftLowerArm, base, 0, 0, 0.12 + Math.sin(t * 1.7) * 0.025);
-      applyRotation(bones.rightLowerArm, base, 0, 0, -0.12 - Math.sin(t * 1.7) * 0.025);
-      applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
-      applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
+    const actionCycle = Math.floor(t / 8.5) % 4;
+    const naturalWave = companionMode === "wave" || (!isWalking && companionMode === "idle" && actionCycle === 1);
+    const naturalPoint = companionMode === "point" || (!isWalking && companionMode === "idle" && actionCycle === 2);
+    const naturalThink = isThinking || (!isWalking && companionMode === "idle" && actionCycle === 3);
+    const armSwing = isWalking ? walk * 0.28 : Math.sin(t * 1.35) * 0.028;
+    const legSwing = isWalking ? walk * 0.34 : Math.sin(t * 0.9) * 0.018;
+
+    // Valores base: brazos relajados pegados al cuerpo.
+    let leftArmZ = -0.88 + armSwing * 0.045;
+    let rightArmZ = 0.88 - armSwing * 0.045;
+    let leftArmX = 0.04 + armSwing * 0.18;
+    let rightArmX = -0.04 - armSwing * 0.18;
+    let leftForearmZ = 0.18;
+    let rightForearmZ = -0.18;
+
+    if (naturalWave) {
+      rightArmZ = 0.16 + Math.sin(t * 6.4) * 0.08;
+      rightArmX = -0.62 + Math.sin(t * 5.8) * 0.09;
+      rightForearmZ = -0.58 + Math.sin(t * 7.2) * 0.12;
+      leftArmZ = -0.9;
+    } else if (naturalPoint) {
+      rightArmZ = 0.34;
+      rightArmX = -0.44 + Math.sin(t * 2.2) * 0.02;
+      rightForearmZ = -0.08;
+    } else if (naturalThink) {
+      rightArmZ = 0.55;
+      rightArmX = -0.18;
+      rightForearmZ = -0.36;
     }
+
+    applyRotation(bones.leftUpperArm, base, leftArmX, 0, leftArmZ);
+    applyRotation(bones.rightUpperArm, base, rightArmX, 0, rightArmZ);
+    applyRotation(bones.leftLowerArm, base, 0, 0, leftForearmZ + Math.sin(t * 1.7) * 0.018);
+    applyRotation(bones.rightLowerArm, base, 0, 0, rightForearmZ - Math.sin(t * 1.7) * 0.018);
+    applyRotation(bones.leftUpperLeg, base, -legSwing, 0, 0);
+    applyRotation(bones.rightUpperLeg, base, legSwing, 0, 0);
   });
 
   return (
@@ -458,7 +508,7 @@ export default function FlowlyAssistant3D({
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.35, 8], zoom: compact ? 58 : 64, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.28, 8], zoom: compact ? 68 : 74, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
@@ -476,3 +526,8 @@ export default function FlowlyAssistant3D({
 }
 
 useGLTF.preload("/avatars/flowly.glb");
+useFBX.preload("/avatars/Idle.fbx");
+useFBX.preload("/avatars/Walking.fbx");
+useFBX.preload("/avatars/Waving.fbx");
+useFBX.preload("/avatars/Talking.fbx");
+useFBX.preload("/avatars/Pointing.fbx");

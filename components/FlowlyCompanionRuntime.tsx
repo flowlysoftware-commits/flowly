@@ -414,7 +414,11 @@ export default function FlowlyCompanionRuntime() {
     [lifeMode, open, pathname, thinking, travel.moving, voice.isAwake, voiceNeedsActivation],
   );
   const avatarMood = lifeStateToAvatarMode(lifeDecision.state);
-  const effectiveAvatarMood = lifeMode || avatarMood;
+  const effectiveAvatarMood = draggingAvatar
+    ? "attention"
+    : travel.moving
+      ? "walking"
+      : lifeMode || avatarMood;
   const companionRuntimeStyle = {
     "--flow-x": `${travel.x}px`,
     "--flow-y": `${travel.y}px`,
