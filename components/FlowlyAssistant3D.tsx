@@ -122,12 +122,31 @@ const FLOWLY_MOTION_CLIPS: Record<CompanionMode, string> = {
   spin: "/avatars/Idle.fbx",
 };
 
+function sanitizeExternalClip(clip: AnimationClip, fallbackName: string) {
+  const next = clip.clone();
+  next.name = fallbackName;
+
+  // Los GLB de Blender venían con NlaTrack/NlaTrack.00x sin semántica.
+  // Para V7 el GLB solo aporta el personaje; las acciones oficiales son los FBX.
+  // Además limpiamos root motion para que Flow camine por el panel con el contenedor
+  // mientras las piernas hacen la acción walk sin "patinar" fuera del rig.
+  next.tracks = next.tracks.filter((track) => {
+    const normalized = track.name.toLowerCase();
+    const isRootPosition =
+      normalized.endsWith(".position") &&
+      (normalized.includes("hips") ||
+        normalized.includes("armature") ||
+        normalized.includes("root") ||
+        normalized.includes("mixamorig"));
+    return !isRootPosition;
+  });
+
+  return next;
+}
+
 function getPrimaryClip(fbx: { animations?: AnimationClip[] }, fallbackName: string) {
-  const clip = fbx.animations?.[0]?.clone();
-  if (clip) {
-    clip.name = fallbackName;
-    return clip;
-  }
+  const clip = fbx.animations?.[0];
+  if (clip) return sanitizeExternalClip(clip, fallbackName);
   return null;
 }
 
@@ -231,7 +250,7 @@ function FlowlyCharacterEngine({
   const rootRef = useRef<Group>(null);
   const bonesRef = useRef<RigBones>({});
   const baseRotationsRef = useRef<Map<string, Euler>>(new Map());
-  const { scene, animations: embeddedAnimations = [] } = useGLTF(modelUrl) as { scene: Group; animations?: AnimationClip[] };
+  const { scene } = useGLTF(modelUrl) as { scene: Group; animations?: AnimationClip[] };
   const idleFbx = useFBX(FLOWLY_MOTION_CLIPS.idle);
   const walkFbx = useFBX(FLOWLY_MOTION_CLIPS.walk);
   const waveFbx = useFBX(FLOWLY_MOTION_CLIPS.wave);
@@ -241,32 +260,9 @@ function FlowlyCharacterEngine({
   const skin = FLOWLY_SKINS[skinTone] || FLOWLY_SKINS.flowly;
   const companionMode = normalizeMode(mode);
   const clips = useMemo(() => {
-    if (embeddedAnimations.length) {
-      const fallbackByMode: Record<CompanionMode, number> = {
-        idle: 0,
-        walk: Math.min(1, embeddedAnimations.length - 1),
-        wave: Math.min(2, embeddedAnimations.length - 1),
-        talk: Math.min(3, embeddedAnimations.length - 1),
-        point: Math.min(4, embeddedAnimations.length - 1),
-        thinking: Math.min(5, embeddedAnimations.length - 1),
-        jump: Math.min(2, embeddedAnimations.length - 1),
-        spin: 0,
-      };
-
-      const used = new Set<number>();
-      return (Object.keys(fallbackByMode) as CompanionMode[])
-        .map((modeName) => {
-          const index = fallbackByMode[modeName];
-          const sourceClip = embeddedAnimations[index] || embeddedAnimations[0];
-          if (!sourceClip) return null;
-          const clip = sourceClip.clone();
-          clip.name = `flowly-${modeName}`;
-          used.add(index);
-          return clip;
-        })
-        .filter((clip): clip is AnimationClip => Boolean(clip));
-    }
-
+    // Importante: ignoramos las animaciones internas del GLB porque vienen como
+    // NlaTrack/NlaTrack.001 y no permiten saber cuál es idle, walk o wave.
+    // El motor V7 usa exclusivamente las acciones FBX nombradas.
     const entries: Array<[CompanionMode, { animations?: AnimationClip[] }]> = [
       ["idle", idleFbx],
       ["walk", walkFbx],
@@ -277,29 +273,43 @@ function FlowlyCharacterEngine({
       ["jump", waveFbx],
       ["spin", idleFbx],
     ];
+
     return entries
       .map(([name, fbx]) => getPrimaryClip(fbx, `flowly-${name}`))
       .filter((clip): clip is AnimationClip => Boolean(clip));
-  }, [embeddedAnimations, idleFbx, walkFbx, waveFbx, talkFbx, pointFbx, thinkingFbx]);
+  }, [idleFbx, walkFbx, waveFbx, talkFbx, pointFbx, thinkingFbx]);
   const { actions, names } = useAnimations(clips, rootRef);
+  const activeActionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!names.length) return;
     const requestedName = `flowly-${companionMode}`;
-    const nextName = names.includes(requestedName) ? requestedName : names[0];
+    const nextName = names.includes(requestedName) ? requestedName : names.includes("flowly-idle") ? "flowly-idle" : names[0];
+    const nextAction = actions[nextName];
 
-    Object.entries(actions).forEach(([name, action]) => {
-      if (!action) return;
-      if (name === nextName) {
-        action.enabled = true;
-        action.loop = LoopRepeat;
-        action.clampWhenFinished = false;
-        action.reset().fadeIn(0.22).play();
-        action.timeScale = companionMode === "walk" ? 0.92 : companionMode === "talk" ? 0.84 : 0.72;
-      } else {
-        action.fadeOut(0.18);
-      }
-    });
+    if (!nextAction) return;
+    if (activeActionRef.current === nextName && nextAction.isRunning()) return;
+
+    const previousName = activeActionRef.current;
+    const previousAction = previousName ? actions[previousName] : undefined;
+
+    nextAction.enabled = true;
+    nextAction.loop = LoopRepeat;
+    nextAction.clampWhenFinished = false;
+    nextAction.timeScale =
+      companionMode === "walk" ? 1.08 :
+      companionMode === "talk" ? 0.92 :
+      companionMode === "wave" || companionMode === "point" ? 0.86 :
+      0.78;
+
+    nextAction.reset().fadeIn(previousAction ? 0.18 : 0.01).play();
+    if (previousAction && previousAction !== nextAction) previousAction.fadeOut(0.18);
+
+    activeActionRef.current = nextName;
+
+    return () => {
+      nextAction.fadeOut(0.12);
+    };
   }, [actions, companionMode, names]);
 
   const normalizedScene = useMemo(() => {
@@ -342,17 +352,19 @@ function FlowlyCharacterEngine({
     const isSpinning = companionMode === "spin";
     const isTalking = companionMode === "talk";
     const isThinking = companionMode === "thinking";
-    const baseFacing = facing === "left" ? -0.28 : facing === "right" ? 0.28 : 0;
+    // El cuerpo ya no persigue el mouse. Solo corrige ligeramente la dirección
+    // cuando el runtime decide que Flow camina hacia izquierda/derecha.
+    const baseFacing = facing === "left" ? -0.12 : facing === "right" ? 0.12 : 0;
 
-    const breathe = Math.sin(t * 2.1) * 0.022;
+    const breathe = Math.sin(t * 2.1) * 0.014;
     const weightShift = Math.sin(t * 0.95) * 0.035;
     const talkPulse = isTalking ? Math.sin(t * 10.5) * 0.014 : 0;
     const walkPulse = isWalking ? Math.abs(Math.sin(t * 5.6)) * 0.045 : 0;
     const jumpPulse = isJumping ? Math.max(0, Math.sin(t * 5.2)) * 0.32 : 0;
 
-    root.position.y = breathe + talkPulse + walkPulse + jumpPulse;
-    root.rotation.y = baseFacing + Math.sin(t * 0.7) * 0.045 + (isSpinning ? t * 1.35 : 0);
-    root.rotation.z = weightShift * 0.25;
+    root.position.y = breathe + talkPulse + (isWalking ? 0 : walkPulse) + jumpPulse;
+    root.rotation.y = baseFacing + Math.sin(t * 0.7) * 0.018 + (isSpinning ? t * 1.35 : 0);
+    root.rotation.z = isWalking ? weightShift * 0.08 : weightShift * 0.18;
 
     const bones = bonesRef.current;
     const base = baseRotationsRef.current;
@@ -363,15 +375,16 @@ function FlowlyCharacterEngine({
     // Companion V3.1: el personaje no se anima como una burbuja ni forzando huesos
     // agresivamente. Los clips FBX mandan; esta capa solo añade microvida segura
     // en cabeza, cuello y torso para evitar cortes de brazos/piernas.
+    const faceLook = facing === "left" ? -0.18 : facing === "right" ? 0.18 : look * 0.035;
     applyRotation(
       bones.head,
       base,
-      (isTalking ? talk * 0.032 : Math.sin(t * 1.15) * 0.014) + (isThinking ? 0.035 : 0),
-      look * 0.045,
+      (isTalking ? talk * 0.028 : Math.sin(t * 1.15) * 0.012) + (isThinking ? 0.032 : 0),
+      faceLook,
       0,
     );
-    applyRotation(bones.neck, base, 0, look * 0.022, 0);
-    applyRotation(bones.spine, base, isThinking ? 0.022 : 0, 0, weightShift * 0.075);
+    applyRotation(bones.neck, base, 0, faceLook * 0.42, 0);
+    applyRotation(bones.spine, base, isThinking ? 0.018 : 0, 0, weightShift * 0.045);
   });
 
   return (
