@@ -122,25 +122,77 @@ const FLOWLY_MOTION_CLIPS: Record<CompanionMode, string> = {
   spin: "/avatars/Idle.fbx",
 };
 
+const MIXAMO_TO_FLOWLY_BONES: Record<string, string> = {
+  hips: "Root",
+  spine: "Waist",
+  spine1: "Spine01",
+  spine2: "Spine02",
+  neck: "NeckTwist01",
+  head: "Head",
+  leftshoulder: "L_Clavicle",
+  leftarm: "L_Upperarm",
+  leftforearm: "L_Forearm",
+  lefthand: "L_Hand",
+  rightshoulder: "R_Clavicle",
+  rightarm: "R_Upperarm",
+  rightforearm: "R_Forearm",
+  righthand: "R_Hand",
+  leftupleg: "L_Thigh",
+  leftleg: "L_Calf",
+  leftfoot: "L_Foot",
+  lefttoebase: "L_ToeBase",
+  rightupleg: "R_Thigh",
+  rightleg: "R_Calf",
+  rightfoot: "R_Foot",
+  righttoebase: "R_ToeBase",
+};
+
+function normalizeFbxBoneName(name: string) {
+  return name
+    .replace(/^mixamorig[:_]?/i, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+}
+
+function retargetTrackName(trackName: string) {
+  const separatorIndex = trackName.search(/[.[]/);
+  if (separatorIndex <= 0) return trackName;
+
+  const sourceBoneName = trackName.slice(0, separatorIndex);
+  const propertyPath = trackName.slice(separatorIndex);
+  const targetBoneName = MIXAMO_TO_FLOWLY_BONES[normalizeFbxBoneName(sourceBoneName)];
+
+  return targetBoneName ? `${targetBoneName}${propertyPath}` : trackName;
+}
+
 function sanitizeExternalClip(clip: AnimationClip, fallbackName: string) {
   const next = clip.clone();
   next.name = fallbackName;
 
-  // Los GLB de Blender venían con NlaTrack/NlaTrack.00x sin semántica.
-  // Para V7 el GLB solo aporta el personaje; las acciones oficiales son los FBX.
-  // Además limpiamos root motion para que Flow camine por el panel con el contenedor
-  // mientras las piernas hacen la acción walk sin "patinar" fuera del rig.
-  next.tracks = next.tracks.filter((track) => {
-    const normalized = track.name.toLowerCase();
-    const isRootPosition =
-      normalized.endsWith(".position") &&
-      (normalized.includes("hips") ||
-        normalized.includes("armature") ||
-        normalized.includes("root") ||
-        normalized.includes("mixamorig"));
-    return !isRootPosition;
-  });
+  // Los FBX vienen del esqueleto Mixamo/Blender, pero el modelo Flow usa huesos
+  // propios (L_Upperarm, R_Thigh, Spine01...). Si no retargeteamos nombres,
+  // Three no encuentra los huesos y el personaje queda en T-pose.
+  next.tracks = next.tracks
+    .map((track) => {
+      const clonedTrack = track.clone();
+      clonedTrack.name = retargetTrackName(clonedTrack.name);
+      return clonedTrack;
+    })
+    .filter((track) => {
+      const normalized = track.name.toLowerCase();
+      const isRootPosition =
+        normalized.endsWith(".position") &&
+        (normalized.startsWith("root.") ||
+          normalized.startsWith("pelvis.") ||
+          normalized.startsWith("hip.") ||
+          normalized.startsWith("hips.") ||
+          normalized.startsWith("armature.") ||
+          normalized.includes("mixamorig"));
+      return !isRootPosition;
+    });
 
+  next.validate();
+  next.optimize();
   return next;
 }
 
