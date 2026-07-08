@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Flow Companion WebGL</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      #unity-container {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at 50% 25%, rgba(34, 211, 238, 0.16), transparent 35%), #07111f;
+      }
+      #unity-canvas {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+        background: transparent;
+      }
+      #unity-loading-bar {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(320px, 70vw);
+        transform: translate(-50%, -50%);
+        display: none;
+        text-align: center;
+        color: rgba(255,255,255,.78);
+      }
+      #unity-progress-bar-empty {
+        height: 10px;
+        overflow: hidden;
+        border-radius: 999px;
+        border: 1px solid rgba(103,232,249,.24);
+        background: rgba(255,255,255,.08);
+      }
+      #unity-progress-bar-full {
+        width: 0%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #67e8f9, #a78bfa);
+      }
+      #unity-warning {
+        position: absolute;
+        left: 1rem;
+        right: 1rem;
+        top: 1rem;
+        z-index: 10;
+        font-size: 13px;
+      }
+      #unity-footer { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <p style="margin:0 0 12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:12px;">Cargando Flow Companion</p>
+        <div id="unity-progress-bar-empty"><div id="unity-progress-bar-full"></div></div>
+      </div>
+      <div id="unity-warning"></div>
+      <div id="unity-footer"><div id="unity-fullscreen-button"></div></div>
+    </div>
+    <script>
+      const canvas = document.querySelector('#unity-canvas');
+      function unityShowBanner(msg, type) {
+        const warningBanner = document.querySelector('#unity-warning');
+        const div = document.createElement('div');
+        div.innerHTML = msg;
+        div.style = type === 'error'
+          ? 'background:#7f1d1d;color:white;padding:10px;border-radius:12px;margin-bottom:8px;'
+          : 'background:#fef3c7;color:#1f2937;padding:10px;border-radius:12px;margin-bottom:8px;';
+        warningBanner.appendChild(div);
+        if (type !== 'error') setTimeout(() => div.remove(), 5000);
+      }
+      const buildUrl = 'Build';
+      const loaderUrl = buildUrl + '/webgl.loader.js';
+      const config = {
+        arguments: [],
+        dataUrl: buildUrl + '/webgl.data.br',
+        frameworkUrl: buildUrl + '/webgl.framework.js.br',
+        codeUrl: buildUrl + '/webgl.wasm.br',
+        streamingAssetsUrl: 'StreamingAssets',
+        companyName: 'Flowly',
+        productName: 'Flow Companion',
+        productVersion: '0.1.0',
+        showBanner: unityShowBanner,
+      };
+      config.matchWebGLToCanvasSize = true;
+      document.querySelector('#unity-loading-bar').style.display = 'block';
+      const script = document.createElement('script');
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          document.querySelector('#unity-progress-bar-full').style.width = (100 * progress) + '%';
+        }).then((unityInstance) => {
+          window.flowUnityInstance = unityInstance;
+          document.querySelector('#unity-loading-bar').style.display = 'none';
+          window.parent?.postMessage({ type: 'flow-unity-ready' }, '*');
+        }).catch((message) => {
+          unityShowBanner(message, 'error');
+          window.parent?.postMessage({ type: 'flow-unity-error', message }, '*');
+        });
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
