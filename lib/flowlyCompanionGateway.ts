@@ -64,7 +64,8 @@ export function createCompanionSession(input?: {
   const userId = cleanId(input?.userId, "local-user");
   const sessionId = cleanId(input?.sessionId, `flow-session-${Date.now()}`);
   const httpBaseUrl = (input?.origin || process.env.NEXT_PUBLIC_FLOWLY_URL || process.env.FLOWLY_PUBLIC_URL || "http://localhost:3000").replace(/\/$/, "");
-  const websocketUrl = process.env.FLOW_COMPANION_WS_URL || null;
+  const defaultWebSocketUrl = `${httpBaseUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:")}/api/companion/realtime`;
+  const websocketUrl = process.env.FLOW_COMPANION_WS_URL || defaultWebSocketUrl;
   const websocketEnabled = typeof websocketUrl === "string" && websocketUrl.startsWith("ws");
 
   return {

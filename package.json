@@ -19,7 +19,8 @@
     "react-dom": "19.0.0",
     "three": "^0.179.1",
     "@react-three/fiber": "^9.3.0",
-    "@react-three/drei": "^10.7.6"
+    "@react-three/drei": "^10.7.6",
+    "@vercel/functions": "latest"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
