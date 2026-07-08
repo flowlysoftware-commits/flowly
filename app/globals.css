@@ -5940,7 +5940,16 @@ input[type="date"].input-dark { color-scheme: dark; }
   display: none !important;
 }
 
-/* Flow Overlay Companion - Phase 1: nuevo Flow global, sustituye al runtime antiguo */
+
+/* Limpieza Flow Web Companion: ocultamos la integración Unity/WebGL antigua. */
+.flow-unity-webgl,
+.flow-unity-webgl-card,
+.flow-webgl-large,
+iframe[src*="flow-companion-webgl"] {
+  display: none !important;
+}
+
+/* Flow Overlay Companion - Flow Web Native */
 .flowly-3d-character-wrap,
 .flowly-3d-restore-button {
   display: none !important;
@@ -6059,13 +6068,19 @@ input[type="date"].input-dark { color-scheme: dark; }
   cursor: pointer;
 }
 
-.flow-overlay-unity-frame {
+.flow-overlay-avatar-3d {
   position: absolute;
-  inset: -18px -18px -34px -18px;
-  width: calc(100% + 36px);
-  height: calc(100% + 52px);
-  border: 0;
-  background: transparent;
+  inset: -22px -22px -28px -22px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.flow-overlay-avatar-3d .flowly-avatar-renderer-v6 {
+  width: 100%;
+  height: 100%;
+}
+.flow-overlay-avatar-3d canvas {
+  background: transparent !important;
 }
 
 .flow-overlay-avatar-glow {
@@ -6271,4 +6286,18 @@ input[type="date"].input-dark { color-scheme: dark; }
 @keyframes flowOverlayStepShadow {
   0%, 100% { transform: translateX(-50%) scaleX(.86); opacity: .42; }
   50% { transform: translateX(-50%) scaleX(1.16); opacity: .72; }
+}
+
+
+/* Flow Web Companion cleanup: fuera Flow antiguo flotante y visor Unity WebGL. */
+.flowly-v6-runtime,
+.flowly-v6-launcher,
+.flowly-3d-character-wrap,
+.flowly-3d-restore-button,
+.flow-unity-webgl,
+.flow-unity-webgl-card,
+.flow-webgl-large,
+iframe[src*="flow-companion-webgl"] {
+  display: none !important;
+  pointer-events: none !important;
 }

@@ -117,7 +117,7 @@ const FLOWLY_MOTION_CLIPS: Record<CompanionMode, string> = {
   wave: "/avatars/Waving.fbx",
   talk: "/avatars/Talking.fbx",
   point: "/avatars/Pointing.fbx",
-  thinking: "/avatars/Sitting Talking.fbx",
+  thinking: "/avatars/Idle.fbx",
   jump: "/avatars/Waving.fbx",
   spin: "/avatars/Idle.fbx",
 };

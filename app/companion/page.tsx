@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Bot, Brain, Database, HeartPulse, Radio, Server, Sparkles, Workflow } from "lucide-react";
-import FlowUnityWebGL from "@/components/FlowUnityWebGL";
+import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 
 const modules = [
   { icon: Server, title: "Gateway propio", text: "Flow Companion Gateway en Render con WebSocket persistente, sesiones y runtime." },
@@ -19,9 +19,9 @@ export default function CompanionRuntimePage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.45em] text-cyan-200">Nuevo Flow Companion Engine</p>
-              <h1 className="mt-4 text-4xl font-black tracking-tight">Flow real de Unity dentro de Flowly</h1>
+              <h1 className="mt-4 text-4xl font-black tracking-tight">Flow Web Companion dentro de Flowly</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-white/65">
-                Esta pantalla carga el build WebGL real generado desde Unity. El avatar usa el motor gráfico de Unity y sigue conectado al Gateway IA, memoria, emociones y Tool Engine.
+                Esta pantalla muestra el nuevo Flow nativo para web. El avatar usa React Three Fiber, vive encima del panel y queda preparado para navegar por la interfaz.
               </p>
             </div>
             <Link href="/dashboard" className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100">
@@ -30,7 +30,11 @@ export default function CompanionRuntimePage() {
           </div>
         </div>
 
-        <FlowUnityWebGL />
+        <section className="rounded-[2rem] border border-cyan-300/20 bg-black/30 p-5">
+          <div className="grid min-h-[520px] place-items-center rounded-[1.6rem] bg-[radial-gradient(circle_at_50%_15%,rgba(34,211,238,.16),transparent_38%)]">
+            <FlowlyAssistant3D mode="wave" facing="front" />
+          </div>
+        </section>
 
         <div className="grid gap-4 md:grid-cols-3">
           {modules.map((block) => {

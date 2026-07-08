@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, ChevronDown, ChevronUp, Maximize2, Mic, Minimize2, Navigation, Send, Sparkles, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, Mic, Minimize2, Navigation, Send, Sparkles, X } from "lucide-react";
+import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 
-const UNITY_URL = "/flow-companion-webgl/index.html";
 const GATEWAY_URL = process.env.NEXT_PUBLIC_FLOW_COMPANION_GATEWAY_URL || "https://flowly-companion-gateway.onrender.com";
 
 type OverlayPosition = "bottom-right" | "bottom-left" | "center-right" | "custom";
@@ -127,7 +127,7 @@ export default function FlowOverlayCompanion() {
       text: "Estoy aquí. Ya puedo moverme por el panel y llevarte a módulos como CRM, WhatsApp o Facturación.",
     },
   ]);
-  const [frameKey, setFrameKey] = useState(0);
+  const [avatarMode, setAvatarMode] = useState<"idle" | "walk" | "wave" | "talk" | "point" | "thinking">("idle");
   const mountedRef = useRef(true);
 
   const positionClasses = useMemo(() => getPositionClasses(position), [position]);
@@ -159,8 +159,8 @@ export default function FlowOverlayCompanion() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!event.data || typeof event.data !== "object") return;
-      if (event.data.type === "flow-unity-ready") setStatus("ready");
-      if (event.data.type === "flow-unity-error") setStatus("error");
+      if (event.data.type === "flow-avatar-ready") setStatus("ready");
+      if (event.data.type === "flow-avatar-error") setStatus("error");
     };
 
     window.addEventListener("message", handleMessage);
@@ -202,6 +202,7 @@ export default function FlowOverlayCompanion() {
     setMinimized(false);
     setOpen(false);
     setStatus("thinking");
+    setAvatarMode("walk");
     setActiveNavigation(target.key);
 
     if (!options?.silent) {
@@ -223,6 +224,7 @@ export default function FlowOverlayCompanion() {
     if (!element) {
       setOpen(true);
       setStatus("error");
+      setAvatarMode("idle");
       setMessages((current) => [
         ...current,
         { id: createId("system"), role: "system", text: `No encuentro el acceso a ${target.label} en esta pantalla.` },
@@ -245,6 +247,7 @@ export default function FlowOverlayCompanion() {
 
     element.click();
     setStatus("speaking");
+    setAvatarMode("point");
     setMessages((current) => [
       ...current,
       { id: createId("flow"), role: "flow", text: `Ya he abierto ${target.label}.` },
@@ -253,6 +256,7 @@ export default function FlowOverlayCompanion() {
     await new Promise((resolve) => window.setTimeout(resolve, 700));
     element.classList.remove("flow-overlay-target-highlight");
     setStatus("ready");
+    setAvatarMode("idle");
     setOpen(true);
     setActiveNavigation(null);
   }
@@ -273,6 +277,7 @@ export default function FlowOverlayCompanion() {
     }
 
     setStatus("thinking");
+    setAvatarMode("thinking");
 
     try {
       const response = await fetch("/api/companion/chat", {
@@ -285,10 +290,15 @@ export default function FlowOverlayCompanion() {
       const reply = data?.reply || data?.message || data?.text || "He recibido tu mensaje. También puedes pedirme: ‘Flow, llévame al CRM’.";
 
       setStatus("speaking");
+      setAvatarMode("talk");
       setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: reply }]);
-      window.setTimeout(() => setStatus("ready"), 1200);
+      window.setTimeout(() => {
+        setStatus("ready");
+        setAvatarMode("idle");
+      }, 1200);
     } catch {
       setStatus("error");
+      setAvatarMode("idle");
       setMessages((current) => [...current, { id: createId("system"), role: "system", text: "No he podido contactar con el Companion ahora mismo." }]);
     }
   };
@@ -302,7 +312,10 @@ export default function FlowOverlayCompanion() {
     });
   };
 
-  const reloadUnity = () => setFrameKey((value) => value + 1);
+  const waveFlow = () => {
+    setAvatarMode("wave");
+    window.setTimeout(() => setAvatarMode("idle"), 1400);
+  };
 
   if (minimized) {
     return (
@@ -335,20 +348,16 @@ export default function FlowOverlayCompanion() {
 
             <div className="flow-overlay-actions">
               <button type="button" onClick={cyclePosition} aria-label="Mover Flow"><Navigation size={14} /></button>
-              <button type="button" onClick={reloadUnity} aria-label="Recargar avatar"><Sparkles size={14} /></button>
+              <button type="button" onClick={waveFlow} aria-label="Saludar"><Sparkles size={14} /></button>
               <button type="button" onClick={() => setMinimized(true)} aria-label="Minimizar Flow"><Minimize2 size={14} /></button>
               <button type="button" onClick={() => setOpen(false)} aria-label="Cerrar panel"><X size={14} /></button>
             </div>
           </div>
 
           <button type="button" onClick={() => setOpen((value) => !value)} className="flow-overlay-avatar" aria-label="Hablar con Flow">
-            <iframe
-              key={frameKey}
-              title="Flow Unity Companion Overlay"
-              src={UNITY_URL}
-              className="flow-overlay-unity-frame"
-              allow="autoplay; microphone; fullscreen; clipboard-read; clipboard-write"
-            />
+            <div className="flow-overlay-avatar-3d">
+              <FlowlyAssistant3D mode={avatarMode} facing={position === "bottom-left" ? "right" : "left"} compact />
+            </div>
             <span className="flow-overlay-avatar-glow" />
           </button>
 
