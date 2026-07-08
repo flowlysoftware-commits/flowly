@@ -6210,3 +6210,65 @@ input[type="date"].input-dark { color-scheme: dark; }
     height: 230px;
   }
 }
+
+/* Flow Overlay Companion - Phase 2: navegación inteligente */
+.flow-overlay-companion.is-navigating .flow-overlay-shell {
+  border-color: rgba(34, 211, 238, .46);
+  box-shadow: 0 32px 100px rgba(34, 211, 238, .22), inset 0 1px 0 rgba(255,255,255,.12);
+}
+
+.flow-overlay-companion.is-navigating .flow-overlay-avatar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  width: 42px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, .28);
+  filter: blur(8px);
+  transform: translateX(-50%);
+  animation: flowOverlayStepShadow .72s ease-in-out infinite;
+}
+
+.flow-overlay-quick-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.flow-overlay-quick-actions button {
+  border: 1px solid rgba(125, 211, 252, .18);
+  border-radius: 999px;
+  background: rgba(14, 165, 233, .1);
+  color: #cffafe;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 7px 9px;
+}
+
+.flow-overlay-quick-actions button:hover {
+  border-color: rgba(125, 211, 252, .38);
+  background: rgba(14, 165, 233, .18);
+}
+
+.flow-overlay-target-highlight {
+  position: relative;
+  z-index: 91;
+  outline: 2px solid rgba(34, 211, 238, .85) !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 8px rgba(34, 211, 238, .12), 0 0 34px rgba(34, 211, 238, .42) !important;
+  animation: flowOverlayTargetPulse 1s ease-in-out infinite;
+}
+
+@keyframes flowOverlayTargetPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25); }
+}
+
+@keyframes flowOverlayStepShadow {
+  0%, 100% { transform: translateX(-50%) scaleX(.86); opacity: .42; }
+  50% { transform: translateX(-50%) scaleX(1.16); opacity: .72; }
+}

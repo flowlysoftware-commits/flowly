@@ -6,7 +6,7 @@ import { Bot, ChevronDown, ChevronUp, Maximize2, Mic, Minimize2, Navigation, Sen
 const UNITY_URL = "/flow-companion-webgl/index.html";
 const GATEWAY_URL = process.env.NEXT_PUBLIC_FLOW_COMPANION_GATEWAY_URL || "https://flowly-companion-gateway.onrender.com";
 
-type OverlayPosition = "bottom-right" | "bottom-left" | "center-right";
+type OverlayPosition = "bottom-right" | "bottom-left" | "center-right" | "custom";
 type FlowStatus = "idle" | "connecting" | "ready" | "thinking" | "speaking" | "error";
 
 type ChatMessage = {
@@ -15,9 +15,57 @@ type ChatMessage = {
   text: string;
 };
 
+type NavigationTarget = {
+  key: string;
+  label: string;
+  aliases: string[];
+  href?: string;
+  selector: string;
+};
+
+type CustomPosition = {
+  left: number;
+  top: number;
+};
+
+const NAVIGATION_TARGETS: NavigationTarget[] = [
+  { key: "flow", label: "Flow Companion", aliases: ["flow", "companion", "asistente"], selector: '[data-flow-target="flow"]' },
+  { key: "dashboard", label: "Área personal", aliases: ["dashboard", "area", "área", "inicio", "panel", "home"], selector: '[data-flow-target="area"]' },
+  { key: "crm", label: "CRM", aliases: ["crm", "cliente", "clientes", "contacto", "contactos"], selector: '[data-flow-module="crm"], [data-flow-target="clientes"], [data-flow-target="crm"]' },
+  { key: "facturacion", label: "Facturación", aliases: ["facturacion", "facturación", "factura", "facturas", "presupuesto", "presupuestos", "billing"], selector: '[data-flow-module="facturacion"], [data-flow-module="billing"], [data-flow-target="facturacion"]' },
+  { key: "whatsapp", label: "WhatsApp", aliases: ["whatsapp", "wasap", "wsp", "mensajes"], selector: '[data-flow-module="whatsapp"], [data-flow-target="whatsapp"]' },
+  { key: "agenda", label: "Agenda", aliases: ["agenda", "calendario", "citas", "cita"], selector: '[data-flow-target="agenda"], [data-flow-module="agenda-pro"]' },
+  { key: "servicios", label: "Servicios", aliases: ["servicio", "servicios"], selector: '[data-flow-target="servicios"]' },
+  { key: "empleados", label: "Empleados", aliases: ["empleado", "empleados", "equipo"], selector: '[data-flow-target="empleados"]' },
+  { key: "recordatorios", label: "Recordatorios", aliases: ["recordatorio", "recordatorios", "alarma", "alarmas"], selector: '[data-flow-target="recordatorios"]' },
+  { key: "ajustes", label: "Ajustes", aliases: ["ajuste", "ajustes", "configuracion", "configuración"], selector: '[data-flow-target="ajustes"]' },
+  { key: "automatizaciones", label: "Automatizaciones", aliases: ["automatizacion", "automatización", "automatizaciones", "flujos"], selector: '[data-flow-module="automatizaciones"], [data-flow-module="automations"]' },
+  { key: "marketing", label: "Marketing", aliases: ["marketing", "campañas", "campanas", "ads"], selector: '[data-flow-module="marketing"]' },
+  { key: "estadisticas", label: "Estadísticas", aliases: ["estadisticas", "estadísticas", "metricas", "métricas", "analytics"], selector: '[data-flow-module="estadisticas"], [data-flow-module="analytics"]' },
+];
+
 function createId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `${prefix}_${crypto.randomUUID()}`;
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectNavigationTarget(text: string) {
+  const normalized = normalizeText(text);
+  const hasNavigationIntent = /\b(llevame|llevarme|abre|abrir|ve|ir|vamos|entra|entrar|muestrame|mostrar|navega|navegar|pulsa|click|clic)\b/.test(normalized);
+
+  if (!hasNavigationIntent) return null;
+
+  return NAVIGATION_TARGETS.find((target) => target.aliases.some((alias) => normalized.includes(normalizeText(alias)))) || null;
 }
 
 function statusLabel(status: FlowStatus) {
@@ -32,26 +80,58 @@ function statusLabel(status: FlowStatus) {
 function getPositionClasses(position: OverlayPosition) {
   if (position === "bottom-left") return "bottom-5 left-5 md:bottom-7 md:left-7";
   if (position === "center-right") return "right-5 top-1/2 -translate-y-1/2 md:right-7";
+  if (position === "custom") return "";
   return "bottom-5 right-5 md:bottom-7 md:right-7";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function findTargetElement(target: NavigationTarget) {
+  const direct = document.querySelector<HTMLElement>(target.selector);
+  if (direct) return direct;
+
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>("button, a, [role='button']"));
+  const targetAliases = target.aliases.map(normalizeText);
+
+  return candidates.find((element) => {
+    const text = normalizeText(element.innerText || element.textContent || element.getAttribute("aria-label") || "");
+    return targetAliases.some((alias) => text.includes(alias));
+  }) || null;
+}
+
+function computeOverlayPosition(element: HTMLElement, panelWidth = 320, estimatedHeight = 390): CustomPosition {
+  const rect = element.getBoundingClientRect();
+  const margin = 18;
+  const rightCandidate = rect.right + margin;
+  const leftCandidate = rect.left - panelWidth - margin;
+  const left = rightCandidate + panelWidth < window.innerWidth ? rightCandidate : Math.max(margin, leftCandidate);
+  const top = clamp(rect.top + rect.height / 2 - estimatedHeight / 2, margin, Math.max(margin, window.innerHeight - estimatedHeight - margin));
+
+  return { left, top };
 }
 
 export default function FlowOverlayCompanion() {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [position, setPosition] = useState<OverlayPosition>("bottom-right");
+  const [customPosition, setCustomPosition] = useState<CustomPosition | null>(null);
   const [status, setStatus] = useState<FlowStatus>("connecting");
   const [input, setInput] = useState("");
+  const [activeNavigation, setActiveNavigation] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "flow",
-      text: "Estoy aquí. Esta es la primera fase del nuevo Flow Overlay dentro de Flowly.",
+      text: "Estoy aquí. Ya puedo moverme por el panel y llevarte a módulos como CRM, WhatsApp o Facturación.",
     },
   ]);
   const [frameKey, setFrameKey] = useState(0);
   const mountedRef = useRef(true);
 
   const positionClasses = useMemo(() => getPositionClasses(position), [position]);
+  const customStyle = position === "custom" && customPosition ? { left: customPosition.left, top: customPosition.top } : undefined;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -87,6 +167,96 @@ export default function FlowOverlayCompanion() {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
+  useEffect(() => {
+    const runPendingNavigation = () => {
+      const pending = window.localStorage.getItem("flow_pending_navigation_target");
+      if (!pending) return;
+
+      const target = NAVIGATION_TARGETS.find((item) => item.key === pending);
+      if (!target) return;
+
+      window.localStorage.removeItem("flow_pending_navigation_target");
+      window.setTimeout(() => void navigateToTarget(target, { silent: true }), 650);
+    };
+
+    runPendingNavigation();
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ target?: string }>).detail;
+      const target = NAVIGATION_TARGETS.find((item) => item.key === detail?.target || item.aliases.includes(String(detail?.target || "")));
+      if (target) void navigateToTarget(target);
+    };
+
+    window.addEventListener("flow:navigate-to", handler as EventListener);
+    (window as unknown as { FlowOverlay?: { navigateTo: (target: string) => void } }).FlowOverlay = {
+      navigateTo: (targetKey: string) => {
+        const target = NAVIGATION_TARGETS.find((item) => item.key === targetKey || item.aliases.includes(targetKey));
+        if (target) void navigateToTarget(target);
+      },
+    };
+
+    return () => window.removeEventListener("flow:navigate-to", handler as EventListener);
+  }, []);
+
+  async function navigateToTarget(target: NavigationTarget, options?: { silent?: boolean }) {
+    setMinimized(false);
+    setOpen(false);
+    setStatus("thinking");
+    setActiveNavigation(target.key);
+
+    if (!options?.silent) {
+      setMessages((current) => [
+        ...current,
+        { id: createId("flow"), role: "flow", text: `Voy contigo a ${target.label}.` },
+      ]);
+    }
+
+    if (!window.location.pathname.startsWith("/dashboard")) {
+      window.localStorage.setItem("flow_pending_navigation_target", target.key);
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+    let element = findTargetElement(target);
+
+    if (!element) {
+      setOpen(true);
+      setStatus("error");
+      setMessages((current) => [
+        ...current,
+        { id: createId("system"), role: "system", text: `No encuentro el acceso a ${target.label} en esta pantalla.` },
+      ]);
+      setActiveNavigation(null);
+      return;
+    }
+
+    element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    await new Promise((resolve) => window.setTimeout(resolve, 450));
+
+    element = findTargetElement(target) || element;
+    const nextPosition = computeOverlayPosition(element);
+    setCustomPosition(nextPosition);
+    setPosition("custom");
+
+    element.classList.add("flow-overlay-target-highlight");
+
+    await new Promise((resolve) => window.setTimeout(resolve, 1050));
+
+    element.click();
+    setStatus("speaking");
+    setMessages((current) => [
+      ...current,
+      { id: createId("flow"), role: "flow", text: `Ya he abierto ${target.label}.` },
+    ]);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+    element.classList.remove("flow-overlay-target-highlight");
+    setStatus("ready");
+    setOpen(true);
+    setActiveNavigation(null);
+  }
+
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const text = input.trim();
@@ -95,17 +265,24 @@ export default function FlowOverlayCompanion() {
     setInput("");
     setOpen(true);
     setMessages((current) => [...current, { id: createId("user"), role: "user", text }]);
+
+    const navigationTarget = detectNavigationTarget(text);
+    if (navigationTarget) {
+      await navigateToTarget(navigationTarget);
+      return;
+    }
+
     setStatus("thinking");
 
     try {
       const response = await fetch("/api/companion/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, source: "flow-overlay" }),
+        body: JSON.stringify({ message: text, source: "flow-overlay", pathname: window.location.pathname }),
       });
 
       const data = await response.json().catch(() => null);
-      const reply = data?.reply || data?.message || data?.text || "He recibido tu mensaje. La siguiente fase conectará navegación visual y acciones del panel.";
+      const reply = data?.reply || data?.message || data?.text || "He recibido tu mensaje. También puedes pedirme: ‘Flow, llévame al CRM’.";
 
       setStatus("speaking");
       setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: reply }]);
@@ -117,6 +294,7 @@ export default function FlowOverlayCompanion() {
   };
 
   const cyclePosition = () => {
+    setCustomPosition(null);
     setPosition((current) => {
       if (current === "bottom-right") return "center-right";
       if (current === "center-right") return "bottom-left";
@@ -144,14 +322,14 @@ export default function FlowOverlayCompanion() {
 
   return (
     <div className="flow-overlay-root pointer-events-none fixed inset-0 z-[90] overflow-hidden">
-      <div className={`flow-overlay-companion pointer-events-auto fixed ${positionClasses}`}>
+      <div className={`flow-overlay-companion pointer-events-auto fixed ${positionClasses} ${activeNavigation ? "is-navigating" : ""}`} style={customStyle}>
         <div className="flow-overlay-shell">
           <div className="flow-overlay-header">
             <button type="button" onClick={() => setOpen((value) => !value)} className="flow-overlay-title" aria-label="Abrir Flow">
               <span className={`flow-overlay-status-dot is-${status}`} />
               <span>
                 <strong>Flow</strong>
-                <small>{statusLabel(status)}</small>
+                <small>{activeNavigation ? `yendo a ${activeNavigation}` : statusLabel(status)}</small>
               </span>
             </button>
 
@@ -179,17 +357,23 @@ export default function FlowOverlayCompanion() {
               <div className="flow-overlay-panel-head">
                 <div>
                   <p>Nuevo Flow Overlay</p>
-                  <span>Fase 1: presencia global activa</span>
+                  <span>Fase 2: navegación inteligente activa</span>
                 </div>
                 <button type="button" onClick={() => setOpen(false)}><ChevronDown size={16} /></button>
               </div>
 
               <div className="flow-overlay-messages">
-                {messages.slice(-5).map((message) => (
+                {messages.slice(-7).map((message) => (
                   <div key={message.id} className={`flow-overlay-message is-${message.role}`}>
                     {message.text}
                   </div>
                 ))}
+              </div>
+
+              <div className="flow-overlay-quick-actions">
+                <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "crm")!)}>Ir al CRM</button>
+                <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "facturacion")!)}>Facturación</button>
+                <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "whatsapp")!)}>WhatsApp</button>
               </div>
 
               <form onSubmit={sendMessage} className="flow-overlay-input-row">
@@ -197,13 +381,13 @@ export default function FlowOverlayCompanion() {
                 <input
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
-                  placeholder="Pídele algo a Flow..."
+                  placeholder="Ej: Flow, llévame al CRM"
                 />
                 <button type="submit" className="flow-overlay-send" aria-label="Enviar"><Send size={15} /></button>
               </form>
 
               <div className="flow-overlay-hint">
-                Próxima fase: “Flow, llévame al CRM” → caminar, señalar y abrir el módulo.
+                Prueba: “Flow, llévame al CRM”, “abre facturación” o “ve a WhatsApp”.
               </div>
             </div>
           )}

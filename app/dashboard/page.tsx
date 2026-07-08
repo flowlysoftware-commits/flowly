@@ -1451,7 +1451,17 @@ export default function DashboardPage() {
           </div>
 
           <nav className="grid gap-2">
-            {navItems.map(({ id, label, Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "menu-active" : "menu-item"}><Icon size={17} /> {label}</button>)}
+            {navItems.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                data-flow-target={id}
+                data-flow-label={label}
+                onClick={() => setActiveTab(id)}
+                className={activeTab === id ? "menu-active" : "menu-item"}
+              >
+                <Icon size={17} /> {label}
+              </button>
+            ))}
             {/* Herramientas internas ocultas para clientes.
                 Studio, Builder, Kernel, Crear y Asistente Arquitecto viven en /os.
                 El panel del cliente solo muestra módulos de negocio. */}
@@ -1567,13 +1577,27 @@ export default function DashboardPage() {
                   const defaultTab = children[0]?.tab || id;
                   return (
                     <div key={item.key} className="grid gap-2">
-                      <button onClick={() => { resetRecordForm(); setActiveTab(defaultTab); }} className={isActive ? "menu-active" : "menu-item"}>
+                      <button
+                        data-flow-module={item.slug}
+                        data-flow-module-key={item.key}
+                        data-flow-label={item.short}
+                        onClick={() => { resetRecordForm(); setActiveTab(defaultTab); }}
+                        className={isActive ? "menu-active" : "menu-item"}
+                      >
                         <Icon size={17} /> {item.short}
                       </button>
                       {isActive && children.length > 0 && (
                         <div className="ml-4 grid gap-2 border-l border-white/10 pl-3">
                           {children.map((child) => (
-                            <button key={child.label} onClick={() => setActiveTab(child.tab)} className={activeTab === child.tab || (child.tab === defaultTab && activeTab === id) ? "menu-active" : "menu-item"}>{child.label}</button>
+                            <button
+                              key={child.label}
+                              data-flow-submenu={String(child.tab)}
+                              data-flow-label={child.label}
+                              onClick={() => setActiveTab(child.tab)}
+                              className={activeTab === child.tab || (child.tab === defaultTab && activeTab === id) ? "menu-active" : "menu-item"}
+                            >
+                              {child.label}
+                            </button>
                           ))}
                         </div>
                       )}
