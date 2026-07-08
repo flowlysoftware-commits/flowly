@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
+import FlowlyCompanionPanel from "@/components/FlowlyCompanionPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -253,7 +254,7 @@ type ClinicalDocument = {
   created_at: string;
 };
 
-type CoreTab = "area" | "agenda" | "servicios" | "empleados" | "clientes" | "recordatorios" | "ajustes";
+type CoreTab = "area" | "flow" | "agenda" | "servicios" | "empleados" | "clientes" | "recordatorios" | "ajustes";
 type ActiveTab = CoreTab | `module:${string}`;
 type AssistantMessage = { role: "assistant" | "user"; content: string };
 type AssistantTourStep = { title: string; body: string; target: ActiveTab; cta: string };
@@ -1427,6 +1428,7 @@ export default function DashboardPage() {
 
   const navItems: { id: CoreTab; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
     { id: "area", label: "Área personal", Icon: LayoutDashboard },
+    { id: "flow", label: "Flow Companion", Icon: Bot },
     { id: "agenda", label: "Agenda", Icon: CalendarDays },
     { id: "servicios", label: "Servicios", Icon: Scissors },
     { id: "empleados", label: "Empleados", Icon: UserRound },
@@ -1657,6 +1659,7 @@ export default function DashboardPage() {
           )}
 
           {activeTab === "area" && <AreaSection business={business} businessAvatar={businessAvatar} activeModules={activeModules} inactiveModules={inactiveModules} bookingUrl={bookingUrl} openBillingPortal={openBillingPortal} setActiveTab={setActiveTab} activateModule={activateModule} integrations={businessIntegrations} reloadData={loadData} />}
+          {activeTab === "flow" && <FlowlyCompanionPanel business={business} businessAvatar={businessAvatar} customersCount={customers.length} appointmentsCount={appointments.length} activeModulesCount={activeModules.length} integrationsCount={businessIntegrations.length} voiceCallsCount={voiceCalls.length} onNavigate={(tab) => setActiveTab(tab as ActiveTab)} />}
           {activeTab === "agenda" && <AgendaSection appointments={appointments} customers={customers} employees={employees} services={services} appointmentCustomer={appointmentCustomer} setAppointmentCustomer={setAppointmentCustomer} appointmentEmployee={appointmentEmployee} setAppointmentEmployee={setAppointmentEmployee} appointmentService={appointmentService} setAppointmentService={setAppointmentService} appointmentDateValue={appointmentDateValue} setAppointmentDateValue={setAppointmentDateValue} createAppointment={createAppointment} updateAppointmentStatus={updateAppointmentStatus} />}
           {activeTab === "servicios" && <ServicesSection services={services} serviceName={serviceName} setServiceName={setServiceName} serviceDuration={serviceDuration} setServiceDuration={setServiceDuration} servicePrice={servicePrice} setServicePrice={setServicePrice} createService={createService} />}
           {activeTab === "empleados" && <EmployeesSection employees={employees} employeeName={employeeName} setEmployeeName={setEmployeeName} employeePhone={employeePhone} setEmployeePhone={setEmployeePhone} createEmployee={createEmployee} />}
