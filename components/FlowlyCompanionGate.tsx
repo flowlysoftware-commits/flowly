@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import FlowlyCompanionRuntime from "@/components/FlowlyCompanionRuntime";
+import FlowOverlayCompanion from "@/components/FlowOverlayCompanion";
 
 const HIDDEN_PREFIXES = ["/", "/automatiza", "/login", "/registro", "/reservas", "/demo/login"];
 
@@ -16,5 +16,5 @@ export default function FlowlyCompanionGate() {
 
   if (shouldHideCompanion(pathname)) return null;
 
-  return <FlowlyCompanionRuntime />;
+  return <FlowOverlayCompanion />;
 }

@@ -5939,3 +5939,274 @@ input[type="date"].input-dark { color-scheme: dark; }
 .flowly-v6-runtime[data-open="true"] .flowly-v6-panel {
   display: none !important;
 }
+
+/* Flow Overlay Companion - Phase 1: nuevo Flow global, sustituye al runtime antiguo */
+.flowly-3d-character-wrap,
+.flowly-3d-restore-button {
+  display: none !important;
+}
+
+.flow-overlay-root {
+  font-family: inherit;
+}
+
+.flow-overlay-companion {
+  width: min(92vw, 320px);
+  transition: left .8s cubic-bezier(.2,.9,.2,1), right .8s cubic-bezier(.2,.9,.2,1), top .8s cubic-bezier(.2,.9,.2,1), bottom .8s cubic-bezier(.2,.9,.2,1), transform .8s cubic-bezier(.2,.9,.2,1);
+}
+
+.flow-overlay-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, .24);
+  border-radius: 28px;
+  background: linear-gradient(145deg, rgba(2, 6, 23, .82), rgba(15, 23, 42, .72));
+  box-shadow: 0 28px 90px rgba(8, 47, 73, .42), inset 0 1px 0 rgba(255,255,255,.08);
+  backdrop-filter: blur(20px);
+}
+
+.flow-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 10px 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.035);
+}
+
+.flow-overlay-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  text-align: left;
+}
+
+.flow-overlay-title strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.flow-overlay-title small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(207, 250, 254, .62);
+}
+
+.flow-overlay-status-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, .12), 0 0 18px rgba(34, 211, 238, .85);
+}
+
+.flow-overlay-status-dot.is-thinking { background: #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, .14), 0 0 18px rgba(251, 191, 36, .8); }
+.flow-overlay-status-dot.is-speaking { background: #a78bfa; box-shadow: 0 0 0 4px rgba(167, 139, 250, .16), 0 0 18px rgba(167, 139, 250, .85); }
+.flow-overlay-status-dot.is-error { background: #fb7185; box-shadow: 0 0 0 4px rgba(251, 113, 133, .16), 0 0 18px rgba(251, 113, 133, .85); }
+
+.flow-overlay-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.flow-overlay-actions button,
+.flow-overlay-panel-head button,
+.flow-overlay-icon-button,
+.flow-overlay-send {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.78);
+  cursor: pointer;
+}
+
+.flow-overlay-actions button {
+  width: 27px;
+  height: 27px;
+  border-radius: 999px;
+}
+
+.flow-overlay-actions button:hover,
+.flow-overlay-icon-button:hover,
+.flow-overlay-send:hover {
+  background: rgba(125, 211, 252, .14);
+  color: white;
+}
+
+.flow-overlay-avatar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 270px;
+  border: 0;
+  padding: 0;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 18%, rgba(34, 211, 238, .18), transparent 32%), rgba(2, 6, 23, .42);
+  cursor: pointer;
+}
+
+.flow-overlay-unity-frame {
+  position: absolute;
+  inset: -18px -18px -34px -18px;
+  width: calc(100% + 36px);
+  height: calc(100% + 52px);
+  border: 0;
+  background: transparent;
+}
+
+.flow-overlay-avatar-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: auto 18% 8px 18%;
+  height: 22px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse, rgba(34, 211, 238, .28), transparent 68%);
+  filter: blur(6px);
+}
+
+.flow-overlay-panel {
+  border-top: 1px solid rgba(255,255,255,.08);
+  background: rgba(2, 6, 23, .84);
+  padding: 12px;
+}
+
+.flow-overlay-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.flow-overlay-panel-head p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .18em;
+  color: #cffafe;
+  text-transform: uppercase;
+}
+
+.flow-overlay-panel-head span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(255,255,255,.5);
+}
+
+.flow-overlay-panel-head button {
+  width: 29px;
+  height: 29px;
+  border-radius: 999px;
+}
+
+.flow-overlay-messages {
+  margin-top: 11px;
+  display: grid;
+  max-height: 190px;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.flow-overlay-message {
+  border-radius: 16px;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255,255,255,.78);
+}
+
+.flow-overlay-message.is-flow {
+  border: 1px solid rgba(125, 211, 252, .18);
+  background: rgba(14, 165, 233, .12);
+}
+
+.flow-overlay-message.is-user {
+  justify-self: end;
+  max-width: 88%;
+  background: rgba(255,255,255,.1);
+  color: white;
+}
+
+.flow-overlay-message.is-system {
+  border: 1px solid rgba(251, 191, 36, .18);
+  background: rgba(251, 191, 36, .1);
+}
+
+.flow-overlay-input-row {
+  margin-top: 11px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  gap: 7px;
+}
+
+.flow-overlay-input-row input {
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px;
+  background: rgba(255,255,255,.07);
+  color: white;
+  padding: 0 12px;
+  font-size: 12px;
+  outline: none;
+}
+
+.flow-overlay-input-row input::placeholder {
+  color: rgba(255,255,255,.38);
+}
+
+.flow-overlay-icon-button,
+.flow-overlay-send {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+}
+
+.flow-overlay-send {
+  border-color: rgba(125, 211, 252, .28);
+  background: rgba(34, 211, 238, .16);
+  color: #cffafe;
+}
+
+.flow-overlay-hint {
+  margin-top: 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.055);
+  padding: 9px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(255,255,255,.5);
+}
+
+.flow-overlay-mini {
+  transition: transform .2s ease, background .2s ease;
+}
+
+.flow-overlay-mini:hover {
+  transform: translateY(-2px);
+  background: rgba(8, 47, 73, .94);
+}
+
+@media (max-width: 720px) {
+  .flow-overlay-companion {
+    width: min(94vw, 300px);
+  }
+
+  .flow-overlay-avatar {
+    height: 230px;
+  }
+}
