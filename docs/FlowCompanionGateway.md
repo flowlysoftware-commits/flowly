@@ -1,52 +1,39 @@
-# Flow Companion Gateway v0.2
+# Flow Companion Gateway
 
-Este módulo crea el primer puente real entre Flowly y Unity para el Flow Companion.
+Gateway HTTP seguro para conectar Unity Flow Companion con Flowly en Vercel.
 
-## Endpoints HTTP
+## Transporte actual
 
-### `GET /api/companion/gateway/session`
-Devuelve la configuración que Unity debe usar.
+En Vercel usamos HTTP API Routes, no WebSocket persistente. Esto evita problemas de conexiones largas y permite probar ya la comunicación Unity → Flowly.
 
-### `GET|POST /api/companion/gateway/ping`
-Prueba rápida para confirmar que el gateway responde.
+## Endpoints principales
 
-### `POST /api/companion/gateway/event`
-Recibe eventos del runtime y devuelve comandos para Unity.
+Rutas cortas recomendadas:
 
-### `POST /api/companion/gateway/message`
-Procesa texto usando `runFlowlyBrain` y devuelve comandos `Thinking`, `Speaking`, `Say` e `Idle`.
+- `GET /api/companion/ping` — prueba rápida del gateway.
+- `GET /api/companion/health` — estado del servicio.
+- `GET|POST /api/companion/session` — crea/lee configuración de sesión.
+- `POST /api/companion/event` — envía eventos del Companion.
+- `POST /api/companion/message` — envía texto al cerebro Flowly.
+- `GET /api/companion/unity-config` — configuración para Unity.
+- `POST /api/companion/realtime-session` — crea sesión efímera para OpenAI Realtime.
 
-### `POST /api/companion/gateway/realtime-session`
-Crea una sesión efímera de OpenAI Realtime desde backend seguro.
+Rutas canónicas equivalentes:
 
-## WebSocket local para Unity
+- `/api/companion/gateway/ping`
+- `/api/companion/gateway/health`
+- `/api/companion/gateway/session`
+- `/api/companion/gateway/event`
+- `/api/companion/gateway/message`
+- `/api/companion/gateway/unity-config`
+- `/api/companion/gateway/realtime-session`
 
-Next.js no debe exponer WebSocket persistente desde route handlers serverless. Para desarrollo local se incluye un gateway dedicado sin dependencias externas:
+## Prueba rápida
 
-```bash
-npm run companion:gateway
-```
+Después del deploy en Vercel abre:
 
-Por defecto escucha en:
-
-```text
-ws://localhost:3001/flow-companion
-```
-
-Healthcheck:
-
-```text
-http://localhost:3001/health
-```
-
-## Mensaje mínimo desde Unity
-
-```json
-{
-  "type": "ping",
-  "companionId": "flow-companion-dev",
-  "userId": "local-user"
-}
+```txt
+https://flowlyia.com/api/companion/ping
 ```
 
 Respuesta esperada:
@@ -54,29 +41,31 @@ Respuesta esperada:
 ```json
 {
   "ok": true,
-  "commands": [
-    { "type": "debug", "name": "Pong", "payload": { "message": "Hola Unity" } },
-    { "type": "attention", "name": "LookAtUser" }
-  ]
+  "message": "pong"
 }
 ```
 
-## Variables recomendadas
+## Variables de entorno
+
+Para mensajería avanzada y Realtime:
 
 ```env
 OPENAI_API_KEY=...
-FLOW_COMPANION_WS_URL=ws://localhost:3001/flow-companion
-FLOW_COMPANION_GATEWAY_PORT=3001
-FLOW_COMPANION_GATEWAY_PATH=/flow-companion
 OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview
 OPENAI_REALTIME_VOICE=alloy
+NEXT_PUBLIC_FLOWLY_URL=https://flowlyia.com
 ```
 
-## Siguiente fase
+`OPENAI_API_KEY` nunca debe ir dentro de Unity.
 
-Cuando Unity reciba y aplique los comandos del gateway, el siguiente paso será sustituir el `ping/pong` por streaming real con OpenAI Realtime y eventos como:
+## Unity
 
-- `user.speaking`
-- `assistant.thinking`
-- `assistant.response.started`
-- `assistant.response.finished`
+Durante esta fase Unity debe llamar por HTTP a:
+
+```txt
+https://flowlyia.com/api/companion/ping
+https://flowlyia.com/api/companion/event
+https://flowlyia.com/api/companion/message
+```
+
+WebSocket quedará para un Gateway dedicado futuro si se necesita streaming persistente.
