@@ -381,7 +381,7 @@ export default function DashboardPage() {
   const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
   const [incomingVoiceCall, setIncomingVoiceCall] = useState<VoiceCall | null>(null);
   const [selectedCrmCustomerId, setSelectedCrmCustomerId] = useState("");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("area");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("flow");
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantTourOpen, setAssistantTourOpen] = useState(false);
   const [assistantTourStep, setAssistantTourStep] = useState(0);
@@ -1428,7 +1428,7 @@ export default function DashboardPage() {
 
   const navItems: { id: CoreTab; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
     { id: "area", label: "Área personal", Icon: LayoutDashboard },
-    { id: "flow", label: "Flow Companion", Icon: Bot },
+    { id: "flow", label: "🤖 Nuevo Flow", Icon: Bot },
     { id: "agenda", label: "Agenda", Icon: CalendarDays },
     { id: "servicios", label: "Servicios", Icon: Scissors },
     { id: "empleados", label: "Empleados", Icon: UserRound },
@@ -1838,6 +1838,10 @@ function FloatingAvatarAssistant({
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
 }) {
+  // Nuevo Flow vive en el panel principal: Dashboard -> Nuevo Flow.
+  // Desactivamos el antiguo avatar flotante para que no se mezcle con el nuevo Companion.
+  return null;
+
   const avatarUrl = businessAvatar?.avatar_url;
   const avatarName = businessAvatar?.avatar_name || "Flowly";
   const currentStep = tourSteps[tourStep];
