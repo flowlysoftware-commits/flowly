@@ -42,7 +42,7 @@ export type FlowCompanionGatewayResponse = {
   meta?: Record<string, unknown>;
 };
 
-export const FLOW_COMPANION_GATEWAY_VERSION = "0.2.0";
+export const FLOW_COMPANION_GATEWAY_VERSION = "0.3.0";
 
 function cleanId(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -58,12 +58,14 @@ export function createCompanionSession(input?: {
   companionId?: string;
   userId?: string;
   sessionId?: string;
+  origin?: string;
 }) {
   const companionId = cleanId(input?.companionId, "flow-companion-dev");
   const userId = cleanId(input?.userId, "local-user");
   const sessionId = cleanId(input?.sessionId, `flow-session-${Date.now()}`);
-  const httpBaseUrl = process.env.NEXT_PUBLIC_FLOWLY_URL || process.env.FLOWLY_PUBLIC_URL || "http://localhost:3000";
-  const websocketUrl = process.env.FLOW_COMPANION_WS_URL || "ws://localhost:3001/flow-companion";
+  const httpBaseUrl = (input?.origin || process.env.NEXT_PUBLIC_FLOWLY_URL || process.env.FLOWLY_PUBLIC_URL || "http://localhost:3000").replace(/\/$/, "");
+  const websocketUrl = process.env.FLOW_COMPANION_WS_URL || null;
+  const websocketEnabled = typeof websocketUrl === "string" && websocketUrl.startsWith("ws");
 
   return {
     ok: true,
@@ -78,10 +80,23 @@ export function createCompanionSession(input?: {
       message: `${httpBaseUrl}/api/companion/gateway/message`,
       realtimeSession: `${httpBaseUrl}/api/companion/gateway/realtime-session`,
       ping: `${httpBaseUrl}/api/companion/gateway/ping`,
-      websocket: websocketUrl,
+      websocket: websocketEnabled ? websocketUrl : null,
+      health: `${httpBaseUrl}/api/companion/gateway/health`,
+      unityConfig: `${httpBaseUrl}/api/companion/gateway/unity-config`,
+    },
+    transport: {
+      mode: websocketEnabled ? "websocket" : "http",
+      websocketEnabled,
+      vercelSafe: !websocketEnabled,
     },
     unity: {
-      websocketUrl,
+      mode: websocketEnabled ? "websocket" : "http",
+      gatewayBaseUrl: httpBaseUrl,
+      websocketUrl: websocketEnabled ? websocketUrl : "",
+      sessionUrl: `${httpBaseUrl}/api/companion/gateway/session`,
+      eventUrl: `${httpBaseUrl}/api/companion/gateway/event`,
+      messageUrl: `${httpBaseUrl}/api/companion/gateway/message`,
+      pingUrl: `${httpBaseUrl}/api/companion/gateway/ping`,
       companionId,
       userId,
       debugLogs: process.env.NODE_ENV !== "production",

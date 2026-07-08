@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { companionJson, companionOptions } from "@/lib/flowlyCompanionCors";
 import { createOpenAIRealtimeSession } from "@/lib/flowlyCompanionGateway";
 
 export const runtime = "nodejs";
+
+export async function OPTIONS() {
+  return companionOptions();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,9 +17,9 @@ export async function POST(request: NextRequest) {
     });
 
     const status = result.ok ? 200 : 500;
-    return NextResponse.json(result, { status });
+    return companionJson(result, { status });
   } catch (error) {
     console.error("Flow Companion Realtime session error", error);
-    return NextResponse.json({ ok: false, error: "No se pudo crear la sesión Realtime." }, { status: 500 });
+    return companionJson({ ok: false, error: "No se pudo crear la sesión Realtime." }, { status: 500 });
   }
 }

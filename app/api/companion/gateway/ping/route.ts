@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { companionJson, companionOptions } from "@/lib/flowlyCompanionCors";
 import { createGatewayEventResponse } from "@/lib/flowlyCompanionGateway";
 
 export const runtime = "nodejs";
@@ -6,7 +7,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
 
-  return NextResponse.json(
+  return companionJson(
     createGatewayEventResponse({
       type: "ping",
       companionId: search.get("companionId") || undefined,
@@ -17,10 +18,14 @@ export async function GET(request: NextRequest) {
   );
 }
 
+export async function OPTIONS() {
+  return companionOptions();
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
 
-  return NextResponse.json(
+  return companionJson(
     createGatewayEventResponse({
       type: "ping",
       companionId: typeof body.companionId === "string" ? body.companionId : undefined,

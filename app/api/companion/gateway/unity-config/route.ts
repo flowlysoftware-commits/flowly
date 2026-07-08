@@ -10,22 +10,24 @@ export async function OPTIONS() {
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
-
-  return companionJson(createCompanionSession({
+  const session = createCompanionSession({
     companionId: search.get("companionId") || undefined,
     userId: search.get("userId") || undefined,
     sessionId: search.get("sessionId") || undefined,
     origin: request.nextUrl.origin,
-  }));
-}
+  });
 
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => ({}));
-
-  return companionJson(createCompanionSession({
-    companionId: typeof body.companionId === "string" ? body.companionId : undefined,
-    userId: typeof body.userId === "string" ? body.userId : undefined,
-    sessionId: typeof body.sessionId === "string" ? body.sessionId : undefined,
-    origin: request.nextUrl.origin,
-  }));
+  return companionJson({
+    ok: true,
+    generatedAt: session.generatedAt,
+    version: session.version,
+    mode: session.unity.mode,
+    gatewayBaseUrl: session.unity.gatewayBaseUrl,
+    websocketUrl: session.unity.websocketUrl,
+    companionId: session.companionId,
+    userId: session.userId,
+    sessionId: session.sessionId,
+    endpoints: session.endpoints,
+    debugLogs: session.unity.debugLogs,
+  });
 }

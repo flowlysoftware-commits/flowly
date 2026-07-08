@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { companionJson, companionOptions } from "@/lib/flowlyCompanionCors";
 import { createGatewayEventResponse, type FlowCompanionGatewayEvent } from "@/lib/flowlyCompanionGateway";
 
 export const runtime = "nodejs";
+
+export async function OPTIONS() {
+  return companionOptions();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,9 +25,9 @@ export async function POST(request: NextRequest) {
       payload: body.payload && typeof body.payload === "object" ? body.payload : undefined,
     };
 
-    return NextResponse.json(createGatewayEventResponse(event));
+    return companionJson(createGatewayEventResponse(event));
   } catch (error) {
     console.error("Flow Companion Gateway event error", error);
-    return NextResponse.json({ ok: false, error: "No se pudo procesar el evento del Companion." }, { status: 500 });
+    return companionJson({ ok: false, error: "No se pudo procesar el evento del Companion." }, { status: 500 });
   }
 }

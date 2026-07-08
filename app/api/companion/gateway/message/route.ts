@@ -1,8 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { companionJson, companionOptions } from "@/lib/flowlyCompanionCors";
 import { createGatewayMessageResponse } from "@/lib/flowlyCompanionGateway";
 import type { FlowlyBrainMessage } from "@/lib/flowlyBrain";
 
 export const runtime = "nodejs";
+
+export async function OPTIONS() {
+  return companionOptions();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +15,7 @@ export async function POST(request: NextRequest) {
     const message = typeof body.message === "string" ? body.message.trim() : "";
 
     if (!message) {
-      return NextResponse.json({ ok: false, error: "Falta el mensaje." }, { status: 400 });
+      return companionJson({ ok: false, error: "Falta el mensaje." }, { status: 400 });
     }
 
     const conversation = Array.isArray(body.conversation)
@@ -27,9 +32,9 @@ export async function POST(request: NextRequest) {
       extraContext: body.extraContext && typeof body.extraContext === "object" ? body.extraContext : undefined,
     });
 
-    return NextResponse.json(response);
+    return companionJson(response);
   } catch (error) {
     console.error("Flow Companion Gateway message error", error);
-    return NextResponse.json({ ok: false, error: "No se pudo procesar el mensaje del Companion." }, { status: 500 });
+    return companionJson({ ok: false, error: "No se pudo procesar el mensaje del Companion." }, { status: 500 });
   }
 }
