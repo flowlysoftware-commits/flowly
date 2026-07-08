@@ -1,1 +1,4 @@
-export { GET, runtime, maxDuration } from "@/app/api/companion/gateway/realtime/route";
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+export { GET } from "@/app/api/companion/gateway/realtime/route";
