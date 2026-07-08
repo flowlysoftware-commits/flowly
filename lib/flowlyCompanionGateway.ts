@@ -1,6 +1,7 @@
 import { runFlowlyBrain, type FlowlyBrainMessage } from "@/lib/flowlyBrain";
 
 export type FlowCompanionGatewayEventType =
+  | "ping"
   | "session.started"
   | "session.ended"
   | "mouse.move"
@@ -41,7 +42,7 @@ export type FlowCompanionGatewayResponse = {
   meta?: Record<string, unknown>;
 };
 
-export const FLOW_COMPANION_GATEWAY_VERSION = "0.1.0";
+export const FLOW_COMPANION_GATEWAY_VERSION = "0.2.0";
 
 function cleanId(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -62,7 +63,7 @@ export function createCompanionSession(input?: {
   const userId = cleanId(input?.userId, "local-user");
   const sessionId = cleanId(input?.sessionId, `flow-session-${Date.now()}`);
   const httpBaseUrl = process.env.NEXT_PUBLIC_FLOWLY_URL || process.env.FLOWLY_PUBLIC_URL || "http://localhost:3000";
-  const websocketUrl = process.env.FLOW_COMPANION_WS_URL || null;
+  const websocketUrl = process.env.FLOW_COMPANION_WS_URL || "ws://localhost:3001/flow-companion";
 
   return {
     ok: true,
@@ -76,10 +77,11 @@ export function createCompanionSession(input?: {
       event: `${httpBaseUrl}/api/companion/gateway/event`,
       message: `${httpBaseUrl}/api/companion/gateway/message`,
       realtimeSession: `${httpBaseUrl}/api/companion/gateway/realtime-session`,
+      ping: `${httpBaseUrl}/api/companion/gateway/ping`,
       websocket: websocketUrl,
     },
     unity: {
-      websocketUrl: websocketUrl || `${httpBaseUrl.replace(/^http/, "ws")}/api/companion/gateway/event`,
+      websocketUrl,
       companionId,
       userId,
       debugLogs: process.env.NODE_ENV !== "production",
@@ -89,6 +91,12 @@ export function createCompanionSession(input?: {
 
 export function buildRuntimeCommands(event: FlowCompanionGatewayEvent): FlowCompanionRuntimeCommand[] {
   switch (event.type) {
+    case "ping":
+      return [
+        { type: "debug", name: "Pong", payload: { message: "Hola Unity" } },
+        { type: "attention", name: "LookAtUser" },
+      ];
+
     case "session.started":
       return [
         { type: "state", name: "Idle" },
