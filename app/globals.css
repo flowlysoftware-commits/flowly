@@ -6301,3 +6301,18 @@ iframe[src*="flow-companion-webgl"] {
   display: none !important;
   pointer-events: none !important;
 }
+
+/* Flow real avatar model — uses the uploaded stylized character instead of the legacy Flow renderer. */
+.flow-real-avatar-renderer {
+  background: transparent !important;
+  filter: drop-shadow(0 24px 34px rgba(8, 47, 73, 0.34));
+}
+
+.flow-real-avatar-renderer canvas {
+  background: transparent !important;
+}
+
+.flow-overlay-avatar-3d .flow-real-avatar-renderer {
+  width: 100%;
+  height: 100%;
+}

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronUp, Mic, Minimize2, Navigation, Send, Sparkles, X } from "lucide-react";
-import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
+import FlowRealAssistant3D from "@/components/FlowRealAssistant3D";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_FLOW_COMPANION_GATEWAY_URL || "https://flowly-companion-gateway.onrender.com";
 
@@ -356,7 +356,7 @@ export default function FlowOverlayCompanion() {
 
           <button type="button" onClick={() => setOpen((value) => !value)} className="flow-overlay-avatar" aria-label="Hablar con Flow">
             <div className="flow-overlay-avatar-3d">
-              <FlowlyAssistant3D mode={avatarMode} facing={position === "bottom-left" ? "right" : "left"} compact />
+              <FlowRealAssistant3D mode={avatarMode} facing={position === "bottom-left" ? "right" : "left"} compact />
             </div>
             <span className="flow-overlay-avatar-glow" />
           </button>
