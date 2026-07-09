@@ -43,8 +43,20 @@ type FlowPanelNavigateResult = {
   };
 };
 
+type FlowPanelTarget = {
+  key: string;
+  label: string;
+  aliases: string[];
+  selector: string;
+  route?: string;
+};
+
 type FlowPanelIntegrationApi = {
+  targets: FlowPanelTarget[];
+  findTarget: (target: string) => FlowPanelTarget | null;
+  findElement: (target: string) => HTMLElement | null;
   navigate: (target: string) => Promise<FlowPanelNavigateResult>;
+  click: (target: string) => Promise<FlowPanelNavigateResult>;
   context: () => unknown;
 };
 

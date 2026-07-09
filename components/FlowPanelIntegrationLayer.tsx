@@ -166,16 +166,18 @@ function getWorkspaceContext() {
   };
 }
 
+type FlowPanelIntegrationApi = {
+  targets: FlowPanelTarget[];
+  findTarget: (target: string) => FlowPanelTarget | null;
+  findElement: (target: string) => HTMLElement | null;
+  navigate: (target: string) => Promise<FlowPanelNavigateResult>;
+  click: (target: string) => Promise<FlowPanelNavigateResult>;
+  context: () => unknown;
+};
+
 declare global {
   interface Window {
-    FlowPanelIntegration?: {
-      targets: FlowPanelTarget[];
-      findTarget: (target: string) => FlowPanelTarget | null;
-      findElement: (target: string) => HTMLElement | null;
-      navigate: (target: string) => Promise<FlowPanelNavigateResult>;
-      click: (target: string) => Promise<FlowPanelNavigateResult>;
-      context: () => ReturnType<typeof getWorkspaceContext>;
-    };
+    FlowPanelIntegration?: FlowPanelIntegrationApi;
   }
 }
 
