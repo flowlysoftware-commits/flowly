@@ -6337,3 +6337,46 @@ iframe[src*="companion-webgl"] {
   display: none !important;
   pointer-events: none !important;
 }
+
+
+/* Flow overlay final fix: eliminar avatar grande del panel y no bloquear el dashboard. */
+.flow-overlay-root {
+  pointer-events: none !important;
+  z-index: 60 !important;
+}
+
+.flow-overlay-companion {
+  pointer-events: auto !important;
+}
+
+.flow-overlay-companion .flow-overlay-shell,
+.flow-overlay-companion button,
+.flow-overlay-companion input,
+.flow-overlay-companion form {
+  pointer-events: auto !important;
+}
+
+/* Cualquier integración antigua o avatar de tarjeta grande queda apagado. */
+.flowly-v6-runtime,
+.flowly-v6-launcher,
+.flowly-v6-panel,
+.flowly-v6-talk,
+.flowly-3d-character-wrap,
+.flowly-3d-restore-button,
+.flow-unity-webgl,
+.flow-unity-webgl-card,
+.flow-webgl-large,
+iframe[src*="flow-companion-webgl"],
+iframe[src*="companion-webgl"] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* El canvas del Flow nuevo nunca debe capturar eventos fuera de su propio widget. */
+.flow-real-avatar-renderer,
+.flow-real-avatar-renderer canvas {
+  pointer-events: none !important;
+}
+.flow-overlay-avatar {
+  pointer-events: auto !important;
+}

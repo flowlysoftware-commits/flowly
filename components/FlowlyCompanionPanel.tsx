@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
 import {
   Activity,
   Bot,
@@ -175,16 +174,16 @@ export default function FlowlyCompanionPanel({
         </div>
       </div>
 
-      <div className="rounded-[1.7rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,.18),transparent_34%),linear-gradient(180deg,rgba(15,23,42,.88),rgba(2,6,23,.92))] p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="rounded-[1.7rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,.14),transparent_34%),linear-gradient(180deg,rgba(15,23,42,.88),rgba(2,6,23,.92))] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.35em] text-cyan-200">Flow Web Companion</p>
-            <h2 className="mt-1 text-xl font-black text-white">Avatar nativo del panel</h2>
+            <h2 className="mt-1 text-xl font-black text-white">Overlay activo</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
+              El avatar ya no se renderiza en una tarjeta grande del dashboard. Flow vive como overlay lateral global para no bloquear el panel.
+            </p>
           </div>
-          <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100">Sin WebGL Unity</span>
-        </div>
-        <div className="grid min-h-[360px] place-items-center rounded-[1.4rem] border border-white/10 bg-black/20">
-          <FlowlyAssistant3D mode="idle" facing="front" />
+          <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100">Avatar lateral activo</span>
         </div>
       </div>
 

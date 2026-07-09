@@ -49,7 +49,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
 
     cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.1 : 1.72), -center.z * scale);
     cloned.scale.setScalar(scale);
-    cloned.rotation.y = Math.PI;
+    cloned.rotation.y = Math.PI / 2;
 
     cloned.traverse((object) => {
       if (!isMesh(object)) return;
@@ -84,7 +84,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     const isPointing = mode === "point";
     const isWaving = mode === "wave";
 
-    const direction = facing === "left" ? -0.18 : facing === "right" ? 0.18 : 0;
+    const direction = facing === "left" ? -0.35 : facing === "right" ? 0.35 : 0;
     const breath = Math.sin(t * 2.0) * 0.018;
     const walk = isWalking ? Math.sin(t * 7.2) * 0.045 : 0;
     const talk = isTalking ? Math.sin(t * 9.5) * 0.018 : 0;

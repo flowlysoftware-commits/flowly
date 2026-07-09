@@ -320,7 +320,7 @@ export default function FlowOverlayCompanion() {
 
           <button type="button" onClick={() => setOpen((value) => !value)} className="flow-overlay-avatar" aria-label="Hablar con Flow">
             <div className="flow-overlay-avatar-3d">
-              <FlowRealAssistant3D mode={avatarMode} facing={position === "bottom-left" ? "right" : "left"} compact />
+              <FlowRealAssistant3D mode={avatarMode} facing="front" compact />
             </div>
             <span className="flow-overlay-avatar-glow" />
           </button>

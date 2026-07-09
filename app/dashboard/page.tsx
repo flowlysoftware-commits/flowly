@@ -1453,6 +1453,7 @@ export default function DashboardPage() {
           <nav className="grid gap-2">
             {navItems.map(({ id, label, Icon }) => (
               <button
+                type="button"
                 key={id}
                 data-flow-target={id}
                 data-flow-label={label}
@@ -1578,6 +1579,7 @@ export default function DashboardPage() {
                   return (
                     <div key={item.key} className="grid gap-2">
                       <button
+                        type="button"
                         data-flow-module={item.slug}
                         data-flow-module-key={item.key}
                         data-flow-label={item.short}
@@ -1590,6 +1592,7 @@ export default function DashboardPage() {
                         <div className="ml-4 grid gap-2 border-l border-white/10 pl-3">
                           {children.map((child) => (
                             <button
+                              type="button"
                               key={child.label}
                               data-flow-submenu={String(child.tab)}
                               data-flow-label={child.label}
@@ -1609,8 +1612,8 @@ export default function DashboardPage() {
           )}
 
           <div className="mt-6 grid gap-2 border-t border-white/10 pt-4">
-            <button onClick={openBillingPortal} className="menu-item"><CreditCard size={17} /> Facturación Stripe</button>
-            <button onClick={logout} className="menu-item"><LogOut size={17} /> Salir</button>
+            <button type="button" onClick={openBillingPortal} className="menu-item"><CreditCard size={17} /> Facturación Stripe</button>
+            <button type="button" onClick={logout} className="menu-item"><LogOut size={17} /> Salir</button>
           </div>
         </aside>
 
