@@ -51,7 +51,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     cloned.scale.setScalar(scale);
     // El FBX original viene orientado de espaldas para la cámara web.
     // Esta rotación lo deja mirando al usuario dentro del overlay.
-    cloned.rotation.y = -Math.PI / 2;
+    cloned.rotation.y = Math.PI;
 
     cloned.traverse((object) => {
       if (!isMesh(object)) return;
