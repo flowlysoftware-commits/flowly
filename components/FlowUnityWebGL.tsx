@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Deprecated.
+ * LEGACY FLOW DISABLED.
  *
- * El Flow definitivo ya no usa Unity WebGL incrustado. Ahora se renderiza
- * como avatar nativo web mediante React Three Fiber desde FlowlyAssistant3D.
- * Este componente queda como stub seguro para evitar que imports antiguos
- * vuelvan a mostrar el visor WebGL grande.
+ * This component is intentionally empty.
+ * The only visual assistant must be:
+ *   components/flow-runtime/FlowRuntime.tsx
+ * mounted once from app/layout.tsx.
  */
-export default function FlowUnityWebGL() {
+export default function LegacyFlowDisabled() {
   return null;
 }

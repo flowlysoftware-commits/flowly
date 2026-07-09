@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import FlowlyAssistant3D from "@/components/FlowlyAssistant3D";
-import FlowlyCompanionPanel from "@/components/FlowlyCompanionPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -2111,7 +2109,7 @@ function FloatingAvatarAssistant({
           )}
 
           <div className="flowly-3d-light-rim" />
-          <FlowlyAssistant3D modelUrl={modelUrl} mode={characterMode} facing={assistantFacing} onClick={openAndGreet} />
+          {null}
           <div className="flowly-3d-ground-shadow" />
 
           <div className="flowly-character-status">

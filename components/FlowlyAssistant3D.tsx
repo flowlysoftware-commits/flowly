@@ -1,14 +1,13 @@
 "use client";
 
-type FlowlyAssistant3DProps = {
-  modelUrl?: string;
-  mode?: string;
-  skinTone?: string;
-  facing?: "left" | "right" | "front";
-  compact?: boolean;
-  onClick?: () => void;
-};
-
-export default function FlowlyAssistant3D(_props: FlowlyAssistant3DProps) {
+/**
+ * LEGACY FLOW DISABLED.
+ *
+ * This component is intentionally empty.
+ * The only visual assistant must be:
+ *   components/flow-runtime/FlowRuntime.tsx
+ * mounted once from app/layout.tsx.
+ */
+export default function LegacyFlowDisabled() {
   return null;
 }
