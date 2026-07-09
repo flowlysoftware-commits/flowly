@@ -6855,20 +6855,31 @@ iframe[src*="companion-webgl"] {
   z-index: -1 !important;
 }
 
-/* Flow movement runtime: keep the avatar upright while the FBX walk clip moves legs. */
-.flow-overlay-companion.flow-overlay-free-character {
-  transition: left 1.45s cubic-bezier(.22, .78, .22, 1), top 1.45s cubic-bezier(.22, .78, .22, 1) !important;
+/* Flow animation mixer hard override: no CSS skeletal fake movement. */
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer,
+.flow-real-avatar-renderer[data-mode="idle"],
+.flow-real-avatar-renderer[data-mode="walk"],
+.flow-real-avatar-renderer[data-mode="talk"],
+.flow-real-avatar-renderer[data-mode="wave"],
+.flow-real-avatar-renderer[data-mode="point"],
+.flow-real-avatar-renderer[data-mode="thinking"] {
+  animation: none !important;
+  transform: none !important;
+  filter: drop-shadow(0 22px 24px rgba(8, 47, 73, .34)) !important;
 }
 
-.flow-overlay-companion.flow-overlay-free-character.is-navigating .flow-overlay-free-avatar,
-.flow-overlay-companion.flow-overlay-free-character.is-navigating .flow-overlay-free-avatar-button {
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button .flow-real-avatar-renderer {
   animation: none !important;
   transform: none !important;
 }
 
-.flow-overlay-free-avatar-button .flow-real-avatar-renderer,
-.flow-overlay-free-avatar-button .flowly-avatar-renderer-v6,
-.flow-overlay-free-avatar-button .flowly-v3-canvas,
-.flow-overlay-free-avatar-button canvas {
+.flow-overlay-free-avatar-button {
   transform: none !important;
+}
+
+.flow-overlay-companion.flow-overlay-free-character {
+  transition:
+    left 1.35s cubic-bezier(.18,.86,.22,1),
+    top 1.35s cubic-bezier(.18,.86,.22,1),
+    transform 1.35s cubic-bezier(.18,.86,.22,1) !important;
 }
