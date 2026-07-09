@@ -6975,3 +6975,320 @@ iframe[src*="companion-webgl"] {
 .flowly-3d-restore-button {
   display: none !important;
 }
+
+/* =========================================================
+   FLOW RUNTIME V2 - único Flow activo y libre sobre el panel
+   ========================================================= */
+.flow-runtime-v2-root {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.flow-runtime-v2-root .flow-overlay-root,
+.flow-runtime-v2-root .flowly-3d-character-wrap,
+.flow-runtime-v2-root .flowly-companion-widget {
+  display: none !important;
+}
+
+.flow-runtime-v2-character {
+  position: fixed;
+  width: 175px;
+  height: 245px;
+  transform: translate3d(0, 0, 0);
+  transition: left 900ms cubic-bezier(.2,.9,.22,1), top 900ms cubic-bezier(.2,.9,.22,1);
+  pointer-events: none;
+  will-change: left, top;
+}
+
+.flow-runtime-v2-character.is-walking {
+  transition-duration: 1050ms;
+}
+
+.flow-runtime-v2-avatar {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+  filter: drop-shadow(0 24px 35px rgba(0, 0, 0, .38));
+}
+
+.flow-runtime-v2-avatar .flowly-avatar-renderer-v6,
+.flow-runtime-v2-avatar .flow-real-avatar-renderer {
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.flow-runtime-v2-avatar canvas {
+  background: transparent !important;
+}
+
+.flow-runtime-v2-character.is-ready .flow-runtime-v2-avatar {
+  animation: flow-runtime-idle 4.8s ease-in-out infinite;
+}
+
+.flow-runtime-v2-character.is-speaking .flow-runtime-v2-avatar {
+  animation: flow-runtime-talk 1.15s ease-in-out infinite;
+}
+
+.flow-runtime-v2-character.is-thinking .flow-runtime-v2-avatar {
+  animation: flow-runtime-think 2s ease-in-out infinite;
+}
+
+.flow-runtime-v2-character.is-walking .flow-runtime-v2-avatar {
+  animation: flow-runtime-walk-bob .55s ease-in-out infinite;
+}
+
+@keyframes flow-runtime-idle {
+  0%, 100% { transform: translateY(0) rotate(.15deg); }
+  50% { transform: translateY(-4px) rotate(-.15deg); }
+}
+
+@keyframes flow-runtime-talk {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.018); }
+}
+
+@keyframes flow-runtime-think {
+  0%, 100% { transform: translateY(0) rotate(-.3deg); }
+  50% { transform: translateY(-2px) rotate(.5deg); }
+}
+
+@keyframes flow-runtime-walk-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.flow-runtime-v2-marker {
+  position: absolute;
+  left: 6px;
+  top: -17px;
+  z-index: 2;
+  border: 1px solid rgba(34, 211, 238, .38);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, .72);
+  color: #a5f3fc;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  padding: 3px 7px;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+}
+
+.flow-runtime-v2-status {
+  position: absolute;
+  right: 22px;
+  bottom: 36px;
+  z-index: 3;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, .78);
+  border: 1px solid rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 5px 8px;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+}
+
+.flow-runtime-v2-status.is-walking { color: #67e8f9; }
+.flow-runtime-v2-status.is-speaking { color: #c4b5fd; }
+.flow-runtime-v2-status.is-thinking { color: #fde68a; }
+.flow-runtime-v2-status.is-error { color: #fda4af; }
+
+.flow-runtime-v2-bubble {
+  position: absolute;
+  right: 120px;
+  top: 42px;
+  width: 230px;
+  border: 1px solid rgba(103, 232, 249, .2);
+  border-radius: 18px 18px 4px 18px;
+  background: rgba(2, 6, 23, .86);
+  color: white;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 11px 13px;
+  pointer-events: auto;
+  box-shadow: 0 20px 45px rgba(0,0,0,.35);
+  backdrop-filter: blur(18px);
+}
+
+.flow-runtime-v2-actions {
+  position: absolute;
+  left: 50%;
+  bottom: -16px;
+  display: flex;
+  gap: 7px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.flow-runtime-v2-actions button,
+.flow-runtime-v2-shortcuts button,
+.flow-runtime-v2-panel form button {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .84);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  backdrop-filter: blur(14px);
+}
+
+.flow-runtime-v2-actions button:hover,
+.flow-runtime-v2-shortcuts button:hover,
+.flow-runtime-v2-panel form button:hover {
+  background: rgba(8, 145, 178, .9);
+}
+
+.flow-runtime-v2-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: min(390px, calc(100vw - 32px));
+  z-index: 91;
+  border: 1px solid rgba(103, 232, 249, .18);
+  border-radius: 26px;
+  background: rgba(2, 6, 23, .9);
+  color: white;
+  padding: 15px;
+  pointer-events: auto;
+  box-shadow: 0 30px 80px rgba(0,0,0,.45);
+  backdrop-filter: blur(22px);
+}
+
+.flow-runtime-v2-panel header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flow-runtime-v2-panel header strong {
+  display: block;
+  font-size: 15px;
+}
+
+.flow-runtime-v2-panel header span,
+.flow-runtime-v2-panel small {
+  display: block;
+  margin-top: 3px;
+  color: rgba(255,255,255,.55);
+  font-size: 11px;
+}
+
+.flow-runtime-v2-panel header button {
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  color: white;
+  padding: 7px;
+  cursor: pointer;
+}
+
+.flow-runtime-v2-messages {
+  max-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.flow-runtime-v2-message {
+  border-radius: 16px;
+  padding: 9px 11px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: rgba(255,255,255,.08);
+}
+
+.flow-runtime-v2-message.is-user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, rgba(34,211,238,.3), rgba(168,85,247,.28));
+}
+
+.flow-runtime-v2-message.is-flow {
+  align-self: flex-start;
+  background: rgba(15, 23, 42, .92);
+}
+
+.flow-runtime-v2-message.is-system {
+  align-self: center;
+  color: #fda4af;
+  background: rgba(127, 29, 29, .28);
+}
+
+.flow-runtime-v2-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.flow-runtime-v2-panel form {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  padding: 6px;
+}
+
+.flow-runtime-v2-panel form input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: white;
+  font-size: 13px;
+}
+
+.flow-runtime-v2-panel form input::placeholder {
+  color: rgba(255,255,255,.45);
+}
+
+.flow-panel-target-highlight {
+  outline: 3px solid rgba(34, 211, 238, .92) !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 8px rgba(34,211,238,.13), 0 0 35px rgba(34,211,238,.45) !important;
+}
+
+/* Evita que restos visuales del Flow antiguo vuelvan a aparecer. */
+.flowly-3d-character-wrap,
+.flowly-3d-restore-button,
+.flow-overlay-root:not(.flow-runtime-v2-root) {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  .flow-runtime-v2-character {
+    width: 138px;
+    height: 198px;
+  }
+
+  .flow-runtime-v2-bubble {
+    display: none;
+  }
+
+  .flow-runtime-v2-actions {
+    bottom: -10px;
+  }
+}
