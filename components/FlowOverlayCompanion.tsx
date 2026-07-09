@@ -6,8 +6,9 @@ import FlowRealAssistant3D from "@/components/FlowRealAssistant3D";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_FLOW_COMPANION_GATEWAY_URL || "https://flowly-companion-gateway.onrender.com";
 
-type OverlayPosition = "bottom-right" | "bottom-left" | "center-right" | "custom";
 type FlowStatus = "idle" | "connecting" | "ready" | "thinking" | "speaking" | "error";
+type OverlayPosition = "bottom-right" | "bottom-left" | "center-right" | "custom";
+type AvatarMode = "idle" | "walk" | "wave" | "talk" | "point" | "thinking";
 
 type ChatMessage = {
   id: string;
@@ -19,7 +20,6 @@ type NavigationTarget = {
   key: string;
   label: string;
   aliases: string[];
-  href?: string;
   selector: string;
 };
 
@@ -30,7 +30,7 @@ type CustomPosition = {
 
 const NAVIGATION_TARGETS: NavigationTarget[] = [
   { key: "flow", label: "Flow Companion", aliases: ["flow", "companion", "asistente"], selector: '[data-flow-target="flow"]' },
-  { key: "dashboard", label: "Área personal", aliases: ["dashboard", "area", "área", "inicio", "panel", "home"], selector: '[data-flow-target="area"]' },
+  { key: "area", label: "Área personal", aliases: ["dashboard", "area", "área", "inicio", "panel", "home"], selector: '[data-flow-target="area"]' },
   { key: "crm", label: "CRM", aliases: ["crm", "cliente", "clientes", "contacto", "contactos"], selector: '[data-flow-module="crm"], [data-flow-target="clientes"], [data-flow-target="crm"]' },
   { key: "facturacion", label: "Facturación", aliases: ["facturacion", "facturación", "factura", "facturas", "presupuesto", "presupuestos", "billing"], selector: '[data-flow-module="facturacion"], [data-flow-module="billing"], [data-flow-target="facturacion"]' },
   { key: "whatsapp", label: "WhatsApp", aliases: ["whatsapp", "wasap", "wsp", "mensajes"], selector: '[data-flow-module="whatsapp"], [data-flow-target="whatsapp"]' },
@@ -62,9 +62,7 @@ function normalizeText(value: string) {
 function detectNavigationTarget(text: string) {
   const normalized = normalizeText(text);
   const hasNavigationIntent = /\b(llevame|llevarme|abre|abrir|ve|ir|vamos|entra|entrar|muestrame|mostrar|navega|navegar|pulsa|click|clic)\b/.test(normalized);
-
   if (!hasNavigationIntent) return null;
-
   return NAVIGATION_TARGETS.find((target) => target.aliases.some((alias) => normalized.includes(normalizeText(alias)))) || null;
 }
 
@@ -101,14 +99,13 @@ function findTargetElement(target: NavigationTarget) {
   }) || null;
 }
 
-function computeOverlayPosition(element: HTMLElement, panelWidth = 320, estimatedHeight = 390): CustomPosition {
+function computeOverlayPosition(element: HTMLElement, panelWidth = 220, estimatedHeight = 240): CustomPosition {
   const rect = element.getBoundingClientRect();
-  const margin = 18;
+  const margin = 16;
   const rightCandidate = rect.right + margin;
   const leftCandidate = rect.left - panelWidth - margin;
   const left = rightCandidate + panelWidth < window.innerWidth ? rightCandidate : Math.max(margin, leftCandidate);
   const top = clamp(rect.top + rect.height / 2 - estimatedHeight / 2, margin, Math.max(margin, window.innerHeight - estimatedHeight - margin));
-
   return { left, top };
 }
 
@@ -120,14 +117,14 @@ export default function FlowOverlayCompanion() {
   const [status, setStatus] = useState<FlowStatus>("connecting");
   const [input, setInput] = useState("");
   const [activeNavigation, setActiveNavigation] = useState<string | null>(null);
+  const [avatarMode, setAvatarMode] = useState<AvatarMode>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "flow",
-      text: "Estoy aquí. Ya puedo moverme por el panel y llevarte a módulos como CRM, WhatsApp o Facturación.",
+      text: "Soy el nuevo Flow. Estoy flotando sobre el panel sin bloquearlo. Pídeme: llévame al CRM.",
     },
   ]);
-  const [avatarMode, setAvatarMode] = useState<"idle" | "walk" | "wave" | "talk" | "point" | "thinking">("idle");
   const mountedRef = useRef(true);
 
   const positionClasses = useMemo(() => getPositionClasses(position), [position]);
@@ -157,33 +154,10 @@ export default function FlowOverlayCompanion() {
   }, []);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (!event.data || typeof event.data !== "object") return;
-      if (event.data.type === "flow-avatar-ready") setStatus("ready");
-      if (event.data.type === "flow-avatar-error") setStatus("error");
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  useEffect(() => {
-    const runPendingNavigation = () => {
-      const pending = window.localStorage.getItem("flow_pending_navigation_target");
-      if (!pending) return;
-
-      const target = NAVIGATION_TARGETS.find((item) => item.key === pending);
-      if (!target) return;
-
-      window.localStorage.removeItem("flow_pending_navigation_target");
-      window.setTimeout(() => void navigateToTarget(target, { silent: true }), 650);
-    };
-
-    runPendingNavigation();
-
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ target?: string }>).detail;
-      const target = NAVIGATION_TARGETS.find((item) => item.key === detail?.target || item.aliases.includes(String(detail?.target || "")));
+      const targetValue = String(detail?.target || "");
+      const target = NAVIGATION_TARGETS.find((item) => item.key === targetValue || item.aliases.includes(targetValue));
       if (target) void navigateToTarget(target);
     };
 
@@ -206,10 +180,7 @@ export default function FlowOverlayCompanion() {
     setActiveNavigation(target.key);
 
     if (!options?.silent) {
-      setMessages((current) => [
-        ...current,
-        { id: createId("flow"), role: "flow", text: `Voy contigo a ${target.label}.` },
-      ]);
+      setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Voy contigo a ${target.label}.` }]);
     }
 
     if (!window.location.pathname.startsWith("/dashboard")) {
@@ -225,10 +196,7 @@ export default function FlowOverlayCompanion() {
       setOpen(true);
       setStatus("error");
       setAvatarMode("idle");
-      setMessages((current) => [
-        ...current,
-        { id: createId("system"), role: "system", text: `No encuentro el acceso a ${target.label} en esta pantalla.` },
-      ]);
+      setMessages((current) => [...current, { id: createId("system"), role: "system", text: `No encuentro el acceso a ${target.label} en esta pantalla.` }]);
       setActiveNavigation(null);
       return;
     }
@@ -237,21 +205,16 @@ export default function FlowOverlayCompanion() {
     await new Promise((resolve) => window.setTimeout(resolve, 450));
 
     element = findTargetElement(target) || element;
-    const nextPosition = computeOverlayPosition(element);
-    setCustomPosition(nextPosition);
+    setCustomPosition(computeOverlayPosition(element));
     setPosition("custom");
 
     element.classList.add("flow-overlay-target-highlight");
-
-    await new Promise((resolve) => window.setTimeout(resolve, 1050));
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
 
     element.click();
     setStatus("speaking");
     setAvatarMode("point");
-    setMessages((current) => [
-      ...current,
-      { id: createId("flow"), role: "flow", text: `Ya he abierto ${target.label}.` },
-    ]);
+    setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Ya he abierto ${target.label}.` }]);
 
     await new Promise((resolve) => window.setTimeout(resolve, 700));
     element.classList.remove("flow-overlay-target-highlight");
@@ -261,7 +224,7 @@ export default function FlowOverlayCompanion() {
     setActiveNavigation(null);
   }
 
-  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = input.trim();
     if (!text) return;
@@ -270,9 +233,9 @@ export default function FlowOverlayCompanion() {
     setOpen(true);
     setMessages((current) => [...current, { id: createId("user"), role: "user", text }]);
 
-    const navigationTarget = detectNavigationTarget(text);
-    if (navigationTarget) {
-      await navigateToTarget(navigationTarget);
+    const target = detectNavigationTarget(text);
+    if (target) {
+      await navigateToTarget(target);
       return;
     }
 
@@ -280,28 +243,29 @@ export default function FlowOverlayCompanion() {
     setAvatarMode("thinking");
 
     try {
-      const response = await fetch("/api/companion/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, source: "flow-overlay", pathname: window.location.pathname }),
-      });
-
-      const data = await response.json().catch(() => null);
-      const reply = data?.reply || data?.message || data?.text || "He recibido tu mensaje. También puedes pedirme: ‘Flow, llévame al CRM’.";
-
-      setStatus("speaking");
-      setAvatarMode("talk");
-      setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: reply }]);
+      const response = await fetch(`${GATEWAY_URL.replace(/\/$/, "")}/health`, { cache: "no-store" });
+      setStatus(response.ok ? "speaking" : "error");
+      setAvatarMode(response.ok ? "talk" : "idle");
+      setMessages((current) => [
+        ...current,
+        {
+          id: createId("flow"),
+          role: "flow",
+          text: response.ok
+            ? "Estoy conectado al Gateway. El siguiente paso será conectar este overlay al chat completo del Companion."
+            : "Estoy visible, pero ahora mismo no puedo comprobar el Gateway.",
+        },
+      ]);
       window.setTimeout(() => {
-        setStatus("ready");
+        setStatus(response.ok ? "ready" : "error");
         setAvatarMode("idle");
-      }, 1200);
+      }, 900);
     } catch {
       setStatus("error");
       setAvatarMode("idle");
       setMessages((current) => [...current, { id: createId("system"), role: "system", text: "No he podido contactar con el Companion ahora mismo." }]);
     }
-  };
+  }
 
   const cyclePosition = () => {
     setCustomPosition(null);
@@ -319,7 +283,7 @@ export default function FlowOverlayCompanion() {
 
   if (minimized) {
     return (
-      <div className="flow-overlay-root pointer-events-none fixed inset-0 z-[90]">
+      <div className="flow-overlay-root pointer-events-none fixed inset-0 z-[70]">
         <button
           type="button"
           onClick={() => setMinimized(false)}
@@ -334,7 +298,7 @@ export default function FlowOverlayCompanion() {
   }
 
   return (
-    <div className="flow-overlay-root pointer-events-none fixed inset-0 z-[90] overflow-hidden">
+    <div className="flow-overlay-root pointer-events-none fixed inset-0 z-[70] overflow-hidden" aria-live="polite">
       <div className={`flow-overlay-companion pointer-events-auto fixed ${positionClasses} ${activeNavigation ? "is-navigating" : ""}`} style={customStyle}>
         <div className="flow-overlay-shell">
           <div className="flow-overlay-header">
@@ -366,16 +330,14 @@ export default function FlowOverlayCompanion() {
               <div className="flow-overlay-panel-head">
                 <div>
                   <p>Nuevo Flow Overlay</p>
-                  <span>Fase 2: navegación inteligente activa</span>
+                  <span>Avatar web nativo, sin Unity WebGL ni Flow antiguo.</span>
                 </div>
                 <button type="button" onClick={() => setOpen(false)}><ChevronDown size={16} /></button>
               </div>
 
               <div className="flow-overlay-messages">
                 {messages.slice(-7).map((message) => (
-                  <div key={message.id} className={`flow-overlay-message is-${message.role}`}>
-                    {message.text}
-                  </div>
+                  <div key={message.id} className={`flow-overlay-message is-${message.role}`}>{message.text}</div>
                 ))}
               </div>
 
@@ -387,17 +349,11 @@ export default function FlowOverlayCompanion() {
 
               <form onSubmit={sendMessage} className="flow-overlay-input-row">
                 <button type="button" className="flow-overlay-icon-button" aria-label="Voz próximamente"><Mic size={15} /></button>
-                <input
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  placeholder="Ej: Flow, llévame al CRM"
-                />
+                <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ej: Flow, llévame al CRM" />
                 <button type="submit" className="flow-overlay-send" aria-label="Enviar"><Send size={15} /></button>
               </form>
 
-              <div className="flow-overlay-hint">
-                Prueba: “Flow, llévame al CRM”, “abre facturación” o “ve a WhatsApp”.
-              </div>
+              <div className="flow-overlay-hint">Prueba: “Flow, llévame al CRM”, “abre facturación” o “ve a WhatsApp”.</div>
             </div>
           )}
         </div>

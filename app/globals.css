@@ -6316,3 +6316,24 @@ iframe[src*="flow-companion-webgl"] {
   width: 100%;
   height: 100%;
 }
+
+/* Flow Overlay fix: no bloquea el panel salvo sus propios botones. */
+.flow-overlay-root { pointer-events: none !important; }
+.flow-overlay-companion,
+.flow-overlay-mini,
+.flow-overlay-companion * { pointer-events: auto; }
+.flow-overlay-target-highlight {
+  outline: 3px solid rgba(34, 211, 238, .9) !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 8px rgba(34, 211, 238, .12), 0 0 36px rgba(34, 211, 238, .28) !important;
+}
+.flowly-3d-character-wrap,
+.flowly-3d-restore-button,
+.flow-unity-webgl,
+.flow-unity-webgl-card,
+.flow-webgl-large,
+iframe[src*="flow-companion-webgl"],
+iframe[src*="companion-webgl"] {
+  display: none !important;
+  pointer-events: none !important;
+}
