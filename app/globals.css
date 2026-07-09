@@ -6620,3 +6620,111 @@ iframe[src*="companion-webgl"] {
     height: 240px !important;
   }
 }
+
+/* Flow Web Presence v1: natural motion, no box, walking feedback. */
+.flow-overlay-companion.flow-overlay-free-character {
+  transition:
+    left 1.15s cubic-bezier(.18,.86,.22,1),
+    top 1.15s cubic-bezier(.18,.86,.22,1),
+    right 1.15s cubic-bezier(.18,.86,.22,1),
+    bottom 1.15s cubic-bezier(.18,.86,.22,1),
+    transform 1.15s cubic-bezier(.18,.86,.22,1) !important;
+}
+
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer {
+  animation: flow-web-idle-presence 5.8s ease-in-out infinite !important;
+  transform-origin: 50% 88% !important;
+}
+
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button .flow-real-avatar-renderer {
+  animation: flow-web-walk-presence .48s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="talk"] {
+  animation: flow-web-talk-presence .72s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="wave"] {
+  animation: flow-web-wave-presence .62s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="thinking"] {
+  animation: flow-web-thinking-presence 2.4s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="point"] {
+  animation: flow-web-point-presence 1.3s ease-in-out infinite !important;
+}
+
+.flow-overlay-free-avatar-button::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  left: 48px !important;
+  right: 48px !important;
+  bottom: 12px !important;
+  height: 16px !important;
+  border-radius: 999px !important;
+  background: radial-gradient(circle, rgba(34,211,238,.36), rgba(147,51,234,.18) 45%, transparent 72%) !important;
+  filter: blur(5px) !important;
+  pointer-events: none !important;
+  opacity: .75 !important;
+  z-index: -1 !important;
+}
+
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button::before {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 18px !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 999px !important;
+  background: #a855f7 !important;
+  box-shadow:
+    -34px 4px 0 rgba(168,85,247,.64),
+    -68px 8px 0 rgba(168,85,247,.42),
+    -102px 12px 0 rgba(168,85,247,.24) !important;
+  animation: flow-web-footstep-trail .48s ease-in-out infinite !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+
+@keyframes flow-web-idle-presence {
+  0%, 100% { transform: translateY(0) rotate(-.45deg) scale(1); }
+  35% { transform: translateY(-2px) rotate(.35deg) scale(1.003); }
+  68% { transform: translateY(1px) rotate(-.15deg) scale(.998); }
+}
+
+@keyframes flow-web-walk-presence {
+  0%, 100% { transform: translateY(0) rotate(-1.4deg); }
+  50% { transform: translateY(-6px) rotate(1.4deg); }
+}
+
+@keyframes flow-web-talk-presence {
+  0%, 100% { transform: translateY(0) rotate(.15deg); }
+  50% { transform: translateY(-2px) rotate(-.35deg); }
+}
+
+@keyframes flow-web-wave-presence {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-3px) rotate(-2deg); }
+  50% { transform: translateY(-1px) rotate(2deg); }
+  75% { transform: translateY(-3px) rotate(-1deg); }
+}
+
+@keyframes flow-web-thinking-presence {
+  0%, 100% { transform: translateY(0) rotate(-.3deg); filter: saturate(.96); }
+  50% { transform: translateY(-1px) rotate(.6deg); filter: saturate(1.08); }
+}
+
+@keyframes flow-web-point-presence {
+  0%, 100% { transform: translateY(0) translateX(0) rotate(0); }
+  50% { transform: translateY(-2px) translateX(5px) rotate(1.2deg); }
+}
+
+@keyframes flow-web-footstep-trail {
+  0%, 100% { opacity: .2; transform: translateX(-8px) scale(.86); }
+  50% { opacity: .75; transform: translateX(8px) scale(1); }
+}

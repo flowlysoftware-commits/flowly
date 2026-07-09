@@ -180,6 +180,7 @@ export default function FlowOverlayCompanion() {
   const [input, setInput] = useState("");
   const [activeNavigation, setActiveNavigation] = useState<string | null>(null);
   const [avatarMode, setAvatarMode] = useState<AvatarMode>("idle");
+  const [avatarFacing, setAvatarFacing] = useState<"left" | "right" | "front">("front");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
@@ -290,16 +291,19 @@ export default function FlowOverlayCompanion() {
     element = integration?.findElement?.(target.key) || findTargetElement(target) || element;
     const rect = element.getBoundingClientRect();
     const positionNearTarget = computeFreeCharacterPositionFromRect(rect);
+    const previousLeft = customPosition?.left ?? (position === "bottom-right" ? window.innerWidth - 230 : position === "bottom-left" ? 24 : window.innerWidth - 230);
 
+    setAvatarFacing(positionNearTarget.left < previousLeft ? "left" : "right");
     setCustomPosition(positionNearTarget);
     setPosition("custom");
     window.dispatchEvent(new CustomEvent("flow:overlay-walking", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
 
-    await wait(1050);
+    await wait(1250);
 
     element.classList.add("flow-overlay-target-highlight", "flow-panel-target-highlight");
     window.dispatchEvent(new CustomEvent("flow:overlay-arrived", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
 
+    setAvatarFacing("front");
     setStatus("speaking");
     setAvatarMode("point");
     setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Ya estoy en ${target.label}. Lo abro ahora.` }]);
@@ -308,8 +312,11 @@ export default function FlowOverlayCompanion() {
     element.click();
 
     await wait(520);
+    setAvatarMode("talk");
+    await wait(700);
     element.classList.remove("flow-overlay-target-highlight", "flow-panel-target-highlight");
     setStatus("ready");
+    setAvatarFacing("front");
     setAvatarMode("idle");
     setOpen(true);
     setActiveNavigation(null);
@@ -400,7 +407,7 @@ export default function FlowOverlayCompanion() {
           className="flow-overlay-free-avatar-button pointer-events-auto"
           aria-label="Hablar con Flow"
         >
-          <FlowRealAssistant3D mode={avatarMode} facing="front" compact />
+          <FlowRealAssistant3D mode={avatarMode} facing={avatarFacing} compact />
           <span className={`flow-overlay-free-status is-${status}`} />
         </button>
 
