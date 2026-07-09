@@ -2,20 +2,17 @@
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Html, useGLTF } from "@react-three/drei";
+import { Html, useFBX, useGLTF } from "@react-three/drei";
 import {
   AnimationAction,
   AnimationClip,
   AnimationMixer,
   Box3,
-  Euler,
   Group,
   LoopOnce,
   LoopRepeat,
   Mesh,
   Object3D,
-  Quaternion,
-  Vector2,
   Vector3,
 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -30,12 +27,18 @@ type FlowRealAssistant3DProps = {
 };
 
 const MODEL_URL = "/avatars/flowly.glb";
-const BASE_FRONT_ROTATION = Math.PI;
+const CLIP_URLS: Record<FlowMode, string> = {
+  idle: "/avatars/Idle.fbx",
+  walk: "/avatars/Walking.fbx",
+  wave: "/avatars/Waving.fbx",
+  talk: "/avatars/Talking.fbx",
+  point: "/avatars/Pointing.fbx",
+  thinking: "/avatars/Idle.fbx",
+};
 
-const LOWER_BODY_KEYWORDS = ["thigh", "calf", "foot", "toe", "leg"];
-const UPPER_BODY_KEYWORDS = ["clavicle", "shoulder", "upperarm", "forearm", "hand", "arm"];
-const TORSO_KEYWORDS = ["spine", "waist", "pelvis", "hips", "hip"];
-const HEAD_KEYWORDS = ["head", "neck"];
+// La orientación del avatar se controla aquí. Si el FBX/GLB vuelve a quedar de lado,
+// solo hay que tocar este valor, no todo el runtime.
+const BASE_FRONT_ROTATION = Math.PI;
 
 function isMesh(object: unknown): object is Mesh {
   return Boolean(object && typeof object === "object" && "isMesh" in object && (object as Mesh).isMesh);
@@ -49,141 +52,62 @@ function Loading() {
   );
 }
 
-function includesAny(value: string, keywords: string[]) {
-  const normalized = value.toLowerCase();
-  return keywords.some((keyword) => normalized.includes(keyword));
-}
-
-function trackEnergy(track: AnimationClip["tracks"][number]) {
-  const values = track.values;
-  if (!values || values.length < 8) return 0;
-
-  let score = 0;
-  const step = Math.max(1, Math.floor(values.length / 180));
-  for (let index = step; index < values.length; index += step) {
-    score += Math.abs(values[index] - values[index - step]);
-  }
-  return score / Math.max(1, values.length / step);
-}
-
-function scoreClip(clip: AnimationClip, keywords: string[]) {
-  return clip.tracks.reduce((total, track) => {
-    if (!includesAny(track.name, keywords)) return total;
-    if (track.name.toLowerCase().includes("scale")) return total;
-    return total + trackEnergy(track);
-  }, 0);
-}
-
-function totalClipScore(clip: AnimationClip) {
-  return clip.tracks.reduce((total, track) => {
-    if (track.name.toLowerCase().includes("scale")) return total;
-    return total + trackEnergy(track);
-  }, 0);
-}
-
-function cloneClipWithoutRootTranslation(clip: AnimationClip, name: string) {
+function sanitizeClip(clip: AnimationClip, name: string) {
   const tracks = clip.tracks
     .filter((track) => {
       const lower = track.name.toLowerCase();
       if (lower.includes("scale")) return false;
-      // Evita que una animación desplace el personaje fuera del overlay.
-      if ((lower.includes("root") || lower.includes("hip") || lower.includes("pelvis")) && lower.includes("position")) return false;
+      // En web el desplazamiento lo controla el overlay DOM. La animación solo mueve el esqueleto.
+      if ((lower.includes("root") || lower.includes("hips") || lower.includes("hip") || lower.includes("pelvis")) && lower.includes("position")) return false;
       return true;
     })
     .map((track) => track.clone());
 
-  const cloned = new AnimationClip(name, clip.duration, tracks);
-  cloned.optimize();
-  return cloned;
+  const clean = new AnimationClip(name, clip.duration, tracks);
+  clean.optimize();
+  return clean;
 }
 
-function pickClips(sourceClips: AnimationClip[]) {
-  const clips = sourceClips.filter((clip) => clip.tracks?.length > 0);
-  if (!clips.length) return {} as Partial<Record<FlowMode, AnimationClip>>;
+function firstClipFromFbx(fbx: Group, fallbackName: string) {
+  const animations = (fbx.animations || []).filter((clip) => clip.tracks?.length > 0);
+  if (!animations.length) return null;
+  return sanitizeClip(animations[0], fallbackName);
+}
 
-  const byTotal = [...clips].sort((a, b) => totalClipScore(a) - totalClipScore(b));
-  const idleSource = byTotal[0] || clips[0];
-
-  const byLower = [...clips].sort((a, b) => scoreClip(b, LOWER_BODY_KEYWORDS) - scoreClip(a, LOWER_BODY_KEYWORDS));
-  const walkSource = byLower[0] || idleSource;
-
-  const byUpper = [...clips].sort((a, b) => scoreClip(b, UPPER_BODY_KEYWORDS) - scoreClip(a, UPPER_BODY_KEYWORDS));
-  const waveSource = byUpper[0] || idleSource;
-  const pointSource = byUpper.find((clip) => clip !== waveSource) || waveSource;
-
-  const byTalk = [...clips].sort((a, b) => {
-    const scoreA = scoreClip(a, UPPER_BODY_KEYWORDS) + scoreClip(a, TORSO_KEYWORDS) + scoreClip(a, HEAD_KEYWORDS) - scoreClip(a, LOWER_BODY_KEYWORDS) * 0.35;
-    const scoreB = scoreClip(b, UPPER_BODY_KEYWORDS) + scoreClip(b, TORSO_KEYWORDS) + scoreClip(b, HEAD_KEYWORDS) - scoreClip(b, LOWER_BODY_KEYWORDS) * 0.35;
-    return scoreB - scoreA;
-  });
-  const talkSource = byTalk.find((clip) => clip !== walkSource && clip !== waveSource) || byTalk[0] || idleSource;
-
-  const thinkingSource = byTotal.find((clip) => clip !== idleSource) || idleSource;
-
-  return {
-    idle: cloneClipWithoutRootTranslation(idleSource, "flow_idle"),
-    walk: cloneClipWithoutRootTranslation(walkSource, "flow_walk"),
-    talk: cloneClipWithoutRootTranslation(talkSource, "flow_talk"),
-    wave: cloneClipWithoutRootTranslation(waveSource, "flow_wave"),
-    point: cloneClipWithoutRootTranslation(pointSource, "flow_point"),
-    thinking: cloneClipWithoutRootTranslation(thinkingSource, "flow_thinking"),
-  } satisfies Partial<Record<FlowMode, AnimationClip>>;
+function facingToYaw(facing: "left" | "right" | "front") {
+  if (facing === "left") return 0.34;
+  if (facing === "right") return -0.34;
+  return 0;
 }
 
 function configureAction(action: AnimationAction, mode: FlowMode) {
   action.enabled = true;
   action.clampWhenFinished = mode === "wave" || mode === "point";
-
-  if (mode === "wave" || mode === "point") {
-    action.setLoop(LoopOnce, 1);
-  } else {
-    action.setLoop(LoopRepeat, Infinity);
-  }
-
+  action.setLoop(mode === "wave" || mode === "point" ? LoopOnce : LoopRepeat, mode === "wave" || mode === "point" ? 1 : Infinity);
   action.setEffectiveWeight(1);
 
-  if (mode === "walk") action.setEffectiveTimeScale(1.05);
+  if (mode === "walk") action.setEffectiveTimeScale(1.0);
   else if (mode === "talk") action.setEffectiveTimeScale(0.92);
-  else if (mode === "thinking") action.setEffectiveTimeScale(0.66);
+  else if (mode === "thinking") action.setEffectiveTimeScale(0.62);
   else action.setEffectiveTimeScale(1);
 
   return action;
 }
 
-function facingOffset(facing: "left" | "right" | "front") {
-  // Giro muy pequeño; Flow debe seguir mirando al usuario, no quedar de lado.
-  if (facing === "left") return 0.22;
-  if (facing === "right") return -0.22;
-  return 0;
-}
-
-function findFirstByName(root: Object3D, names: string[]) {
-  const wanted = names.map((name) => name.toLowerCase());
-  let found: Object3D | null = null;
-
-  root.traverse((object) => {
-    if (found) return;
-    const objectName = object.name.toLowerCase();
-    if (wanted.some((name) => objectName === name || objectName.includes(name))) found = object;
-  });
-
-  return found;
-}
-
-function FlowModel({ mode = "idle", facing = "front", compact = true }: Required<Pick<FlowRealAssistant3DProps, "mode" | "facing" | "compact">>) {
+function FlowModel({ mode, facing, compact }: Required<Pick<FlowRealAssistant3DProps, "mode" | "facing" | "compact">>) {
   const rootRef = useRef<Group>(null);
   const mixerRef = useRef<AnimationMixer | null>(null);
   const currentActionRef = useRef<AnimationAction | null>(null);
   const actionsRef = useRef<Partial<Record<FlowMode, AnimationAction>>>({});
   const modeRef = useRef<FlowMode>(mode);
   const facingRef = useRef(facing);
-  const pointerRef = useRef(new Vector2(0, 0));
-  const headRef = useRef<Object3D | null>(null);
-  const neckRef = useRef<Object3D | null>(null);
-  const headOffsetRef = useRef(new Quaternion());
-  const neckOffsetRef = useRef(new Quaternion());
 
   const gltf = useGLTF(MODEL_URL);
+  const idleFbx = useFBX(CLIP_URLS.idle);
+  const walkFbx = useFBX(CLIP_URLS.walk);
+  const waveFbx = useFBX(CLIP_URLS.wave);
+  const talkFbx = useFBX(CLIP_URLS.talk);
+  const pointFbx = useFBX(CLIP_URLS.point);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -192,18 +116,6 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
   useEffect(() => {
     facingRef.current = facing;
   }, [facing]);
-
-  useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
-      pointerRef.current.set(
-        (event.clientX / Math.max(1, window.innerWidth) - 0.5) * 2,
-        -(event.clientY / Math.max(1, window.innerHeight) - 0.5) * 2
-      );
-    };
-
-    window.addEventListener("pointermove", handlePointerMove, { passive: true });
-    return () => window.removeEventListener("pointermove", handlePointerMove);
-  }, []);
 
   const model = useMemo(() => {
     const cloned = cloneSkeleton(gltf.scene) as Group;
@@ -214,14 +126,10 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     box.getCenter(center);
 
     const height = size.y || 1;
-    const targetHeight = compact ? 2.42 : 3.22;
+    const targetHeight = compact ? 2.28 : 3.05;
     const scale = targetHeight / height;
 
-    cloned.position.set(
-      -center.x * scale,
-      -box.min.y * scale - (compact ? 1.18 : 1.72),
-      -center.z * scale
-    );
+    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.03 : 1.48), -center.z * scale);
     cloned.scale.setScalar(scale);
     cloned.rotation.y = BASE_FRONT_ROTATION;
 
@@ -232,22 +140,28 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
       object.frustumCulled = false;
     });
 
-    headRef.current = findFirstByName(cloned, ["Head"]);
-    neckRef.current = findFirstByName(cloned, ["NeckTwist02", "NeckTwist01", "Neck"]);
-
     return cloned;
   }, [gltf.scene, compact]);
 
-  const clipMap = useMemo(() => pickClips(gltf.animations || []), [gltf.animations]);
+  const clips = useMemo(() => {
+    const idle = firstClipFromFbx(idleFbx, "flow_idle") || firstClipFromFbx(walkFbx, "flow_idle_fallback");
+    return {
+      idle,
+      walk: firstClipFromFbx(walkFbx, "flow_walk") || idle,
+      wave: firstClipFromFbx(waveFbx, "flow_wave") || idle,
+      talk: firstClipFromFbx(talkFbx, "flow_talk") || idle,
+      point: firstClipFromFbx(pointFbx, "flow_point") || idle,
+      thinking: idle,
+    } satisfies Partial<Record<FlowMode, AnimationClip | null>>;
+  }, [idleFbx, walkFbx, waveFbx, talkFbx, pointFbx]);
 
   useEffect(() => {
     const mixer = new AnimationMixer(model);
     mixerRef.current = mixer;
 
     const actions: Partial<Record<FlowMode, AnimationAction>> = {};
-
     for (const key of ["idle", "walk", "talk", "wave", "point", "thinking"] as FlowMode[]) {
-      const clip = clipMap[key] || clipMap.idle;
+      const clip = clips[key] || clips.idle;
       if (!clip) continue;
       actions[key] = configureAction(mixer.clipAction(clip, model), key);
     }
@@ -265,7 +179,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
       currentActionRef.current = null;
       mixerRef.current = null;
     };
-  }, [model, clipMap, mode]);
+  }, [model, clips, mode]);
 
   useEffect(() => {
     const actions = actionsRef.current;
@@ -273,19 +187,20 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     if (!next || currentActionRef.current === next) return;
 
     const previous = currentActionRef.current;
-    next.reset().fadeIn(0.24).play();
-    previous?.fadeOut(0.24);
+    next.reset().fadeIn(0.18).play();
+    previous?.fadeOut(0.18);
     currentActionRef.current = next;
 
     if ((mode === "wave" || mode === "point") && actions.idle) {
       const timer = window.setTimeout(() => {
+        if (modeRef.current !== mode) return;
         const idle = actionsRef.current.idle;
-        if (!idle || modeRef.current !== mode) return;
+        if (!idle) return;
         const current = currentActionRef.current;
-        idle.reset().fadeIn(0.28).play();
-        current?.fadeOut(0.28);
+        idle.reset().fadeIn(0.22).play();
+        current?.fadeOut(0.22);
         currentActionRef.current = idle;
-      }, mode === "wave" ? 1700 : 1350);
+      }, mode === "wave" ? 1650 : 1200);
 
       return () => window.clearTimeout(timer);
     }
@@ -298,38 +213,21 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     if (!root) return;
 
     const t = state.clock.elapsedTime;
-    const currentMode = modeRef.current;
-    const pointer = pointerRef.current;
+    const targetYaw = facingToYaw(facingRef.current);
+    root.rotation.y += (targetYaw - root.rotation.y) * Math.min(1, delta * 5.2);
 
-    const subtleMouseYaw = Math.max(-0.18, Math.min(0.18, pointer.x * 0.09));
-    const targetRotationY = facingOffset(facingRef.current) + subtleMouseYaw;
-    root.rotation.y += (targetRotationY - root.rotation.y) * Math.min(1, delta * 4.8);
-
-    // Presencia mínima del cuerpo completo. Las animaciones reales vienen del GLB.
-    const breathe = Math.sin(t * 1.1) * (currentMode === "walk" ? 0.001 : 0.004);
-    root.position.y = breathe;
-    root.rotation.z = Math.sin(t * 0.42) * (currentMode === "walk" ? 0.0008 : 0.0022);
-
-    const head = headRef.current;
-    const neck = neckRef.current;
-
-    if (head || neck) {
-      const headYaw = Math.max(-0.16, Math.min(0.16, pointer.x * 0.12));
-      const headPitch = Math.max(-0.10, Math.min(0.10, pointer.y * 0.07));
-      const neckYaw = headYaw * 0.42;
-      const neckPitch = headPitch * 0.36;
-
-      headOffsetRef.current.setFromEuler(new Euler(headPitch, headYaw, 0, "XYZ"));
-      neckOffsetRef.current.setFromEuler(new Euler(neckPitch, neckYaw, 0, "XYZ"));
-
-      // El mixer actualiza la pose cada frame; multiplicamos un offset pequeño y acotado.
-      if (neck) neck.quaternion.multiply(neckOffsetRef.current);
-      if (head) head.quaternion.multiply(headOffsetRef.current);
+    // Solo presencia mínima. Nada de manipular cabeza/huesos a ciegas.
+    if (modeRef.current !== "walk") {
+      root.position.y = Math.sin(t * 1.1) * 0.004;
+      root.rotation.z = Math.sin(t * 0.42) * 0.002;
+    } else {
+      root.position.y = Math.sin(t * 5.5) * 0.002;
+      root.rotation.z = 0;
     }
   });
 
   return (
-    <group ref={rootRef}>
+    <group ref={rootRef} rotation-y={0}>
       <primitive object={model} />
     </group>
   );
@@ -356,16 +254,16 @@ export default function FlowRealAssistant3D({ mode = "idle", facing = "front", c
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.18, 8], zoom: compact ? 76 : 66, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.12, 8], zoom: compact ? 78 : 66, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
         style={{ background: "transparent" }}
       >
-        <ambientLight intensity={1.45} />
-        <directionalLight position={[2.6, 4.8, 5.5]} intensity={2.25} castShadow />
-        <pointLight position={[-2.4, 2.2, 3]} color="#67e8f9" intensity={0.95} />
-        <pointLight position={[1.6, 0.75, 2.4]} color="#a855f7" intensity={0.64} />
+        <ambientLight intensity={1.35} />
+        <directionalLight position={[2.6, 4.8, 5.5]} intensity={2.15} castShadow />
+        <pointLight position={[-2.4, 2.2, 3]} color="#67e8f9" intensity={0.88} />
+        <pointLight position={[1.6, 0.75, 2.4]} color="#a855f7" intensity={0.58} />
         <Suspense fallback={<Loading />}>
           <FlowModel mode={mode} facing={facing} compact={compact} />
         </Suspense>
@@ -375,3 +273,8 @@ export default function FlowRealAssistant3D({ mode = "idle", facing = "front", c
 }
 
 useGLTF.preload(MODEL_URL);
+useFBX.preload(CLIP_URLS.idle);
+useFBX.preload(CLIP_URLS.walk);
+useFBX.preload(CLIP_URLS.wave);
+useFBX.preload(CLIP_URLS.talk);
+useFBX.preload(CLIP_URLS.point);

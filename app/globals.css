@@ -6947,3 +6947,31 @@ iframe[src*="companion-webgl"] {
 .flow-overlay-free-avatar-button canvas {
   background: transparent !important;
 }
+
+/* Flow web runtime stabilisation: no legacy boxes, no fake CSS walking, real FBX mixer only. */
+.flow-overlay-wave-chip {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer,
+.flow-overlay-free-avatar-button .flowly-avatar-renderer-v6,
+.flow-overlay-free-avatar-button canvas {
+  transform: none !important;
+  animation: none !important;
+}
+
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button .flow-real-avatar-renderer,
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button canvas {
+  transform: none !important;
+  animation: none !important;
+}
+
+.flowly-3d-character-wrap,
+.flowly-3d-restore-button {
+  display: none !important;
+}
