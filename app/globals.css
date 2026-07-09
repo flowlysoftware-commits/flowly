@@ -6804,3 +6804,53 @@ iframe[src*="companion-webgl"] {
   0%, 100% { transform: translateY(0) translateX(0) rotate(0); }
   50% { transform: translateY(-3px) translateX(8px) rotate(1.45deg); }
 }
+
+
+/* Flow animated FBX runtime fix: the character must use skeleton clips, not CSS puppet movement. */
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer,
+.flow-real-avatar-renderer[data-mode="idle"],
+.flow-real-avatar-renderer[data-mode="walk"],
+.flow-real-avatar-renderer[data-mode="talk"],
+.flow-real-avatar-renderer[data-mode="wave"],
+.flow-real-avatar-renderer[data-mode="thinking"],
+.flow-real-avatar-renderer[data-mode="point"] {
+  animation: none !important;
+  transform: none !important;
+}
+
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button .flow-real-avatar-renderer {
+  animation: none !important;
+  transform: none !important;
+}
+
+.flow-real-avatar-renderer,
+.flow-real-avatar-renderer canvas {
+  background: transparent !important;
+}
+
+.flow-overlay-companion.flow-overlay-free-character {
+  transition:
+    left 1.45s cubic-bezier(.16,.84,.22,1),
+    top 1.45s cubic-bezier(.16,.84,.22,1),
+    transform 1.45s cubic-bezier(.16,.84,.22,1) !important;
+}
+
+.flow-overlay-free-avatar-button::before {
+  display: none !important;
+}
+
+.flow-overlay-free-avatar-button::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  left: 46px !important;
+  right: 46px !important;
+  bottom: 10px !important;
+  height: 15px !important;
+  border-radius: 999px !important;
+  background: radial-gradient(circle, rgba(34,211,238,.28), rgba(147,51,234,.12) 48%, transparent 73%) !important;
+  filter: blur(5px) !important;
+  pointer-events: none !important;
+  opacity: .68 !important;
+  z-index: -1 !important;
+}
