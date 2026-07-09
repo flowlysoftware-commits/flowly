@@ -375,12 +375,10 @@ export default function FlowOverlayCompanion() {
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="flow-overlay-avatar flow-overlay-free-avatar pointer-events-auto"
+          className="flow-overlay-free-avatar-button pointer-events-auto"
           aria-label="Hablar con Flow"
         >
-          <div className="flow-overlay-avatar-3d">
-            <FlowRealAssistant3D mode={avatarMode} facing="front" compact />
-          </div>
+          <FlowRealAssistant3D mode={avatarMode} facing="front" compact />
           <span className={`flow-overlay-free-status is-${status}`} />
         </button>
 
@@ -397,7 +395,7 @@ export default function FlowOverlayCompanion() {
         )}
 
         {open && (
-          <div className="flow-overlay-panel flow-overlay-free-bubble pointer-events-auto">
+          <div className="flow-overlay-free-bubble flow-overlay-speech-panel pointer-events-auto">
             <div className="flow-overlay-panel-head">
               <div>
                 <p>Flow</p>

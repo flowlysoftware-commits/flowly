@@ -51,7 +51,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     cloned.scale.setScalar(scale);
     // El FBX original viene orientado de espaldas para la cámara web.
     // Esta rotación lo deja mirando al usuario dentro del overlay.
-    cloned.rotation.y = Math.PI / 2;
+    cloned.rotation.y = -Math.PI / 2;
 
     cloned.traverse((object) => {
       if (!isMesh(object)) return;
@@ -134,6 +134,7 @@ export default function FlowRealAssistant3D({ mode = "idle", facing = "front", c
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
+        style={{ background: "transparent" }}
       >
         <ambientLight intensity={1.65} />
         <directionalLight position={[2.6, 4.8, 5.5]} intensity={2.45} castShadow />
