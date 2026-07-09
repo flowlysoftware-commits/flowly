@@ -6854,3 +6854,21 @@ iframe[src*="companion-webgl"] {
   opacity: .68 !important;
   z-index: -1 !important;
 }
+
+/* Flow movement runtime: keep the avatar upright while the FBX walk clip moves legs. */
+.flow-overlay-companion.flow-overlay-free-character {
+  transition: left 1.45s cubic-bezier(.22, .78, .22, 1), top 1.45s cubic-bezier(.22, .78, .22, 1) !important;
+}
+
+.flow-overlay-companion.flow-overlay-free-character.is-navigating .flow-overlay-free-avatar,
+.flow-overlay-companion.flow-overlay-free-character.is-navigating .flow-overlay-free-avatar-button {
+  animation: none !important;
+  transform: none !important;
+}
+
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer,
+.flow-overlay-free-avatar-button .flowly-avatar-renderer-v6,
+.flow-overlay-free-avatar-button .flowly-v3-canvas,
+.flow-overlay-free-avatar-button canvas {
+  transform: none !important;
+}

@@ -308,12 +308,12 @@ export default function FlowOverlayCompanion() {
     const positionNearTarget = computeFreeCharacterPositionFromRect(rect);
     const previousLeft = customPosition?.left ?? (position === "bottom-right" ? window.innerWidth - 230 : position === "bottom-left" ? 24 : window.innerWidth - 230);
 
-    setAvatarFacing(positionNearTarget.left < previousLeft ? "left" : "right");
+    setAvatarFacing("front");
     setCustomPosition(positionNearTarget);
     setPosition("custom");
     window.dispatchEvent(new CustomEvent("flow:overlay-walking", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
 
-    await wait(1350);
+    await wait(1850);
 
     element.classList.add("flow-overlay-target-highlight", "flow-panel-target-highlight");
     window.dispatchEvent(new CustomEvent("flow:overlay-arrived", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
@@ -323,7 +323,7 @@ export default function FlowOverlayCompanion() {
     setAvatarMode("point");
     setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Ya estoy en ${target.label}. Lo abro ahora.` }]);
 
-    await wait(850);
+    await wait(950);
     element.click();
 
     await wait(520);

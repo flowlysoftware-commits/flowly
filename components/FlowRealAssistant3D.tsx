@@ -10,10 +10,12 @@ import {
   Box3,
   Color,
   Group,
+  KeyframeTrack,
   LoopOnce,
   LoopRepeat,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   TextureLoader,
   Vector3,
 } from "three";
@@ -36,7 +38,7 @@ const TEXTURE_URLS = {
   metalness: "/models/flow/metallic.jpeg",
 };
 
-const ANIMATION_URLS = {
+const ANIMATION_URLS: Record<Exclude<FlowMode, "thinking">, string> = {
   idle: "/avatars/Idle.fbx",
   walk: "/avatars/Walking.fbx",
   talk: "/avatars/Talking.fbx",
@@ -44,6 +46,8 @@ const ANIMATION_URLS = {
   point: "/avatars/Pointing.fbx",
 };
 
+// El FBX del personaje está exportado de espaldas respecto a la cámara web.
+// Este giro deja el torso mirando al usuario.
 const BASE_FRONT_ROTATION = Math.PI;
 
 function isMesh(object: unknown): object is Mesh {
@@ -58,12 +62,80 @@ function Loading() {
   );
 }
 
-function firstUsableClip(group: Group, fallbackName: string) {
-  const clip = group.animations?.find((item) => item.tracks?.length > 0) || group.animations?.[0];
-  if (!clip) return null;
-  const cloned = clip.clone();
-  cloned.name = fallbackName;
-  return cloned.optimize();
+function normalizeBoneName(value: string) {
+  return value
+    .replace(/^.*:/, "")
+    .replace(/^mixamorig/i, "")
+    .replace(/^Armature[_\-. ]?/i, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+}
+
+function collectObjectNameMap(root: Object3D) {
+  const exact = new Map<string, string>();
+  const normalized = new Map<string, string>();
+
+  root.traverse((object) => {
+    if (!object.name) return;
+    exact.set(object.name, object.name);
+    const key = normalizeBoneName(object.name);
+    if (key && !normalized.has(key)) normalized.set(key, object.name);
+  });
+
+  return { exact, normalized };
+}
+
+function splitTrackName(trackName: string) {
+  const dotIndex = trackName.indexOf(".");
+  if (dotIndex < 0) return { nodeName: trackName, property: "" };
+  return {
+    nodeName: trackName.slice(0, dotIndex),
+    property: trackName.slice(dotIndex),
+  };
+}
+
+function shouldDropTrack(nodeName: string, property: string) {
+  const normalized = normalizeBoneName(nodeName);
+
+  // Evita que algunos FBX muevan todo el avatar fuera de su sitio.
+  // Mantiene Hips.position porque es necesaria para caminar natural.
+  if (property === ".position" && (normalized === "armature" || normalized === "root" || normalized === "scene")) {
+    return true;
+  }
+
+  return false;
+}
+
+function retargetClipToModel(group: Group, model: Group, fallbackName: string) {
+  const sourceClip = group.animations?.find((item) => item.tracks?.length > 0) || group.animations?.[0];
+  if (!sourceClip) return null;
+
+  const names = collectObjectNameMap(model);
+  const tracks: KeyframeTrack[] = [];
+
+  for (const track of sourceClip.tracks) {
+    const { nodeName, property } = splitTrackName(track.name);
+    if (!property || shouldDropTrack(nodeName, property)) continue;
+
+    const exactMatch = names.exact.get(nodeName);
+    const normalizedMatch = names.normalized.get(normalizeBoneName(nodeName));
+    const targetName = exactMatch || normalizedMatch;
+
+    if (!targetName) {
+      // Si no encontramos el hueso en el avatar real, no aplicamos esa pista.
+      // Esto evita rotaciones raras de cabeza/cuello/piernas por nombres incompatibles.
+      continue;
+    }
+
+    const clonedTrack = track.clone();
+    clonedTrack.name = `${targetName}${property}`;
+    tracks.push(clonedTrack);
+  }
+
+  if (tracks.length === 0) return null;
+
+  const clip = new AnimationClip(fallbackName, sourceClip.duration, tracks);
+  return clip.optimize();
 }
 
 function configureAction(action: AnimationAction, mode: FlowMode) {
@@ -78,16 +150,18 @@ function configureAction(action: AnimationAction, mode: FlowMode) {
 
   action.setEffectiveWeight(1);
 
-  if (mode === "walk") action.setEffectiveTimeScale(1.08);
-  else if (mode === "talk") action.setEffectiveTimeScale(0.92);
+  if (mode === "walk") action.setEffectiveTimeScale(1.16);
+  else if (mode === "talk") action.setEffectiveTimeScale(0.95);
+  else if (mode === "thinking") action.setEffectiveTimeScale(0.72);
   else action.setEffectiveTimeScale(1);
 
   return action;
 }
 
 function facingOffset(facing: "left" | "right" | "front") {
-  if (facing === "left") return 0.42;
-  if (facing === "right") return -0.42;
+  // Pequeño giro expresivo, no giro lateral completo. Así no vuelve a mirar de lado.
+  if (facing === "left") return 0.16;
+  if (facing === "right") return -0.16;
   return 0;
 }
 
@@ -128,12 +202,12 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     box.getCenter(center);
 
     const height = size.y || 1;
-    const targetHeight = compact ? 2.22 : 3.15;
+    const targetHeight = compact ? 2.18 : 3.15;
     const scale = targetHeight / height;
 
     cloned.position.set(
       -center.x * scale,
-      -box.min.y * scale - (compact ? 1.08 : 1.72),
+      -box.min.y * scale - (compact ? 1.05 : 1.72),
       -center.z * scale
     );
     cloned.scale.setScalar(scale);
@@ -164,12 +238,12 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     mixerRef.current = mixer;
 
     const clips: Partial<Record<FlowMode, AnimationClip | null>> = {
-      idle: firstUsableClip(idleFbx, "flow_idle"),
-      walk: firstUsableClip(walkFbx, "flow_walk"),
-      talk: firstUsableClip(talkFbx, "flow_talk"),
-      wave: firstUsableClip(waveFbx, "flow_wave"),
-      point: firstUsableClip(pointFbx, "flow_point"),
-      thinking: firstUsableClip(idleFbx, "flow_thinking"),
+      idle: retargetClipToModel(idleFbx, model, "flow_idle"),
+      walk: retargetClipToModel(walkFbx, model, "flow_walk"),
+      talk: retargetClipToModel(talkFbx, model, "flow_talk"),
+      wave: retargetClipToModel(waveFbx, model, "flow_wave"),
+      point: retargetClipToModel(pointFbx, model, "flow_point"),
+      thinking: retargetClipToModel(idleFbx, model, "flow_thinking"),
     };
 
     const actions: Partial<Record<FlowMode, AnimationAction>> = {};
@@ -181,9 +255,9 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     }
 
     actionsRef.current = actions;
-    const initial = actions[mode] || actions.idle;
+    const initial = actions[modeRef.current] || actions.idle;
     if (initial) {
-      initial.reset().fadeIn(0.18).play();
+      initial.reset().fadeIn(0.2).play();
       currentActionRef.current = initial;
     }
 
@@ -193,7 +267,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
       currentActionRef.current = null;
       mixerRef.current = null;
     };
-  }, [model, idleFbx, walkFbx, talkFbx, waveFbx, pointFbx, mode]);
+  }, [model, idleFbx, walkFbx, talkFbx, waveFbx, pointFbx]);
 
   useEffect(() => {
     const actions = actionsRef.current;
@@ -201,8 +275,8 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     if (!next || currentActionRef.current === next) return;
 
     const previous = currentActionRef.current;
-    next.reset().fadeIn(0.22).play();
-    previous?.fadeOut(0.22);
+    next.reset().fadeIn(mode === "walk" ? 0.12 : 0.24).play();
+    previous?.fadeOut(mode === "walk" ? 0.12 : 0.24);
     currentActionRef.current = next;
 
     if ((mode === "wave" || mode === "point") && actions.idle) {
@@ -213,7 +287,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
         idle.reset().fadeIn(0.25).play();
         current?.fadeOut(0.25);
         currentActionRef.current = idle;
-      }, mode === "wave" ? 1450 : 1100);
+      }, mode === "wave" ? 1450 : 1150);
 
       return () => window.clearTimeout(timer);
     }
@@ -232,16 +306,16 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     const isThinking = currentMode === "thinking";
 
     const targetRotationY = facingOffset(facingRef.current);
-    root.rotation.y += (targetRotationY - root.rotation.y) * Math.min(1, delta * 6.5);
+    root.rotation.y += (targetRotationY - root.rotation.y) * Math.min(1, delta * 4.5);
 
-    // Presencia procedural mínima. No toca huesos: las piernas, brazos y cuerpo vienen de los clips FBX.
-    const idleBreath = Math.sin(t * 1.35) * (isWalking ? 0.002 : 0.010);
-    const talkingPulse = isTalking ? Math.sin(t * 5.6) * 0.006 : 0;
-    const thinkingLean = isThinking ? Math.sin(t * 0.9) * 0.010 : 0;
+    // Presencia suave encima de los clips FBX. No toca huesos.
+    const idleBreath = Math.sin(t * 1.25) * (isWalking ? 0.001 : 0.006);
+    const talkingPulse = isTalking ? Math.sin(t * 4.8) * 0.003 : 0;
+    const thinkingLean = isThinking ? Math.sin(t * 0.8) * 0.006 : 0;
 
     root.position.y = idleBreath + talkingPulse;
     root.rotation.x = thinkingLean;
-    root.rotation.z = isWalking ? Math.sin(t * 7.2) * 0.006 : Math.sin(t * 0.55) * 0.004;
+    root.rotation.z = isWalking ? Math.sin(t * 6.4) * 0.004 : Math.sin(t * 0.55) * 0.0025;
   });
 
   return (
