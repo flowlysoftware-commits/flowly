@@ -28,6 +28,32 @@ type CustomPosition = {
   top: number;
 };
 
+type FlowPanelNavigateResult = {
+  ok: boolean;
+  target?: string;
+  label?: string;
+  message: string;
+  rect?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    centerX: number;
+    centerY: number;
+  };
+};
+
+type FlowPanelIntegrationApi = {
+  navigate: (target: string) => Promise<FlowPanelNavigateResult>;
+  context: () => unknown;
+};
+
+declare global {
+  interface Window {
+    FlowPanelIntegration?: FlowPanelIntegrationApi;
+  }
+}
+
 const NAVIGATION_TARGETS: NavigationTarget[] = [
   { key: "flow", label: "Flow Companion", aliases: ["flow", "companion", "asistente"], selector: '[data-flow-target="flow"]' },
   { key: "area", label: "Área personal", aliases: ["dashboard", "area", "área", "inicio", "panel", "home"], selector: '[data-flow-target="area"]' },
@@ -181,6 +207,37 @@ export default function FlowOverlayCompanion() {
 
     if (!options?.silent) {
       setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Voy contigo a ${target.label}.` }]);
+    }
+
+    if (window.FlowPanelIntegration) {
+      const result = await window.FlowPanelIntegration.navigate(target.key);
+
+      if (!result.ok) {
+        setOpen(true);
+        setStatus("error");
+        setAvatarMode("idle");
+        setMessages((current) => [...current, { id: createId("system"), role: "system", text: result.message }]);
+        setActiveNavigation(null);
+        return;
+      }
+
+      if (result.rect) {
+        setCustomPosition({
+          left: clamp(result.rect.centerX + 18, 16, window.innerWidth - 260),
+          top: clamp(result.rect.centerY - 140, 16, window.innerHeight - 270),
+        });
+        setPosition("custom");
+      }
+
+      setStatus("speaking");
+      setAvatarMode("point");
+      setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Ya he abierto ${target.label}.` }]);
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
+      setStatus("ready");
+      setAvatarMode("idle");
+      setOpen(true);
+      setActiveNavigation(null);
+      return;
     }
 
     if (!window.location.pathname.startsWith("/dashboard")) {
