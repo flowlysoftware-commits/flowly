@@ -6395,3 +6395,123 @@ iframe[src*="companion-webgl"] {
   0%, 100% { filter: brightness(1); }
   50% { filter: brightness(1.22); }
 }
+
+/* Flow free character overlay: elimina el cuadro y deja a Flow como personaje libre. */
+.flow-overlay-companion.flow-overlay-free-character {
+  width: 190px !important;
+  height: 270px !important;
+  pointer-events: none !important;
+  filter: drop-shadow(0 24px 34px rgba(8, 47, 73, .26));
+}
+
+.flow-overlay-free-character .flow-overlay-shell,
+.flow-overlay-free-character .flow-overlay-header {
+  display: contents !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.flow-overlay-free-avatar.flow-overlay-avatar {
+  position: relative !important;
+  display: block !important;
+  width: 190px !important;
+  height: 270px !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+}
+
+.flow-overlay-free-avatar .flow-overlay-avatar-3d {
+  position: absolute !important;
+  inset: -18px -28px -22px -28px !important;
+  background: transparent !important;
+}
+
+.flow-overlay-free-avatar .flow-overlay-avatar-glow,
+.flow-overlay-free-avatar::before,
+.flow-overlay-free-avatar::after {
+  display: none !important;
+}
+
+.flow-overlay-free-status {
+  position: absolute;
+  right: 24px;
+  top: 28px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 0 5px rgba(34, 211, 238, .13), 0 0 18px rgba(34, 211, 238, .82);
+}
+
+.flow-overlay-free-status.is-thinking { background: #fbbf24; box-shadow: 0 0 0 5px rgba(251, 191, 36, .14), 0 0 18px rgba(251, 191, 36, .82); }
+.flow-overlay-free-status.is-speaking { background: #a78bfa; box-shadow: 0 0 0 5px rgba(167, 139, 250, .16), 0 0 18px rgba(167, 139, 250, .85); }
+.flow-overlay-free-status.is-error { background: #fb7185; box-shadow: 0 0 0 5px rgba(251, 113, 133, .16), 0 0 18px rgba(251, 113, 133, .85); }
+
+.flow-overlay-free-bubble {
+  position: absolute !important;
+  right: calc(100% + 10px);
+  bottom: 32px;
+  width: min(78vw, 330px);
+  border: 1px solid rgba(125, 211, 252, .22) !important;
+  border-radius: 24px !important;
+  background: rgba(2, 6, 23, .88) !important;
+  box-shadow: 0 22px 70px rgba(8, 47, 73, .28), inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+  backdrop-filter: blur(18px) !important;
+}
+
+.flow-overlay-free-bubble-closed {
+  width: auto;
+  min-width: 128px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 13px;
+  color: white;
+  text-align: left;
+}
+
+.flow-overlay-free-bubble-closed strong {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.flow-overlay-free-bubble-closed span {
+  color: rgba(207, 250, 254, .68);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.flow-overlay-free-character.is-navigating .flow-overlay-free-avatar {
+  animation: flowFreeCharacterWalk .72s ease-in-out infinite;
+}
+
+@keyframes flowFreeCharacterWalk {
+  0%, 100% { transform: translateY(0) rotate(-.4deg); }
+  50% { transform: translateY(-5px) rotate(.4deg); }
+}
+
+@media (max-width: 720px) {
+  .flow-overlay-companion.flow-overlay-free-character {
+    width: 160px !important;
+    height: 230px !important;
+  }
+
+  .flow-overlay-free-avatar.flow-overlay-avatar {
+    width: 160px !important;
+    height: 230px !important;
+  }
+
+  .flow-overlay-free-bubble {
+    right: 0;
+    bottom: 236px;
+    width: min(92vw, 320px);
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, ChevronDown, ChevronUp, Mic, Minimize2, Navigation, Send, Sparkles, X } from "lucide-react";
+import { Bot, ChevronUp, Mic, Minimize2, Navigation, Send, Sparkles, X } from "lucide-react";
 import FlowRealAssistant3D from "@/components/FlowRealAssistant3D";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_FLOW_COMPANION_GATEWAY_URL || "https://flowly-companion-gateway.onrender.com";
@@ -368,64 +368,70 @@ export default function FlowOverlayCompanion() {
 
   return (
     <div className="flow-overlay-root pointer-events-none fixed inset-0 z-[70] overflow-hidden" aria-live="polite">
-      <div className={`flow-overlay-companion pointer-events-auto fixed ${positionClasses} ${activeNavigation ? "is-navigating" : ""}`} style={customStyle}>
-        <div className="flow-overlay-shell">
-          <div className="flow-overlay-header">
-            <button type="button" onClick={() => setOpen((value) => !value)} className="flow-overlay-title" aria-label="Abrir Flow">
-              <span className={`flow-overlay-status-dot is-${status}`} />
-              <span>
-                <strong>Flow</strong>
-                <small>{activeNavigation ? `yendo a ${activeNavigation}` : statusLabel(status)}</small>
-              </span>
-            </button>
-
-            <div className="flow-overlay-actions">
-              <button type="button" onClick={cyclePosition} aria-label="Mover Flow"><Navigation size={14} /></button>
-              <button type="button" onClick={waveFlow} aria-label="Saludar"><Sparkles size={14} /></button>
-              <button type="button" onClick={() => setMinimized(true)} aria-label="Minimizar Flow"><Minimize2 size={14} /></button>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Cerrar panel"><X size={14} /></button>
-            </div>
+      <div
+        className={`flow-overlay-companion flow-overlay-free-character pointer-events-none fixed ${positionClasses} ${activeNavigation ? "is-navigating" : ""}`}
+        style={customStyle}
+      >
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="flow-overlay-avatar flow-overlay-free-avatar pointer-events-auto"
+          aria-label="Hablar con Flow"
+        >
+          <div className="flow-overlay-avatar-3d">
+            <FlowRealAssistant3D mode={avatarMode} facing="front" compact />
           </div>
+          <span className={`flow-overlay-free-status is-${status}`} />
+        </button>
 
-          <button type="button" onClick={() => setOpen((value) => !value)} className="flow-overlay-avatar" aria-label="Hablar con Flow">
-            <div className="flow-overlay-avatar-3d">
-              <FlowRealAssistant3D mode={avatarMode} facing="front" compact />
-            </div>
-            <span className="flow-overlay-avatar-glow" />
+        {!open && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flow-overlay-free-bubble flow-overlay-free-bubble-closed pointer-events-auto"
+            aria-label="Abrir conversación con Flow"
+          >
+            <strong>Flow</strong>
+            <span>{activeNavigation ? `yendo a ${activeNavigation}` : statusLabel(status)}</span>
           </button>
+        )}
 
-          {open && (
-            <div className="flow-overlay-panel">
-              <div className="flow-overlay-panel-head">
-                <div>
-                  <p>Nuevo Flow Overlay</p>
-                  <span>Avatar web nativo, sin Unity WebGL ni Flow antiguo.</span>
-                </div>
-                <button type="button" onClick={() => setOpen(false)}><ChevronDown size={16} /></button>
+        {open && (
+          <div className="flow-overlay-panel flow-overlay-free-bubble pointer-events-auto">
+            <div className="flow-overlay-panel-head">
+              <div>
+                <p>Flow</p>
+                <span>{activeNavigation ? `Yendo a ${activeNavigation}` : statusLabel(status)}</span>
               </div>
-
-              <div className="flow-overlay-messages">
-                {messages.slice(-7).map((message) => (
-                  <div key={message.id} className={`flow-overlay-message is-${message.role}`}>{message.text}</div>
-                ))}
+              <div className="flow-overlay-actions">
+                <button type="button" onClick={cyclePosition} aria-label="Mover Flow"><Navigation size={14} /></button>
+                <button type="button" onClick={waveFlow} aria-label="Saludar"><Sparkles size={14} /></button>
+                <button type="button" onClick={() => setMinimized(true)} aria-label="Minimizar Flow"><Minimize2 size={14} /></button>
+                <button type="button" onClick={() => setOpen(false)} aria-label="Cerrar panel"><X size={14} /></button>
               </div>
-
-              <div className="flow-overlay-quick-actions">
-                <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "crm")!)}>Ir al CRM</button>
-                <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "facturacion")!)}>Facturación</button>
-                <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "whatsapp")!)}>WhatsApp</button>
-              </div>
-
-              <form onSubmit={sendMessage} className="flow-overlay-input-row">
-                <button type="button" className="flow-overlay-icon-button" aria-label="Voz próximamente"><Mic size={15} /></button>
-                <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ej: Flow, llévame al CRM" />
-                <button type="submit" className="flow-overlay-send" aria-label="Enviar"><Send size={15} /></button>
-              </form>
-
-              <div className="flow-overlay-hint">Prueba: “Flow, llévame al CRM”, “abre facturación” o “ve a WhatsApp”.</div>
             </div>
-          )}
-        </div>
+
+            <div className="flow-overlay-messages">
+              {messages.slice(-7).map((message) => (
+                <div key={message.id} className={`flow-overlay-message is-${message.role}`}>{message.text}</div>
+              ))}
+            </div>
+
+            <div className="flow-overlay-quick-actions">
+              <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "crm")!)}>Ir al CRM</button>
+              <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "facturacion")!)}>Facturación</button>
+              <button type="button" onClick={() => void navigateToTarget(NAVIGATION_TARGETS.find((item) => item.key === "whatsapp")!)}>WhatsApp</button>
+            </div>
+
+            <form onSubmit={sendMessage} className="flow-overlay-input-row">
+              <button type="button" className="flow-overlay-icon-button" aria-label="Voz próximamente"><Mic size={15} /></button>
+              <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ej: Flow, llévame al CRM" />
+              <button type="submit" className="flow-overlay-send" aria-label="Enviar"><Send size={15} /></button>
+            </form>
+
+            <div className="flow-overlay-hint">Prueba: “Flow, llévame al CRM”, “abre facturación” o “ve a WhatsApp”.</div>
+          </div>
+        )}
       </div>
     </div>
   );
