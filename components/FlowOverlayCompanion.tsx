@@ -147,6 +147,30 @@ function computeOverlayPosition(element: HTMLElement, panelWidth = 220, estimate
   return { left, top };
 }
 
+function rectToPayload(rect: DOMRect) {
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+    centerX: rect.left + rect.width / 2,
+    centerY: rect.top + rect.height / 2,
+  };
+}
+
+function computeFreeCharacterPositionFromRect(rect: DOMRect, avatarWidth = 190, avatarHeight = 285): CustomPosition {
+  const margin = 14;
+  const preferredLeft = rect.left - avatarWidth - 18;
+  const fallbackLeft = rect.right + 18;
+  const left = preferredLeft > margin ? preferredLeft : clamp(fallbackLeft, margin, window.innerWidth - avatarWidth - margin);
+  const top = clamp(rect.top + rect.height / 2 - avatarHeight * 0.58, margin, window.innerHeight - avatarHeight - margin);
+  return { left, top };
+}
+
+async function wait(ms: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 export default function FlowOverlayCompanion() {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -221,36 +245,7 @@ export default function FlowOverlayCompanion() {
       setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Voy contigo a ${target.label}.` }]);
     }
 
-    if (window.FlowPanelIntegration) {
-      const result = await window.FlowPanelIntegration.navigate(target.key);
-
-      if (!result.ok) {
-        setOpen(true);
-        setStatus("error");
-        setAvatarMode("idle");
-        setMessages((current) => [...current, { id: createId("system"), role: "system", text: result.message }]);
-        setActiveNavigation(null);
-        return;
-      }
-
-      if (result.rect) {
-        setCustomPosition({
-          left: clamp(result.rect.centerX + 18, 16, window.innerWidth - 260),
-          top: clamp(result.rect.centerY - 140, 16, window.innerHeight - 270),
-        });
-        setPosition("custom");
-      }
-
-      setStatus("speaking");
-      setAvatarMode("point");
-      setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Ya he abierto ${target.label}.` }]);
-      await new Promise((resolve) => window.setTimeout(resolve, 650));
-      setStatus("ready");
-      setAvatarMode("idle");
-      setOpen(true);
-      setActiveNavigation(null);
-      return;
-    }
+    if (typeof window === "undefined") return;
 
     if (!window.location.pathname.startsWith("/dashboard")) {
       window.localStorage.setItem("flow_pending_navigation_target", target.key);
@@ -258,10 +253,29 @@ export default function FlowOverlayCompanion() {
       return;
     }
 
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
-    let element = findTargetElement(target);
+    await wait(80);
+
+    const integration = window.FlowPanelIntegration;
+    let element = integration?.findElement?.(target.key) || findTargetElement(target);
 
     if (!element) {
+      // Último recurso: que la capa del panel intente navegar por sí misma.
+      if (integration?.navigate) {
+        const fallbackResult = await integration.navigate(target.key);
+        if (fallbackResult.ok && fallbackResult.rect) {
+          setCustomPosition({
+            left: clamp(fallbackResult.rect.centerX + 18, 16, window.innerWidth - 240),
+            top: clamp(fallbackResult.rect.centerY - 170, 16, window.innerHeight - 300),
+          });
+          setPosition("custom");
+          setStatus("ready");
+          setAvatarMode("idle");
+          setOpen(true);
+          setActiveNavigation(null);
+          return;
+        }
+      }
+
       setOpen(true);
       setStatus("error");
       setAvatarMode("idle");
@@ -271,22 +285,30 @@ export default function FlowOverlayCompanion() {
     }
 
     element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-    await new Promise((resolve) => window.setTimeout(resolve, 450));
+    await wait(520);
 
-    element = findTargetElement(target) || element;
-    setCustomPosition(computeOverlayPosition(element));
+    element = integration?.findElement?.(target.key) || findTargetElement(target) || element;
+    const rect = element.getBoundingClientRect();
+    const positionNearTarget = computeFreeCharacterPositionFromRect(rect);
+
+    setCustomPosition(positionNearTarget);
     setPosition("custom");
+    window.dispatchEvent(new CustomEvent("flow:overlay-walking", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
 
-    element.classList.add("flow-overlay-target-highlight");
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    await wait(1050);
 
-    element.click();
+    element.classList.add("flow-overlay-target-highlight", "flow-panel-target-highlight");
+    window.dispatchEvent(new CustomEvent("flow:overlay-arrived", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
+
     setStatus("speaking");
     setAvatarMode("point");
-    setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Ya he abierto ${target.label}.` }]);
+    setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Ya estoy en ${target.label}. Lo abro ahora.` }]);
 
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
-    element.classList.remove("flow-overlay-target-highlight");
+    await wait(850);
+    element.click();
+
+    await wait(520);
+    element.classList.remove("flow-overlay-target-highlight", "flow-panel-target-highlight");
     setStatus("ready");
     setAvatarMode("idle");
     setOpen(true);
