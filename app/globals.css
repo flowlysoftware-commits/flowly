@@ -6883,3 +6883,67 @@ iframe[src*="companion-webgl"] {
     top 1.35s cubic-bezier(.18,.86,.22,1),
     transform 1.35s cubic-bezier(.18,.86,.22,1) !important;
 }
+
+/* Flow Web Character Runtime v3: real GLB animation only. Remove fake whole-avatar CSS motion. */
+.flow-real-avatar-renderer,
+.flow-real-avatar-renderer[data-mode],
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer,
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button .flow-real-avatar-renderer {
+  animation: none !important;
+  transform: none !important;
+  filter: drop-shadow(0 22px 24px rgba(8, 47, 73, .36)) !important;
+}
+
+.flow-overlay-companion.flow-overlay-free-character {
+  transition:
+    left 1.85s cubic-bezier(.22,.86,.2,1),
+    top 1.85s cubic-bezier(.22,.86,.2,1),
+    transform 1.85s cubic-bezier(.22,.86,.2,1) !important;
+  will-change: left, top, transform !important;
+}
+
+.flow-overlay-closed-controls {
+  position: absolute;
+  left: 124px;
+  top: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  z-index: 7;
+}
+
+.flow-overlay-wave-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(103, 232, 249, .28);
+  background: rgba(15, 23, 42, .86);
+  color: #e0f2fe;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 14px 30px rgba(8, 47, 73, .22);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+}
+
+.flow-overlay-wave-chip:hover {
+  border-color: rgba(103, 232, 249, .65);
+  color: #ffffff;
+}
+
+.flow-overlay-free-avatar-button::before,
+.flow-overlay-free-avatar-button::after,
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button::before {
+  display: none !important;
+  content: none !important;
+}
+
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer,
+.flow-overlay-free-avatar-button .flowly-avatar-renderer-v6,
+.flow-overlay-free-avatar-button .flowly-v3-canvas,
+.flow-overlay-free-avatar-button canvas {
+  background: transparent !important;
+}

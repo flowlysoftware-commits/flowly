@@ -428,15 +428,26 @@ export default function FlowOverlayCompanion() {
         </button>
 
         {!open && (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="flow-overlay-free-bubble flow-overlay-free-bubble-closed pointer-events-auto"
-            aria-label="Abrir conversación con Flow"
-          >
-            <strong>Flow</strong>
-            <span>{activeNavigation ? `yendo a ${activeNavigation}` : statusLabel(status)}</span>
-          </button>
+          <div className="flow-overlay-closed-controls pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="flow-overlay-free-bubble flow-overlay-free-bubble-closed"
+              aria-label="Abrir conversación con Flow"
+            >
+              <strong>Flow</strong>
+              <span>{activeNavigation ? `yendo a ${activeNavigation}` : statusLabel(status)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={waveFlow}
+              className="flow-overlay-wave-chip"
+              aria-label="Saludar con Flow"
+            >
+              <Sparkles size={13} />
+              Saludar
+            </button>
+          </div>
         )}
 
         {open && (
