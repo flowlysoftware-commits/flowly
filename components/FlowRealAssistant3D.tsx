@@ -49,7 +49,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
 
     cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.1 : 1.72), -center.z * scale);
     cloned.scale.setScalar(scale);
-    cloned.rotation.y = Math.PI / 2;
+    cloned.rotation.y = -Math.PI / 2;
 
     cloned.traverse((object) => {
       if (!isMesh(object)) return;
