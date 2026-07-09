@@ -6728,3 +6728,79 @@ iframe[src*="companion-webgl"] {
   0%, 100% { opacity: .2; transform: translateX(-8px) scale(.86); }
   50% { opacity: .75; transform: translateX(8px) scale(1); }
 }
+
+/* Flow Web Presence v2: smoother free character motion and stronger walk feedback. */
+.flow-overlay-companion.flow-overlay-free-character {
+  transition:
+    left 1.28s cubic-bezier(.18,.86,.22,1),
+    top 1.28s cubic-bezier(.18,.86,.22,1),
+    transform 1.28s cubic-bezier(.18,.86,.22,1) !important;
+  will-change: left, top, transform !important;
+}
+
+.flow-overlay-free-avatar-button {
+  transform-origin: 50% 88% !important;
+}
+
+.flow-overlay-free-avatar-button .flow-real-avatar-renderer {
+  animation: flow-web-idle-presence-v2 4.9s ease-in-out infinite !important;
+  transform-origin: 50% 92% !important;
+}
+
+.flow-overlay-companion.is-navigating .flow-overlay-free-avatar-button .flow-real-avatar-renderer {
+  animation: flow-web-walk-presence-v2 .42s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="talk"] {
+  animation: flow-web-talk-presence-v2 .72s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="wave"] {
+  animation: flow-web-wave-presence-v2 .56s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="thinking"] {
+  animation: flow-web-thinking-presence-v2 2.2s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-mode="point"] {
+  animation: flow-web-point-presence-v2 1.05s ease-in-out infinite !important;
+}
+
+.flow-real-avatar-renderer[data-facing="left"] canvas,
+.flow-real-avatar-renderer[data-facing="right"] canvas {
+  filter: drop-shadow(0 26px 22px rgba(8, 47, 73, .34)) saturate(1.08) !important;
+}
+
+@keyframes flow-web-idle-presence-v2 {
+  0%, 100% { transform: translateY(0) rotate(-.25deg) scale(1); }
+  34% { transform: translateY(-2px) rotate(.32deg) scale(1.004); }
+  68% { transform: translateY(1px) rotate(-.12deg) scale(.999); }
+}
+
+@keyframes flow-web-walk-presence-v2 {
+  0%, 100% { transform: translateY(0) rotate(-1.8deg) scale(1.01); }
+  50% { transform: translateY(-8px) rotate(1.8deg) scale(1.018); }
+}
+
+@keyframes flow-web-talk-presence-v2 {
+  0%, 100% { transform: translateY(0) rotate(.12deg) scale(1); }
+  50% { transform: translateY(-3px) rotate(-.32deg) scale(1.006); }
+}
+
+@keyframes flow-web-wave-presence-v2 {
+  0%, 100% { transform: translateY(0) rotate(0) scale(1); }
+  25% { transform: translateY(-4px) rotate(-2.2deg) scale(1.01); }
+  50% { transform: translateY(-1px) rotate(2.2deg) scale(1.012); }
+  75% { transform: translateY(-4px) rotate(-1.2deg) scale(1.008); }
+}
+
+@keyframes flow-web-thinking-presence-v2 {
+  0%, 100% { transform: translateY(0) rotate(-.25deg); filter: saturate(.96); }
+  50% { transform: translateY(-2px) rotate(.55deg); filter: saturate(1.08); }
+}
+
+@keyframes flow-web-point-presence-v2 {
+  0%, 100% { transform: translateY(0) translateX(0) rotate(0); }
+  50% { transform: translateY(-3px) translateX(8px) rotate(1.45deg); }
+}

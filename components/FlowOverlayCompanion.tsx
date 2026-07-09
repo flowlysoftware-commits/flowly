@@ -189,9 +189,23 @@ export default function FlowOverlayCompanion() {
     },
   ]);
   const mountedRef = useRef(true);
+  const companionRef = useRef<HTMLDivElement | null>(null);
 
   const positionClasses = useMemo(() => getPositionClasses(position), [position]);
   const customStyle = position === "custom" && customPosition ? { left: customPosition.left, top: customPosition.top } : undefined;
+
+  function lockCurrentOverlayPosition() {
+    if (typeof window === "undefined") return;
+
+    const rect = companionRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    setCustomPosition({
+      left: clamp(rect.left, 12, window.innerWidth - rect.width - 12),
+      top: clamp(rect.top, 12, window.innerHeight - rect.height - 12),
+    });
+    setPosition("custom");
+  }
 
   useEffect(() => {
     mountedRef.current = true;
@@ -241,6 +255,7 @@ export default function FlowOverlayCompanion() {
     setStatus("thinking");
     setAvatarMode("walk");
     setActiveNavigation(target.key);
+    lockCurrentOverlayPosition();
 
     if (!options?.silent) {
       setMessages((current) => [...current, { id: createId("flow"), role: "flow", text: `Voy contigo a ${target.label}.` }]);
@@ -254,7 +269,7 @@ export default function FlowOverlayCompanion() {
       return;
     }
 
-    await wait(80);
+    await wait(120);
 
     const integration = window.FlowPanelIntegration;
     let element = integration?.findElement?.(target.key) || findTargetElement(target);
@@ -298,7 +313,7 @@ export default function FlowOverlayCompanion() {
     setPosition("custom");
     window.dispatchEvent(new CustomEvent("flow:overlay-walking", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
 
-    await wait(1250);
+    await wait(1350);
 
     element.classList.add("flow-overlay-target-highlight", "flow-panel-target-highlight");
     window.dispatchEvent(new CustomEvent("flow:overlay-arrived", { detail: { target: target.key, label: target.label, rect: rectToPayload(rect) } }));
@@ -398,6 +413,7 @@ export default function FlowOverlayCompanion() {
   return (
     <div className="flow-overlay-root pointer-events-none fixed inset-0 z-[70] overflow-hidden" aria-live="polite">
       <div
+        ref={companionRef}
         className={`flow-overlay-companion flow-overlay-free-character pointer-events-none fixed ${positionClasses} ${activeNavigation ? "is-navigating" : ""}`}
         style={customStyle}
       >

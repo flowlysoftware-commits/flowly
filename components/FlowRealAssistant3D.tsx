@@ -35,8 +35,23 @@ type FlowBoneRig = {
   chest?: Object3D;
   leftArm?: Object3D;
   rightArm?: Object3D;
+  leftForeArm?: Object3D;
+  rightForeArm?: Object3D;
   leftHand?: Object3D;
   rightHand?: Object3D;
+  leftUpLeg?: Object3D;
+  rightUpLeg?: Object3D;
+  leftLeg?: Object3D;
+  rightLeg?: Object3D;
+  leftFoot?: Object3D;
+  rightFoot?: Object3D;
+};
+
+type BoneBasePose = {
+  object: Object3D;
+  x: number;
+  y: number;
+  z: number;
 };
 
 const FLOW_BASE_ROTATION = Math.PI;
@@ -71,6 +86,22 @@ function getFirstClip(group: Group, fallbackName: string) {
   return clip.clone().resetDuration().optimize() || new AnimationClip(fallbackName, -1, clip.tracks);
 }
 
+function captureBasePose(rig: FlowBoneRig) {
+  const bones = Object.values(rig).filter(Boolean) as Object3D[];
+  return bones.map((object) => ({
+    object,
+    x: object.rotation.x,
+    y: object.rotation.y,
+    z: object.rotation.z,
+  }));
+}
+
+function restoreBasePose(basePose: BoneBasePose[]) {
+  for (const pose of basePose) {
+    pose.object.rotation.set(pose.x, pose.y, pose.z);
+  }
+}
+
 function FlowModel({ mode = "idle", facing = "front", compact = true }: Required<Pick<FlowRealAssistant3DProps, "mode" | "facing" | "compact">>) {
   const rootRef = useRef<Group>(null);
   const modelRef = useRef<Group | null>(null);
@@ -99,10 +130,10 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     box.getCenter(center);
 
     const height = size.y || 1;
-    const targetHeight = compact ? 2.18 : 3.15;
+    const targetHeight = compact ? 2.22 : 3.15;
     const scale = targetHeight / height;
 
-    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.08 : 1.72), -center.z * scale);
+    cloned.position.set(-center.x * scale, -box.min.y * scale - (compact ? 1.1 : 1.72), -center.z * scale);
     cloned.scale.setScalar(scale);
     cloned.rotation.y = FLOW_BASE_ROTATION;
 
@@ -126,15 +157,24 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     const rig: FlowBoneRig = {
       head: findBone(cloned, [/head/i]),
       neck: findBone(cloned, [/neck/i]),
-      spine: findBone(cloned, [/spine/i, /waist/i]),
+      spine: findBone(cloned, [/spine/i, /waist/i, /hips/i]),
       chest: findBone(cloned, [/chest/i, /spine02/i, /upperchest/i]),
       leftArm: findBone(cloned, [/left.*arm/i, /l_.*arm/i, /mixamorigleftarm/i]),
       rightArm: findBone(cloned, [/right.*arm/i, /r_.*arm/i, /mixamorigrightarm/i]),
+      leftForeArm: findBone(cloned, [/left.*fore.*arm/i, /left.*lower.*arm/i, /mixamorigleftforearm/i]),
+      rightForeArm: findBone(cloned, [/right.*fore.*arm/i, /right.*lower.*arm/i, /mixamorigrightforearm/i]),
       leftHand: findBone(cloned, [/left.*hand/i, /l_.*hand/i, /mixamoriglefthand/i]),
-      rightHand: findBone(cloned, [/right.*hand/i, /r_.*hand/i, /mixamoriglefthand/i]),
+      rightHand: findBone(cloned, [/right.*hand/i, /r_.*hand/i, /mixamorigrightthand/i, /mixamorigrightHand/i]),
+      leftUpLeg: findBone(cloned, [/left.*up.*leg/i, /left.*thigh/i, /l_.*thigh/i, /mixamorigleftupleg/i]),
+      rightUpLeg: findBone(cloned, [/right.*up.*leg/i, /right.*thigh/i, /r_.*thigh/i, /mixamorigrightupleg/i]),
+      leftLeg: findBone(cloned, [/left.*leg/i, /left.*shin/i, /left.*calf/i, /mixamorigleftleg/i]),
+      rightLeg: findBone(cloned, [/right.*leg/i, /right.*shin/i, /right.*calf/i, /mixamorigrightleg/i]),
+      leftFoot: findBone(cloned, [/left.*foot/i, /l_.*foot/i, /mixamorigleftfoot/i]),
+      rightFoot: findBone(cloned, [/right.*foot/i, /r_.*foot/i, /mixamorigrightfoot/i]),
     };
 
     cloned.userData.flowRig = rig;
+    cloned.userData.flowBasePose = captureBasePose(rig);
     return cloned;
   }, [fbx, colorMap, normalMap, roughnessMap, metalnessMap, compact]);
 
@@ -156,7 +196,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
       const action = mixer.clipAction(clip, model);
       action.enabled = true;
       action.clampWhenFinished = !loop;
-      action.setLoop(loop ? LoopRepeat : LoopRepeat, loop ? Infinity : 1);
+      action.setLoop(LoopRepeat, loop ? Infinity : 1);
       actions[key] = action;
     };
 
@@ -189,7 +229,7 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     if (!next || currentActionRef.current === next) return;
 
     const previous = currentActionRef.current;
-    next.reset().setEffectiveWeight(1).setEffectiveTimeScale(mode === "walk" ? 1.08 : 1).fadeIn(0.22).play();
+    next.reset().setEffectiveWeight(1).setEffectiveTimeScale(mode === "walk" ? 1.18 : 1).fadeIn(0.22).play();
     if (previous) previous.fadeOut(0.22);
     currentActionRef.current = next;
   }, [mode]);
@@ -208,55 +248,78 @@ function FlowModel({ mode = "idle", facing = "front", compact = true }: Required
     const isPointing = mode === "point";
     const isWaving = mode === "wave";
 
-    const direction = facing === "left" ? 0.38 : facing === "right" ? -0.38 : 0;
-    const breath = Math.sin(t * 1.75) * 0.012;
-    const walkBounce = isWalking ? Math.abs(Math.sin(t * 6.8)) * 0.05 : 0;
-    const talkPulse = isTalking ? Math.sin(t * 8.5) * 0.011 : 0;
-    const thinkingLean = isThinking ? Math.sin(t * 1.1) * 0.012 : 0;
-    const idleSway = Math.sin(t * 0.75) * 0.012;
+    const facingAngle = facing === "left" ? 0.72 : facing === "right" ? -0.72 : 0;
+    const breath = Math.sin(t * 1.65) * 0.010;
+    const walkCycle = Math.sin(t * 8.4);
+    const walkLift = isWalking ? Math.abs(walkCycle) * 0.046 : 0;
+    const talkPulse = isTalking ? Math.sin(t * 7.7) * 0.010 : 0;
+    const thinkingLean = isThinking ? Math.sin(t * 1.05) * 0.018 : 0;
+    const idleSway = Math.sin(t * 0.68) * 0.011;
 
-    root.position.y = breath + walkBounce + talkPulse;
-    root.rotation.y = direction + Math.sin(t * 0.55) * 0.018;
-    root.rotation.z = idleSway + Math.sin(t * (isWalking ? 5.8 : 0.52)) * (isWalking ? 0.026 : 0.006);
+    root.position.y = breath + walkLift + talkPulse;
+    root.rotation.y = facingAngle + Math.sin(t * 0.5) * 0.014;
+    root.rotation.z = idleSway + (isWalking ? Math.sin(t * 8.4) * 0.022 : Math.sin(t * 0.42) * 0.004);
     root.rotation.x = thinkingLean;
 
     const rig = modelObject.userData.flowRig as FlowBoneRig | undefined;
-    if (!rig) return;
+    const basePose = modelObject.userData.flowBasePose as BoneBasePose[] | undefined;
+    if (!rig || !basePose) return;
+
+    restoreBasePose(basePose);
+
+    const armSwing = isWalking ? walkCycle * 0.28 : Math.sin(t * 0.9) * 0.025;
+    const legSwing = isWalking ? walkCycle * 0.34 : 0;
+    const kneeSwing = isWalking ? Math.abs(walkCycle) * 0.22 : 0;
+    const bodyEnergy = isWalking ? 1 : isTalking ? 0.65 : isThinking ? 0.35 : 0.22;
 
     if (rig.head) {
-      rig.head.rotation.x += Math.sin(t * 1.2) * 0.006 + (isThinking ? 0.045 : 0) + (isTalking ? Math.sin(t * 7.4) * 0.01 : 0);
-      rig.head.rotation.y += direction * 0.22 + Math.sin(t * 0.85) * 0.012;
+      rig.head.rotation.x += Math.sin(t * 1.15) * 0.008 + (isThinking ? 0.055 : 0) + (isTalking ? Math.sin(t * 7.4) * 0.016 : 0);
+      rig.head.rotation.y += facingAngle * 0.2 + Math.sin(t * 0.85) * 0.012;
       rig.head.rotation.z += (isPointing ? -0.035 : 0) + Math.sin(t * 0.65) * 0.006;
     }
 
     if (rig.neck) {
-      rig.neck.rotation.y += direction * 0.12 + Math.sin(t * 0.6) * 0.006;
+      rig.neck.rotation.y += facingAngle * 0.12 + Math.sin(t * 0.6) * 0.006;
     }
 
     if (rig.chest) {
-      rig.chest.rotation.x += breath * 0.65 + (isTalking ? Math.sin(t * 6.6) * 0.006 : 0);
-      rig.chest.rotation.z += Math.sin(t * 0.42) * 0.006;
+      rig.chest.rotation.x += breath * 0.7 + (isTalking ? Math.sin(t * 6.6) * 0.012 : 0);
+      rig.chest.rotation.z += Math.sin(t * 0.42) * 0.008 * bodyEnergy;
     }
 
     if (rig.spine) {
-      rig.spine.rotation.z += Math.sin(t * 0.5) * 0.005;
+      rig.spine.rotation.z += Math.sin(t * 0.5) * 0.006 * bodyEnergy;
     }
 
+    if (rig.leftArm) rig.leftArm.rotation.x += -armSwing;
+    if (rig.rightArm) rig.rightArm.rotation.x += armSwing;
+    if (rig.leftForeArm) rig.leftForeArm.rotation.x += isWalking ? 0.08 + Math.abs(walkCycle) * 0.08 : 0.035;
+    if (rig.rightForeArm) rig.rightForeArm.rotation.x += isWalking ? 0.08 + Math.abs(walkCycle) * 0.08 : 0.035;
+
+    if (rig.leftUpLeg) rig.leftUpLeg.rotation.x += legSwing;
+    if (rig.rightUpLeg) rig.rightUpLeg.rotation.x -= legSwing;
+    if (rig.leftLeg) rig.leftLeg.rotation.x += kneeSwing;
+    if (rig.rightLeg) rig.rightLeg.rotation.x += Math.abs(Math.sin(t * 8.4 + Math.PI)) * 0.22;
+    if (rig.leftFoot) rig.leftFoot.rotation.x += isWalking ? Math.sin(t * 8.4 + Math.PI / 2) * 0.08 : 0;
+    if (rig.rightFoot) rig.rightFoot.rotation.x += isWalking ? Math.sin(t * 8.4 - Math.PI / 2) * 0.08 : 0;
+
     if (isWaving && rig.rightArm) {
-      rig.rightArm.rotation.z += Math.sin(t * 8.8) * 0.18;
-      rig.rightArm.rotation.x -= 0.12;
+      rig.rightArm.rotation.z += 0.55 + Math.sin(t * 9.8) * 0.24;
+      rig.rightArm.rotation.x -= 0.38;
+      if (rig.rightForeArm) rig.rightForeArm.rotation.z += Math.sin(t * 10.5) * 0.18;
     }
 
     if (isPointing && rig.rightArm) {
-      rig.rightArm.rotation.x -= 0.18;
-      rig.rightArm.rotation.z -= 0.08;
+      rig.rightArm.rotation.x -= 0.32;
+      rig.rightArm.rotation.z -= 0.16;
+      if (rig.rightForeArm) rig.rightForeArm.rotation.x -= 0.18;
     }
   });
 
   return (
     <group ref={rootRef}>
       <primitive object={model} />
-      <mesh position={[0, -1.1, -0.08]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[0, -1.11, -0.08]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[0.68, 48]} />
         <meshBasicMaterial color="#7dd3fc" transparent opacity={0.13} />
       </mesh>
@@ -285,7 +348,7 @@ export default function FlowRealAssistant3D({ mode = "idle", facing = "front", c
       <Canvas
         className="flowly-v3-canvas"
         orthographic
-        camera={{ position: [0, 1.28, 8], zoom: compact ? 78 : 66, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.26, 8], zoom: compact ? 79 : 66, near: 0.1, far: 100 }}
         dpr={[1, 1.75]}
         shadows
         gl={{ alpha: true, antialias: true }}
