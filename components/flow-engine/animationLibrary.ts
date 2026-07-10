@@ -16,5 +16,6 @@ export const FLOW_ANIMATION_URLS: Partial<
   pointing: "/avatars/Pointing.fbx",
 };
 
-// El modelo base está exportado mirando en sentido contrario a la cámara web.
-export const FLOW_FRONT_YAW = Math.PI;
+// El FBX está exportado con el frente en el eje +X. En Three.js la cámara
+// observa desde +Z, por lo que giramos -90° para que Flow mire al usuario.
+export const FLOW_FRONT_YAW = -Math.PI / 2;
