@@ -96,7 +96,7 @@ function buildBoneMap(root: Object3D) {
   return map;
 }
 
-function findPrimarySkinnedMesh(root: Object3D) {
+function findPrimarySkinnedMesh(root: Object3D): SkinnedMesh | null {
   let result: SkinnedMesh | null = null;
   root.traverse((node) => {
     if (!result && (node as SkinnedMesh).isSkinnedMesh) {
@@ -128,8 +128,10 @@ function retargetClip(
   if (!sourceClip) return null;
 
   const sourceSkeleton = createSourceSkeleton(sourceRoot);
-  const targetMesh = findPrimarySkinnedMesh(targetRoot);
-  if (!sourceSkeleton || !targetMesh) return null;
+  const foundTargetMesh = findPrimarySkinnedMesh(targetRoot);
+  if (!sourceSkeleton || foundTargetMesh === null) return null;
+
+  const targetMesh: SkinnedMesh = foundTargetMesh;
 
   sourceRoot.updateMatrixWorld(true);
   targetRoot.updateMatrixWorld(true);
