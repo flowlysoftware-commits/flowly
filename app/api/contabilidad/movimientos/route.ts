@@ -90,3 +90,25 @@ export async function POST(request: NextRequest) {
   if (error) return jsonError(error.message, 500);
   return NextResponse.json({ entry: data });
 }
+
+export async function DELETE(request: NextRequest) {
+  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  if (!dbReady()) return jsonError("Supabase no está configurado", 503);
+
+  const { searchParams } = new URL(request.url);
+  const id = String(searchParams.get("id") || "").trim();
+
+  if (!id) return jsonError("Falta el identificador del movimiento");
+
+  const { data, error } = await supabaseAdmin
+    .from("manual_accounting_movements")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return jsonError(error.message, 500);
+  if (!data) return jsonError("El movimiento no existe o ya fue eliminado", 404);
+
+  return NextResponse.json({ deletedId: data.id });
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
-import { CalendarDays, LockKeyhole, Plus, ReceiptText, ShieldCheck, Vault, WalletCards } from "lucide-react";
+import { CalendarDays, LockKeyhole, Plus, ReceiptText, ShieldCheck, Trash2, Vault, WalletCards } from "lucide-react";
 
 type MovementType = "ingreso" | "gasto";
 type BusinessName = "Flowly" | "Celestial" | "Leonaris";
@@ -129,6 +129,7 @@ export default function ContabilidadClient() {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
 
   const totals = useMemo(() => calculateTotals(entries), [entries]);
@@ -179,6 +180,31 @@ export default function ContabilidadClient() {
       return;
     }
     setAccessError("Contraseña incorrecta.");
+  };
+
+  const handleDelete = async (entry: AccountingEntry) => {
+    const confirmed = window.confirm(
+      `¿Seguro que deseas eliminar este ${entry.type} de ${euro(entry.amount)}? Esta acción no se puede deshacer.`,
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(entry.id);
+    setFormError("");
+    try {
+      const response = await fetch(`/api/contabilidad/movimientos?id=${encodeURIComponent(entry.id)}`, {
+        method: "DELETE",
+        headers: { "x-contabilidad-password": ACCESS_PASSWORD },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || "No se pudo eliminar el movimiento.");
+
+      setEntries((current) => current.filter((item) => item.id !== entry.id));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "No se pudo eliminar el movimiento.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -377,12 +403,12 @@ export default function ContabilidadClient() {
 
         <section className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-cyan-950/10 backdrop-blur">
           <SectionHeader title="Movimientos del mes" subtitle={loading ? "Cargando movimientos desde Supabase..." : "Registros guardados para el mes seleccionado."} count={entries.length} />
-          <MovementsTable entries={entries} emptyText="Todavía no hay movimientos. Añade el primer ingreso o gasto desde la barra superior." />
+          <MovementsTable entries={entries} emptyText="Todavía no hay movimientos. Añade el primer ingreso o gasto desde la barra superior." onDelete={handleDelete} deletingId={deletingId} />
         </section>
 
         <section className="flowly-client-card rounded-[2rem] border border-amber-300/20 bg-amber-300/[0.06] p-5 shadow-2xl shadow-amber-950/10 backdrop-blur">
           <CashHeader cashIn={cashTotals.cashIn} cashOut={cashTotals.cashOut} balance={cashTotals.balance} count={cashRows.length} />
-          <CashTable rows={cashRows} />
+          <CashTable rows={cashRows} onDelete={handleDelete} deletingId={deletingId} />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-3">
@@ -400,7 +426,7 @@ export default function ContabilidadClient() {
                 <MiniStat label="Gastos" value={euro(group.totals.expenses)} tone="rose" />
                 <MiniStat label="Saldo" value={euro(group.totals.balance)} tone="cyan" />
               </div>
-              <MovementsTable entries={group.entries} compact emptyText={`Sin movimientos para ${group.business}.`} />
+              <MovementsTable entries={group.entries} compact emptyText={`Sin movimientos para ${group.business}.`} onDelete={handleDelete} deletingId={deletingId} />
             </div>
           ))}
         </section>
@@ -506,7 +532,19 @@ function CashHeader({ cashIn, cashOut, balance, count }: { cashIn: number; cashO
   );
 }
 
-function MovementsTable({ entries, emptyText, compact = false }: { entries: AccountingEntry[]; emptyText: string; compact?: boolean }) {
+function MovementsTable({
+  entries,
+  emptyText,
+  compact = false,
+  onDelete,
+  deletingId,
+}: {
+  entries: AccountingEntry[];
+  emptyText: string;
+  compact?: boolean;
+  onDelete: (entry: AccountingEntry) => void;
+  deletingId: string | null;
+}) {
   if (entries.length === 0) {
     return <div className="rounded-3xl border border-dashed border-white/15 bg-black/20 p-8 text-center text-sm text-slate-400">{emptyText}</div>;
   }
@@ -525,6 +563,7 @@ function MovementsTable({ entries, emptyText, compact = false }: { entries: Acco
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3 text-right">Importe</th>
             <th className="px-4 py-3">Observación</th>
+            <th className="px-4 py-3 text-right">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -545,6 +584,18 @@ function MovementsTable({ entries, emptyText, compact = false }: { entries: Acco
                 {entry.type === "gasto" ? "-" : "+"}{euro(entry.amount)}
               </td>
               <td className="px-4 py-4 text-slate-400">{entry.note || "—"}</td>
+              <td className="px-4 py-4 text-right">
+                <button
+                  type="button"
+                  onClick={() => onDelete(entry)}
+                  disabled={deletingId === entry.id}
+                  className="inline-flex items-center gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs font-black text-rose-200 transition hover:bg-rose-300/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={`Eliminar movimiento de ${euro(entry.amount)}`}
+                >
+                  <Trash2 size={15} />
+                  {deletingId === entry.id ? "Eliminando" : "Eliminar"}
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -553,7 +604,15 @@ function MovementsTable({ entries, emptyText, compact = false }: { entries: Acco
   );
 }
 
-function CashTable({ rows }: { rows: CashRow[] }) {
+function CashTable({
+  rows,
+  onDelete,
+  deletingId,
+}: {
+  rows: CashRow[];
+  onDelete: (entry: AccountingEntry) => void;
+  deletingId: string | null;
+}) {
   if (rows.length === 0) {
     return <div className="rounded-3xl border border-dashed border-amber-300/20 bg-black/20 p-8 text-center text-sm text-slate-300">Todavía no hay movimientos vinculados a la caja extra.</div>;
   }
@@ -571,6 +630,7 @@ function CashTable({ rows }: { rows: CashRow[] }) {
             <th className="px-4 py-3 text-right">Salida</th>
             <th className="px-4 py-3 text-right">Saldo</th>
             <th className="px-4 py-3">Observación</th>
+            <th className="px-4 py-3 text-right">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -584,6 +644,18 @@ function CashTable({ rows }: { rows: CashRow[] }) {
               <td className="px-4 py-4 text-right font-black text-rose-200">{row.cashOut ? euro(row.cashOut) : "—"}</td>
               <td className="px-4 py-4 text-right font-black text-amber-100">{euro(row.balance)}</td>
               <td className="px-4 py-4 text-slate-400">{row.entry.note || "—"}</td>
+              <td className="px-4 py-4 text-right">
+                <button
+                  type="button"
+                  onClick={() => onDelete(row.entry)}
+                  disabled={deletingId === row.entry.id}
+                  className="inline-flex items-center gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs font-black text-rose-200 transition hover:bg-rose-300/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={`Eliminar movimiento de ${euro(row.entry.amount)}`}
+                >
+                  <Trash2 size={15} />
+                  {deletingId === row.entry.id ? "Eliminando" : "Eliminar"}
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
