@@ -7376,3 +7376,36 @@ iframe[src*="companion-webgl"] {
   white-space: nowrap;
   line-height: 1.05;
 }
+
+
+/* Flow Engine final motion calibration */
+.flow-engine-character {
+  width: 240px;
+  height: 350px;
+  transform-origin: 50% 100%;
+  transition: none;
+}
+.flow-engine-character-button {
+  overflow: visible;
+}
+.flow-engine-status {
+  bottom: 10px;
+}
+.flow-engine-actions {
+  bottom: -32px;
+  min-width: 202px;
+  gap: 8px;
+}
+.flow-engine-actions button {
+  min-width: 92px;
+  padding: 8px 11px;
+}
+.flow-engine-bubble {
+  top: 42px;
+  left: calc(100% - 18px);
+  width: 230px;
+}
+@media (max-width: 640px) {
+  .flow-engine-character { width: 190px; height: 285px; }
+  .flow-engine-bubble { left: 118px; top: 36px; width: 172px; }
+}
