@@ -141,7 +141,7 @@ export default function FlowlyAvatarRuntimePage() {
             </div>
 
             <div className="mt-6 flex min-h-[420px] items-center justify-center rounded-[1.8rem] border border-cyan-300/10 bg-gradient-to-b from-cyan-300/10 via-purple-300/5 to-black/30 p-6">
-              <EvolutionaryCompanionAvatar name={previewAvatar.name} level={7} xpPercent={68} mood={mood} modelUrl={previewAvatar.modelUrl} memory="Avatar Runtime activo" />
+              <EvolutionaryCompanionAvatar name={previewAvatar.name} mood={mood} modelUrl={previewAvatar.modelUrl} />
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
