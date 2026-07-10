@@ -1,5 +1,2 @@
 "use client";
-
-export default function FlowlyCompanionGate() {
-  return null;
-}
+export default function FlowlyCompanionGate() { return null; }
