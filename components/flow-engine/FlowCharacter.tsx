@@ -143,7 +143,6 @@ function retargetClip(
       hip: "Hip",
       hipInfluence: new Vector3(0, 0, 0),
       preserveBoneMatrix: true,
-      preserveBonePositions: true,
       useFirstFramePosition: true,
       fps: 30,
     },
