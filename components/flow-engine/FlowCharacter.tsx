@@ -16,6 +16,8 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  Quaternion,
+  QuaternionKeyframeTrack,
   SRGBColorSpace,
   Texture,
   Vector3,
@@ -34,8 +36,18 @@ type Props = {
 
 type RestTransform = {
   position: Vector3;
-  quaternion: import("three").Quaternion;
+  quaternion: Quaternion;
   scale: Vector3;
+};
+
+type BoneRig = {
+  pelvis?: Object3D;
+  spine01?: Object3D;
+  spine02?: Object3D;
+  neck?: Object3D;
+  head?: Object3D;
+  leftClavicle?: Object3D;
+  rightClavicle?: Object3D;
 };
 
 const HUMANOID_BONE_ALIASES: Record<string, string> = {
@@ -72,7 +84,7 @@ function normalizeBone(value: string) {
     .toLowerCase();
 }
 
-function buildTargetMap(root: Object3D) {
+function buildBoneMap(root: Object3D) {
   const map = new Map<string, Object3D>();
   root.traverse((node) => {
     if (node.name) map.set(normalizeBone(node.name), node);
@@ -91,38 +103,59 @@ function findTargetBone(sourceName: string, map: Map<string, Object3D>) {
   )?.[1];
 }
 
-function retargetClip(source: AnimationClip | undefined, target: Object3D, name: string) {
-  if (!source) return null;
-  const map = buildTargetMap(target);
+/**
+ * Retarget local rotations using each rig's bind/rest orientation.
+ * Copying raw quaternion values between unrelated FBX rigs is what caused
+ * Flow to fold, sit in the air and turn his head toward his legs.
+ */
+function retargetClip(
+  sourceClip: AnimationClip | undefined,
+  sourceRoot: Object3D,
+  targetRoot: Object3D,
+  name: string,
+) {
+  if (!sourceClip) return null;
 
-  const tracks = source.tracks.flatMap((track) => {
+  const sourceMap = buildBoneMap(sourceRoot);
+  const targetMap = buildBoneMap(targetRoot);
+  const tracks = sourceClip.tracks.flatMap((track) => {
     const dot = track.name.lastIndexOf(".");
     if (dot < 0) return [];
 
-    const sourceNode = track.name.slice(0, dot);
+    const sourceNodeName = track.name.slice(0, dot);
     const property = track.name.slice(dot + 1);
-    const node = findTargetBone(sourceNode, map);
+    const sourceNode = sourceMap.get(normalizeBone(sourceNodeName));
+    const targetNode = findTargetBone(sourceNodeName, targetMap);
 
-    if (!node || property === "scale") return [];
+    if (!sourceNode || !targetNode || property !== "quaternion") return [];
 
-    const normalizedTarget = normalizeBone(node.name);
+    const values = track.values;
+    if (values.length % 4 !== 0) return [];
 
-    // El desplazamiento y la orientación global los controla React. Quitamos
-    // el root motion y cualquier giro del nodo raíz para que los clips no
-    // tumben, sienten o roten el avatar completo.
-    if (
-      (property === "position" && /pelvis|hips|root|armature/.test(normalizedTarget)) ||
-      (property === "quaternion" && /root|armature/.test(normalizedTarget))
-    ) {
-      return [];
+    const sourceRestInverse = sourceNode.quaternion.clone().invert();
+    const targetRest = targetNode.quaternion.clone();
+    const output = new Float32Array(values.length);
+    const animated = new Quaternion();
+    const delta = new Quaternion();
+    const retargeted = new Quaternion();
+
+    for (let index = 0; index < values.length; index += 4) {
+      animated.fromArray(values, index).normalize();
+      delta.copy(sourceRestInverse).multiply(animated).normalize();
+      retargeted.copy(targetRest).multiply(delta).normalize();
+      retargeted.toArray(output, index);
     }
 
-    const cloned = track.clone();
-    cloned.name = `${node.name}.${property}`;
-    return [cloned];
+    return [
+      new QuaternionKeyframeTrack(
+        `${targetNode.name}.quaternion`,
+        track.times.slice(),
+        output,
+      ),
+    ];
   });
 
-  return tracks.length ? new AnimationClip(name, source.duration, tracks) : null;
+  return tracks.length ? new AnimationClip(name, sourceClip.duration, tracks) : null;
 }
 
 function firstClip(group: Group) {
@@ -175,11 +208,11 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   const actions = useRef<Partial<Record<FlowMode, AnimationAction>>>({});
   const active = useRef<AnimationAction | null>(null);
   const restPose = useRef(new Map<Object3D, RestTransform>());
+  const rig = useRef<BoneRig>({});
+  const pointer = useRef({ x: 0, y: 0 });
   const requestedMode = useRef<FlowMode>(mode);
   requestedMode.current = mode;
 
-  // El modelo se carga de forma independiente. Un FBX de animación roto ya
-  // no puede ocultar al avatar completo.
   const modelSource = useFBX(FLOW_MODEL_URL);
   const [color, normal, roughness, metallic] = useTexture([
     "/models/flow/color.jpg",
@@ -192,6 +225,7 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   const model = useMemo(() => {
     const clone = cloneSkeleton(modelSource) as Group;
     const pose = new Map<Object3D, RestTransform>();
+    const map = buildBoneMap(clone);
 
     clone.traverse((node) => {
       pose.set(node, {
@@ -215,7 +249,6 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
         : visibleMaterials[0];
     });
 
-    // Normalizamos tamaño y suelo sin mezclarlo con la orientación frontal.
     const bounds = new Box3().setFromObject(clone);
     const size = new Vector3();
     const center = new Vector3();
@@ -230,23 +263,38 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       -center.z * scale,
     );
 
-    // Guardamos la pose neutral ya normalizada. Esta será la pose de reposo
-    // real del avatar, no una animación retargeteada de otro esqueleto.
     pose.set(clone, {
       position: clone.position.clone(),
       quaternion: clone.quaternion.clone(),
       scale: clone.scale.clone(),
     });
     restPose.current = pose;
+    rig.current = {
+      pelvis: map.get("pelvis"),
+      spine01: map.get("spine01"),
+      spine02: map.get("spine02"),
+      neck: map.get("necktwist01") || map.get("neck"),
+      head: map.get("head"),
+      leftClavicle: map.get("lclavicle"),
+      rightClavicle: map.get("rclavicle"),
+    };
 
     return clone;
   }, [modelSource, color, normal, roughness, metallic]);
 
   useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      pointer.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.current.y = (event.clientY / window.innerHeight) * 2 - 1;
+    };
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onPointerMove);
+  }, []);
+
+  useEffect(() => {
     const nextMixer = new AnimationMixer(model);
     mixer.current = nextMixer;
     let cancelled = false;
-
     const loader = new FBXLoader();
     const entries = Object.entries(FLOW_ANIMATION_URLS) as Array<[
       Exclude<FlowMode, "error">,
@@ -256,7 +304,10 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     Promise.allSettled(
       entries.map(async ([key, url]) => {
         const source = await loader.loadAsync(url);
-        return { key, clip: retargetClip(firstClip(source), model, key) };
+        return {
+          key,
+          clip: retargetClip(firstClip(source), source, model, key),
+        };
       }),
     ).then((results) => {
       if (cancelled) return;
@@ -273,16 +324,15 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
         const { key, clip } = result.value;
         const action = nextMixer.clipAction(clip, model);
         const oneShot = key === "waving" || key === "pointing";
-        action.clampWhenFinished = oneShot;
+        action.clampWhenFinished = false;
         action.setLoop(oneShot ? LoopOnce : LoopRepeat, oneShot ? 1 : Infinity);
         action.enabled = true;
         action.setEffectiveWeight(1);
-        action.setEffectiveTimeScale(1);
+        action.setEffectiveTimeScale(key === "walking" ? 1.08 : 1);
         nextActions[key] = action;
       });
 
       actions.current = nextActions;
-
       const initial = nextActions[requestedMode.current];
       initial?.reset().fadeIn(0.2).play();
       active.current = initial || null;
@@ -300,28 +350,41 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
 
   useEffect(() => {
     const next = actions.current[mode];
-
-    // Idle, thinking, listening y error vuelven a la pose neutral auténtica
-    // del modelo. Así evitamos la postura sentada causada por clips que no
-    // comparten exactamente el mismo rig.
     if (!next) {
-      active.current?.fadeOut(0.18);
+      active.current?.fadeOut(0.2);
       active.current = null;
       return;
     }
-
     if (next === active.current) return;
 
-    next.reset().setEffectiveWeight(1).fadeIn(0.22).play();
-    active.current?.fadeOut(0.22);
+    next.reset().setEffectiveWeight(1).fadeIn(0.26).play();
+    active.current?.crossFadeTo(next, 0.26, false);
     active.current = next;
   }, [mode]);
 
   useFrame((state, delta) => {
-    mixer.current?.update(Math.min(delta, 0.05));
+    const dt = Math.min(delta, 0.05);
+
+    // Remove last frame's procedural offsets before AnimationMixer evaluates
+    // the next pose. This prevents head/neck/chest rotations from accumulating.
+    [
+      rig.current.pelvis,
+      rig.current.spine01,
+      rig.current.spine02,
+      rig.current.neck,
+      rig.current.head,
+      rig.current.leftClavicle,
+      rig.current.rightClavicle,
+    ].forEach((node) => {
+      if (!node) return;
+      const rest = restPose.current.get(node);
+      if (rest) node.quaternion.copy(rest.quaternion);
+    });
+
+    mixer.current?.update(dt);
 
     if (!active.current) {
-      const blend = Math.min(1, delta * 8);
+      const blend = Math.min(1, dt * 8);
       restPose.current.forEach((rest, node) => {
         node.position.lerp(rest.position, blend);
         node.quaternion.slerp(rest.quaternion, blend);
@@ -329,17 +392,42 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       });
     }
 
-    if (!presentation.current) return;
+    const elapsed = state.clock.elapsedTime;
+    const energy = Math.max(0, Math.min(1, emotion.energy));
+    const calm = Math.max(0, Math.min(1, emotion.calm));
+    const idleLike = mode === "idle" || mode === "thinking" || mode === "listening" || mode === "talking";
 
-    const sideTurn = facing === "left" ? 0.16 : facing === "right" ? -0.16 : 0;
+    if (idleLike) {
+      const breath = Math.sin(elapsed * (1.25 + energy * 0.45));
+      const sway = Math.sin(elapsed * 0.52) * (0.006 + (1 - calm) * 0.006);
+      const chestAmount = breath * (0.007 + (1 - calm) * 0.004);
+
+      const spine01 = rig.current.spine01;
+      const spine02 = rig.current.spine02;
+      const pelvis = rig.current.pelvis;
+      if (spine01) spine01.rotateX(chestAmount * 0.42);
+      if (spine02) spine02.rotateX(chestAmount);
+      if (pelvis) pelvis.rotateZ(sway * 0.35);
+
+      const canLook = mode !== "thinking";
+      if (canLook) {
+        const yaw = pointer.current.x * 0.055 * emotion.attention;
+        const pitch = -pointer.current.y * 0.028 * emotion.attention;
+        rig.current.neck?.rotateY(yaw * 0.42);
+        rig.current.neck?.rotateX(pitch * 0.42);
+        rig.current.head?.rotateY(yaw * 0.58);
+        rig.current.head?.rotateX(pitch * 0.58);
+      } else {
+        rig.current.head?.rotateY(Math.sin(elapsed * 0.44) * 0.018);
+        rig.current.head?.rotateX(-0.025);
+      }
+    }
+
+    if (!presentation.current) return;
+    const sideTurn = facing === "left" ? 0.15 : facing === "right" ? -0.15 : 0;
     const targetYaw = FLOW_FRONT_YAW + sideTurn;
     presentation.current.rotation.y +=
-      (targetYaw - presentation.current.rotation.y) * Math.min(1, delta * 7);
-
-    const breath =
-      Math.sin(state.clock.elapsedTime * (1.15 + emotion.energy * 0.55)) *
-      (0.003 + (1 - emotion.calm) * 0.003);
-    presentation.current.scale.set(1 - breath * 0.12, 1 + breath, 1);
+      (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 7);
   });
 
   return (

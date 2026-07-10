@@ -7355,3 +7355,24 @@ iframe[src*="companion-webgl"] {
 .flow-engine-panel form { display:grid; grid-template-columns:32px 1fr 32px; gap:8px; padding:12px; border-top:1px solid rgba(148,163,184,.14); }.flow-engine-panel form input{min-width:0;border:1px solid rgba(148,163,184,.18);border-radius:12px;background:rgba(15,23,42,.82);color:#fff;padding:0 11px;outline:none}
 .flow-engine-target-highlight { position:relative; z-index:82!important; outline:3px solid rgba(168,85,247,.9)!important; box-shadow:0 0 0 8px rgba(168,85,247,.16),0 0 30px rgba(168,85,247,.6)!important; transition:all .2s ease!important; }
 @media(max-width:640px){.flow-engine-character{width:180px;height:265px}.flow-engine-bubble{left:112px;top:38px;width:165px}.flow-engine-panel{right:14px;bottom:14px}}
+
+/* Flow Engine natural presence calibration */
+.flow-engine-character {
+  width: 230px;
+  height: 330px;
+  transform-origin: 50% 100%;
+}
+.flow-engine-character-button {
+  touch-action: none;
+}
+.flow-engine-actions {
+  bottom: -34px;
+  min-width: 190px;
+  justify-content: center;
+}
+.flow-engine-actions button {
+  min-width: 84px;
+  justify-content: center;
+  white-space: nowrap;
+  line-height: 1.05;
+}

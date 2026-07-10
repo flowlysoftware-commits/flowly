@@ -31,7 +31,11 @@ export default function FlowEngine() {
     clientRef.current = client; client.connect(); return () => client.disconnect();
   }, []);
 
-  async function setTemporaryMode(mode: FlowMode, duration: number) { dispatch({ type: "mode", mode }); await sleep(duration); dispatch({ type: "mode", mode: "idle" }); }
+  async function setTemporaryMode(mode: FlowMode, duration: number) {
+    dispatch({ type: "mode", mode });
+    await sleep(duration);
+    dispatch({ type: "mode", mode: "idle" });
+  }
 
   async function navigate(targetText: string) {
     const api = window.FlowPanelIntegration;
@@ -61,7 +65,7 @@ export default function FlowEngine() {
       <FlowCharacter mode={state.mode} facing={state.facing} emotion={state.emotion} onClick={() => dispatch({ type: "open", open: !state.open })} />
       <span className={`flow-engine-status is-${state.connected ? "online" : "offline"}`}>{status}</span>
       {!state.open && <button className="flow-engine-bubble" type="button" onClick={() => dispatch({ type: "open", open: true })}>{state.bubble}</button>}
-      <div className="flow-engine-actions"><button type="button" onClick={() => void setTemporaryMode("waving", 1600)}><Sparkles size={14}/> Saludar</button><button type="button" onClick={() => void navigate("crm")}><Navigation size={14}/> CRM</button></div>
+      <div className="flow-engine-actions"><button type="button" onClick={() => void setTemporaryMode("waving", 2200)}><Sparkles size={14}/> Saludar</button><button type="button" onClick={() => void navigate("crm")}><Navigation size={14}/> CRM</button></div>
     </div>
     {state.open && <section className="flow-engine-panel"><header><div><strong>Flow</strong><span>{status} · corazón, cerebro y Gateway activos</span></div><button type="button" onClick={() => dispatch({ type: "open", open: false })}><X size={16}/></button></header><div className="flow-engine-messages">{state.messages.slice(-8).map((m) => <div key={m.id} className={`is-${m.role}`}>{m.text}</div>)}</div><form onSubmit={submit}><button type="button"><Mic size={15}/></button><input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Flow, llévame al CRM"/><button type="submit"><Send size={15}/></button></form></section>}
   </div>;
