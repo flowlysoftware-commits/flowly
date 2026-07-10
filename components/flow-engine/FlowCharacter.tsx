@@ -32,6 +32,12 @@ type Props = {
   onClick?: () => void;
 };
 
+type RestTransform = {
+  position: Vector3;
+  quaternion: import("three").Quaternion;
+  scale: Vector3;
+};
+
 const HUMANOID_BONE_ALIASES: Record<string, string> = {
   hips: "pelvis",
   pelvis: "pelvis",
@@ -99,11 +105,14 @@ function retargetClip(source: AnimationClip | undefined, target: Object3D, name:
 
     if (!node || property === "scale") return [];
 
-    // El desplazamiento por la interfaz lo controla React. Conservamos el
-    // movimiento completo del esqueleto, pero eliminamos el root motion.
+    const normalizedTarget = normalizeBone(node.name);
+
+    // El desplazamiento y la orientación global los controla React. Quitamos
+    // el root motion y cualquier giro del nodo raíz para que los clips no
+    // tumben, sienten o roten el avatar completo.
     if (
-      property === "position" &&
-      /pelvis|hips|root|armature/.test(normalizeBone(node.name))
+      (property === "position" && /pelvis|hips|root|armature/.test(normalizedTarget)) ||
+      (property === "quaternion" && /root|armature/.test(normalizedTarget))
     ) {
       return [];
     }
@@ -165,6 +174,7 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   const mixer = useRef<AnimationMixer | null>(null);
   const actions = useRef<Partial<Record<FlowMode, AnimationAction>>>({});
   const active = useRef<AnimationAction | null>(null);
+  const restPose = useRef(new Map<Object3D, RestTransform>());
   const requestedMode = useRef<FlowMode>(mode);
   requestedMode.current = mode;
 
@@ -181,8 +191,14 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
 
   const model = useMemo(() => {
     const clone = cloneSkeleton(modelSource) as Group;
+    const pose = new Map<Object3D, RestTransform>();
 
     clone.traverse((node) => {
+      pose.set(node, {
+        position: node.position.clone(),
+        quaternion: node.quaternion.clone(),
+        scale: node.scale.clone(),
+      });
       if (!isMesh(node)) return;
       node.frustumCulled = false;
       node.castShadow = false;
@@ -213,6 +229,15 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       -bounds.min.y * scale - 1.18,
       -center.z * scale,
     );
+
+    // Guardamos la pose neutral ya normalizada. Esta será la pose de reposo
+    // real del avatar, no una animación retargeteada de otro esqueleto.
+    pose.set(clone, {
+      position: clone.position.clone(),
+      quaternion: clone.quaternion.clone(),
+      scale: clone.scale.clone(),
+    });
+    restPose.current = pose;
 
     return clone;
   }, [modelSource, color, normal, roughness, metallic]);
@@ -256,15 +281,9 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
         nextActions[key] = action;
       });
 
-      // Cualquier estado sin clip usa Idle; si Idle también falla, el modelo
-      // continúa visible en pose base en lugar de desaparecer.
-      const idleAction = nextActions.idle;
-      nextActions.error = idleAction;
-      nextActions.thinking ||= idleAction;
-      nextActions.listening ||= idleAction;
       actions.current = nextActions;
 
-      const initial = nextActions[requestedMode.current] || idleAction;
+      const initial = nextActions[requestedMode.current];
       initial?.reset().fadeIn(0.2).play();
       active.current = initial || null;
     });
@@ -280,16 +299,36 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   }, [model]);
 
   useEffect(() => {
-    const next = actions.current[mode] || actions.current.idle;
-    if (!next || next === active.current) return;
+    const next = actions.current[mode];
 
-    next.reset().setEffectiveWeight(1).fadeIn(0.25).play();
-    active.current?.fadeOut(0.25);
+    // Idle, thinking, listening y error vuelven a la pose neutral auténtica
+    // del modelo. Así evitamos la postura sentada causada por clips que no
+    // comparten exactamente el mismo rig.
+    if (!next) {
+      active.current?.fadeOut(0.18);
+      active.current = null;
+      return;
+    }
+
+    if (next === active.current) return;
+
+    next.reset().setEffectiveWeight(1).fadeIn(0.22).play();
+    active.current?.fadeOut(0.22);
     active.current = next;
   }, [mode]);
 
   useFrame((state, delta) => {
     mixer.current?.update(Math.min(delta, 0.05));
+
+    if (!active.current) {
+      const blend = Math.min(1, delta * 8);
+      restPose.current.forEach((rest, node) => {
+        node.position.lerp(rest.position, blend);
+        node.quaternion.slerp(rest.quaternion, blend);
+        node.scale.lerp(rest.scale, blend);
+      });
+    }
+
     if (!presentation.current) return;
 
     const sideTurn = facing === "left" ? 0.16 : facing === "right" ? -0.16 : 0;
