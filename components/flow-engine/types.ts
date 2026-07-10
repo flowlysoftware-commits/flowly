@@ -19,7 +19,9 @@ export type FlowMessage = { id: string; role: "user" | "flow" | "system"; text: 
 export type FlowPanelTarget = {
   key: string;
   label: string;
-  aliases?: string[];
+  aliases: string[];
+  selector: string;
+  route?: string;
 };
 
 export type FlowPanelResult = {

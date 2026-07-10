@@ -2,29 +2,10 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-
-type FlowPanelTarget = {
-  key: string;
-  label: string;
-  aliases: string[];
-  selector: string;
-  route?: string;
-};
-
-type FlowPanelNavigateResult = {
-  ok: boolean;
-  target?: string;
-  label?: string;
-  message: string;
-  rect?: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    centerX: number;
-    centerY: number;
-  };
-};
+import type {
+  FlowPanelResult,
+  FlowPanelTarget,
+} from "@/components/flow-engine/types";
 
 const FLOW_PANEL_TARGETS: FlowPanelTarget[] = [
   { key: "area", label: "Área personal", aliases: ["area", "área", "inicio", "panel", "dashboard", "home"], selector: '[data-flow-target="area"], button, a', route: "/dashboard" },
@@ -106,7 +87,7 @@ async function wait(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function navigateToTarget(targetKeyOrText: string): Promise<FlowPanelNavigateResult> {
+async function navigateToTarget(targetKeyOrText: string): Promise<FlowPanelResult> {
   const target = findTargetByKeyOrText(targetKeyOrText);
 
   if (!target) {
@@ -164,21 +145,6 @@ function getWorkspaceContext() {
     activeLabel: activeElement ? activeElement.innerText || activeElement.textContent || null : null,
     targets: FLOW_PANEL_TARGETS.map(({ key, label, aliases }) => ({ key, label, aliases })),
   };
-}
-
-type FlowPanelIntegrationApi = {
-  targets: FlowPanelTarget[];
-  findTarget: (target: string) => FlowPanelTarget | null;
-  findElement: (target: string) => HTMLElement | null;
-  navigate: (target: string) => Promise<FlowPanelNavigateResult>;
-  click: (target: string) => Promise<FlowPanelNavigateResult>;
-  context: () => unknown;
-};
-
-declare global {
-  interface Window {
-    FlowPanelIntegration?: FlowPanelIntegrationApi;
-  }
 }
 
 export default function FlowPanelIntegrationLayer() {
