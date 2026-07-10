@@ -7292,3 +7292,43 @@ iframe[src*="companion-webgl"] {
     bottom: -10px;
   }
 }
+
+/* ========================================================================== */
+/* FLOW COMPANION FINAL — único runtime visual activo                         */
+/* ========================================================================== */
+.flow-companion-root { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; }
+.flow-companion-character { position: fixed; width: 230px; height: 330px; pointer-events: none; transition: filter .2s ease; }
+.flow-companion-character-button { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; pointer-events: auto; overflow: visible; }
+.flow-companion-character-button canvas { width: 100% !important; height: 100% !important; background: transparent !important; }
+.flow-companion-loading { border: 1px solid rgba(103,232,249,.25); background: rgba(2,6,23,.82); color: #cffafe; border-radius: 999px; padding: 7px 11px; font: 700 11px/1 system-ui; white-space: nowrap; }
+.flow-companion-status { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); border-radius: 999px; padding: 5px 9px; font: 800 10px/1 system-ui; text-transform: uppercase; letter-spacing: .08em; color: white; background: rgba(2,6,23,.78); border: 1px solid rgba(148,163,184,.22); backdrop-filter: blur(10px); pointer-events: none; }
+.flow-companion-status.is-online::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399; }
+.flow-companion-status.is-offline::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #f59e0b; }
+.flow-companion-bubble { position: absolute; left: calc(100% - 28px); top: 54px; width: 220px; border: 1px solid rgba(103,232,249,.22); background: rgba(2,6,23,.9); color: white; border-radius: 18px 18px 18px 5px; padding: 11px 13px; font: 650 12px/1.45 system-ui; box-shadow: 0 18px 50px rgba(2,6,23,.32); backdrop-filter: blur(14px); pointer-events: auto; cursor: pointer; text-align: left; }
+.flow-companion-quick-actions { position: absolute; left: 50%; bottom: -28px; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; }
+.flow-companion-quick-actions button { display: flex; align-items: center; gap: 5px; border: 1px solid rgba(103,232,249,.2); background: rgba(2,6,23,.88); color: #e0f2fe; border-radius: 999px; padding: 7px 10px; font: 800 10px/1 system-ui; cursor: pointer; backdrop-filter: blur(12px); }
+.flow-companion-quick-actions button:hover { border-color: rgba(103,232,249,.55); transform: translateY(-1px); }
+.flow-companion-panel { position: fixed; right: 22px; bottom: 22px; width: min(360px, calc(100vw - 28px)); max-height: min(560px, calc(100vh - 44px)); display: flex; flex-direction: column; pointer-events: auto; border: 1px solid rgba(103,232,249,.2); border-radius: 24px; overflow: hidden; background: rgba(2,6,23,.94); color: white; box-shadow: 0 24px 80px rgba(2,6,23,.52); backdrop-filter: blur(24px); }
+.flow-companion-panel header { display: flex; align-items: center; justify-content: space-between; padding: 15px 16px; border-bottom: 1px solid rgba(148,163,184,.14); }
+.flow-companion-panel header div { display: grid; gap: 3px; }
+.flow-companion-panel header strong { font-size: 14px; }
+.flow-companion-panel header span { font-size: 10px; color: #a5f3fc; }
+.flow-companion-panel header button, .flow-companion-panel form button { border: 0; background: rgba(148,163,184,.1); color: white; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; cursor: pointer; }
+.flow-companion-messages { min-height: 180px; max-height: 340px; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.flow-companion-messages > div { max-width: 88%; border-radius: 14px; padding: 9px 11px; font: 600 12px/1.45 system-ui; }
+.flow-companion-messages .is-flow { align-self: flex-start; background: rgba(8,145,178,.16); border: 1px solid rgba(34,211,238,.16); }
+.flow-companion-messages .is-user { align-self: flex-end; background: rgba(124,58,237,.24); border: 1px solid rgba(167,139,250,.18); }
+.flow-companion-messages .is-system { align-self: center; color: #fbbf24; background: rgba(245,158,11,.08); }
+.flow-companion-panel form { display: grid; grid-template-columns: 32px 1fr 32px; gap: 8px; padding: 12px; border-top: 1px solid rgba(148,163,184,.14); }
+.flow-companion-panel form input { width: 100%; min-width: 0; border: 1px solid rgba(148,163,184,.18); background: rgba(15,23,42,.82); color: white; border-radius: 12px; padding: 0 11px; outline: none; font-size: 12px; }
+.flow-companion-panel form input:focus { border-color: rgba(34,211,238,.55); box-shadow: 0 0 0 3px rgba(34,211,238,.08); }
+.flow-panel-target-highlight { position: relative; z-index: 69 !important; outline: 3px solid rgba(34,211,238,.86) !important; outline-offset: 4px !important; box-shadow: 0 0 0 8px rgba(34,211,238,.12), 0 0 32px rgba(34,211,238,.36) !important; }
+
+/* Asegura que los runtimes visuales anteriores no reaparezcan. */
+.flow-runtime-v2-root, .flow-overlay-root, .flowly-companion-shell, .flowly-v6-legacy-preview { display: none !important; }
+
+@media (max-width: 720px) {
+  .flow-companion-character { width: 185px; height: 270px; }
+  .flow-companion-bubble { left: 115px; top: 38px; width: 165px; }
+  .flow-companion-quick-actions { bottom: -22px; }
+}
