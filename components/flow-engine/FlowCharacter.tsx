@@ -7,6 +7,7 @@ import {
   AnimationAction,
   AnimationClip,
   AnimationMixer,
+  Bone,
   Box3,
   Color,
   DoubleSide,
@@ -16,14 +17,18 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  SkinnedMesh,
+  Skeleton,
   Quaternion,
-  QuaternionKeyframeTrack,
   SRGBColorSpace,
   Texture,
   Vector3,
 } from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
-import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
+import {
+  clone as cloneSkeleton,
+  retargetClip as retargetSkeletonClip,
+} from "three/examples/jsm/utils/SkeletonUtils.js";
 import { FLOW_ANIMATION_URLS, FLOW_FRONT_YAW, FLOW_MODEL_URL } from "./animationLibrary";
 import { FlowEmotion, FlowFacing, FlowMode } from "./types";
 
@@ -50,30 +55,29 @@ type BoneRig = {
   rightClavicle?: Object3D;
 };
 
-const HUMANOID_BONE_ALIASES: Record<string, string> = {
-  hips: "pelvis",
-  pelvis: "pelvis",
-  spine: "spine01",
-  spine1: "spine02",
-  spine2: "spine02",
-  neck: "necktwist01",
-  head: "head",
-  leftshoulder: "lclavicle",
-  leftarm: "lupperarm",
-  leftforearm: "lforearm",
-  lefthand: "lhand",
-  leftupleg: "lthigh",
-  leftleg: "lcalf",
-  leftfoot: "lfoot",
-  lefttoebase: "ltoebase",
-  rightshoulder: "rclavicle",
-  rightarm: "rupperarm",
-  rightforearm: "rforearm",
-  righthand: "rhand",
-  rightupleg: "rthigh",
-  rightleg: "rcalf",
-  rightfoot: "rfoot",
-  righttoebase: "rtoebase",
+const RETARGET_NAMES: Record<string, string> = {
+  Hip: "mixamorigHips",
+  Waist: "mixamorigSpine",
+  Spine01: "mixamorigSpine1",
+  Spine02: "mixamorigSpine2",
+  NeckTwist01: "mixamorigNeck",
+  Head: "mixamorigHead",
+  L_Clavicle: "mixamorigLeftShoulder",
+  L_Upperarm: "mixamorigLeftArm",
+  L_Forearm: "mixamorigLeftForeArm",
+  L_Hand: "mixamorigLeftHand",
+  R_Clavicle: "mixamorigRightShoulder",
+  R_Upperarm: "mixamorigRightArm",
+  R_Forearm: "mixamorigRightForeArm",
+  R_Hand: "mixamorigRightHand",
+  L_Thigh: "mixamorigLeftUpLeg",
+  L_Calf: "mixamorigLeftLeg",
+  L_Foot: "mixamorigLeftFoot",
+  L_ToeBase: "mixamorigLeftToeBase",
+  R_Thigh: "mixamorigRightUpLeg",
+  R_Calf: "mixamorigRightLeg",
+  R_Foot: "mixamorigRightFoot",
+  R_ToeBase: "mixamorigRightToeBase",
 };
 
 function normalizeBone(value: string) {
@@ -92,21 +96,28 @@ function buildBoneMap(root: Object3D) {
   return map;
 }
 
-function findTargetBone(sourceName: string, map: Map<string, Object3D>) {
-  const normalized = normalizeBone(sourceName);
-  const aliased = HUMANOID_BONE_ALIASES[normalized] || normalized;
-  const direct = map.get(aliased);
-  if (direct) return direct;
+function findPrimarySkinnedMesh(root: Object3D) {
+  let result: SkinnedMesh | null = null;
+  root.traverse((node) => {
+    if (!result && (node as SkinnedMesh).isSkinnedMesh) {
+      result = node as SkinnedMesh;
+    }
+  });
+  return result;
+}
 
-  return [...map.entries()].find(
-    ([key]) => key.endsWith(aliased) || aliased.endsWith(key),
-  )?.[1];
+function createSourceSkeleton(root: Object3D) {
+  const bones: Bone[] = [];
+  root.traverse((node) => {
+    if ((node as Bone).isBone) bones.push(node as Bone);
+  });
+  return bones.length ? new Skeleton(bones) : null;
 }
 
 /**
- * Retarget local rotations using each rig's bind/rest orientation.
- * Copying raw quaternion values between unrelated FBX rigs is what caused
- * Flow to fold, sit in the air and turn his head toward his legs.
+ * Uses Three.js' world-space skeleton retargeter instead of copying local
+ * quaternion deltas. The avatar and the animation pack have very different
+ * bind axes, so local quaternion copying keeps producing the same broken pose.
  */
 function retargetClip(
   sourceClip: AnimationClip | undefined,
@@ -116,46 +127,32 @@ function retargetClip(
 ) {
   if (!sourceClip) return null;
 
-  const sourceMap = buildBoneMap(sourceRoot);
-  const targetMap = buildBoneMap(targetRoot);
-  const tracks = sourceClip.tracks.flatMap((track) => {
-    const dot = track.name.lastIndexOf(".");
-    if (dot < 0) return [];
+  const sourceSkeleton = createSourceSkeleton(sourceRoot);
+  const targetMesh = findPrimarySkinnedMesh(targetRoot);
+  if (!sourceSkeleton || !targetMesh) return null;
 
-    const sourceNodeName = track.name.slice(0, dot);
-    const property = track.name.slice(dot + 1);
-    const sourceNode = sourceMap.get(normalizeBone(sourceNodeName));
-    const targetNode = findTargetBone(sourceNodeName, targetMap);
+  sourceRoot.updateMatrixWorld(true);
+  targetRoot.updateMatrixWorld(true);
 
-    if (!sourceNode || !targetNode || property !== "quaternion") return [];
+  const clip = retargetSkeletonClip(
+    targetMesh,
+    sourceSkeleton,
+    sourceClip,
+    {
+      names: RETARGET_NAMES,
+      hip: "Hip",
+      hipInfluence: new Vector3(0, 0, 0),
+      preserveBoneMatrix: true,
+      preserveBonePositions: true,
+      useFirstFramePosition: true,
+      fps: 30,
+    },
+  );
 
-    const values = track.values;
-    if (values.length % 4 !== 0) return [];
-
-    const sourceRestInverse = sourceNode.quaternion.clone().invert();
-    const targetRest = targetNode.quaternion.clone();
-    const output = new Float32Array(values.length);
-    const animated = new Quaternion();
-    const delta = new Quaternion();
-    const retargeted = new Quaternion();
-
-    for (let index = 0; index < values.length; index += 4) {
-      animated.fromArray(values, index).normalize();
-      delta.copy(sourceRestInverse).multiply(animated).normalize();
-      retargeted.copy(targetRest).multiply(delta).normalize();
-      retargeted.toArray(output, index);
-    }
-
-    return [
-      new QuaternionKeyframeTrack(
-        `${targetNode.name}.quaternion`,
-        track.times.slice(),
-        output,
-      ),
-    ];
-  });
-
-  return tracks.length ? new AnimationClip(name, sourceClip.duration, tracks) : null;
+  targetMesh.skeleton.pose();
+  targetRoot.updateMatrixWorld(true);
+  clip.name = name;
+  return clip.tracks.length ? clip : null;
 }
 
 function firstClip(group: Group) {
@@ -322,7 +319,9 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
         }
 
         const { key, clip } = result.value;
-        const action = nextMixer.clipAction(clip, model);
+        const targetMesh = findPrimarySkinnedMesh(model);
+        if (!targetMesh) return;
+        const action = nextMixer.clipAction(clip, targetMesh);
         const oneShot = key === "waving" || key === "pointing";
         action.clampWhenFinished = false;
         action.setLoop(oneShot ? LoopOnce : LoopRepeat, oneShot ? 1 : Infinity);
