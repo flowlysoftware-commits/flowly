@@ -12,6 +12,6 @@ export const FLOW_ANIMATION_URLS: Record<Exclude<FlowMode, "error">, string> = {
   pointing: "/avatars/Pointing.fbx",
 };
 
-// The source FBX faces the X axis. Rotate it 90 degrees so it faces the
-// orthographic web camera instead of remaining in profile.
-export const FLOW_FRONT_YAW = Math.PI / 2;
+// Este FBX se exportó mirando al eje contrario de la cámara web. La rotación
+// de 180° lo deja de frente; los giros laterales se suman de forma suave.
+export const FLOW_FRONT_YAW = Math.PI;

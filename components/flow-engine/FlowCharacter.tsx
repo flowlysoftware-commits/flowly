@@ -20,6 +20,7 @@ import {
   Texture,
   Vector3,
 } from "three";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { FLOW_ANIMATION_URLS, FLOW_FRONT_YAW, FLOW_MODEL_URL } from "./animationLibrary";
 import { FlowEmotion, FlowFacing, FlowMode } from "./types";
@@ -65,7 +66,7 @@ function normalizeBone(value: string) {
     .toLowerCase();
 }
 
-function targetMap(root: Object3D) {
+function buildTargetMap(root: Object3D) {
   const map = new Map<string, Object3D>();
   root.traverse((node) => {
     if (node.name) map.set(normalizeBone(node.name), node);
@@ -84,9 +85,9 @@ function findTargetBone(sourceName: string, map: Map<string, Object3D>) {
   )?.[1];
 }
 
-function retarget(source: AnimationClip | undefined, target: Object3D, name: string) {
+function retargetClip(source: AnimationClip | undefined, target: Object3D, name: string) {
   if (!source) return null;
-  const map = targetMap(target);
+  const map = buildTargetMap(target);
 
   const tracks = source.tracks.flatMap((track) => {
     const dot = track.name.lastIndexOf(".");
@@ -98,9 +99,12 @@ function retarget(source: AnimationClip | undefined, target: Object3D, name: str
 
     if (!node || property === "scale") return [];
 
-    // Keep locomotion in-place. The web movement controller moves the whole
-    // character across the panel while the clip animates the complete rig.
-    if (property === "position" && /pelvis|hips|root|armature/.test(normalizeBone(node.name))) {
+    // El desplazamiento por la interfaz lo controla React. Conservamos el
+    // movimiento completo del esqueleto, pero eliminamos el root motion.
+    if (
+      property === "position" &&
+      /pelvis|hips|root|armature/.test(normalizeBone(node.name))
+    ) {
       return [];
     }
 
@@ -112,7 +116,7 @@ function retarget(source: AnimationClip | undefined, target: Object3D, name: str
   return tracks.length ? new AnimationClip(name, source.duration, tracks) : null;
 }
 
-function first(group: Group) {
+function firstClip(group: Group) {
   return group.animations?.find((clip) => clip.tracks.length > 0);
 }
 
@@ -139,8 +143,8 @@ function createVisibleMaterial(
     normalMap: normal,
     roughnessMap: roughness,
     metalnessMap: metallic,
-    roughness: 0.78,
-    metalness: 0.08,
+    roughness: 0.72,
+    metalness: 0.06,
     transparent: Boolean(sourceMaterial?.transparent),
     opacity: sourceMaterial?.opacity ?? 1,
     alphaTest: sourceMaterial?.alphaTest ?? 0,
@@ -159,17 +163,14 @@ function Loading() {
 function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   const presentation = useRef<Group>(null);
   const mixer = useRef<AnimationMixer | null>(null);
+  const actions = useRef<Partial<Record<FlowMode, AnimationAction>>>({});
   const active = useRef<AnimationAction | null>(null);
+  const requestedMode = useRef<FlowMode>(mode);
+  requestedMode.current = mode;
 
+  // El modelo se carga de forma independiente. Un FBX de animación roto ya
+  // no puede ocultar al avatar completo.
   const modelSource = useFBX(FLOW_MODEL_URL);
-  const idle = useFBX(FLOW_ANIMATION_URLS.idle);
-  const walking = useFBX(FLOW_ANIMATION_URLS.walking);
-  const thinking = useFBX(FLOW_ANIMATION_URLS.thinking);
-  const listening = useFBX(FLOW_ANIMATION_URLS.listening);
-  const talking = useFBX(FLOW_ANIMATION_URLS.talking);
-  const waving = useFBX(FLOW_ANIMATION_URLS.waving);
-  const pointing = useFBX(FLOW_ANIMATION_URLS.pointing);
-
   const [color, normal, roughness, metallic] = useTexture([
     "/models/flow/color.jpg",
     "/models/flow/normal.jpg",
@@ -180,7 +181,6 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
 
   const model = useMemo(() => {
     const clone = cloneSkeleton(modelSource) as Group;
-    clone.rotation.y = FLOW_FRONT_YAW;
 
     clone.traverse((node) => {
       if (!isMesh(node)) return;
@@ -191,73 +191,93 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       const sourceMaterials = Array.isArray(node.material)
         ? node.material
         : [node.material];
-      node.material = sourceMaterials.map((material) =>
+      const visibleMaterials = sourceMaterials.map((material) =>
         createVisibleMaterial(color, normal, roughness, metallic, material),
       );
+      node.material = Array.isArray(node.material)
+        ? visibleMaterials
+        : visibleMaterials[0];
     });
 
+    // Normalizamos tamaño y suelo sin mezclarlo con la orientación frontal.
     const bounds = new Box3().setFromObject(clone);
     const size = new Vector3();
     const center = new Vector3();
     bounds.getSize(size);
     bounds.getCenter(center);
 
-    const scale = 2.7 / Math.max(size.y, 0.001);
+    const scale = 2.65 / Math.max(size.y, 0.001);
     clone.scale.setScalar(scale);
     clone.position.set(
       -center.x * scale,
-      -bounds.min.y * scale - 1.34,
+      -bounds.min.y * scale - 1.18,
       -center.z * scale,
     );
 
     return clone;
   }, [modelSource, color, normal, roughness, metallic]);
 
-  const clips = useMemo(
-    () => ({
-      idle: retarget(first(idle), model, "idle"),
-      walking: retarget(first(walking), model, "walking"),
-      thinking: retarget(first(thinking), model, "thinking"),
-      listening: retarget(first(listening), model, "listening"),
-      talking: retarget(first(talking), model, "talking"),
-      waving: retarget(first(waving), model, "waving"),
-      pointing: retarget(first(pointing), model, "pointing"),
-      error: retarget(first(idle), model, "error"),
-    }),
-    [idle, walking, thinking, listening, talking, waving, pointing, model],
-  );
-
-  const actions = useRef<Partial<Record<FlowMode, AnimationAction>>>({});
-
   useEffect(() => {
     const nextMixer = new AnimationMixer(model);
     mixer.current = nextMixer;
-    const nextActions: Partial<Record<FlowMode, AnimationAction>> = {};
+    let cancelled = false;
 
-    (Object.keys(clips) as FlowMode[]).forEach((key) => {
-      const clip = clips[key] || clips.idle;
-      if (!clip) return;
+    const loader = new FBXLoader();
+    const entries = Object.entries(FLOW_ANIMATION_URLS) as Array<[
+      Exclude<FlowMode, "error">,
+      string,
+    ]>;
 
-      const action = nextMixer.clipAction(clip, model);
-      const oneShot = key === "waving" || key === "pointing";
-      action.clampWhenFinished = oneShot;
-      action.setLoop(oneShot ? LoopOnce : LoopRepeat, oneShot ? 1 : Infinity);
-      action.enabled = true;
-      action.setEffectiveWeight(1);
-      action.setEffectiveTimeScale(1);
-      nextActions[key] = action;
+    Promise.allSettled(
+      entries.map(async ([key, url]) => {
+        const source = await loader.loadAsync(url);
+        return { key, clip: retargetClip(firstClip(source), model, key) };
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+
+      const nextActions: Partial<Record<FlowMode, AnimationAction>> = {};
+      results.forEach((result) => {
+        if (result.status !== "fulfilled" || !result.value.clip) {
+          if (result.status === "rejected") {
+            console.warn("[FlowCharacter] Animation load failed:", result.reason);
+          }
+          return;
+        }
+
+        const { key, clip } = result.value;
+        const action = nextMixer.clipAction(clip, model);
+        const oneShot = key === "waving" || key === "pointing";
+        action.clampWhenFinished = oneShot;
+        action.setLoop(oneShot ? LoopOnce : LoopRepeat, oneShot ? 1 : Infinity);
+        action.enabled = true;
+        action.setEffectiveWeight(1);
+        action.setEffectiveTimeScale(1);
+        nextActions[key] = action;
+      });
+
+      // Cualquier estado sin clip usa Idle; si Idle también falla, el modelo
+      // continúa visible en pose base en lugar de desaparecer.
+      const idleAction = nextActions.idle;
+      nextActions.error = idleAction;
+      nextActions.thinking ||= idleAction;
+      nextActions.listening ||= idleAction;
+      actions.current = nextActions;
+
+      const initial = nextActions[requestedMode.current] || idleAction;
+      initial?.reset().fadeIn(0.2).play();
+      active.current = initial || null;
     });
 
-    actions.current = nextActions;
-    const initial = nextActions[mode] || nextActions.idle;
-    initial?.reset().fadeIn(0.2).play();
-    active.current = initial || null;
-
     return () => {
+      cancelled = true;
       nextMixer.stopAllAction();
       nextMixer.uncacheRoot(model);
+      actions.current = {};
+      active.current = null;
+      mixer.current = null;
     };
-  }, [model, clips, mode]);
+  }, [model]);
 
   useEffect(() => {
     const next = actions.current[mode] || actions.current.idle;
@@ -272,11 +292,10 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     mixer.current?.update(Math.min(delta, 0.05));
     if (!presentation.current) return;
 
-    // The imported model is calibrated to face the camera. Left/right only
-    // adds a small natural turn and never leaves Flow in profile.
-    const yaw = facing === "left" ? 0.18 : facing === "right" ? -0.18 : 0;
+    const sideTurn = facing === "left" ? 0.16 : facing === "right" ? -0.16 : 0;
+    const targetYaw = FLOW_FRONT_YAW + sideTurn;
     presentation.current.rotation.y +=
-      (yaw - presentation.current.rotation.y) * Math.min(1, delta * 7);
+      (targetYaw - presentation.current.rotation.y) * Math.min(1, delta * 7);
 
     const breath =
       Math.sin(state.clock.elapsedTime * (1.15 + emotion.energy * 0.55)) *
@@ -285,7 +304,7 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   });
 
   return (
-    <group ref={presentation}>
+    <group ref={presentation} rotation={[0, FLOW_FRONT_YAW, 0]}>
       <primitive object={model} />
     </group>
   );
@@ -301,19 +320,15 @@ export default function FlowCharacter(props: Props) {
     >
       <Canvas
         orthographic
-        camera={{ position: [0, 1.1, 8], zoom: 76, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.05, 8], zoom: 72, near: 0.1, far: 100 }}
         dpr={[1, 1.5]}
         gl={{ alpha: true, antialias: true, premultipliedAlpha: false }}
         style={{ background: "transparent" }}
       >
-        <ambientLight intensity={2.6} />
-        <hemisphereLight
-          color={new Color("#ffffff")}
-          groundColor={new Color("#4b5563")}
-          intensity={2.1}
-        />
-        <directionalLight position={[3, 5, 6]} intensity={3.4} />
-        <directionalLight position={[-3, 2, 4]} intensity={1.8} />
+        <ambientLight intensity={2.2} />
+        <hemisphereLight color="#ffffff" groundColor="#64748b" intensity={1.8} />
+        <directionalLight position={[3, 5, 6]} intensity={3.2} />
+        <directionalLight position={[-3, 2, 4]} intensity={1.5} />
         <Suspense fallback={<Loading />}>
           <CharacterScene
             mode={props.mode}
@@ -327,4 +342,3 @@ export default function FlowCharacter(props: Props) {
 }
 
 useFBX.preload(FLOW_MODEL_URL);
-Object.values(FLOW_ANIMATION_URLS).forEach((url) => useFBX.preload(url));
