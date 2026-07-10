@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import FlowEngine from "@/components/flow-engine/FlowEngine";
+import FlowEngineBoundary from "@/components/flow-engine/FlowEngineBoundary";
 import FlowPanelIntegrationLayer from "@/components/FlowPanelIntegrationLayer";
 import FlowlyAnalyticsTracker from "@/components/FlowlyAnalyticsTracker";
 
@@ -98,7 +99,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <FlowlyAnalyticsTracker />
         <FlowPanelIntegrationLayer />
-        <FlowEngine />
+        <FlowEngineBoundary>
+          <FlowEngine />
+        </FlowEngineBoundary>
       </body>
     </html>
   );
