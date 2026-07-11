@@ -332,7 +332,7 @@ export default function FlowEngine() {
         Math.max(0, window.innerWidth - size.width),
       );
       const top = clamp(
-        throne.top - size.height * 0.28,
+        throne.top + 26,
         0,
         Math.max(0, window.innerHeight - size.height),
       );
@@ -421,6 +421,9 @@ export default function FlowEngine() {
           aria-label="Trono de Flow"
         >
           <div className="flow-engine-throne-aura" />
+          <div className="flow-engine-throne-blades" aria-hidden="true">
+            {Array.from({ length: 17 }, (_, index) => <i key={index} />)}
+          </div>
           <div className="flow-engine-throne-crest"><span>F</span></div>
           <div className="flow-engine-throne-back">
             <span>FLOW</span>

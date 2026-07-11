@@ -184,6 +184,62 @@ function removeRootTranslation(clip: AnimationClip) {
   return clean;
 }
 
+function canonicalBoneName(value: string) {
+  const name = normalizeBone(value);
+  if (/^(root|armature)$/.test(name)) return "root";
+  if (/hips|pelvis|hip/.test(name)) return "pelvis";
+  if (/spine2|spine02|upperchest|chest/.test(name)) return "spine02";
+  if (/spine1|spine01/.test(name)) return "spine01";
+  if (/^spine$/.test(name)) return "spine01";
+  if (/neck/.test(name)) return "neck";
+  if (/head/.test(name)) return "head";
+  if (/leftshoulder|shoulderl|lshoulder/.test(name)) return "leftShoulder";
+  if (/rightshoulder|shoulderr|rshoulder/.test(name)) return "rightShoulder";
+  if (/leftupperarm|leftarm|upperarml|lupperarm/.test(name)) return "leftUpperArm";
+  if (/rightupperarm|rightarm|upperarmr|rupperarm/.test(name)) return "rightUpperArm";
+  if (/leftforearm|leftlowerarm|forearml|lforearm/.test(name)) return "leftForeArm";
+  if (/rightforearm|rightlowerarm|forearmr|rforearm/.test(name)) return "rightForeArm";
+  if (/lefthand|handl|lhand/.test(name)) return "leftHand";
+  if (/righthand|handr|rhand/.test(name)) return "rightHand";
+  if (/leftupleg|leftthigh|thighl|lthigh/.test(name)) return "leftThigh";
+  if (/rightupleg|rightthigh|thighr|rthigh/.test(name)) return "rightThigh";
+  if (/leftleg|leftcalf|calfl|lcalf/.test(name)) return "leftCalf";
+  if (/rightleg|rightcalf|calfr|rcalf/.test(name)) return "rightCalf";
+  if (/leftfoot|footl|lfoot/.test(name)) return "leftFoot";
+  if (/rightfoot|footr|rfoot/.test(name)) return "rightFoot";
+  return name;
+}
+
+function retargetClipByBoneNames(sourceClip: AnimationClip, targetRoot: Object3D) {
+  const targetByCanonical = new Map<string, Object3D>();
+  targetRoot.traverse((node) => {
+    if (!node.name) return;
+    const canonical = canonicalBoneName(node.name);
+    if (!targetByCanonical.has(canonical)) targetByCanonical.set(canonical, node);
+  });
+
+  const clip = sourceClip.clone();
+  clip.tracks = clip.tracks.flatMap((track) => {
+    const dot = track.name.indexOf(".");
+    if (dot < 0) return [];
+    const sourceNodeName = track.name.slice(0, dot);
+    const property = track.name.slice(dot + 1);
+    const target = targetByCanonical.get(canonicalBoneName(sourceNodeName));
+    if (!target) return [];
+
+    // Root translation from the animation would move Flow inside its own canvas.
+    const canonical = canonicalBoneName(sourceNodeName);
+    if ((canonical === "root" || canonical === "pelvis") && property === "position") return [];
+
+    const clonedTrack = track.clone();
+    clonedTrack.name = `${target.name}.${property}`;
+    return [clonedTrack];
+  });
+  clip.name = "Flow_Seated_Rest";
+  clip.resetDuration();
+  return clip.tracks.length ? clip : null;
+}
+
 const tempEuler = new Euler();
 const tempQuat = new Quaternion();
 
@@ -245,6 +301,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   const lastBehaviourPulse = useRef(behaviourPulse);
 
   const source = useFBX(FLOW_MODEL_URL);
+  const seatedSource = useFBX("/avatars/Sitting Talking.fbx");
   const [color, normal, roughness, metallic] = useTexture([
     "/models/flow/color.jpg",
     "/models/flow/normal.jpg",
@@ -321,6 +378,14 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     [source],
   );
 
+  const seatedClip = useMemo(() => {
+    const clips = seatedSource.animations || [];
+    const sourceClip =
+      clips.find((clip) => /sit|seated|chair|sitting/i.test(clip.name || "")) ||
+      clips[0];
+    return sourceClip ? retargetClipByBoneNames(sourceClip, model) : null;
+  }, [seatedSource, model]);
+
   useEffect(() => {
     const mixer = new AnimationMixer(model);
     mixerRef.current = mixer;
@@ -349,7 +414,9 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     action.reset();
     action.enabled = true;
     action.setEffectiveWeight(1);
-    action.setEffectiveTimeScale(requestedMode === "walking" ? 1.08 : 1);
+    action.setEffectiveTimeScale(
+      requestedMode === "walking" ? 1.08 : requestedMode === "seated" ? 0.72 : 1,
+    );
 
     const oneShot = requestedMode === "waving" || requestedMode === "pointing";
     action.setLoop(oneShot ? LoopOnce : LoopRepeat, oneShot ? 1 : Infinity);
@@ -365,10 +432,12 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   useEffect(() => {
     activeBehaviourId.current = behaviourId;
     idleVariant.current = behaviourPulse % 6;
-    const clip = chooseClipForMode(catalog, mode, emotion, recentClipsRef.current);
+    const clip = mode === "seated"
+      ? seatedClip
+      : chooseClipForMode(catalog, mode, emotion, recentClipsRef.current);
     playClip(clip, mode);
     // useFrame owns the Three.js clock; it will timestamp this state change.
-  }, [catalog, mode, emotion.energy, emotion.stress, behaviourPulse, behaviourId]);
+  }, [catalog, seatedClip, mode, emotion.energy, emotion.stress, behaviourPulse, behaviourId]);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -419,8 +488,9 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       multiplyLocalRotation(rig.current.spine02, breath * 0.0055, 0, -sway * 0.25);
 
       if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "dragging") {
-        const pointerYaw = pointer.current.x * 0.045 * attention;
-        const pointerPitch = -pointer.current.y * 0.025 * attention;
+        const seatedBoost = mode === "seated" ? 1.55 : 1;
+        const pointerYaw = pointer.current.x * 0.045 * attention * seatedBoost;
+        const pointerPitch = -pointer.current.y * 0.025 * attention * seatedBoost;
         multiplyLocalRotation(rig.current.neck, pointerPitch * 0.32, pointerYaw * 0.32, 0);
         multiplyLocalRotation(rig.current.head, pointerPitch * 0.55, pointerYaw * 0.55, 0);
       }
@@ -651,6 +721,13 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     const sideTurn = facing === "left" ? 0.58 : facing === "right" ? -0.58 : 0;
     const targetYaw = FLOW_FRONT_YAW + sideTurn;
     presentation.current.rotation.y += (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 7.2);
+
+    // The dedicated sitting clip bends the skeleton. This offset aligns the pelvis
+    // with the throne cushion instead of leaving Flow floating above it.
+    const targetPresentationY = mode === "seated" ? -0.34 : 0;
+    const targetPresentationZ = mode === "seated" ? 0.05 : 0;
+    presentation.current.position.y += (targetPresentationY - presentation.current.position.y) * Math.min(1, dt * 7.5);
+    presentation.current.position.z += (targetPresentationZ - presentation.current.position.z) * Math.min(1, dt * 7.5);
   });
 
   return (
@@ -694,3 +771,4 @@ export default function FlowCharacter(props: Props) {
 }
 
 useFBX.preload(FLOW_MODEL_URL);
+useFBX.preload("/avatars/Sitting Talking.fbx");
