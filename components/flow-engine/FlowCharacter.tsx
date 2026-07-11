@@ -5,9 +5,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, useFBX, useTexture } from "@react-three/drei";
 import {
   AnimationAction,
-  AnimationClip,
   AnimationMixer,
-  Bone,
   Box3,
   Color,
   DoubleSide,
@@ -17,19 +15,20 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
-  SkinnedMesh,
-  Skeleton,
   Quaternion,
   SRGBColorSpace,
   Texture,
   Vector3,
 } from "three";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
-  clone as cloneSkeleton,
-  retargetClip as retargetSkeletonClip,
-} from "three/examples/jsm/utils/SkeletonUtils.js";
-import { FLOW_ANIMATION_URLS, FLOW_FRONT_YAW, FLOW_MODEL_URL } from "./animationLibrary";
+  buildAnimationCatalog,
+  chooseAnimation,
+  FlowAnimationCatalog,
+  FlowAnimationEntry,
+  summarizeCatalog,
+} from "./animationCatalog";
+import { FLOW_FRONT_YAW, FLOW_MODEL_URL } from "./animationLibrary";
 import { FlowEmotion, FlowFacing, FlowMode } from "./types";
 
 type Props = {
@@ -51,33 +50,6 @@ type BoneRig = {
   spine02?: Object3D;
   neck?: Object3D;
   head?: Object3D;
-  leftClavicle?: Object3D;
-  rightClavicle?: Object3D;
-};
-
-const RETARGET_NAMES: Record<string, string> = {
-  Hip: "mixamorigHips",
-  Waist: "mixamorigSpine",
-  Spine01: "mixamorigSpine1",
-  Spine02: "mixamorigSpine2",
-  NeckTwist01: "mixamorigNeck",
-  Head: "mixamorigHead",
-  L_Clavicle: "mixamorigLeftShoulder",
-  L_Upperarm: "mixamorigLeftArm",
-  L_Forearm: "mixamorigLeftForeArm",
-  L_Hand: "mixamorigLeftHand",
-  R_Clavicle: "mixamorigRightShoulder",
-  R_Upperarm: "mixamorigRightArm",
-  R_Forearm: "mixamorigRightForeArm",
-  R_Hand: "mixamorigRightHand",
-  L_Thigh: "mixamorigLeftUpLeg",
-  L_Calf: "mixamorigLeftLeg",
-  L_Foot: "mixamorigLeftFoot",
-  L_ToeBase: "mixamorigLeftToeBase",
-  R_Thigh: "mixamorigRightUpLeg",
-  R_Calf: "mixamorigRightLeg",
-  R_Foot: "mixamorigRightFoot",
-  R_ToeBase: "mixamorigRightToeBase",
 };
 
 function normalizeBone(value: string) {
@@ -96,68 +68,15 @@ function buildBoneMap(root: Object3D) {
   return map;
 }
 
-function findPrimarySkinnedMesh(root: Object3D): SkinnedMesh | null {
-  let result: SkinnedMesh | null = null;
-  root.traverse((node) => {
-    if (!result && (node as SkinnedMesh).isSkinnedMesh) {
-      result = node as SkinnedMesh;
-    }
-  });
-  return result;
-}
-
-function createSourceSkeleton(root: Object3D) {
-  const bones: Bone[] = [];
-  root.traverse((node) => {
-    if ((node as Bone).isBone) bones.push(node as Bone);
-  });
-  return bones.length ? new Skeleton(bones) : null;
-}
-
-/**
- * Uses Three.js' world-space skeleton retargeter instead of copying local
- * quaternion deltas. The avatar and the animation pack have very different
- * bind axes, so local quaternion copying keeps producing the same broken pose.
- */
-function retargetClip(
-  sourceClip: AnimationClip | undefined,
-  sourceRoot: Object3D,
-  targetRoot: Object3D,
-  name: string,
-) {
-  if (!sourceClip) return null;
-
-  const sourceSkeleton = createSourceSkeleton(sourceRoot);
-  const foundTargetMesh = findPrimarySkinnedMesh(targetRoot);
-  if (!sourceSkeleton || foundTargetMesh === null) return null;
-
-  const targetMesh: SkinnedMesh = foundTargetMesh;
-
-  sourceRoot.updateMatrixWorld(true);
-  targetRoot.updateMatrixWorld(true);
-
-  const clip = retargetSkeletonClip(
-    targetMesh,
-    sourceSkeleton,
-    sourceClip,
-    {
-      names: RETARGET_NAMES,
-      hip: "Hip",
-      hipInfluence: new Vector3(0, 0, 0),
-      preserveBoneMatrix: true,
-      useFirstFramePosition: true,
-      fps: 30,
-    },
-  );
-
-  targetMesh.skeleton.pose();
-  targetRoot.updateMatrixWorld(true);
-  clip.name = name;
-  return clip.tracks.length ? clip : null;
-}
-
-function firstClip(group: Group) {
-  return group.animations?.find((clip) => clip.tracks.length > 0);
+function findBone(map: Map<string, Object3D>, names: string[]) {
+  for (const name of names) {
+    const exact = map.get(normalizeBone(name));
+    if (exact) return exact;
+  }
+  for (const [key, node] of map) {
+    if (names.some((name) => key.includes(normalizeBone(name)))) return node;
+  }
+  return undefined;
 }
 
 function isMesh(node: Object3D): node is Mesh {
@@ -184,7 +103,7 @@ function createVisibleMaterial(
     roughnessMap: roughness,
     metalnessMap: metallic,
     roughness: 0.72,
-    metalness: 0.06,
+    metalness: 0.04,
     transparent: Boolean(sourceMaterial?.transparent),
     opacity: sourceMaterial?.opacity ?? 1,
     alphaTest: sourceMaterial?.alphaTest ?? 0,
@@ -203,15 +122,19 @@ function Loading() {
 function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   const presentation = useRef<Group>(null);
   const mixer = useRef<AnimationMixer | null>(null);
-  const actions = useRef<Partial<Record<FlowMode, AnimationAction>>>({});
-  const active = useRef<AnimationAction | null>(null);
+  const activeAction = useRef<AnimationAction | null>(null);
+  const activeEntry = useRef<FlowAnimationEntry | null>(null);
+  const currentMode = useRef<FlowMode>(mode);
+  const recentlyUsed = useRef(new Map<string, number>());
+  const ambientAt = useRef(0);
+  const oneShotEndsAt = useRef(0);
+  const pointer = useRef({ x: 0, y: 0 });
   const restPose = useRef(new Map<Object3D, RestTransform>());
   const rig = useRef<BoneRig>({});
-  const pointer = useRef({ x: 0, y: 0 });
-  const requestedMode = useRef<FlowMode>(mode);
-  requestedMode.current = mode;
 
-  const modelSource = useFBX(FLOW_MODEL_URL);
+  currentMode.current = mode;
+
+  const source = useFBX(FLOW_MODEL_URL);
   const [color, normal, roughness, metallic] = useTexture([
     "/models/flow/color.jpg",
     "/models/flow/normal.jpg",
@@ -221,9 +144,9 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   color.colorSpace = SRGBColorSpace;
 
   const model = useMemo(() => {
-    const clone = cloneSkeleton(modelSource) as Group;
+    const clone = cloneSkeleton(source) as Group;
     const pose = new Map<Object3D, RestTransform>();
-    const map = buildBoneMap(clone);
+    const boneMap = buildBoneMap(clone);
 
     clone.traverse((node) => {
       pose.set(node, {
@@ -236,15 +159,11 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       node.castShadow = false;
       node.receiveShadow = false;
 
-      const sourceMaterials = Array.isArray(node.material)
-        ? node.material
-        : [node.material];
-      const visibleMaterials = sourceMaterials.map((material) =>
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      const visible = materials.map((material) =>
         createVisibleMaterial(color, normal, roughness, metallic, material),
       );
-      node.material = Array.isArray(node.material)
-        ? visibleMaterials
-        : visibleMaterials[0];
+      node.material = Array.isArray(node.material) ? visible : visible[0];
     });
 
     const bounds = new Box3().setFromObject(clone);
@@ -252,14 +171,9 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     const center = new Vector3();
     bounds.getSize(size);
     bounds.getCenter(center);
-
     const scale = 2.65 / Math.max(size.y, 0.001);
     clone.scale.setScalar(scale);
-    clone.position.set(
-      -center.x * scale,
-      -bounds.min.y * scale - 1.18,
-      -center.z * scale,
-    );
+    clone.position.set(-center.x * scale, -bounds.min.y * scale - 1.18, -center.z * scale);
 
     pose.set(clone, {
       position: clone.position.clone(),
@@ -268,17 +182,57 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     });
     restPose.current = pose;
     rig.current = {
-      pelvis: map.get("pelvis"),
-      spine01: map.get("spine01"),
-      spine02: map.get("spine02"),
-      neck: map.get("necktwist01") || map.get("neck"),
-      head: map.get("head"),
-      leftClavicle: map.get("lclavicle"),
-      rightClavicle: map.get("rclavicle"),
+      pelvis: findBone(boneMap, ["Pelvis", "Hips", "Hip"]),
+      spine01: findBone(boneMap, ["Spine01", "Spine1", "Spine"]),
+      spine02: findBone(boneMap, ["Spine02", "Spine2", "Chest"]),
+      neck: findBone(boneMap, ["NeckTwist01", "Neck"]),
+      head: findBone(boneMap, ["Head"]),
     };
 
     return clone;
-  }, [modelSource, color, normal, roughness, metallic]);
+  }, [source, color, normal, roughness, metallic]);
+
+  const catalog = useMemo<FlowAnimationCatalog>(() => {
+    const built = buildAnimationCatalog(source.animations || []);
+    console.info("[Flow Animation Brain] Master FBX clips:", source.animations?.length || 0, summarizeCatalog(built));
+    return built;
+  }, [source]);
+
+  const playEntry = (entry: FlowAnimationEntry | null, fade = 0.35) => {
+    const nextMixer = mixer.current;
+    if (!entry || !nextMixer) return false;
+
+    const action = nextMixer.clipAction(entry.clip, model);
+    if (action === activeAction.current && action.isRunning()) return true;
+
+    action.enabled = true;
+    action.clampWhenFinished = !entry.loop;
+    action.setLoop(entry.loop ? LoopRepeat : LoopOnce, entry.loop ? Infinity : 1);
+    action.setEffectiveWeight(1);
+    action.setEffectiveTimeScale(
+      entry.category === "walk"
+        ? 1.04 + emotion.energy * 0.22
+        : entry.category === "talk"
+          ? 0.92 + emotion.energy * 0.18
+          : 1,
+    );
+    action.reset().fadeIn(fade).play();
+
+    if (activeAction.current && activeAction.current !== action) {
+      activeAction.current.crossFadeTo(action, fade, false);
+    }
+
+    activeAction.current = action;
+    activeEntry.current = entry;
+    recentlyUsed.current.set(entry.clip.uuid, Date.now());
+    oneShotEndsAt.current = entry.loop
+      ? 0
+      : performance.now() + (entry.clip.duration / Math.max(action.getEffectiveTimeScale(), 0.01)) * 1000;
+    return true;
+  };
+
+  const chooseForMode = (requested: FlowMode) =>
+    chooseAnimation(catalog, requested, recentlyUsed.current);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -292,90 +246,32 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   useEffect(() => {
     const nextMixer = new AnimationMixer(model);
     mixer.current = nextMixer;
-    let cancelled = false;
-    const loader = new FBXLoader();
-    const entries = Object.entries(FLOW_ANIMATION_URLS) as Array<[
-      Exclude<FlowMode, "error">,
-      string,
-    ]>;
-
-    Promise.allSettled(
-      entries.map(async ([key, url]) => {
-        const source = await loader.loadAsync(url);
-        return {
-          key,
-          clip: retargetClip(firstClip(source), source, model, key),
-        };
-      }),
-    ).then((results) => {
-      if (cancelled) return;
-
-      const nextActions: Partial<Record<FlowMode, AnimationAction>> = {};
-      results.forEach((result) => {
-        if (result.status !== "fulfilled" || !result.value.clip) {
-          if (result.status === "rejected") {
-            console.warn("[FlowCharacter] Animation load failed:", result.reason);
-          }
-          return;
-        }
-
-        const { key, clip } = result.value;
-        const targetMesh = findPrimarySkinnedMesh(model);
-        if (!targetMesh) return;
-        const action = nextMixer.clipAction(clip, targetMesh);
-        const oneShot = key === "waving" || key === "pointing";
-        action.clampWhenFinished = false;
-        action.setLoop(oneShot ? LoopOnce : LoopRepeat, oneShot ? 1 : Infinity);
-        action.enabled = true;
-        action.setEffectiveWeight(1);
-        action.setEffectiveTimeScale(key === "walking" ? 1.08 : 1);
-        nextActions[key] = action;
-      });
-
-      actions.current = nextActions;
-      const initial = nextActions[requestedMode.current];
-      initial?.reset().fadeIn(0.2).play();
-      active.current = initial || null;
-    });
+    ambientAt.current = performance.now() + 3500;
+    playEntry(chooseForMode(mode), 0.18);
 
     return () => {
-      cancelled = true;
       nextMixer.stopAllAction();
       nextMixer.uncacheRoot(model);
-      actions.current = {};
-      active.current = null;
       mixer.current = null;
+      activeAction.current = null;
+      activeEntry.current = null;
     };
-  }, [model]);
+    // Catalog and model are immutable per loaded master FBX.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, catalog]);
 
   useEffect(() => {
-    const next = actions.current[mode];
-    if (!next) {
-      active.current?.fadeOut(0.2);
-      active.current = null;
-      return;
-    }
-    if (next === active.current) return;
-
-    next.reset().setEffectiveWeight(1).fadeIn(0.26).play();
-    active.current?.crossFadeTo(next, 0.26, false);
-    active.current = next;
+    const entry = chooseForMode(mode);
+    if (entry) playEntry(entry, mode === "walking" ? 0.22 : 0.34);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05);
+    const now = performance.now();
 
-    // Remove last frame's procedural offsets before AnimationMixer evaluates
-    // the next pose. This prevents head/neck/chest rotations from accumulating.
-    [
-      rig.current.pelvis,
-      rig.current.spine01,
-      rig.current.spine02,
-      rig.current.neck,
-      rig.current.head,
-      rig.current.leftClavicle,
-      rig.current.rightClavicle,
-    ].forEach((node) => {
+    // Remove procedural offsets. The mixer then writes the native master-rig pose.
+    [rig.current.spine01, rig.current.spine02, rig.current.neck, rig.current.head].forEach((node) => {
       if (!node) return;
       const rest = restPose.current.get(node);
       if (rest) node.quaternion.copy(rest.quaternion);
@@ -383,51 +279,49 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
 
     mixer.current?.update(dt);
 
-    if (!active.current) {
-      const blend = Math.min(1, dt * 8);
-      restPose.current.forEach((rest, node) => {
-        node.position.lerp(rest.position, blend);
-        node.quaternion.slerp(rest.quaternion, blend);
-        node.scale.lerp(rest.scale, blend);
-      });
+    // One-shot gestures naturally return to the current behavioural state.
+    if (oneShotEndsAt.current && now >= oneShotEndsAt.current) {
+      oneShotEndsAt.current = 0;
+      const fallback = chooseForMode(currentMode.current === "waving" || currentMode.current === "pointing" ? "idle" : currentMode.current);
+      if (fallback) playEntry(fallback, 0.3);
+    }
+
+    // Idle intelligence: vary the native clips without repeating recently used ones.
+    if (currentMode.current === "idle" && now >= ambientAt.current && !oneShotEndsAt.current) {
+      const roll = Math.random();
+      const ambientMode: FlowMode = roll < 0.62 ? "idle" : roll < 0.76 ? "listening" : roll < 0.9 ? "thinking" : "waving";
+      const ambient = chooseForMode(ambientMode);
+      if (ambient) playEntry(ambient, 0.45);
+      const calmDelay = 7000 + emotion.calm * 9000;
+      ambientAt.current = now + calmDelay + Math.random() * 7000;
     }
 
     const elapsed = state.clock.elapsedTime;
     const energy = Math.max(0, Math.min(1, emotion.energy));
     const calm = Math.max(0, Math.min(1, emotion.calm));
+    const attention = Math.max(0, Math.min(1, emotion.attention));
     const idleLike = mode === "idle" || mode === "thinking" || mode === "listening" || mode === "talking";
 
     if (idleLike) {
-      const breath = Math.sin(elapsed * (1.25 + energy * 0.45));
-      const sway = Math.sin(elapsed * 0.52) * (0.006 + (1 - calm) * 0.006);
-      const chestAmount = breath * (0.007 + (1 - calm) * 0.004);
+      const breath = Math.sin(elapsed * (1.08 + energy * 0.48));
+      const chest = breath * (0.0045 + (1 - calm) * 0.0035);
+      rig.current.spine01?.rotateX(chest * 0.45);
+      rig.current.spine02?.rotateX(chest);
 
-      const spine01 = rig.current.spine01;
-      const spine02 = rig.current.spine02;
-      const pelvis = rig.current.pelvis;
-      if (spine01) spine01.rotateX(chestAmount * 0.42);
-      if (spine02) spine02.rotateX(chestAmount);
-      if (pelvis) pelvis.rotateZ(sway * 0.35);
-
-      const canLook = mode !== "thinking";
-      if (canLook) {
-        const yaw = pointer.current.x * 0.055 * emotion.attention;
-        const pitch = -pointer.current.y * 0.028 * emotion.attention;
-        rig.current.neck?.rotateY(yaw * 0.42);
-        rig.current.neck?.rotateX(pitch * 0.42);
-        rig.current.head?.rotateY(yaw * 0.58);
-        rig.current.head?.rotateX(pitch * 0.58);
-      } else {
-        rig.current.head?.rotateY(Math.sin(elapsed * 0.44) * 0.018);
-        rig.current.head?.rotateX(-0.025);
+      if (mode !== "thinking") {
+        const yaw = pointer.current.x * 0.045 * attention;
+        const pitch = -pointer.current.y * 0.022 * attention;
+        rig.current.neck?.rotateY(yaw * 0.35);
+        rig.current.neck?.rotateX(pitch * 0.35);
+        rig.current.head?.rotateY(yaw * 0.65);
+        rig.current.head?.rotateX(pitch * 0.65);
       }
     }
 
     if (!presentation.current) return;
-    const sideTurn = facing === "left" ? 0.15 : facing === "right" ? -0.15 : 0;
+    const sideTurn = facing === "left" ? 0.12 : facing === "right" ? -0.12 : 0;
     const targetYaw = FLOW_FRONT_YAW + sideTurn;
-    presentation.current.rotation.y +=
-      (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 7);
+    presentation.current.rotation.y += (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 8);
   });
 
   return (
@@ -452,16 +346,12 @@ export default function FlowCharacter(props: Props) {
         gl={{ alpha: true, antialias: true, premultipliedAlpha: false }}
         style={{ background: "transparent" }}
       >
-        <ambientLight intensity={2.2} />
-        <hemisphereLight color="#ffffff" groundColor="#64748b" intensity={1.8} />
-        <directionalLight position={[3, 5, 6]} intensity={3.2} />
-        <directionalLight position={[-3, 2, 4]} intensity={1.5} />
+        <ambientLight intensity={2.15} />
+        <hemisphereLight color="#ffffff" groundColor="#64748b" intensity={1.75} />
+        <directionalLight position={[3, 5, 6]} intensity={3.1} />
+        <directionalLight position={[-3, 2, 4]} intensity={1.45} />
         <Suspense fallback={<Loading />}>
-          <CharacterScene
-            mode={props.mode}
-            facing={props.facing}
-            emotion={props.emotion}
-          />
+          <CharacterScene mode={props.mode} facing={props.facing} emotion={props.emotion} />
         </Suspense>
       </Canvas>
     </button>
