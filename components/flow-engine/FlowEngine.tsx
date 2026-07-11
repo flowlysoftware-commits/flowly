@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Mic, Navigation, Send, Sparkles, X } from "lucide-react";
 import FlowCharacter from "./FlowCharacter";
+import { FlowBehaviourEngine } from "./behaviourEngine";
 import { detectNavigationTarget, getTargetDestination, highlightTarget } from "./domNavigator";
 import { FlowGatewayClient } from "./gatewayClient";
 import { walkFlowTo } from "./movementController";
@@ -35,6 +36,7 @@ export default function FlowEngine() {
   const stateRef = useRef(state);
   const clientRef = useRef<FlowGatewayClient | null>(null);
   const navigationLock = useRef(false);
+  const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
   stateRef.current = state;
 
   const navigate = useCallback(async (targetText: string) => {
@@ -49,6 +51,7 @@ export default function FlowEngine() {
     }
 
     navigationLock.current = true;
+    behaviourRef.current?.noteActivity();
 
     try {
       let element = api.findElement(target.key);
@@ -88,29 +91,6 @@ export default function FlowEngine() {
     }
   }, []);
 
-
-  useEffect(() => {
-    if (state.mode !== "idle") return;
-    let cancelled=false;
-    let timer:number;
-    const idleModes: FlowMode[]=["thinking","listening","talking","pointing"];
-    const schedule=()=>{
-      const delay=5000+Math.random()*7000;
-      timer=window.setTimeout(()=>{
-        if(cancelled||stateRef.current.mode!=="idle") return;
-        const m=idleModes[Math.floor(Math.random()*idleModes.length)];
-        dispatch({type:"mode",mode:m});
-        window.setTimeout(()=>{
-          if(!cancelled && stateRef.current.mode===m){
-            dispatch({type:"mode",mode:"idle"});
-          }
-          if(!cancelled) schedule();
-        },1200+Math.random()*1800);
-      },delay);
-    };
-    schedule();
-    return ()=>{cancelled=true; clearTimeout(timer);}
-  },[state.mode]);
   useEffect(() => {
     const client = new FlowGatewayClient(WS, {
       onConnected: (connected) => dispatch({ type: "connected", connected }),
@@ -135,6 +115,39 @@ export default function FlowEngine() {
     return () => client.disconnect();
   }, [navigate]);
 
+
+  useEffect(() => {
+    const behaviour = new FlowBehaviourEngine({
+      getMode: () => stateRef.current.mode,
+      getEmotion: () => stateRef.current.emotion,
+      isBlocked: () => navigationLock.current,
+      onDecision: (decision) => {
+        dispatch({ type: "behaviour", pulse: decision.pulse, id: decision.id });
+        dispatch({ type: "mode", mode: decision.mode });
+      },
+      onReturnToIdle: (decision) => {
+        dispatch({ type: "mode", mode: "idle" });
+        dispatch({ type: "behaviour", pulse: decision.pulse + 1, id: null });
+      },
+    });
+
+    behaviourRef.current = behaviour;
+    behaviour.start();
+
+    const markActivity = () => behaviour.noteActivity();
+    window.addEventListener("pointerdown", markActivity, { passive: true });
+    window.addEventListener("keydown", markActivity);
+    window.addEventListener("scroll", markActivity, { passive: true });
+
+    return () => {
+      behaviour.stop();
+      behaviourRef.current = null;
+      window.removeEventListener("pointerdown", markActivity);
+      window.removeEventListener("keydown", markActivity);
+      window.removeEventListener("scroll", markActivity);
+    };
+  }, []);
+
   async function setTemporaryMode(mode: FlowMode, duration: number) {
     dispatch({ type: "mode", mode });
     await sleep(duration);
@@ -147,6 +160,7 @@ export default function FlowEngine() {
     if (!text) return;
 
     setInput("");
+    behaviourRef.current?.noteActivity();
     dispatch({
       type: "message",
       message: { id: uid("user"), role: "user", text },
@@ -196,6 +210,8 @@ export default function FlowEngine() {
           mode={state.mode}
           facing={state.facing}
           emotion={state.emotion}
+          behaviourPulse={state.behaviourPulse}
+          behaviourId={state.behaviourId}
           onClick={() => dispatch({ type: "open", open: !state.open })}
         />
 

@@ -8,7 +8,8 @@ export type FlowAction =
   | { type: "position"; left: number; top: number }
   | { type: "bubble"; text: string }
   | { type: "emotion"; emotion: Partial<FlowEmotion> }
-  | { type: "message"; message: FlowRuntimeState["messages"][number] };
+  | { type: "message"; message: FlowRuntimeState["messages"][number] }
+  | { type: "behaviour"; pulse: number; id: string | null };
 
 export function createInitialFlowState(): FlowRuntimeState {
   return {
@@ -20,6 +21,8 @@ export function createInitialFlowState(): FlowRuntimeState {
     emotion: DEFAULT_EMOTION,
     bubble: "Estoy aquí. Puedo acompañarte por Flowly.",
     messages: [{ id: "welcome", role: "flow", text: "Soy Flow. Pídeme que te lleve a cualquier módulo." }],
+    behaviourPulse: 0,
+    behaviourId: null,
   };
 }
 
@@ -33,6 +36,7 @@ export function flowReducer(state: FlowRuntimeState, action: FlowAction): FlowRu
     case "bubble": return { ...state, bubble: action.text };
     case "emotion": return { ...state, emotion: { ...state.emotion, ...action.emotion } };
     case "message": return { ...state, messages: [...state.messages, action.message].slice(-20) };
+    case "behaviour": return { ...state, behaviourPulse: action.pulse, behaviourId: action.id };
     default: return state;
   }
 }

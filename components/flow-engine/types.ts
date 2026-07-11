@@ -57,6 +57,8 @@ export type FlowRuntimeState = {
   emotion: FlowEmotion;
   bubble: string;
   messages: FlowMessage[];
+  behaviourPulse: number;
+  behaviourId: string | null;
 };
 
 export const DEFAULT_EMOTION: FlowEmotion = {

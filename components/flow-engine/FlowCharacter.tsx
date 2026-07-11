@@ -32,6 +32,8 @@ type Props = {
   mode: FlowMode;
   facing: FlowFacing;
   emotion: FlowEmotion;
+  behaviourPulse?: number;
+  behaviourId?: string | null;
   onClick?: () => void;
 };
 
@@ -223,7 +225,7 @@ function applyRestPosition(
   node.position.lerp(new Vector3(rest.position.x + x, rest.position.y + y, rest.position.z + z), alpha);
 }
 
-function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
+function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId = null }: Omit<Props, "onClick">) {
   const presentation = useRef<Group>(null);
   const pointer = useRef({ x: 0, y: 0 });
   const restPose = useRef(new Map<Object3D, RestTransform>());
@@ -238,6 +240,9 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   const nextBlinkAt = useRef(1.8);
   const modeEnteredAt = useRef(0);
   const lastMode = useRef<FlowMode>(mode);
+  const activeBehaviourId = useRef<string | null>(behaviourId);
+  const idleVariant = useRef(0);
+  const lastBehaviourPulse = useRef(behaviourPulse);
 
   const source = useFBX(FLOW_MODEL_URL);
   const [color, normal, roughness, metallic] = useTexture([
@@ -358,10 +363,12 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   };
 
   useEffect(() => {
+    activeBehaviourId.current = behaviourId;
+    idleVariant.current = behaviourPulse % 6;
     const clip = chooseClipForMode(catalog, mode, emotion, recentClipsRef.current);
     playClip(clip, mode);
     // useFrame owns the Three.js clock; it will timestamp this state change.
-  }, [catalog, mode, emotion.energy, emotion.stress]);
+  }, [catalog, mode, emotion.energy, emotion.stress, behaviourPulse, behaviourId]);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -380,6 +387,11 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
 
     if (lastMode.current !== mode) {
       lastMode.current = mode;
+      modeEnteredAt.current = elapsed;
+    }
+
+    if (lastBehaviourPulse.current !== behaviourPulse) {
+      lastBehaviourPulse.current = behaviourPulse;
       modeEnteredAt.current = elapsed;
     }
 
@@ -412,6 +424,29 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
         multiplyLocalRotation(rig.current.neck, pointerPitch * 0.32, pointerYaw * 0.32, 0);
         multiplyLocalRotation(rig.current.head, pointerPitch * 0.55, pointerYaw * 0.55, 0);
       }
+
+      if (mode === "idle" && activeBehaviourId.current) {
+        const local = modeTime;
+        const intro = MathUtils.smoothstep(Math.min(local / 0.4, 1), 0, 1);
+        const outro = local > 1.55
+          ? 1 - MathUtils.smoothstep(Math.min((local - 1.55) / 0.65, 1), 0, 1)
+          : 1;
+        const amount = intro * outro;
+        const variant = idleVariant.current;
+
+        if (variant % 3 === 0) {
+          multiplyLocalRotation(rig.current.pelvis, 0, 0, Math.sin(local * 1.2) * 0.012 * amount);
+          multiplyLocalRotation(rig.current.spine02, 0, 0, -Math.sin(local * 1.2) * 0.01 * amount);
+        } else if (variant % 3 === 1) {
+          multiplyLocalRotation(rig.current.neck, -0.008 * amount, 0.035 * amount, 0.01 * amount);
+          multiplyLocalRotation(rig.current.head, -0.014 * amount, 0.045 * amount, 0.012 * amount);
+        } else {
+          multiplyLocalRotation(rig.current.spine01, -0.014 * amount, 0, 0);
+          multiplyLocalRotation(rig.current.spine02, -0.022 * amount, 0, 0);
+          multiplyLocalRotation(rig.current.leftShoulder, 0, 0, 0.018 * amount);
+          multiplyLocalRotation(rig.current.rightShoulder, 0, 0, -0.018 * amount);
+        }
+      }
     } else {
       // Conservative fallback for files without an appropriate named clip.
       let pelvisY = 0;
@@ -434,6 +469,44 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       let rightCalfX = 0;
       let leftFootX = 0;
       let rightFootX = 0;
+
+      if (mode === "idle") {
+        const variant = idleVariant.current;
+        const local = modeTime;
+        const easeIn = MathUtils.smoothstep(Math.min(local / 0.45, 1), 0, 1);
+        const easeOut = local > 1.7
+          ? 1 - MathUtils.smoothstep(Math.min((local - 1.7) / 0.7, 1), 0, 1)
+          : 1;
+        const amount = easeIn * easeOut;
+
+        if (variant === 0) {
+          pelvisZ += Math.sin(local * 1.35) * 0.018 * amount;
+          chestZ += -Math.sin(local * 1.35) * 0.018 * amount;
+          headZ += Math.sin(local * 0.9) * 0.012 * amount;
+        } else if (variant === 1) {
+          headY += 0.06 * amount;
+          headX -= 0.012 * amount;
+          chestY -= 0.02 * amount;
+        } else if (variant === 2) {
+          leftUpperZ += 0.035 * amount;
+          rightUpperZ -= 0.035 * amount;
+          chestX -= 0.018 * amount;
+          headX += 0.01 * amount;
+        } else if (variant === 3) {
+          pelvisY += 0.008 * amount;
+          chestX += 0.028 * amount;
+          headX -= 0.018 * amount;
+        } else if (variant === 4) {
+          headY -= 0.055 * amount;
+          headZ += 0.018 * amount;
+          chestY += 0.018 * amount;
+        } else {
+          pelvisZ += 0.014 * amount;
+          leftThighX += 0.02 * amount;
+          rightThighX -= 0.014 * amount;
+          headY += Math.sin(local * 0.8) * 0.015 * amount;
+        }
+      }
 
       if (mode === "walking") {
         const cadence = 1.48 + energy * 0.34;
@@ -564,7 +637,13 @@ export default function FlowCharacter(props: Props) {
         <directionalLight position={[3, 5, 6]} intensity={3.25} />
         <directionalLight position={[-3, 2, 4]} intensity={1.55} />
         <Suspense fallback={<Loading />}>
-          <CharacterScene mode={props.mode} facing={props.facing} emotion={props.emotion} />
+          <CharacterScene
+            mode={props.mode}
+            facing={props.facing}
+            emotion={props.emotion}
+            behaviourPulse={props.behaviourPulse}
+            behaviourId={props.behaviourId}
+          />
         </Suspense>
       </Canvas>
     </button>
