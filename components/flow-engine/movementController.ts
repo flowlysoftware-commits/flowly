@@ -4,21 +4,17 @@ export type MovementCallbacks = {
   onPosition: (position: FlowPosition) => void;
   onFacing: (facing: FlowFacing) => void;
   onWalking: (walking: boolean) => void;
+  onPhase?: (phase: "turn" | "start" | "cruise" | "stop" | "arrived") => void;
 };
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function smoothStep(t: number) {
-  return t * t * (3 - 2 * t);
+function smootherStep(t: number) {
+  return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
-/**
- * Moves the transparent character viewport across the DOM while the 3D rig
- * plays its real walking cycle. The eased acceleration/deceleration prevents
- * Flow from looking like a sticker sliding at constant speed.
- */
 export async function walkFlowTo(
   start: FlowPosition,
   destination: FlowPosition,
@@ -31,19 +27,28 @@ export async function walkFlowTo(
   if (distance < 8) {
     callbacks.onFacing("front");
     callbacks.onPosition(destination);
+    callbacks.onPhase?.("arrived");
     return;
   }
 
-  // Around 185 screen pixels per second, constrained for short/long trips.
-  const duration = clamp((distance / 185) * 1000, 900, 4200);
-  callbacks.onFacing(dx < -8 ? "left" : dx > 8 ? "right" : "front");
+  const horizontalFacing: FlowFacing = dx < -8 ? "left" : dx > 8 ? "right" : "front";
+  callbacks.onPhase?.("turn");
+  callbacks.onFacing(horizontalFacing);
+  await new Promise((resolve) => window.setTimeout(resolve, 220));
+
+  callbacks.onPhase?.("start");
   callbacks.onWalking(true);
+  await new Promise((resolve) => window.setTimeout(resolve, 120));
+
+  const speed = 210;
+  const duration = clamp((distance / speed) * 1000, 760, 4300);
   const began = performance.now();
 
   await new Promise<void>((resolve) => {
     const step = (now: number) => {
       const raw = clamp((now - began) / duration, 0, 1);
-      const t = smoothStep(raw);
+      const t = smootherStep(raw);
+      callbacks.onPhase?.(raw < 0.14 ? "start" : raw > 0.84 ? "stop" : "cruise");
       callbacks.onPosition({
         left: start.left + dx * t,
         top: start.top + dy * t,
@@ -54,7 +59,10 @@ export async function walkFlowTo(
     requestAnimationFrame(step);
   });
 
+  callbacks.onPhase?.("stop");
   callbacks.onPosition(destination);
+  await new Promise((resolve) => window.setTimeout(resolve, 150));
   callbacks.onWalking(false);
   callbacks.onFacing("front");
+  callbacks.onPhase?.("arrived");
 }

@@ -7421,3 +7421,30 @@ iframe[src*="companion-webgl"] {
 @media (max-width: 640px) {
   .flow-engine-character { width: 215px; height: 320px; }
 }
+
+/* Flow Engine presence pass — authoritative final sizing/placement */
+.flow-engine-character {
+  width: 318px;
+  height: 470px;
+  transform-origin: 50% 100%;
+  transition: none !important;
+}
+.flow-engine-character-button {
+  overflow: visible;
+}
+.flow-engine-status {
+  bottom: 18px;
+}
+.flow-engine-actions {
+  bottom: -28px;
+  min-width: 220px;
+}
+.flow-engine-bubble {
+  left: calc(100% - 34px);
+  top: 62px;
+  width: 240px;
+}
+@media (max-width: 640px) {
+  .flow-engine-character { width: 238px; height: 360px; }
+  .flow-engine-bubble { left: 146px; top: 50px; width: 180px; }
+}

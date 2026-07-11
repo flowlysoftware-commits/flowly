@@ -4,14 +4,12 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, useFBX, useTexture } from "@react-three/drei";
 import {
-  AnimationAction,
-  AnimationMixer,
   Box3,
   Color,
   DoubleSide,
+  Euler,
   Group,
-  LoopOnce,
-  LoopRepeat,
+  MathUtils,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -21,13 +19,6 @@ import {
   Vector3,
 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
-import {
-  buildAnimationCatalog,
-  chooseAnimation,
-  FlowAnimationCatalog,
-  FlowAnimationEntry,
-  summarizeCatalog,
-} from "./animationCatalog";
 import { FLOW_FRONT_YAW, FLOW_MODEL_URL } from "./animationLibrary";
 import { FlowEmotion, FlowFacing, FlowMode } from "./types";
 
@@ -45,6 +36,7 @@ type RestTransform = {
 };
 
 type BoneRig = {
+  root?: Object3D;
   pelvis?: Object3D;
   spine01?: Object3D;
   spine02?: Object3D;
@@ -56,10 +48,22 @@ type BoneRig = {
   rightUpperArm?: Object3D;
   leftForeArm?: Object3D;
   rightForeArm?: Object3D;
+  leftHand?: Object3D;
+  rightHand?: Object3D;
   leftThigh?: Object3D;
   rightThigh?: Object3D;
   leftCalf?: Object3D;
   rightCalf?: Object3D;
+  leftFoot?: Object3D;
+  rightFoot?: Object3D;
+};
+
+type FaceRig = {
+  meshes: Mesh[];
+  blinkLeft: number[];
+  blinkRight: number[];
+  smile: number[];
+  browUp: number[];
 };
 
 function normalizeBone(value: string) {
@@ -112,8 +116,8 @@ function createVisibleMaterial(
     normalMap: normal,
     roughnessMap: roughness,
     metalnessMap: metallic,
-    roughness: 0.72,
-    metalness: 0.04,
+    roughness: 0.78,
+    metalness: 0.02,
     transparent: Boolean(sourceMaterial?.transparent),
     opacity: sourceMaterial?.opacity ?? 1,
     alphaTest: sourceMaterial?.alphaTest ?? 0,
@@ -129,20 +133,92 @@ function Loading() {
   );
 }
 
+function buildFaceRig(root: Object3D): FaceRig {
+  const result: FaceRig = {
+    meshes: [],
+    blinkLeft: [],
+    blinkRight: [],
+    smile: [],
+    browUp: [],
+  };
+
+  root.traverse((node) => {
+    if (!isMesh(node)) return;
+    const mesh = node as Mesh & {
+      morphTargetDictionary?: Record<string, number>;
+      morphTargetInfluences?: number[];
+    };
+    if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
+    const meshIndex = result.meshes.push(mesh) - 1;
+    Object.entries(mesh.morphTargetDictionary).forEach(([rawName, index]) => {
+      const name = normalizeBone(rawName);
+      const packed = meshIndex * 10000 + index;
+      if (/blinkleft|eyeblinkleft|leftblink/.test(name)) result.blinkLeft.push(packed);
+      if (/blinkright|eyeblinkright|rightblink/.test(name)) result.blinkRight.push(packed);
+      if (/smile|mouthsmile|happy/.test(name)) result.smile.push(packed);
+      if (/browup|eyebrowup|surprise/.test(name)) result.browUp.push(packed);
+    });
+  });
+
+  return result;
+}
+
+function setMorph(face: FaceRig, packedIndices: number[], value: number) {
+  packedIndices.forEach((packed) => {
+    const meshIndex = Math.floor(packed / 10000);
+    const morphIndex = packed % 10000;
+    const mesh = face.meshes[meshIndex] as Mesh & { morphTargetInfluences?: number[] };
+    if (mesh?.morphTargetInfluences) mesh.morphTargetInfluences[morphIndex] = value;
+  });
+}
+
+const tempEuler = new Euler();
+const tempQuat = new Quaternion();
+const targetQuat = new Quaternion();
+
+function applyAdditiveRotation(
+  node: Object3D | undefined,
+  restPose: Map<Object3D, RestTransform>,
+  x: number,
+  y: number,
+  z: number,
+  alpha: number,
+) {
+  if (!node) return;
+  const rest = restPose.get(node);
+  if (!rest) return;
+  tempEuler.set(x, y, z, "XYZ");
+  tempQuat.setFromEuler(tempEuler);
+  targetQuat.copy(rest.quaternion).multiply(tempQuat);
+  node.quaternion.slerp(targetQuat, alpha);
+}
+
+function applyAdditivePosition(
+  node: Object3D | undefined,
+  restPose: Map<Object3D, RestTransform>,
+  x: number,
+  y: number,
+  z: number,
+  alpha: number,
+) {
+  if (!node) return;
+  const rest = restPose.get(node);
+  if (!rest) return;
+  const target = new Vector3(rest.position.x + x, rest.position.y + y, rest.position.z + z);
+  node.position.lerp(target, alpha);
+}
+
 function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
   const presentation = useRef<Group>(null);
-  const mixer = useRef<AnimationMixer | null>(null);
-  const activeAction = useRef<AnimationAction | null>(null);
-  const activeEntry = useRef<FlowAnimationEntry | null>(null);
-  const currentMode = useRef<FlowMode>(mode);
-  const recentlyUsed = useRef(new Map<string, number>());
-  const ambientAt = useRef(0);
-  const oneShotEndsAt = useRef(0);
   const pointer = useRef({ x: 0, y: 0 });
   const restPose = useRef(new Map<Object3D, RestTransform>());
   const rig = useRef<BoneRig>({});
-
-  currentMode.current = mode;
+  const face = useRef<FaceRig>({ meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [] });
+  const blinkStartedAt = useRef(-1);
+  const nextBlinkAt = useRef(1.8);
+  const microGestureSeed = useRef(Math.random() * 100);
+  const lastMode = useRef<FlowMode>(mode);
+  const modeEnteredAt = useRef(0);
 
   const source = useFBX(FLOW_MODEL_URL);
   const [color, normal, roughness, metallic] = useTexture([
@@ -181,20 +257,22 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     const center = new Vector3();
     bounds.getSize(size);
     bounds.getCenter(center);
-    const scale = 2.65 / Math.max(size.y, 0.001);
+    const scale = 2.9 / Math.max(size.y, 0.001);
     clone.scale.setScalar(scale);
-    clone.position.set(-center.x * scale, -bounds.min.y * scale - 1.18, -center.z * scale);
+    clone.position.set(-center.x * scale, -bounds.min.y * scale - 1.30, -center.z * scale);
 
     pose.set(clone, {
       position: clone.position.clone(),
       quaternion: clone.quaternion.clone(),
       scale: clone.scale.clone(),
     });
+
     restPose.current = pose;
     rig.current = {
+      root: findBone(boneMap, ["Root", "Armature"]),
       pelvis: findBone(boneMap, ["Pelvis", "Hips", "Hip"]),
       spine01: findBone(boneMap, ["Spine01", "Spine1", "Spine"]),
-      spine02: findBone(boneMap, ["Spine02", "Spine2", "Chest"]),
+      spine02: findBone(boneMap, ["Spine02", "Spine2", "Chest", "UpperChest"]),
       neck: findBone(boneMap, ["NeckTwist01", "Neck"]),
       head: findBone(boneMap, ["Head"]),
       leftShoulder: findBone(boneMap, ["LeftShoulder", "Shoulder_L", "LShoulder"]),
@@ -203,56 +281,19 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       rightUpperArm: findBone(boneMap, ["RightArm", "RightUpperArm", "UpperArm_R", "RUpperArm"]),
       leftForeArm: findBone(boneMap, ["LeftForeArm", "LeftLowerArm", "ForeArm_L", "LForeArm"]),
       rightForeArm: findBone(boneMap, ["RightForeArm", "RightLowerArm", "ForeArm_R", "RForeArm"]),
+      leftHand: findBone(boneMap, ["LeftHand", "Hand_L", "LHand"]),
+      rightHand: findBone(boneMap, ["RightHand", "Hand_R", "RHand"]),
       leftThigh: findBone(boneMap, ["LeftUpLeg", "LeftThigh", "Thigh_L", "LThigh"]),
       rightThigh: findBone(boneMap, ["RightUpLeg", "RightThigh", "Thigh_R", "RThigh"]),
       leftCalf: findBone(boneMap, ["LeftLeg", "LeftCalf", "Calf_L", "LCalf"]),
       rightCalf: findBone(boneMap, ["RightLeg", "RightCalf", "Calf_R", "RCalf"]),
+      leftFoot: findBone(boneMap, ["LeftFoot", "Foot_L", "LFoot"]),
+      rightFoot: findBone(boneMap, ["RightFoot", "Foot_R", "RFoot"]),
     };
+    face.current = buildFaceRig(clone);
 
     return clone;
   }, [source, color, normal, roughness, metallic]);
-
-  const catalog = useMemo<FlowAnimationCatalog>(() => {
-    const built = buildAnimationCatalog(source.animations || []);
-    console.info("[Flow Animation Brain] Master FBX clips:", source.animations?.length || 0, summarizeCatalog(built));
-    return built;
-  }, [source]);
-
-  const playEntry = (entry: FlowAnimationEntry | null, fade = 0.35) => {
-    const nextMixer = mixer.current;
-    if (!entry || !nextMixer) return false;
-
-    const action = nextMixer.clipAction(entry.clip, model);
-    if (action === activeAction.current && action.isRunning()) return true;
-
-    action.enabled = true;
-    action.clampWhenFinished = !entry.loop;
-    action.setLoop(entry.loop ? LoopRepeat : LoopOnce, entry.loop ? Infinity : 1);
-    action.setEffectiveWeight(1);
-    action.setEffectiveTimeScale(
-      entry.category === "walk"
-        ? 1.04 + emotion.energy * 0.22
-        : entry.category === "talk"
-          ? 0.92 + emotion.energy * 0.18
-          : 1,
-    );
-    action.reset().fadeIn(fade).play();
-
-    if (activeAction.current && activeAction.current !== action) {
-      activeAction.current.crossFadeTo(action, fade, false);
-    }
-
-    activeAction.current = action;
-    activeEntry.current = entry;
-    recentlyUsed.current.set(entry.clip.uuid, Date.now());
-    oneShotEndsAt.current = entry.loop
-      ? 0
-      : performance.now() + (entry.clip.duration / Math.max(action.getEffectiveTimeScale(), 0.01)) * 1000;
-    return true;
-  };
-
-  const chooseForMode = (requested: FlowMode) =>
-    chooseAnimation(catalog, requested, recentlyUsed.current);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -263,150 +304,159 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     return () => window.removeEventListener("pointermove", onPointerMove);
   }, []);
 
-  useEffect(() => {
-    const nextMixer = new AnimationMixer(model);
-    mixer.current = nextMixer;
-    ambientAt.current = performance.now() + 3500;
-    playEntry(chooseForMode(mode), 0.18);
-
-    return () => {
-      nextMixer.stopAllAction();
-      nextMixer.uncacheRoot(model);
-      mixer.current = null;
-      activeAction.current = null;
-      activeEntry.current = null;
-    };
-    // Catalog and model are immutable per loaded master FBX.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, catalog]);
-
-  useEffect(() => {
-    const entry = chooseForMode(mode);
-    if (entry) playEntry(entry, mode === "walking" ? 0.22 : 0.34);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
-
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05);
-    const now = performance.now();
-
-    // Remove procedural offsets first. The mixer can then write its native pose.
-    [
-      rig.current.pelvis,
-      rig.current.spine01,
-      rig.current.spine02,
-      rig.current.neck,
-      rig.current.head,
-      rig.current.leftShoulder,
-      rig.current.rightShoulder,
-      rig.current.leftUpperArm,
-      rig.current.rightUpperArm,
-      rig.current.leftForeArm,
-      rig.current.rightForeArm,
-      rig.current.leftThigh,
-      rig.current.rightThigh,
-      rig.current.leftCalf,
-      rig.current.rightCalf,
-    ].forEach((node) => {
-      if (!node) return;
-      const rest = restPose.current.get(node);
-      if (rest) node.quaternion.copy(rest.quaternion);
-    });
-
-    mixer.current?.update(dt);
-
-    // One-shot gestures naturally return to the current behavioural state.
-    if (oneShotEndsAt.current && now >= oneShotEndsAt.current) {
-      oneShotEndsAt.current = 0;
-      const fallback = chooseForMode(currentMode.current === "waving" || currentMode.current === "pointing" ? "idle" : currentMode.current);
-      if (fallback) playEntry(fallback, 0.3);
-    }
-
-    // Idle intelligence: vary the native clips without repeating recently used ones.
-    if (currentMode.current === "idle" && now >= ambientAt.current && !oneShotEndsAt.current) {
-      const roll = Math.random();
-      const ambientMode: FlowMode = roll < 0.62 ? "idle" : roll < 0.76 ? "listening" : roll < 0.9 ? "thinking" : "waving";
-      const ambient = chooseForMode(ambientMode);
-      if (ambient) playEntry(ambient, 0.45);
-      const calmDelay = 7000 + emotion.calm * 9000;
-      ambientAt.current = now + calmDelay + Math.random() * 7000;
-    }
-
     const elapsed = state.clock.elapsedTime;
-    const energy = Math.max(0, Math.min(1, emotion.energy));
-    const calm = Math.max(0, Math.min(1, emotion.calm));
-    const attention = Math.max(0, Math.min(1, emotion.attention));
-    const idleLike = mode === "idle" || mode === "thinking" || mode === "listening" || mode === "talking";
-    const hasEmbeddedAnimation = Boolean(activeEntry.current && activeAction.current?.isRunning());
+    const alpha = 1 - Math.exp(-dt * 10);
 
-    // Always-on micro life. It is deliberately subtle when a real clip is active,
-    // and becomes the safe fallback when the FBX contains no usable animation takes.
-    if (idleLike) {
-      const breath = Math.sin(elapsed * (1.05 + energy * 0.5));
-      const chest = breath * (hasEmbeddedAnimation ? 0.0035 : 0.012 + (1 - calm) * 0.006);
-      const sway = Math.sin(elapsed * 0.62) * (hasEmbeddedAnimation ? 0.0025 : 0.012);
-      rig.current.spine01?.rotateX(chest * 0.45);
-      rig.current.spine02?.rotateX(chest);
-      rig.current.pelvis?.rotateZ(sway * 0.35);
-      rig.current.spine01?.rotateZ(-sway * 0.5);
-
-      if (mode !== "thinking") {
-        const yaw = pointer.current.x * 0.05 * attention;
-        const pitch = -pointer.current.y * 0.025 * attention;
-        rig.current.neck?.rotateY(yaw * 0.35);
-        rig.current.neck?.rotateX(pitch * 0.35);
-        rig.current.head?.rotateY(yaw * 0.65);
-        rig.current.head?.rotateX(pitch * 0.65);
-      }
+    if (lastMode.current !== mode) {
+      lastMode.current = mode;
+      modeEnteredAt.current = elapsed;
+      microGestureSeed.current = Math.random() * 100;
     }
 
-    // Procedural safety net: guarantees visible movement even when the master FBX
-    // unexpectedly ships without animation stacks. Real embedded clips still take priority.
-    if (!hasEmbeddedAnimation) {
-      if (mode === "walking") {
-        const phase = elapsed * (5.2 + energy * 1.6);
-        const leg = Math.sin(phase) * 0.5;
-        const kneeLeft = Math.max(0, -Math.sin(phase)) * 0.48;
-        const kneeRight = Math.max(0, Math.sin(phase)) * 0.48;
-        rig.current.leftThigh?.rotateX(leg);
-        rig.current.rightThigh?.rotateX(-leg);
-        rig.current.leftCalf?.rotateX(kneeLeft);
-        rig.current.rightCalf?.rotateX(kneeRight);
-        rig.current.leftUpperArm?.rotateX(-leg * 0.72);
-        rig.current.rightUpperArm?.rotateX(leg * 0.72);
-        rig.current.pelvis?.rotateY(Math.sin(phase) * 0.035);
-        rig.current.spine02?.rotateY(-Math.sin(phase) * 0.025);
-      } else if (mode === "waving") {
-        const wave = Math.sin(elapsed * 7.5) * 0.32;
-        rig.current.rightUpperArm?.rotateZ(-1.05);
-        rig.current.rightUpperArm?.rotateX(-0.35);
-        rig.current.rightForeArm?.rotateY(-0.65 + wave);
-        rig.current.head?.rotateZ(0.04);
-      } else if (mode === "pointing") {
-        rig.current.rightUpperArm?.rotateZ(-0.82);
-        rig.current.rightUpperArm?.rotateX(-0.2);
-        rig.current.rightForeArm?.rotateY(-0.12);
-        rig.current.head?.rotateY(-0.08);
-      } else if (mode === "talking") {
-        const talk = Math.sin(elapsed * 2.8) * 0.08;
-        rig.current.leftUpperArm?.rotateZ(0.18 + talk);
-        rig.current.rightUpperArm?.rotateZ(-0.18 - talk);
-        rig.current.leftForeArm?.rotateY(-0.12 + talk * 0.6);
-        rig.current.rightForeArm?.rotateY(0.12 - talk * 0.6);
-      } else if (mode === "thinking") {
-        rig.current.head?.rotateX(-0.05);
-        rig.current.head?.rotateY(0.09 + Math.sin(elapsed * 0.7) * 0.025);
-        rig.current.spine02?.rotateX(0.025);
-      } else if (mode === "listening") {
-        rig.current.head?.rotateZ(0.045);
-        rig.current.spine02?.rotateX(-0.015);
+    const modeTime = elapsed - modeEnteredAt.current;
+    const energy = MathUtils.clamp(emotion.energy, 0, 1);
+    const calm = MathUtils.clamp(emotion.calm, 0, 1);
+    const attention = MathUtils.clamp(emotion.attention, 0, 1);
+    const joy = MathUtils.clamp(emotion.joy, 0, 1);
+    const empathy = MathUtils.clamp(emotion.empathy, 0, 1);
+    const stress = MathUtils.clamp(emotion.stress, 0, 1);
+
+    const breathSpeed = 0.95 + energy * 0.55 + stress * 0.35;
+    const breath = Math.sin(elapsed * breathSpeed * Math.PI * 2);
+    const slowSway = Math.sin(elapsed * 0.48 + microGestureSeed.current) * (0.012 + (1 - calm) * 0.012);
+    const weightShift = Math.sin(elapsed * 0.24 + microGestureSeed.current * 0.7);
+
+    let pelvisX = 0;
+    let pelvisY = 0;
+    let pelvisZ = slowSway * 0.35;
+    let chestX = breath * (0.008 + energy * 0.004);
+    let chestY = 0;
+    let chestZ = -slowSway * 0.55;
+    let headX = 0;
+    let headY = 0;
+    let headZ = 0;
+    let leftUpperX = 0;
+    let rightUpperX = 0;
+    let leftUpperZ = 0;
+    let rightUpperZ = 0;
+    let leftForeY = 0;
+    let rightForeY = 0;
+    let leftThighX = 0;
+    let rightThighX = 0;
+    let leftCalfX = 0;
+    let rightCalfX = 0;
+    let leftFootX = 0;
+    let rightFootX = 0;
+
+    if (mode === "walking") {
+      const cadence = 1.65 + energy * 0.45;
+      const phase = elapsed * Math.PI * 2 * cadence;
+      const stride = 0.48 + energy * 0.12;
+      const leftStep = Math.sin(phase);
+      const rightStep = -leftStep;
+      leftThighX = leftStep * stride;
+      rightThighX = rightStep * stride;
+      leftCalfX = Math.max(0, -leftStep) * 0.68;
+      rightCalfX = Math.max(0, -rightStep) * 0.68;
+      leftFootX = -Math.max(0, leftStep) * 0.22;
+      rightFootX = -Math.max(0, rightStep) * 0.22;
+      leftUpperX = -leftStep * 0.34;
+      rightUpperX = -rightStep * 0.34;
+      pelvisY = Math.abs(Math.sin(phase)) * 0.018;
+      pelvisZ = Math.sin(phase) * 0.045;
+      chestY = -Math.sin(phase) * 0.028;
+      chestX = 0.025;
+    } else if (mode === "waving") {
+      const intro = MathUtils.smoothstep(Math.min(modeTime / 0.35, 1), 0, 1);
+      const outro = modeTime > 1.55 ? 1 - MathUtils.smoothstep(Math.min((modeTime - 1.55) / 0.45, 1), 0, 1) : 1;
+      const amount = intro * outro;
+      const wave = Math.sin(modeTime * 8.5) * 0.30;
+      rightUpperZ = -1.08 * amount;
+      rightUpperX = -0.28 * amount;
+      rightForeY = (-0.72 + wave) * amount;
+      headZ = 0.045 * amount;
+      chestY = -0.05 * amount;
+    } else if (mode === "pointing") {
+      const amount = MathUtils.smoothstep(Math.min(modeTime / 0.3, 1), 0, 1);
+      rightUpperZ = -0.88 * amount;
+      rightUpperX = -0.18 * amount;
+      rightForeY = -0.14 * amount;
+      headY = -0.09 * amount;
+      chestY = -0.035 * amount;
+    } else if (mode === "talking") {
+      const gesture = Math.sin(elapsed * (2.1 + energy * 1.2));
+      const gesture2 = Math.sin(elapsed * 1.45 + 1.6);
+      leftUpperZ = 0.12 + gesture * 0.07;
+      rightUpperZ = -0.12 - gesture2 * 0.07;
+      leftForeY = -0.10 + gesture2 * 0.12;
+      rightForeY = 0.10 - gesture * 0.12;
+      chestY = gesture * 0.018;
+      headY = gesture2 * 0.025;
+    } else if (mode === "thinking") {
+      headX = -0.045;
+      headY = 0.10 + Math.sin(elapsed * 0.55) * 0.028;
+      chestX += 0.025;
+      rightUpperZ = -0.10;
+      rightForeY = -0.20;
+    } else if (mode === "listening") {
+      headZ = 0.045 * empathy;
+      headX = -0.018;
+      chestX -= 0.014;
+      chestY = pointer.current.x * 0.018 * attention;
+    } else {
+      pelvisZ += weightShift * 0.018;
+      chestZ -= weightShift * 0.012;
+      const micro = Math.sin(elapsed * 0.31 + microGestureSeed.current);
+      headY += micro * 0.018 * attention;
+      headZ += Math.sin(elapsed * 0.19 + 2.1) * 0.012;
+    }
+
+    if (mode !== "walking" && mode !== "waving" && mode !== "pointing") {
+      const pointerYaw = pointer.current.x * 0.08 * attention;
+      const pointerPitch = -pointer.current.y * 0.04 * attention;
+      headY += pointerYaw;
+      headX += pointerPitch;
+    }
+
+    applyAdditivePosition(rig.current.pelvis, restPose.current, 0, pelvisY, 0, alpha);
+    applyAdditiveRotation(rig.current.pelvis, restPose.current, pelvisX, pelvisY * 0.2, pelvisZ, alpha);
+    applyAdditiveRotation(rig.current.spine01, restPose.current, chestX * 0.45, chestY * 0.45, chestZ * 0.55, alpha);
+    applyAdditiveRotation(rig.current.spine02, restPose.current, chestX, chestY, chestZ, alpha);
+    applyAdditiveRotation(rig.current.neck, restPose.current, headX * 0.35, headY * 0.35, headZ * 0.35, alpha);
+    applyAdditiveRotation(rig.current.head, restPose.current, headX * 0.65, headY * 0.65, headZ * 0.65, alpha);
+    applyAdditiveRotation(rig.current.leftUpperArm, restPose.current, leftUpperX, 0, leftUpperZ, alpha);
+    applyAdditiveRotation(rig.current.rightUpperArm, restPose.current, rightUpperX, 0, rightUpperZ, alpha);
+    applyAdditiveRotation(rig.current.leftForeArm, restPose.current, 0, leftForeY, 0, alpha);
+    applyAdditiveRotation(rig.current.rightForeArm, restPose.current, 0, rightForeY, 0, alpha);
+    applyAdditiveRotation(rig.current.leftThigh, restPose.current, leftThighX, 0, 0, alpha);
+    applyAdditiveRotation(rig.current.rightThigh, restPose.current, rightThighX, 0, 0, alpha);
+    applyAdditiveRotation(rig.current.leftCalf, restPose.current, leftCalfX, 0, 0, alpha);
+    applyAdditiveRotation(rig.current.rightCalf, restPose.current, rightCalfX, 0, 0, alpha);
+    applyAdditiveRotation(rig.current.leftFoot, restPose.current, leftFootX, 0, 0, alpha);
+    applyAdditiveRotation(rig.current.rightFoot, restPose.current, rightFootX, 0, 0, alpha);
+
+    // Natural blink rhythm. Stress produces quicker blinks; concentration slightly delays them.
+    if (elapsed >= nextBlinkAt.current && blinkStartedAt.current < 0) blinkStartedAt.current = elapsed;
+    let blink = 0;
+    if (blinkStartedAt.current >= 0) {
+      const t = (elapsed - blinkStartedAt.current) / 0.16;
+      blink = t < 0.5 ? t * 2 : Math.max(0, 2 - t * 2);
+      if (t >= 1) {
+        blinkStartedAt.current = -1;
+        nextBlinkAt.current = elapsed + 2.8 + calm * 3.2 + Math.random() * 2.5 - stress * 1.3;
       }
     }
+    setMorph(face.current, face.current.blinkLeft, blink);
+    setMorph(face.current, face.current.blinkRight, blink);
+    setMorph(face.current, face.current.smile, MathUtils.clamp(joy * 0.58 + (mode === "waving" ? 0.24 : 0), 0, 0.8));
+    setMorph(face.current, face.current.browUp, MathUtils.clamp(emotion.curiosity * 0.25 + (mode === "thinking" ? 0.12 : 0), 0, 0.5));
 
     if (!presentation.current) return;
-    const sideTurn = facing === "left" ? 0.12 : facing === "right" ? -0.12 : 0;
+    const sideTurn = facing === "left" ? 0.16 : facing === "right" ? -0.16 : 0;
     const targetYaw = FLOW_FRONT_YAW + sideTurn;
-    presentation.current.rotation.y += (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 8);
+    presentation.current.rotation.y += (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 7.5);
   });
 
   return (
@@ -426,15 +476,15 @@ export default function FlowCharacter(props: Props) {
     >
       <Canvas
         orthographic
-        camera={{ position: [0, 1.05, 8], zoom: 72, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.08, 8], zoom: 70, near: 0.1, far: 100 }}
         dpr={[1, 1.5]}
         gl={{ alpha: true, antialias: true, premultipliedAlpha: false }}
         style={{ background: "transparent" }}
       >
-        <ambientLight intensity={2.15} />
-        <hemisphereLight color="#ffffff" groundColor="#64748b" intensity={1.75} />
-        <directionalLight position={[3, 5, 6]} intensity={3.1} />
-        <directionalLight position={[-3, 2, 4]} intensity={1.45} />
+        <ambientLight intensity={2.25} />
+        <hemisphereLight color="#ffffff" groundColor="#64748b" intensity={1.85} />
+        <directionalLight position={[3, 5, 6]} intensity={3.25} />
+        <directionalLight position={[-3, 2, 4]} intensity={1.55} />
         <Suspense fallback={<Loading />}>
           <CharacterScene mode={props.mode} facing={props.facing} emotion={props.emotion} />
         </Suspense>
