@@ -136,7 +136,7 @@ export function chooseClipForMode(
   emotion: FlowEmotion,
   recentNames: string[],
 ) {
-  if (mode === "dragging") return null;
+  if (mode === "dragging" || mode === "seated") return null;
   const family: FlowAnimationFamily =
     mode === "walking" ? "walk" :
     mode === "talking" ? "talk" :

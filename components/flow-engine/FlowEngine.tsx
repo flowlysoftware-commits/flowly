@@ -72,14 +72,19 @@ export default function FlowEngine() {
   const [state, dispatch] = useReducer(flowReducer, undefined, createInitialFlowState);
   const [input, setInput] = useState("");
   const [introPhase, setIntroPhase] = useState<IntroPhase>("hidden");
+  const [isThroned, setIsThroned] = useState(false);
+  const [throneHover, setThroneHover] = useState(false);
   const stateRef = useRef(state);
   const introRef = useRef<IntroPhase>(introPhase);
   const clientRef = useRef<FlowGatewayClient | null>(null);
   const navigationLock = useRef(false);
   const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
   const dragRef = useRef<DragState>({ active: false, offsetX: 0, offsetY: 0 });
+  const throneRef = useRef<HTMLDivElement | null>(null);
+  const thronedRef = useRef(false);
   stateRef.current = state;
   introRef.current = introPhase;
+  thronedRef.current = isThroned;
 
   useEffect(() => {
     if (!enabled) {
@@ -229,7 +234,7 @@ export default function FlowEngine() {
     const behaviour = new FlowBehaviourEngine({
       getMode: () => stateRef.current.mode,
       getEmotion: () => stateRef.current.emotion,
-      isBlocked: () => navigationLock.current || introRef.current !== "ready" || dragRef.current.active,
+      isBlocked: () => navigationLock.current || introRef.current !== "ready" || dragRef.current.active || thronedRef.current,
       onDecision: (decision) => {
         dispatch({ type: "behaviour", pulse: decision.pulse, id: decision.id });
         dispatch({ type: "mode", mode: decision.mode });
@@ -269,6 +274,10 @@ export default function FlowEngine() {
       offsetY: event.clientY - position.top,
     };
     behaviourRef.current?.noteActivity();
+    if (thronedRef.current) {
+      setIsThroned(false);
+      thronedRef.current = false;
+    }
     dispatch({ type: "open", open: false });
     dispatch({ type: "mode", mode: "dragging" });
     dispatch({ type: "bubble", text: "¡Eh! Sujétame con cuidado 😄" });
@@ -283,6 +292,17 @@ export default function FlowEngine() {
       left: clamp(event.clientX - dragRef.current.offsetX, 0, Math.max(0, window.innerWidth - size.width)),
       top: clamp(event.clientY - dragRef.current.offsetY, 0, Math.max(0, window.innerHeight - size.height)),
     });
+
+    const throne = throneRef.current?.getBoundingClientRect();
+    if (throne) {
+      const margin = 42;
+      setThroneHover(
+        event.clientX >= throne.left - margin &&
+        event.clientX <= throne.right + margin &&
+        event.clientY >= throne.top - margin &&
+        event.clientY <= throne.bottom + margin,
+      );
+    }
   }
 
   function endDrag(event: ReactPointerEvent<HTMLDivElement>) {
@@ -292,6 +312,43 @@ export default function FlowEngine() {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     dragRef.current.active = false;
+
+    const throne = throneRef.current?.getBoundingClientRect();
+    const droppedOnThrone = Boolean(
+      throne &&
+      event.clientX >= throne.left - 52 &&
+      event.clientX <= throne.right + 52 &&
+      event.clientY >= throne.top - 52 &&
+      event.clientY <= throne.bottom + 52
+    );
+
+    setThroneHover(false);
+
+    if (throne && droppedOnThrone) {
+      const size = getCompactSize();
+      const left = clamp(
+        throne.left + throne.width / 2 - size.width / 2,
+        0,
+        Math.max(0, window.innerWidth - size.width),
+      );
+      const top = clamp(
+        throne.top - size.height * 0.28,
+        0,
+        Math.max(0, window.innerHeight - size.height),
+      );
+
+      setIsThroned(true);
+      thronedRef.current = true;
+      dispatch({ type: "position", left, top });
+      dispatch({ type: "mode", mode: "seated" });
+      dispatch({ type: "facing", facing: "front" });
+      dispatch({ type: "open", open: false });
+      dispatch({ type: "bubble", text: "Voy a descansar aquí un momento." });
+      return;
+    }
+
+    setIsThroned(false);
+    thronedRef.current = false;
     dispatch({ type: "mode", mode: "idle" });
     dispatch({ type: "facing", facing: "front" });
     dispatch({ type: "bubble", text: "Puedes colocarme donde te resulte más cómodo." });
@@ -340,6 +397,8 @@ export default function FlowEngine() {
           ? "caminando"
           : state.mode === "dragging"
             ? "en tus manos"
+          : state.mode === "seated"
+            ? "descansando"
           : state.mode === "talking"
             ? "hablando"
             : state.mode === "thinking"
@@ -354,9 +413,27 @@ export default function FlowEngine() {
   if (!enabled) return null;
 
   return (
-    <div className={`flow-engine-root is-intro-${introPhase}`} data-flow-runtime="engine-v2">
+    <div className={`flow-engine-root is-intro-${introPhase} ${isThroned ? "has-throned-flow" : ""}`} data-flow-runtime="engine-v2">
+      {introPhase === "ready" && (
+        <div
+          ref={throneRef}
+          className={`flow-engine-throne ${throneHover ? "is-drop-hover" : ""} ${isThroned ? "is-occupied" : ""}`}
+          aria-label="Trono de Flow"
+        >
+          <div className="flow-engine-throne-aura" />
+          <div className="flow-engine-throne-crest"><span>F</span></div>
+          <div className="flow-engine-throne-back">
+            <span>FLOW</span>
+          </div>
+          <div className="flow-engine-throne-seat" />
+          <div className="flow-engine-throne-arm is-left" />
+          <div className="flow-engine-throne-arm is-right" />
+          <div className="flow-engine-throne-base" />
+          {!isThroned && <small>Arrastra a Flow aquí para descansar</small>}
+        </div>
+      )}
       <div
-        className={`flow-engine-character is-${state.mode} is-intro-${introPhase}`}
+        className={`flow-engine-character is-${state.mode} is-intro-${introPhase} ${isThroned ? "is-throned" : ""}`}
         style={{ left: state.position.left, top: state.position.top }}
       >
         {introPhase === "ready" && (
@@ -377,7 +454,7 @@ export default function FlowEngine() {
           behaviourPulse={state.behaviourPulse}
           behaviourId={state.behaviourId}
           onClick={() => {
-            if (introRef.current === "ready" && !dragRef.current.active) {
+            if (introRef.current === "ready" && !dragRef.current.active && !thronedRef.current) {
               dispatch({ type: "open", open: !state.open });
             }
           }}
@@ -394,13 +471,13 @@ export default function FlowEngine() {
           <div className="flow-engine-welcome-card is-moving">Voy a colocarme aquí abajo para acompañarte.</div>
         )}
 
-        {introPhase === "ready" && (
+        {introPhase === "ready" && !isThroned && (
           <span className={`flow-engine-status is-${state.connected ? "online" : "offline"}`}>
             {status}
           </span>
         )}
 
-        {introPhase === "ready" && !state.open && (
+        {introPhase === "ready" && !isThroned && !state.open && (
           <button
             className="flow-engine-bubble"
             type="button"
@@ -410,7 +487,7 @@ export default function FlowEngine() {
           </button>
         )}
 
-        {introPhase === "ready" && <div className="flow-engine-actions">
+        {introPhase === "ready" && !isThroned && <div className="flow-engine-actions">
           <button type="button" onClick={() => void setTemporaryMode("waving", 2200)}>
             <Sparkles size={14} /> Saludar
           </button>

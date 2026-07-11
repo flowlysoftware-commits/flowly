@@ -508,7 +508,28 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         }
       }
 
-      if (mode === "dragging") {
+      if (mode === "seated") {
+        // Resting pose for Flow's throne. Keep this procedural so it remains
+        // compatible with the master rig even when no dedicated sit clip exists.
+        const settle = MathUtils.smoothstep(Math.min(modeTime / 0.75, 1), 0, 1);
+        const relaxedBreath = Math.sin(elapsed * 1.15) * 0.006;
+        pelvisY = -0.115 * settle;
+        chestX = (0.055 + relaxedBreath) * settle;
+        chestZ = Math.sin(elapsed * 0.35) * 0.008 * settle;
+        leftThighX = -1.02 * settle;
+        rightThighX = -1.02 * settle;
+        leftCalfX = 1.14 * settle;
+        rightCalfX = 1.14 * settle;
+        leftFootX = -0.16 * settle;
+        rightFootX = -0.16 * settle;
+        leftUpperX = 0.16 * settle;
+        rightUpperX = 0.16 * settle;
+        leftUpperZ = 0.075 * settle;
+        rightUpperZ = -0.075 * settle;
+        leftForeY = -0.12 * settle;
+        rightForeY = 0.12 * settle;
+        headZ = Math.sin(elapsed * 0.28) * 0.006;
+      } else if (mode === "dragging") {
         // Mii-style dangling reaction while the user grabs Flow by the head.
         const kick = Math.sin(elapsed * 11.5);
         const counterKick = Math.sin(elapsed * 11.5 + Math.PI);
@@ -588,8 +609,9 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       }
 
       if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "dragging") {
-        headY += pointer.current.x * 0.05 * attention;
-        headX += -pointer.current.y * 0.025 * attention;
+        const seatedBoost = mode === "seated" ? 1.75 : 1;
+        headY += pointer.current.x * 0.05 * attention * seatedBoost;
+        headX += -pointer.current.y * 0.025 * attention * seatedBoost;
       }
 
       applyRestPosition(rig.current.pelvis, restPose.current, 0, pelvisY, 0, alpha);
