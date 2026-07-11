@@ -422,13 +422,24 @@ export default function FlowEngine() {
         >
           <div className="flow-engine-throne-aura" aria-hidden="true" />
           <img
-            className="flow-engine-throne-art"
-            src="/flow/flow-throne.png"
-            alt=""
+            className={`flow-engine-throne-art ${isThroned ? "is-seated-art" : ""}`}
+            src={isThroned ? "/flow/flow-throne-seated.png" : "/flow/flow-throne.png"}
+            alt={isThroned ? "Flow descansando en su trono" : ""}
             draggable={false}
-            aria-hidden="true"
+            aria-hidden={!isThroned}
           />
           <div className="flow-engine-throne-seat-anchor" aria-hidden="true" />
+          {isThroned && (
+            <div
+              className="flow-engine-throne-grab-handle"
+              onPointerDown={beginDrag}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              title="Coge a Flow por la cabeza"
+              aria-label="Levantar a Flow del trono"
+            />
+          )}
           {!isThroned && <small>Arrastra a Flow al trono para descansar</small>}
         </div>
       )}
@@ -447,18 +458,20 @@ export default function FlowEngine() {
             aria-label="Mover a Flow"
           />
         )}
-        <FlowCharacter
-          mode={state.mode}
-          facing={state.facing}
-          emotion={state.emotion}
-          behaviourPulse={state.behaviourPulse}
-          behaviourId={state.behaviourId}
-          onClick={() => {
-            if (introRef.current === "ready" && !dragRef.current.active && !thronedRef.current) {
-              dispatch({ type: "open", open: !state.open });
-            }
-          }}
-        />
+        {!isThroned && (
+          <FlowCharacter
+            mode={state.mode}
+            facing={state.facing}
+            emotion={state.emotion}
+            behaviourPulse={state.behaviourPulse}
+            behaviourId={state.behaviourId}
+            onClick={() => {
+              if (introRef.current === "ready" && !dragRef.current.active && !thronedRef.current) {
+                dispatch({ type: "open", open: !state.open });
+              }
+            }}
+          />
+        )}
 
         {introPhase === "welcome" && (
           <div className="flow-engine-welcome-card">

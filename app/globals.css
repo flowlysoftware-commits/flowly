@@ -7745,3 +7745,64 @@ iframe[src*="companion-webgl"] {
 }
 
 
+
+/* Flow seated throne portrait — authoritative occupied state. */
+.flow-engine-throne.is-occupied {
+  width: 194px;
+  height: 286px;
+  transform: translate(-8px, -16px);
+  filter:
+    drop-shadow(0 22px 36px rgba(2, 6, 23, .68))
+    drop-shadow(0 0 22px rgba(139, 92, 246, .24));
+}
+
+.flow-engine-throne-art.is-seated-art {
+  inset: -2% -4% -1%;
+  width: 108%;
+  height: 103%;
+  object-fit: contain;
+  object-position: center bottom;
+  filter:
+    saturate(1.04)
+    contrast(1.03)
+    drop-shadow(0 14px 22px rgba(2, 6, 23, .62));
+}
+
+.flow-engine-throne.is-occupied .flow-engine-throne-aura {
+  inset: 12% -20% -2%;
+  opacity: .82;
+}
+
+.flow-engine-throne-grab-handle {
+  position: absolute;
+  z-index: 8;
+  left: 36%;
+  top: 25%;
+  width: 29%;
+  height: 24%;
+  border-radius: 48%;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.flow-engine-throne-grab-handle:active {
+  cursor: grabbing;
+}
+
+/* The live 3D canvas is replaced by the exact seated portrait while resting. */
+.flow-engine-character.is-throned {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .flow-engine-throne.is-occupied {
+    width: 170px;
+    height: 250px;
+    transform: translate(-5px, -10px);
+  }
+}
