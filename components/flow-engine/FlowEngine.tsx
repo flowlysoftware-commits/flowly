@@ -332,7 +332,7 @@ export default function FlowEngine() {
         Math.max(0, window.innerWidth - size.width),
       );
       const top = clamp(
-        throne.top + 26,
+        throne.top - 12,
         0,
         Math.max(0, window.innerHeight - size.height),
       );
@@ -420,19 +420,16 @@ export default function FlowEngine() {
           className={`flow-engine-throne ${throneHover ? "is-drop-hover" : ""} ${isThroned ? "is-occupied" : ""}`}
           aria-label="Trono de Flow"
         >
-          <div className="flow-engine-throne-aura" />
-          <div className="flow-engine-throne-blades" aria-hidden="true">
-            {Array.from({ length: 17 }, (_, index) => <i key={index} />)}
-          </div>
-          <div className="flow-engine-throne-crest"><span>F</span></div>
-          <div className="flow-engine-throne-back">
-            <span>FLOW</span>
-          </div>
-          <div className="flow-engine-throne-seat" />
-          <div className="flow-engine-throne-arm is-left" />
-          <div className="flow-engine-throne-arm is-right" />
-          <div className="flow-engine-throne-base" />
-          {!isThroned && <small>Arrastra a Flow aquí para descansar</small>}
+          <div className="flow-engine-throne-aura" aria-hidden="true" />
+          <img
+            className="flow-engine-throne-art"
+            src="/flow/flow-throne.png"
+            alt=""
+            draggable={false}
+            aria-hidden="true"
+          />
+          <div className="flow-engine-throne-seat-anchor" aria-hidden="true" />
+          {!isThroned && <small>Arrastra a Flow al trono para descansar</small>}
         </div>
       )}
       <div
