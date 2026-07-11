@@ -45,6 +45,7 @@ export default function LoginPage() {
 
     if (salesUser) return router.push("/comercial");
 
+    window.sessionStorage.setItem("flow_companion_welcome_pending", "1");
     router.push("/dashboard");
   };
 

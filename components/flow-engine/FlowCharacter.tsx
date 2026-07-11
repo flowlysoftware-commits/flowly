@@ -418,7 +418,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       multiplyLocalRotation(rig.current.spine01, breath * 0.0025, 0, sway * 0.18);
       multiplyLocalRotation(rig.current.spine02, breath * 0.0055, 0, -sway * 0.25);
 
-      if (mode !== "walking" && mode !== "waving" && mode !== "pointing") {
+      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "dragging") {
         const pointerYaw = pointer.current.x * 0.045 * attention;
         const pointerPitch = -pointer.current.y * 0.025 * attention;
         multiplyLocalRotation(rig.current.neck, pointerPitch * 0.32, pointerYaw * 0.32, 0);
@@ -508,7 +508,28 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         }
       }
 
-      if (mode === "walking") {
+      if (mode === "dragging") {
+        // Mii-style dangling reaction while the user grabs Flow by the head.
+        const kick = Math.sin(elapsed * 11.5);
+        const counterKick = Math.sin(elapsed * 11.5 + Math.PI);
+        pelvisY = -0.018 + Math.abs(Math.sin(elapsed * 5.75)) * 0.008;
+        pelvisZ = Math.sin(elapsed * 4.4) * 0.045;
+        chestX = -0.035;
+        chestZ = -pelvisZ * 0.55;
+        headZ = Math.sin(elapsed * 3.8) * 0.025;
+        leftThighX = 0.22 + kick * 0.24;
+        rightThighX = 0.22 + counterKick * 0.24;
+        leftCalfX = 0.28 + Math.max(0, -kick) * 0.38;
+        rightCalfX = 0.28 + Math.max(0, -counterKick) * 0.38;
+        leftFootX = -0.12 - Math.max(0, kick) * 0.12;
+        rightFootX = -0.12 - Math.max(0, counterKick) * 0.12;
+        leftUpperX = -0.2 + counterKick * 0.1;
+        rightUpperX = -0.2 + kick * 0.1;
+        leftUpperZ = 0.22 + Math.sin(elapsed * 7.2) * 0.08;
+        rightUpperZ = -0.22 - Math.sin(elapsed * 7.2 + 0.8) * 0.08;
+        leftForeY = -0.12 + Math.sin(elapsed * 8.4) * 0.12;
+        rightForeY = 0.12 - Math.sin(elapsed * 8.4 + 0.6) * 0.12;
+      } else if (mode === "walking") {
         const cadence = 1.48 + energy * 0.34;
         const phase = elapsed * Math.PI * 2 * cadence;
         const stride = 0.38 + energy * 0.08;
@@ -566,7 +587,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         headZ += Math.sin(elapsed * 0.17 + 2.1) * 0.007;
       }
 
-      if (mode !== "walking" && mode !== "waving" && mode !== "pointing") {
+      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "dragging") {
         headY += pointer.current.x * 0.05 * attention;
         headX += -pointer.current.y * 0.025 * attention;
       }

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { FormEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Mic, Navigation, Send, Sparkles, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import FlowCharacter from "./FlowCharacter";
 import { FlowBehaviourEngine } from "./behaviourEngine";
 import { detectNavigationTarget, getTargetDestination, highlightTarget } from "./domNavigator";
@@ -18,6 +19,41 @@ const WS = HTTP.replace(/^http:/, "ws:").replace(/^https:/, "wss:") + "/flow-com
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
+type IntroPhase = "hidden" | "welcome" | "walking-home" | "ready";
+
+type DragState = {
+  active: boolean;
+  offsetX: number;
+  offsetY: number;
+};
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getCompactSize() {
+  return window.innerWidth <= 640
+    ? { width: 238, height: 360 }
+    : { width: 318, height: 470 };
+}
+
+function getHomePosition() {
+  const size = getCompactSize();
+  return {
+    left: Math.max(12, window.innerWidth - size.width - 24),
+    top: Math.max(12, window.innerHeight - size.height - 36),
+  };
+}
+
+function getWelcomePosition() {
+  const width = Math.min(window.innerWidth * 0.72, 680);
+  const height = Math.min(window.innerHeight * 0.84, 760);
+  return {
+    left: Math.max(8, (window.innerWidth - width) / 2),
+    top: Math.max(8, (window.innerHeight - height) / 2),
+  };
+}
+
 function actionTarget(name: string, payload?: unknown) {
   const normalized = name.toLowerCase().replace(/[_\s]/g, ".");
   if (payload && typeof payload === "object") {
@@ -31,13 +67,84 @@ function actionTarget(name: string, payload?: unknown) {
 }
 
 export default function FlowEngine() {
+  const pathname = usePathname();
+  const enabled = pathname.startsWith("/dashboard");
   const [state, dispatch] = useReducer(flowReducer, undefined, createInitialFlowState);
   const [input, setInput] = useState("");
+  const [introPhase, setIntroPhase] = useState<IntroPhase>("hidden");
   const stateRef = useRef(state);
+  const introRef = useRef<IntroPhase>(introPhase);
   const clientRef = useRef<FlowGatewayClient | null>(null);
   const navigationLock = useRef(false);
   const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
+  const dragRef = useRef<DragState>({ active: false, offsetX: 0, offsetY: 0 });
   stateRef.current = state;
+  introRef.current = introPhase;
+
+  useEffect(() => {
+    if (!enabled) {
+      setIntroPhase("hidden");
+      return;
+    }
+
+    const pending = window.sessionStorage.getItem("flow_companion_welcome_pending") === "1";
+
+    if (!pending) {
+      dispatch({ type: "position", ...getHomePosition() });
+      setIntroPhase("ready");
+      return;
+    }
+
+    window.sessionStorage.removeItem("flow_companion_welcome_pending");
+    dispatch({ type: "position", ...getWelcomePosition() });
+    dispatch({ type: "open", open: false });
+    dispatch({ type: "mode", mode: "waving" });
+    dispatch({
+      type: "bubble",
+      text: "¡Hola! Bienvenid@ a tu panel. Soy Flow y estoy aquí para ayudarte en lo que necesites.",
+    });
+    setIntroPhase("welcome");
+
+    const speakTimer = window.setTimeout(() => {
+      dispatch({ type: "mode", mode: "talking" });
+    }, 1350);
+
+    const walkTimer = window.setTimeout(() => {
+      setIntroPhase("walking-home");
+      dispatch({ type: "mode", mode: "walking" });
+      dispatch({ type: "facing", facing: "right" });
+      dispatch({ type: "position", ...getHomePosition() });
+    }, 4600);
+
+    const finishTimer = window.setTimeout(() => {
+      dispatch({ type: "mode", mode: "idle" });
+      dispatch({ type: "facing", facing: "front" });
+      dispatch({ type: "bubble", text: "Estoy aquí. Pídeme lo que necesites." });
+      setIntroPhase("ready");
+    }, 7350);
+
+    return () => {
+      window.clearTimeout(speakTimer);
+      window.clearTimeout(walkTimer);
+      window.clearTimeout(finishTimer);
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled || introPhase !== "ready") return;
+    const handleResize = () => {
+      if (dragRef.current.active) return;
+      const current = stateRef.current.position;
+      const size = getCompactSize();
+      dispatch({
+        type: "position",
+        left: clamp(current.left, 0, Math.max(0, window.innerWidth - size.width)),
+        top: clamp(current.top, 0, Math.max(0, window.innerHeight - size.height)),
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [enabled, introPhase]);
 
   const navigate = useCallback(async (targetText: string) => {
     if (navigationLock.current) return;
@@ -92,6 +199,7 @@ export default function FlowEngine() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     const client = new FlowGatewayClient(WS, {
       onConnected: (connected) => dispatch({ type: "connected", connected }),
       onMode: (mode) => dispatch({ type: "mode", mode }),
@@ -113,14 +221,15 @@ export default function FlowEngine() {
     clientRef.current = client;
     client.connect();
     return () => client.disconnect();
-  }, [navigate]);
+  }, [enabled, navigate]);
 
 
   useEffect(() => {
+    if (!enabled) return;
     const behaviour = new FlowBehaviourEngine({
       getMode: () => stateRef.current.mode,
       getEmotion: () => stateRef.current.emotion,
-      isBlocked: () => navigationLock.current,
+      isBlocked: () => navigationLock.current || introRef.current !== "ready" || dragRef.current.active,
       onDecision: (decision) => {
         dispatch({ type: "behaviour", pulse: decision.pulse, id: decision.id });
         dispatch({ type: "mode", mode: decision.mode });
@@ -146,7 +255,47 @@ export default function FlowEngine() {
       window.removeEventListener("keydown", markActivity);
       window.removeEventListener("scroll", markActivity);
     };
-  }, []);
+  }, [enabled]);
+
+  function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (introRef.current !== "ready") return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const position = stateRef.current.position;
+    dragRef.current = {
+      active: true,
+      offsetX: event.clientX - position.left,
+      offsetY: event.clientY - position.top,
+    };
+    behaviourRef.current?.noteActivity();
+    dispatch({ type: "open", open: false });
+    dispatch({ type: "mode", mode: "dragging" });
+    dispatch({ type: "bubble", text: "¡Eh! Sujétame con cuidado 😄" });
+  }
+
+  function moveDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragRef.current.active) return;
+    event.preventDefault();
+    const size = getCompactSize();
+    dispatch({
+      type: "position",
+      left: clamp(event.clientX - dragRef.current.offsetX, 0, Math.max(0, window.innerWidth - size.width)),
+      top: clamp(event.clientY - dragRef.current.offsetY, 0, Math.max(0, window.innerHeight - size.height)),
+    });
+  }
+
+  function endDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragRef.current.active) return;
+    event.preventDefault();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current.active = false;
+    dispatch({ type: "mode", mode: "idle" });
+    dispatch({ type: "facing", facing: "front" });
+    dispatch({ type: "bubble", text: "Puedes colocarme donde te resulte más cómodo." });
+  }
 
   async function setTemporaryMode(mode: FlowMode, duration: number) {
     dispatch({ type: "mode", mode });
@@ -189,6 +338,8 @@ export default function FlowEngine() {
       state.connected
         ? state.mode === "walking"
           ? "caminando"
+          : state.mode === "dragging"
+            ? "en tus manos"
           : state.mode === "talking"
             ? "hablando"
             : state.mode === "thinking"
@@ -200,26 +351,56 @@ export default function FlowEngine() {
     [state.connected, state.mode],
   );
 
+  if (!enabled) return null;
+
   return (
-    <div className="flow-engine-root" data-flow-runtime="engine-v2">
+    <div className={`flow-engine-root is-intro-${introPhase}`} data-flow-runtime="engine-v2">
       <div
-        className={`flow-engine-character is-${state.mode}`}
+        className={`flow-engine-character is-${state.mode} is-intro-${introPhase}`}
         style={{ left: state.position.left, top: state.position.top }}
       >
+        {introPhase === "ready" && (
+          <div
+            className="flow-engine-grab-handle"
+            onPointerDown={beginDrag}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            title="Arrastra a Flow por la cabeza"
+            aria-label="Mover a Flow"
+          />
+        )}
         <FlowCharacter
           mode={state.mode}
           facing={state.facing}
           emotion={state.emotion}
           behaviourPulse={state.behaviourPulse}
           behaviourId={state.behaviourId}
-          onClick={() => dispatch({ type: "open", open: !state.open })}
+          onClick={() => {
+            if (introRef.current === "ready" && !dragRef.current.active) {
+              dispatch({ type: "open", open: !state.open });
+            }
+          }}
         />
 
-        <span className={`flow-engine-status is-${state.connected ? "online" : "offline"}`}>
-          {status}
-        </span>
+        {introPhase === "welcome" && (
+          <div className="flow-engine-welcome-card">
+            <strong>¡Hola! Bienvenid@ a tu panel</strong>
+            <span>Flow aquí para ayudarte en lo que necesites.</span>
+          </div>
+        )}
 
-        {!state.open && (
+        {introPhase === "walking-home" && (
+          <div className="flow-engine-welcome-card is-moving">Voy a colocarme aquí abajo para acompañarte.</div>
+        )}
+
+        {introPhase === "ready" && (
+          <span className={`flow-engine-status is-${state.connected ? "online" : "offline"}`}>
+            {status}
+          </span>
+        )}
+
+        {introPhase === "ready" && !state.open && (
           <button
             className="flow-engine-bubble"
             type="button"
@@ -229,17 +410,17 @@ export default function FlowEngine() {
           </button>
         )}
 
-        <div className="flow-engine-actions">
+        {introPhase === "ready" && <div className="flow-engine-actions">
           <button type="button" onClick={() => void setTemporaryMode("waving", 2200)}>
             <Sparkles size={14} /> Saludar
           </button>
           <button type="button" onClick={() => void navigate("crm")}>
             <Navigation size={14} /> CRM
           </button>
-        </div>
+        </div>}
       </div>
 
-      {state.open && (
+      {introPhase === "ready" && state.open && (
         <section className="flow-engine-panel">
           <header>
             <div>

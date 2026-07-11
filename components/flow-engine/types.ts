@@ -1,4 +1,4 @@
-export type FlowMode = "idle" | "walking" | "thinking" | "listening" | "talking" | "waving" | "pointing" | "error";
+export type FlowMode = "idle" | "walking" | "thinking" | "listening" | "talking" | "waving" | "pointing" | "dragging" | "error";
 export type FlowFacing = "front" | "left" | "right";
 
 export type FlowEmotion = {
