@@ -50,6 +50,16 @@ type BoneRig = {
   spine02?: Object3D;
   neck?: Object3D;
   head?: Object3D;
+  leftShoulder?: Object3D;
+  rightShoulder?: Object3D;
+  leftUpperArm?: Object3D;
+  rightUpperArm?: Object3D;
+  leftForeArm?: Object3D;
+  rightForeArm?: Object3D;
+  leftThigh?: Object3D;
+  rightThigh?: Object3D;
+  leftCalf?: Object3D;
+  rightCalf?: Object3D;
 };
 
 function normalizeBone(value: string) {
@@ -187,6 +197,16 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
       spine02: findBone(boneMap, ["Spine02", "Spine2", "Chest"]),
       neck: findBone(boneMap, ["NeckTwist01", "Neck"]),
       head: findBone(boneMap, ["Head"]),
+      leftShoulder: findBone(boneMap, ["LeftShoulder", "Shoulder_L", "LShoulder"]),
+      rightShoulder: findBone(boneMap, ["RightShoulder", "Shoulder_R", "RShoulder"]),
+      leftUpperArm: findBone(boneMap, ["LeftArm", "LeftUpperArm", "UpperArm_L", "LUpperArm"]),
+      rightUpperArm: findBone(boneMap, ["RightArm", "RightUpperArm", "UpperArm_R", "RUpperArm"]),
+      leftForeArm: findBone(boneMap, ["LeftForeArm", "LeftLowerArm", "ForeArm_L", "LForeArm"]),
+      rightForeArm: findBone(boneMap, ["RightForeArm", "RightLowerArm", "ForeArm_R", "RForeArm"]),
+      leftThigh: findBone(boneMap, ["LeftUpLeg", "LeftThigh", "Thigh_L", "LThigh"]),
+      rightThigh: findBone(boneMap, ["RightUpLeg", "RightThigh", "Thigh_R", "RThigh"]),
+      leftCalf: findBone(boneMap, ["LeftLeg", "LeftCalf", "Calf_L", "LCalf"]),
+      rightCalf: findBone(boneMap, ["RightLeg", "RightCalf", "Calf_R", "RCalf"]),
     };
 
     return clone;
@@ -270,8 +290,24 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     const dt = Math.min(delta, 0.05);
     const now = performance.now();
 
-    // Remove procedural offsets. The mixer then writes the native master-rig pose.
-    [rig.current.spine01, rig.current.spine02, rig.current.neck, rig.current.head].forEach((node) => {
+    // Remove procedural offsets first. The mixer can then write its native pose.
+    [
+      rig.current.pelvis,
+      rig.current.spine01,
+      rig.current.spine02,
+      rig.current.neck,
+      rig.current.head,
+      rig.current.leftShoulder,
+      rig.current.rightShoulder,
+      rig.current.leftUpperArm,
+      rig.current.rightUpperArm,
+      rig.current.leftForeArm,
+      rig.current.rightForeArm,
+      rig.current.leftThigh,
+      rig.current.rightThigh,
+      rig.current.leftCalf,
+      rig.current.rightCalf,
+    ].forEach((node) => {
       if (!node) return;
       const rest = restPose.current.get(node);
       if (rest) node.quaternion.copy(rest.quaternion);
@@ -301,20 +337,69 @@ function CharacterScene({ mode, facing, emotion }: Omit<Props, "onClick">) {
     const calm = Math.max(0, Math.min(1, emotion.calm));
     const attention = Math.max(0, Math.min(1, emotion.attention));
     const idleLike = mode === "idle" || mode === "thinking" || mode === "listening" || mode === "talking";
+    const hasEmbeddedAnimation = Boolean(activeEntry.current && activeAction.current?.isRunning());
 
+    // Always-on micro life. It is deliberately subtle when a real clip is active,
+    // and becomes the safe fallback when the FBX contains no usable animation takes.
     if (idleLike) {
-      const breath = Math.sin(elapsed * (1.08 + energy * 0.48));
-      const chest = breath * (0.0045 + (1 - calm) * 0.0035);
+      const breath = Math.sin(elapsed * (1.05 + energy * 0.5));
+      const chest = breath * (hasEmbeddedAnimation ? 0.0035 : 0.012 + (1 - calm) * 0.006);
+      const sway = Math.sin(elapsed * 0.62) * (hasEmbeddedAnimation ? 0.0025 : 0.012);
       rig.current.spine01?.rotateX(chest * 0.45);
       rig.current.spine02?.rotateX(chest);
+      rig.current.pelvis?.rotateZ(sway * 0.35);
+      rig.current.spine01?.rotateZ(-sway * 0.5);
 
       if (mode !== "thinking") {
-        const yaw = pointer.current.x * 0.045 * attention;
-        const pitch = -pointer.current.y * 0.022 * attention;
+        const yaw = pointer.current.x * 0.05 * attention;
+        const pitch = -pointer.current.y * 0.025 * attention;
         rig.current.neck?.rotateY(yaw * 0.35);
         rig.current.neck?.rotateX(pitch * 0.35);
         rig.current.head?.rotateY(yaw * 0.65);
         rig.current.head?.rotateX(pitch * 0.65);
+      }
+    }
+
+    // Procedural safety net: guarantees visible movement even when the master FBX
+    // unexpectedly ships without animation stacks. Real embedded clips still take priority.
+    if (!hasEmbeddedAnimation) {
+      if (mode === "walking") {
+        const phase = elapsed * (5.2 + energy * 1.6);
+        const leg = Math.sin(phase) * 0.5;
+        const kneeLeft = Math.max(0, -Math.sin(phase)) * 0.48;
+        const kneeRight = Math.max(0, Math.sin(phase)) * 0.48;
+        rig.current.leftThigh?.rotateX(leg);
+        rig.current.rightThigh?.rotateX(-leg);
+        rig.current.leftCalf?.rotateX(kneeLeft);
+        rig.current.rightCalf?.rotateX(kneeRight);
+        rig.current.leftUpperArm?.rotateX(-leg * 0.72);
+        rig.current.rightUpperArm?.rotateX(leg * 0.72);
+        rig.current.pelvis?.rotateY(Math.sin(phase) * 0.035);
+        rig.current.spine02?.rotateY(-Math.sin(phase) * 0.025);
+      } else if (mode === "waving") {
+        const wave = Math.sin(elapsed * 7.5) * 0.32;
+        rig.current.rightUpperArm?.rotateZ(-1.05);
+        rig.current.rightUpperArm?.rotateX(-0.35);
+        rig.current.rightForeArm?.rotateY(-0.65 + wave);
+        rig.current.head?.rotateZ(0.04);
+      } else if (mode === "pointing") {
+        rig.current.rightUpperArm?.rotateZ(-0.82);
+        rig.current.rightUpperArm?.rotateX(-0.2);
+        rig.current.rightForeArm?.rotateY(-0.12);
+        rig.current.head?.rotateY(-0.08);
+      } else if (mode === "talking") {
+        const talk = Math.sin(elapsed * 2.8) * 0.08;
+        rig.current.leftUpperArm?.rotateZ(0.18 + talk);
+        rig.current.rightUpperArm?.rotateZ(-0.18 - talk);
+        rig.current.leftForeArm?.rotateY(-0.12 + talk * 0.6);
+        rig.current.rightForeArm?.rotateY(0.12 - talk * 0.6);
+      } else if (mode === "thinking") {
+        rig.current.head?.rotateX(-0.05);
+        rig.current.head?.rotateY(0.09 + Math.sin(elapsed * 0.7) * 0.025);
+        rig.current.spine02?.rotateX(0.025);
+      } else if (mode === "listening") {
+        rig.current.head?.rotateZ(0.045);
+        rig.current.spine02?.rotateX(-0.015);
       }
     }
 

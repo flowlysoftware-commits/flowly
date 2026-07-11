@@ -7409,3 +7409,15 @@ iframe[src*="companion-webgl"] {
   .flow-engine-character { width: 190px; height: 285px; }
   .flow-engine-bubble { left: 118px; top: 36px; width: 172px; }
 }
+
+
+/* Flow Engine visibility + presence calibration 2026-07-11 */
+.flow-engine-character {
+  width: 278px;
+  height: 405px;
+}
+.flow-engine-status { bottom: 13px; }
+.flow-engine-actions { bottom: -34px; }
+@media (max-width: 640px) {
+  .flow-engine-character { width: 215px; height: 320px; }
+}
