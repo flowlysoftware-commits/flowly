@@ -15,6 +15,8 @@ function smootherStep(t: number) {
   return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
 export async function walkFlowTo(
   start: FlowPosition,
   destination: FlowPosition,
@@ -32,27 +34,35 @@ export async function walkFlowTo(
   }
 
   const horizontalFacing: FlowFacing = dx < -8 ? "left" : dx > 8 ? "right" : "front";
+
   callbacks.onPhase?.("turn");
   callbacks.onFacing(horizontalFacing);
-  await new Promise((resolve) => window.setTimeout(resolve, 220));
+  await wait(300);
 
   callbacks.onPhase?.("start");
   callbacks.onWalking(true);
-  await new Promise((resolve) => window.setTimeout(resolve, 120));
+  await wait(180);
 
-  const speed = 210;
-  const duration = clamp((distance / speed) * 1000, 760, 4300);
+  // A slower screen-space velocity lets the leg cycle read as an actual walk,
+  // instead of making the character look like it is skating across the UI.
+  const speed = 118;
+  const duration = clamp((distance / speed) * 1000, 1050, 6200);
   const began = performance.now();
 
   await new Promise<void>((resolve) => {
     const step = (now: number) => {
       const raw = clamp((now - began) / duration, 0, 1);
-      const t = smootherStep(raw);
-      callbacks.onPhase?.(raw < 0.14 ? "start" : raw > 0.84 ? "stop" : "cruise");
+      const eased = smootherStep(raw);
+      callbacks.onPhase?.(
+        raw < 0.12 ? "start" :
+        raw > 0.86 ? "stop" :
+        "cruise",
+      );
       callbacks.onPosition({
-        left: start.left + dx * t,
-        top: start.top + dy * t,
+        left: start.left + dx * eased,
+        top: start.top + dy * eased,
       });
+
       if (raw < 1) requestAnimationFrame(step);
       else resolve();
     };
@@ -61,8 +71,9 @@ export async function walkFlowTo(
 
   callbacks.onPhase?.("stop");
   callbacks.onPosition(destination);
-  await new Promise((resolve) => window.setTimeout(resolve, 150));
+  await wait(260);
   callbacks.onWalking(false);
+  await wait(110);
   callbacks.onFacing("front");
   callbacks.onPhase?.("arrived");
 }

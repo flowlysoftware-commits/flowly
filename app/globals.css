@@ -7448,3 +7448,36 @@ iframe[src*="companion-webgl"] {
   .flow-engine-character { width: 238px; height: 360px; }
   .flow-engine-bubble { left: 146px; top: 50px; width: 180px; }
 }
+
+
+/* Flow Engine v2 — locomotion and chat integration calibration */
+.flow-engine-character {
+  will-change: left, top;
+}
+.flow-engine-character::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 27px;
+  z-index: -1;
+  width: 92px;
+  height: 17px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse, rgba(15, 23, 42, .48), rgba(34, 211, 238, .16) 48%, transparent 72%);
+  filter: blur(5px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.flow-engine-character.is-walking::after {
+  animation: flow-engine-step-shadow .72s ease-in-out infinite;
+}
+@keyframes flow-engine-step-shadow {
+  0%, 100% { transform: translateX(-50%) scaleX(.9); opacity: .72; }
+  50% { transform: translateX(-50%) scaleX(1.08); opacity: .48; }
+}
+.flow-engine-character-button canvas {
+  pointer-events: none;
+}
+.flow-engine-panel form input:disabled {
+  opacity: .65;
+}
