@@ -1,14 +1,12 @@
 "use client";
 
 import { Component, ErrorInfo, ReactNode } from "react";
+import { createFlowLogger } from "./core/logger";
 
-type Props = {
-  children: ReactNode;
-};
+const logger = createFlowLogger("Boundary");
 
-type State = {
-  hasError: boolean;
-};
+type Props = { children: ReactNode };
+type State = { hasError: boolean };
 
 export default class FlowEngineBoundary extends Component<Props, State> {
   state: State = { hasError: false };
@@ -18,15 +16,12 @@ export default class FlowEngineBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[FlowEngine] Runtime disabled after render error.", error, info);
+    logger.error("Runtime disabled after render error.", { error, info });
+    window.dispatchEvent(new CustomEvent("flow:runtime-error", { detail: { message: error.message } }));
   }
 
   render() {
-    if (this.state.hasError) {
-      // Never allow a Companion rendering problem to take down Flowly.
-      return null;
-    }
-
+    if (this.state.hasError) return null;
     return this.props.children;
   }
 }

@@ -10,12 +10,11 @@ import { FlowGatewayClient } from "./gatewayClient";
 import { walkFlowTo } from "./movementController";
 import { createInitialFlowState, flowReducer } from "./stateMachine";
 import { FlowMode, FlowPanelTarget } from "./types";
+import { FLOW_COMPANION_CONFIG } from "./core/config";
+import { claimFlowRuntime, releaseFlowRuntime } from "./core/runtimeRegistry";
+import { createFlowCoreServices } from "./core/services";
+import { readFlowState, writeFlowState } from "./core/storage";
 
-const HTTP = (
-  process.env.NEXT_PUBLIC_FLOW_COMPANION_GATEWAY_URL ||
-  "https://flowly-companion-gateway.onrender.com"
-).replace(/\/$/, "");
-const WS = HTTP.replace(/^http:/, "ws:").replace(/^https:/, "wss:") + "/flow-companion";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
@@ -68,7 +67,9 @@ function actionTarget(name: string, payload?: unknown) {
 
 export default function FlowEngine() {
   const pathname = usePathname();
-  const enabled = pathname.startsWith("/dashboard");
+  const enabled = pathname.startsWith(FLOW_COMPANION_CONFIG.dashboardPrefix);
+  const services = useMemo(() => createFlowCoreServices(), []);
+  const [runtimeClaimed, setRuntimeClaimed] = useState(false);
   const [state, dispatch] = useReducer(flowReducer, undefined, createInitialFlowState);
   const [input, setInput] = useState("");
   const [introPhase, setIntroPhase] = useState<IntroPhase>("hidden");
@@ -85,6 +86,51 @@ export default function FlowEngine() {
   stateRef.current = state;
   introRef.current = introPhase;
   thronedRef.current = isThroned;
+
+  useEffect(() => {
+    if (!enabled) {
+      setRuntimeClaimed(false);
+      return;
+    }
+
+    const claimed = claimFlowRuntime(FLOW_COMPANION_CONFIG.runtimeId);
+    setRuntimeClaimed(claimed);
+    if (claimed) {
+      services.events.emit("runtime:mounted", { runtimeId: FLOW_COMPANION_CONFIG.runtimeId });
+      services.logger.info("Runtime mounted.");
+    }
+
+    return () => {
+      if (!claimed) return;
+      services.events.emit("runtime:unmounted", { runtimeId: FLOW_COMPANION_CONFIG.runtimeId });
+      services.events.clear();
+      releaseFlowRuntime(FLOW_COMPANION_CONFIG.runtimeId);
+      services.logger.info("Runtime unmounted.");
+    };
+  }, [enabled, services]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const persisted = readFlowState(FLOW_COMPANION_CONFIG.storageKey);
+    if (!persisted) return;
+    if (persisted.position && Number.isFinite(persisted.position.left) && Number.isFinite(persisted.position.top)) {
+      dispatch({ type: "position", left: persisted.position.left, top: persisted.position.top });
+    }
+    (persisted.messages || [])
+      .slice(-FLOW_COMPANION_CONFIG.maxPersistedMessages)
+      .forEach((message) => dispatch({ type: "message", message }));
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled || introPhase !== "ready") return;
+    const timer = window.setTimeout(() => {
+      writeFlowState(FLOW_COMPANION_CONFIG.storageKey, {
+        position: state.position,
+        messages: state.messages.slice(-FLOW_COMPANION_CONFIG.maxPersistedMessages),
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [enabled, introPhase, state.position, state.messages]);
 
   useEffect(() => {
     if (!enabled) {
@@ -205,7 +251,12 @@ export default function FlowEngine() {
 
   useEffect(() => {
     if (!enabled) return;
-    const client = new FlowGatewayClient(WS, {
+    const client = new FlowGatewayClient({
+      wsUrl: FLOW_COMPANION_CONFIG.gatewayWsUrl,
+      httpUrl: FLOW_COMPANION_CONFIG.gatewayHttpUrl,
+      reconnectDelayMs: FLOW_COMPANION_CONFIG.reconnectDelayMs,
+      logger: services.logger,
+      handlers: {
       onConnected: (connected) => dispatch({ type: "connected", connected }),
       onMode: (mode) => dispatch({ type: "mode", mode }),
       onEmotion: (emotion) => dispatch({ type: "emotion", emotion }),
@@ -221,12 +272,18 @@ export default function FlowEngine() {
         const target = actionTarget(name, payload);
         if (target) void navigate(target);
       },
+      getContext: () => ({
+        pathname: window.location.pathname,
+        conversation: stateRef.current.messages,
+        panel: window.FlowPanelIntegration?.context?.(),
+      }),
+    },
     });
 
     clientRef.current = client;
     client.connect();
     return () => client.disconnect();
-  }, [enabled, navigate]);
+  }, [enabled, navigate, services]);
 
 
   useEffect(() => {
@@ -248,19 +305,21 @@ export default function FlowEngine() {
     behaviourRef.current = behaviour;
     behaviour.start();
 
-    const markActivity = () => behaviour.noteActivity();
-    window.addEventListener("pointerdown", markActivity, { passive: true });
-    window.addEventListener("keydown", markActivity);
-    window.addEventListener("scroll", markActivity, { passive: true });
+    const markPointerActivity = () => { behaviour.noteActivity(); services.events.emit("activity:user", { source: "pointer" }); };
+    const markKeyboardActivity = () => { behaviour.noteActivity(); services.events.emit("activity:user", { source: "keyboard" }); };
+    const markScrollActivity = () => { behaviour.noteActivity(); services.events.emit("activity:user", { source: "scroll" }); };
+    window.addEventListener("pointerdown", markPointerActivity, { passive: true });
+    window.addEventListener("keydown", markKeyboardActivity);
+    window.addEventListener("scroll", markScrollActivity, { passive: true });
 
     return () => {
       behaviour.stop();
       behaviourRef.current = null;
-      window.removeEventListener("pointerdown", markActivity);
-      window.removeEventListener("keydown", markActivity);
-      window.removeEventListener("scroll", markActivity);
+      window.removeEventListener("pointerdown", markPointerActivity);
+      window.removeEventListener("keydown", markKeyboardActivity);
+      window.removeEventListener("scroll", markScrollActivity);
     };
-  }, [enabled]);
+  }, [enabled, services]);
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (introRef.current !== "ready") return;
@@ -274,6 +333,7 @@ export default function FlowEngine() {
       offsetY: event.clientY - position.top,
     };
     behaviourRef.current?.noteActivity();
+    services.events.emit("activity:user", { source: "drag" });
     if (thronedRef.current) {
       setIsThroned(false);
       thronedRef.current = false;
@@ -367,10 +427,10 @@ export default function FlowEngine() {
 
     setInput("");
     behaviourRef.current?.noteActivity();
-    dispatch({
-      type: "message",
-      message: { id: uid("user"), role: "user", text },
-    });
+    services.events.emit("activity:user", { source: "chat" });
+    const userMessage = { id: uid("user"), role: "user" as const, text };
+    dispatch({ type: "message", message: userMessage });
+    services.events.emit("chat:message", { message: userMessage });
 
     const targets: FlowPanelTarget[] = window.FlowPanelIntegration?.targets || [];
     const target = detectNavigationTarget(text, targets);
@@ -383,10 +443,9 @@ export default function FlowEngine() {
     dispatch({ type: "mode", mode: "thinking" });
     dispatch({ type: "bubble", text: "Déjame pensarlo..." });
 
-    const sentNow = clientRef.current?.sendText(text) ?? false;
-    if (!sentNow) {
-      dispatch({ type: "bubble", text: "Estoy reconectando con mi cerebro. Enviaré tu mensaje en cuanto vuelva." });
-      clientRef.current?.connect();
+    const sentNow = await (clientRef.current?.sendText(text) ?? Promise.resolve(false));
+    if (!sentNow && stateRef.current.mode !== "error") {
+      dispatch({ type: "bubble", text: "No he podido conectar con mi cerebro. Revisa OPENAI_API_KEY y vuelve a intentarlo." });
     }
   }
 
@@ -410,7 +469,7 @@ export default function FlowEngine() {
     [state.connected, state.mode],
   );
 
-  if (!enabled) return null;
+  if (!enabled || !runtimeClaimed) return null;
 
   return (
     <div className={`flow-engine-root is-intro-${introPhase} ${isThroned ? "has-throned-flow" : ""}`} data-flow-runtime="engine-v2">
