@@ -7746,26 +7746,29 @@ iframe[src*="companion-webgl"] {
 
 
 
-/* Flow seated throne portrait — authoritative occupied state. */
+/* Flow seated throne portrait — crisp occupied state. */
 .flow-engine-throne.is-occupied {
   width: 194px;
   height: 286px;
+  opacity: 1;
   transform: translate(-8px, -16px);
-  filter:
-    drop-shadow(0 22px 36px rgba(2, 6, 23, .68))
-    drop-shadow(0 0 22px rgba(139, 92, 246, .24));
+  filter: none;
 }
 
 .flow-engine-throne-art.is-seated-art {
-  inset: -2% -4% -1%;
-  width: 108%;
-  height: 103%;
+  inset: 0;
+  width: 194px;
+  height: 286px;
+  max-width: none;
   object-fit: contain;
   object-position: center bottom;
-  filter:
-    saturate(1.04)
-    contrast(1.03)
-    drop-shadow(0 14px 22px rgba(2, 6, 23, .62));
+  opacity: 1;
+  filter: none;
+  transform: none;
+  image-rendering: auto;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: auto;
 }
 
 .flow-engine-throne.is-occupied .flow-engine-throne-aura {
