@@ -88,6 +88,29 @@ export default function FlowEngine() {
     }
   }, []);
 
+
+  useEffect(() => {
+    if (state.mode !== "idle") return;
+    let cancelled=false;
+    let timer:number;
+    const idleModes: FlowMode[]=["thinking","listening","talking","pointing"];
+    const schedule=()=>{
+      const delay=5000+Math.random()*7000;
+      timer=window.setTimeout(()=>{
+        if(cancelled||stateRef.current.mode!=="idle") return;
+        const m=idleModes[Math.floor(Math.random()*idleModes.length)];
+        dispatch({type:"mode",mode:m});
+        window.setTimeout(()=>{
+          if(!cancelled && stateRef.current.mode===m){
+            dispatch({type:"mode",mode:"idle"});
+          }
+          if(!cancelled) schedule();
+        },1200+Math.random()*1800);
+      },delay);
+    };
+    schedule();
+    return ()=>{cancelled=true; clearTimeout(timer);}
+  },[state.mode]);
   useEffect(() => {
     const client = new FlowGatewayClient(WS, {
       onConnected: (connected) => dispatch({ type: "connected", connected }),
