@@ -221,8 +221,6 @@ function emotionMultiplier(entry: CataloguedClip, emotion: FlowEmotion) {
   const joy = MathUtils.clamp(emotion.joy, 0, 1);
 
   switch (entry.family) {
-    case "seated":
-      return { priority: 85, cooldownMs: 0, loop: "repeat" as const, blendIn: 0.32, blendOut: 0.32, playbackRate: [0.72, 0.84] as [number, number] };
     case "talk": return 0.75 + energy * 0.65 + joy * 0.2;
     case "listen": return 0.7 + attention * 0.7;
     case "think": return 0.75 + emotion.curiosity * 0.55;
