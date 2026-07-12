@@ -21,10 +21,10 @@ export default function HeroFlowExperience() {
   const [mode, setMode] = useState<FlowMode>("waving");
 
   useEffect(() => {
-    const first = window.setTimeout(() => setMode("idle"), 2300);
+    const first = window.setTimeout(() => setMode("idle"), 3100);
     const loop = window.setInterval(() => {
       setMode("waving");
-      window.setTimeout(() => setMode("idle"), 1900);
+      window.setTimeout(() => setMode("idle"), 2900);
     }, 11000);
     return () => {
       window.clearTimeout(first);

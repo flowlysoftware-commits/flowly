@@ -457,6 +457,9 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       let rightUpperZ = 0;
       let leftForeY = 0;
       let rightForeY = 0;
+      let rightHandX = 0;
+      let rightHandY = 0;
+      let rightHandZ = 0;
       let leftThighX = 0;
       let rightThighX = 0;
       let leftCalfX = 0;
@@ -567,20 +570,38 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         chestY = -Math.sin(phase) * 0.018;
         chestX = 0.016;
       } else if (mode === "waving") {
-        // Clear, readable greeting: raise the whole arm, bend the elbow and wave
-        // from the forearm. It remains below extreme anatomical limits.
-        const intro = MathUtils.smoothstep(Math.min(modeTime / 0.32, 1), 0, 1);
-        const outro = modeTime > 2.05
-          ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.05) / 0.42, 1), 0, 1)
+        // Friendly, unmistakable greeting. Flow first raises the hand beside his
+        // face, opens the palm toward the visitor and then performs two wrist
+        // waves before returning naturally to idle.
+        const raise = MathUtils.smoothstep(Math.min(modeTime / 0.55, 1), 0, 1);
+        const lower = modeTime > 2.35
+          ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.35) / 0.55, 1), 0, 1)
           : 1;
-        const amount = intro * outro;
-        const wave = Math.sin(modeTime * 8.8);
-        rightUpperX = -0.22 * amount;
-        rightUpperZ = -0.82 * amount;
-        rightForeY = (-0.58 + wave * 0.32) * amount;
-        headZ = 0.045 * amount;
-        headY = -0.035 * amount;
-        chestY = -0.035 * amount;
+        const amount = raise * lower;
+        const waveWindow = MathUtils.smoothstep(Math.min(Math.max((modeTime - 0.48) / 0.22, 0), 1), 0, 1)
+          * (modeTime > 2.15
+            ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.15) / 0.2, 1), 0, 1)
+            : 1);
+        const wave = Math.sin((modeTime - 0.45) * 10.4) * waveWindow;
+
+        // Shoulder and upper arm place the hand clearly beside the head instead
+        // of leaving the arm diagonally extended at waist height.
+        rightUpperX = -0.34 * amount;
+        rightUpperZ = -1.28 * amount;
+        rightForeY = (-1.08 + wave * 0.12) * amount;
+
+        // Most of the greeting comes from the wrist, as in a real human wave.
+        rightHandX = -0.12 * amount;
+        rightHandY = (0.08 + wave * 0.42) * amount;
+        rightHandZ = 0.12 * amount;
+
+        // The whole body participates subtly: eye contact, a small head tilt and
+        // a gentle lean make the gesture feel welcoming rather than mechanical.
+        headZ = 0.055 * amount;
+        headY = -0.045 * amount;
+        headX = -0.018 * amount;
+        chestY = -0.045 * amount;
+        chestZ = 0.018 * amount;
       } else if (mode === "pointing") {
         const amount = MathUtils.smoothstep(Math.min(modeTime / 0.35, 1), 0, 1);
         rightUpperX = -0.025 * amount;
@@ -624,6 +645,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       applyRestRotation(rig.current.rightUpperArm, restPose.current, rightUpperX, 0, rightUpperZ, alpha);
       applyRestRotation(rig.current.leftForeArm, restPose.current, 0, leftForeY, 0, alpha);
       applyRestRotation(rig.current.rightForeArm, restPose.current, 0, rightForeY, 0, alpha);
+      applyRestRotation(rig.current.rightHand, restPose.current, rightHandX, rightHandY, rightHandZ, alpha);
       applyRestRotation(rig.current.leftThigh, restPose.current, leftThighX, 0, 0, alpha);
       applyRestRotation(rig.current.rightThigh, restPose.current, rightThighX, 0, 0, alpha);
       applyRestRotation(rig.current.leftCalf, restPose.current, leftCalfX, 0, 0, alpha);
