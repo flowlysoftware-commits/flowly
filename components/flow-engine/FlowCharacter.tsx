@@ -257,6 +257,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   const lastBehaviourPulse = useRef(behaviourPulse);
 
   const source = useFBX(FLOW_MODEL_URL);
+  const greetingSource = useFBX("/avatars/Waving.fbx");
   const [color, normal, roughness, metallic] = useTexture([
     "/models/flow/color.jpg",
     "/models/flow/normal.jpg",
@@ -334,10 +335,22 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     return clone;
   }, [source, color, normal, roughness, metallic]);
 
-  const catalog = useMemo(
-    () => buildAnimationCatalog((source.animations || []).map(removeRootTranslation)),
-    [source],
-  );
+  const catalog = useMemo(() => {
+    const baseCatalog = buildAnimationCatalog((source.animations || []).map(removeRootTranslation));
+    const greetingClip = greetingSource.animations?.[0];
+
+    if (greetingClip) {
+      const cleanGreeting = removeRootTranslation(greetingClip);
+      cleanGreeting.name = "Flow Greeting Wave";
+      const greetingCatalog = buildAnimationCatalog([cleanGreeting]);
+
+      // Always use the dedicated greeting clip for the waving state. This avoids
+      // the old procedural pose that looked like Flow was pointing sideways.
+      if (greetingCatalog.wave.length) baseCatalog.wave = greetingCatalog.wave;
+    }
+
+    return baseCatalog;
+  }, [source, greetingSource]);
 
   useEffect(() => {
     const engine = new FlowAnimationEngine(model, catalog);
@@ -352,13 +365,10 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     activeBehaviourId.current = behaviourId;
     idleVariant.current = behaviourPulse % 6;
 
-    // The throne uses the real seated clip from the master FBX. Greeting remains
-    // procedural because it needs to be clearly readable in every viewport.
-    if (mode === "waving") {
-      animationEngineRef.current?.stop(0.18);
-    } else {
-      animationEngineRef.current?.playMode(mode, emotion, { force: mode === "seated" });
-    }
+    // The throne and greeting both use authored animation clips. The dedicated
+    // greeting bends the elbow, raises the hand beside the face and waves from
+    // the wrist, instead of extending the arm sideways.
+    animationEngineRef.current?.playMode(mode, emotion, { force: mode === "seated" || mode === "waving" });
     // useFrame owns the Three.js clock; it will timestamp this state change.
   }, [mode, emotion.energy, emotion.stress, emotion.joy, emotion.attention, behaviourPulse, behaviourId]);
 
