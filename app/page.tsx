@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import HeroFlowExperience from "@/components/HeroFlowExperience";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -90,15 +91,8 @@ function Hero({ market, pricesHref }: { market: MarketConfig; pricesHref: string
         <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/50"><span className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-cyan-200"/> Sin tarjeta</span><span className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-cyan-200"/> Configuración guiada</span><span className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-cyan-200"/> Desde {market.price}/mes</span></div>
       </div>
 
-      <div className="relative min-h-[610px]">
-        <div className="absolute inset-0 rounded-full bg-violet-500/20 blur-[100px]"/>
-        <div className="flowly-hero-orbit absolute inset-8 rounded-full border border-white/10"/>
-        <div className="absolute inset-x-0 bottom-0 z-10 mx-auto h-[600px] max-w-[560px]">
-          <Image src="/flow/flow-throne-seated.png" alt="Flow, el compañero de inteligencia artificial de Flowly" fill className="object-contain object-bottom drop-shadow-[0_35px_80px_rgba(124,58,237,.5)]" priority />
-        </div>
-        <div className="flowly-float-card absolute left-0 top-16 z-20 rounded-2xl p-4 sm:left-4"><p className="text-xs text-white/45">Flow ha detectado</p><p className="mt-1 font-semibold">3 oportunidades calientes</p></div>
-        <div className="flowly-float-card absolute right-0 top-48 z-20 rounded-2xl p-4 sm:right-2"><p className="text-xs text-white/45">Siguiente acción</p><p className="mt-1 font-semibold">Responder a Laura ahora</p></div>
-        <div className="flowly-float-card absolute bottom-16 left-2 z-20 rounded-2xl p-4"><p className="flex items-center gap-2 text-sm font-semibold text-emerald-200"><span className="flowly-live-dot"/> Flow está trabajando</p></div>
+      <div className="relative min-h-[610px] lg:min-h-[680px]">
+        <HeroFlowExperience />
       </div>
     </section>
   );

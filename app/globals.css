@@ -7977,3 +7977,128 @@ iframe[src*="companion-webgl"] {
 .flowly-guide{animation:flowlyGuideIn .6s ease both}@keyframes flowlyGuideIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 @media(max-width:1023px){.section-title{font-size:clamp(2.4rem,9vw,4rem)}}
 @media(prefers-reduced-motion:reduce){.flowly-hero-orbit,.flowly-float-card,.flowly-guide{animation:none!important}}
+
+/* Flowly public hero — living AI presence */
+.flowly-hero-experience {
+  position: absolute;
+  inset: 0;
+  min-height: 610px;
+  isolation: isolate;
+}
+.flowly-ai-halo {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: min(480px, 82vw);
+  height: min(480px, 82vw);
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(34,211,238,.2) 0%, rgba(139,92,246,.16) 36%, rgba(236,72,153,.08) 58%, transparent 72%);
+  filter: blur(10px);
+  animation: flowlyHaloPulse 5.5s ease-in-out infinite;
+}
+.flowly-ai-ring {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  border: 1px solid rgba(165,243,252,.18);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  box-shadow: inset 0 0 60px rgba(124,58,237,.08), 0 0 50px rgba(34,211,238,.06);
+}
+.flowly-ai-ring-one { width: 430px; height: 430px; animation: flowlyRingSpin 18s linear infinite; }
+.flowly-ai-ring-two { width: 530px; height: 530px; border-style: dashed; opacity: .6; animation: flowlyRingSpinReverse 26s linear infinite; }
+.flowly-ai-floor {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  width: 420px;
+  height: 86px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(34,211,238,.22), rgba(124,58,237,.12) 42%, transparent 72%);
+  filter: blur(7px);
+}
+.flowly-hero-character {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 25px;
+  width: 390px;
+  height: 590px;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 34px 55px rgba(2,6,23,.6));
+}
+.flowly-hero-character .flow-engine-character-button { cursor: default; }
+.flowly-orbit-card {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 170px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(2,6,23,.72);
+  box-shadow: 0 20px 55px rgba(2,6,23,.38), inset 0 1px rgba(255,255,255,.05);
+  backdrop-filter: blur(18px);
+  color: #a5f3fc;
+  animation: flowlyCardFloat 4.8s ease-in-out infinite;
+}
+.flowly-orbit-card div { display: grid; gap: 2px; }
+.flowly-orbit-card span { color: rgba(255,255,255,.44); font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
+.flowly-orbit-card strong { color: #fff; font-size: 13px; white-space: nowrap; }
+.flowly-orbit-card-clients { left: -4px; top: 108px; }
+.flowly-orbit-card-whatsapp { right: -12px; top: 188px; animation-delay: -.9s; }
+.flowly-orbit-card-agenda { left: 4px; bottom: 120px; animation-delay: -1.8s; }
+.flowly-orbit-card-invoice { right: -2px; bottom: 78px; animation-delay: -2.7s; }
+.flowly-ai-status {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(52,211,153,.24);
+  border-radius: 999px;
+  padding: 9px 14px;
+  background: rgba(2,6,23,.82);
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px rgba(2,6,23,.3);
+}
+@keyframes flowlyHaloPulse { 0%,100%{opacity:.72;transform:translate(-50%,-50%) scale(.96)} 50%{opacity:1;transform:translate(-50%,-50%) scale(1.04)} }
+@keyframes flowlyRingSpin { to { transform:translate(-50%,-50%) rotate(360deg); } }
+@keyframes flowlyRingSpinReverse { to { transform:translate(-50%,-50%) rotate(-360deg); } }
+@keyframes flowlyCardFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+@media (max-width: 1023px) {
+  .flowly-hero-experience { position: relative; min-height: 650px; }
+  .flowly-hero-character { width: 360px; height: 560px; }
+  .flowly-orbit-card-clients { left: 5%; }
+  .flowly-orbit-card-whatsapp { right: 4%; }
+  .flowly-orbit-card-agenda { left: 7%; }
+  .flowly-orbit-card-invoice { right: 5%; }
+}
+@media (max-width: 640px) {
+  .flowly-hero-experience { min-height: 540px; }
+  .flowly-hero-character { width: 300px; height: 470px; bottom: 16px; }
+  .flowly-ai-ring-one { width: 320px; height: 320px; }
+  .flowly-ai-ring-two { width: 390px; height: 390px; }
+  .flowly-orbit-card { min-width: 0; padding: 10px 11px; border-radius: 15px; }
+  .flowly-orbit-card strong { font-size: 11px; }
+  .flowly-orbit-card span { font-size: 8px; }
+  .flowly-orbit-card-clients { left: 0; top: 78px; }
+  .flowly-orbit-card-whatsapp { right: 0; top: 155px; }
+  .flowly-orbit-card-agenda { left: 0; bottom: 92px; }
+  .flowly-orbit-card-invoice { right: 0; bottom: 55px; }
+  .flowly-ai-status { bottom: 0; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flowly-ai-halo,.flowly-ai-ring,.flowly-orbit-card { animation: none !important; }
+}
