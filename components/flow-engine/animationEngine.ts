@@ -40,6 +40,12 @@ export class FlowAnimationEngine {
     this.mixer.update(delta);
   }
 
+  setLocomotionSpeed(normalizedSpeed: number) {
+    if (!this.activeAction || this.activeEntry?.family !== "walk") return;
+    const scale = Math.max(0.62, Math.min(1.45, 0.72 + normalizedSpeed * 0.58));
+    this.activeAction.setEffectiveTimeScale(scale);
+  }
+
   playMode(mode: FlowMode, emotion: FlowEmotion, options: PlayOptions = {}) {
     const entry = chooseAnimation(this.catalog, {
       mode,

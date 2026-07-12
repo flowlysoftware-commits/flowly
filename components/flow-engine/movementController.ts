@@ -1,79 +1,149 @@
-import { FlowFacing, FlowPosition } from "./types";
+import { FlowFacing, FlowGait, FlowPosition } from "./types";
+
+export type MovementPhase = "turn" | "start" | "cruise" | "stop" | "arrived" | "cancelled";
 
 export type MovementCallbacks = {
   onPosition: (position: FlowPosition) => void;
   onFacing: (facing: FlowFacing) => void;
   onWalking: (walking: boolean) => void;
-  onPhase?: (phase: "turn" | "start" | "cruise" | "stop" | "arrived") => void;
+  onGait?: (gait: FlowGait) => void;
+  onPhase?: (phase: MovementPhase) => void;
+};
+
+export type WalkOptions = {
+  signal?: AbortSignal;
+  speedPxPerSecond?: number;
+  turnDurationMs?: number;
+  minimumDurationMs?: number;
+  maximumDurationMs?: number;
 };
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function smootherStep(t: number) {
-  return t * t * t * (t * (t * 6 - 15) + 10);
+function smoothstep(t: number) {
+  return t * t * (3 - 2 * t);
 }
 
-const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+function velocityEnvelope(t: number) {
+  const acceleration = smoothstep(clamp(t / 0.18, 0, 1));
+  const braking = 1 - smoothstep(clamp((t - 0.78) / 0.22, 0, 1));
+  return clamp(Math.min(acceleration, braking), 0, 1);
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Movement cancelled", "AbortError");
+}
+
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    throwIfAborted(signal);
+    const timer = window.setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      window.clearTimeout(timer);
+      reject(new DOMException("Movement cancelled", "AbortError"));
+    }, { once: true });
+  });
+}
+
+function getFacing(dx: number): FlowFacing {
+  if (dx < -8) return "left";
+  if (dx > 8) return "right";
+  return "front";
+}
 
 export async function walkFlowTo(
   start: FlowPosition,
   destination: FlowPosition,
   callbacks: MovementCallbacks,
+  options: WalkOptions = {},
 ) {
   const dx = destination.left - start.left;
   const dy = destination.top - start.top;
   const distance = Math.hypot(dx, dy);
+  const signal = options.signal;
 
   if (distance < 8) {
-    callbacks.onFacing("front");
     callbacks.onPosition(destination);
+    callbacks.onGait?.({ speed: 0, normalizedSpeed: 0, distanceRemaining: 0, phase: "arrived" });
     callbacks.onPhase?.("arrived");
     return;
   }
 
-  const horizontalFacing: FlowFacing = dx < -8 ? "left" : dx > 8 ? "right" : "front";
+  const facing = getFacing(dx);
+  const targetSpeed = options.speedPxPerSecond ?? 122;
+  const duration = clamp(
+    (distance / targetSpeed) * 1000,
+    options.minimumDurationMs ?? 900,
+    options.maximumDurationMs ?? 7200,
+  );
 
-  callbacks.onPhase?.("turn");
-  callbacks.onFacing(horizontalFacing);
-  await wait(300);
+  try {
+    callbacks.onPhase?.("turn");
+    callbacks.onFacing(facing);
+    callbacks.onGait?.({ speed: 0, normalizedSpeed: 0, distanceRemaining: distance, phase: "turn" });
+    await wait(options.turnDurationMs ?? 260, signal);
 
-  callbacks.onPhase?.("start");
-  callbacks.onWalking(true);
-  await wait(180);
+    callbacks.onWalking(true);
+    callbacks.onPhase?.("start");
+    const began = performance.now();
+    let previousTime = began;
+    let previousPosition = start;
 
-  // A slower screen-space velocity lets the leg cycle read as an actual walk,
-  // instead of making the character look like it is skating across the UI.
-  const speed = 118;
-  const duration = clamp((distance / speed) * 1000, 1050, 6200);
-  const began = performance.now();
+    await new Promise<void>((resolve, reject) => {
+      const step = (now: number) => {
+        if (signal?.aborted) {
+          reject(new DOMException("Movement cancelled", "AbortError"));
+          return;
+        }
 
-  await new Promise<void>((resolve) => {
-    const step = (now: number) => {
-      const raw = clamp((now - began) / duration, 0, 1);
-      const eased = smootherStep(raw);
-      callbacks.onPhase?.(
-        raw < 0.12 ? "start" :
-        raw > 0.86 ? "stop" :
-        "cruise",
-      );
-      callbacks.onPosition({
-        left: start.left + dx * eased,
-        top: start.top + dy * eased,
-      });
+        const raw = clamp((now - began) / duration, 0, 1);
+        const envelope = velocityEnvelope(raw);
+        const eased = raw < 0.5
+          ? 0.5 * Math.pow(raw * 2, 1.45)
+          : 1 - 0.5 * Math.pow((1 - raw) * 2, 1.45);
+        const position = {
+          left: start.left + dx * eased,
+          top: start.top + dy * eased,
+        };
+        const dt = Math.max((now - previousTime) / 1000, 1 / 120);
+        const actualSpeed = Math.hypot(
+          position.left - previousPosition.left,
+          position.top - previousPosition.top,
+        ) / dt;
+        const remaining = Math.hypot(destination.left - position.left, destination.top - position.top);
+        const phase: MovementPhase = raw < 0.18 ? "start" : raw > 0.78 ? "stop" : "cruise";
 
-      if (raw < 1) requestAnimationFrame(step);
-      else resolve();
-    };
-    requestAnimationFrame(step);
-  });
+        callbacks.onPhase?.(phase);
+        callbacks.onPosition(position);
+        callbacks.onGait?.({
+          speed: actualSpeed,
+          normalizedSpeed: clamp((actualSpeed / targetSpeed) * envelope, 0, 1.35),
+          distanceRemaining: remaining,
+          phase,
+        });
 
-  callbacks.onPhase?.("stop");
-  callbacks.onPosition(destination);
-  await wait(260);
-  callbacks.onWalking(false);
-  await wait(110);
-  callbacks.onFacing("front");
-  callbacks.onPhase?.("arrived");
+        previousTime = now;
+        previousPosition = position;
+        if (raw < 1) requestAnimationFrame(step);
+        else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+
+    callbacks.onPosition(destination);
+    callbacks.onPhase?.("stop");
+    callbacks.onGait?.({ speed: 0, normalizedSpeed: 0, distanceRemaining: 0, phase: "stop" });
+    await wait(180, signal);
+    callbacks.onWalking(false);
+    callbacks.onPhase?.("arrived");
+    callbacks.onGait?.({ speed: 0, normalizedSpeed: 0, distanceRemaining: 0, phase: "arrived" });
+  } catch (error) {
+    callbacks.onWalking(false);
+    callbacks.onPhase?.("cancelled");
+    callbacks.onGait?.({ speed: 0, normalizedSpeed: 0, distanceRemaining: 0, phase: "cancelled" });
+    if (error instanceof DOMException && error.name === "AbortError") return;
+    throw error;
+  }
 }

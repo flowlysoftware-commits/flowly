@@ -1,4 +1,4 @@
-import { DEFAULT_EMOTION, FlowEmotion, FlowRuntimeState } from "./types";
+import { DEFAULT_EMOTION, FlowEmotion, FlowGait, FlowRuntimeState } from "./types";
 
 export type FlowAction =
   | { type: "mode"; mode: FlowRuntimeState["mode"] }
@@ -9,7 +9,8 @@ export type FlowAction =
   | { type: "bubble"; text: string }
   | { type: "emotion"; emotion: Partial<FlowEmotion> }
   | { type: "message"; message: FlowRuntimeState["messages"][number] }
-  | { type: "behaviour"; pulse: number; id: string | null };
+  | { type: "behaviour"; pulse: number; id: string | null }
+  | { type: "gait"; gait: FlowGait };
 
 export function createInitialFlowState(): FlowRuntimeState {
   return {
@@ -23,6 +24,7 @@ export function createInitialFlowState(): FlowRuntimeState {
     messages: [{ id: "welcome", role: "flow", text: "Soy Flow. Pídeme que te lleve a cualquier módulo." }],
     behaviourPulse: 0,
     behaviourId: null,
+    gait: { speed: 0, normalizedSpeed: 0, distanceRemaining: 0, phase: "arrived" },
   };
 }
 
@@ -37,6 +39,7 @@ export function flowReducer(state: FlowRuntimeState, action: FlowAction): FlowRu
     case "emotion": return { ...state, emotion: { ...state.emotion, ...action.emotion } };
     case "message": return { ...state, messages: [...state.messages, action.message].slice(-20) };
     case "behaviour": return { ...state, behaviourPulse: action.pulse, behaviourId: action.id };
+    case "gait": return { ...state, gait: action.gait };
     default: return state;
   }
 }

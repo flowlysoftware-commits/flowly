@@ -5,7 +5,7 @@ import { Mic, Navigation, Send, Sparkles, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import FlowCharacter from "./FlowCharacter";
 import { FlowBehaviourEngine } from "./behaviourEngine";
-import { detectNavigationTarget, getTargetDestination, highlightTarget } from "./domNavigator";
+import { detectNavigationTarget, getTargetApproach, highlightTarget, isElementActionable } from "./domNavigator";
 import { FlowGatewayClient } from "./gatewayClient";
 import { walkFlowTo } from "./movementController";
 import { createInitialFlowState, flowReducer } from "./stateMachine";
@@ -79,6 +79,7 @@ export default function FlowEngine() {
   const introRef = useRef<IntroPhase>(introPhase);
   const clientRef = useRef<FlowGatewayClient | null>(null);
   const navigationLock = useRef(false);
+  const movementAbortRef = useRef<AbortController | null>(null);
   const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
   const dragRef = useRef<DragState>({ active: false, offsetX: 0, offsetY: 0 });
   const throneRef = useRef<HTMLDivElement | null>(null);
@@ -228,23 +229,40 @@ export default function FlowEngine() {
       dispatch({ type: "bubble", text: `Claro. Te acompaño a ${target.label}.` });
       dispatch({ type: "open", open: false });
 
-      await walkFlowTo(stateRef.current.position, getTargetDestination(element), {
+      movementAbortRef.current?.abort();
+      const movement = new AbortController();
+      movementAbortRef.current = movement;
+      const approach = getTargetApproach(element);
+
+      await walkFlowTo(stateRef.current.position, approach.destination, {
         onPosition: (position) => dispatch({ type: "position", ...position }),
         onFacing: (facing) => dispatch({ type: "facing", facing }),
-        onWalking: (walking) =>
-          dispatch({ type: "mode", mode: walking ? "walking" : "idle" }),
-      });
+        onWalking: (walking) => dispatch({ type: "mode", mode: walking ? "walking" : "idle" }),
+        onGait: (gait) => dispatch({ type: "gait", gait }),
+      }, { signal: movement.signal });
 
+      if (movement.signal.aborted) return;
+      element = api.findElement(target.key) || element;
+      if (!isElementActionable(element)) {
+        dispatch({ type: "bubble", text: `${target.label} ya no está disponible en esta vista.` });
+        dispatch({ type: "open", open: true });
+        return;
+      }
+
+      dispatch({ type: "facing", facing: approach.facing });
       highlightTarget(element, true);
       dispatch({ type: "mode", mode: "pointing" });
       dispatch({ type: "bubble", text: `Aquí tienes ${target.label}.` });
-      await sleep(900);
+      await sleep(760);
+      element.focus({ preventScroll: true });
       element.click();
       await sleep(180);
       highlightTarget(element, false);
       dispatch({ type: "mode", mode: "idle" });
+      dispatch({ type: "facing", facing: "front" });
       dispatch({ type: "open", open: true });
     } finally {
+      movementAbortRef.current = null;
       navigationLock.current = false;
     }
   }, []);
@@ -323,6 +341,7 @@ export default function FlowEngine() {
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (introRef.current !== "ready") return;
+    movementAbortRef.current?.abort();
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -524,6 +543,7 @@ export default function FlowEngine() {
             emotion={state.emotion}
             behaviourPulse={state.behaviourPulse}
             behaviourId={state.behaviourId}
+            gaitSpeed={state.gait.normalizedSpeed}
             onClick={() => {
               if (introRef.current === "ready" && !dragRef.current.active && !thronedRef.current) {
                 dispatch({ type: "open", open: !state.open });

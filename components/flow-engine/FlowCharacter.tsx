@@ -31,6 +31,7 @@ type Props = {
   emotion: FlowEmotion;
   behaviourPulse?: number;
   behaviourId?: string | null;
+  gaitSpeed?: number;
   onClick?: () => void;
 };
 
@@ -278,7 +279,7 @@ function applyRestPosition(
   node.position.lerp(new Vector3(rest.position.x + x, rest.position.y + y, rest.position.z + z), alpha);
 }
 
-function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId = null }: Omit<Props, "onClick">) {
+function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId = null, gaitSpeed = 0 }: Omit<Props, "onClick">) {
   const presentation = useRef<Group>(null);
   const pointer = useRef({ x: 0, y: 0 });
   const restPose = useRef(new Map<Object3D, RestTransform>());
@@ -412,6 +413,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     const elapsed = state.clock.elapsedTime;
     const alpha = 1 - Math.exp(-dt * 10);
     animationEngineRef.current?.update(dt);
+    if (mode === "walking") animationEngineRef.current?.setLocomotionSpeed(gaitSpeed);
 
     if (lastMode.current !== mode) {
       lastMode.current = mode;
@@ -721,6 +723,7 @@ export default function FlowCharacter(props: Props) {
             emotion={props.emotion}
             behaviourPulse={props.behaviourPulse}
             behaviourId={props.behaviourId}
+            gaitSpeed={props.gaitSpeed}
           />
         </Suspense>
       </Canvas>

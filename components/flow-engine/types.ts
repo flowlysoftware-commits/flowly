@@ -14,6 +14,12 @@ export type FlowEmotion = {
 };
 
 export type FlowPosition = { left: number; top: number };
+export type FlowGait = {
+  speed: number;
+  normalizedSpeed: number;
+  distanceRemaining: number;
+  phase: "turn" | "start" | "cruise" | "stop" | "arrived" | "cancelled";
+};
 export type FlowMessage = { id: string; role: "user" | "flow" | "system"; text: string };
 
 export type FlowPanelTarget = {
@@ -59,6 +65,7 @@ export type FlowRuntimeState = {
   messages: FlowMessage[];
   behaviourPulse: number;
   behaviourId: string | null;
+  gait: FlowGait;
 };
 
 export const DEFAULT_EMOTION: FlowEmotion = {
