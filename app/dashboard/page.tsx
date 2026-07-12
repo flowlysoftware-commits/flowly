@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import ClientPanelLoadingVideo from "@/components/ClientPanelLoadingVideo";
 import { marketingPlans } from "@/lib/marketingPlans";
 import {
   Bot,
@@ -388,6 +389,7 @@ export default function DashboardPage() {
   const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([]);
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
+  const [clientIntroState, setClientIntroState] = useState<"checking" | "show" | "skip">("checking");
 
   const [serviceName, setServiceName] = useState("");
   const [serviceDuration, setServiceDuration] = useState("30");
@@ -431,6 +433,16 @@ export default function DashboardPage() {
   const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => setOrigin(window.location.origin), []);
+
+  useEffect(() => {
+    const pending = window.sessionStorage.getItem("flow_companion_welcome_pending") === "1";
+    setClientIntroState(pending ? "show" : "skip");
+  }, []);
+
+  const finishClientPanelIntro = useCallback(() => {
+    window.sessionStorage.removeItem("flow_companion_welcome_pending");
+    setClientIntroState("skip");
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -1411,6 +1423,14 @@ export default function DashboardPage() {
     if (error) return alert(error.message);
     await loadData();
   };
+
+  if (clientIntroState === "checking") {
+    return <main className="fixed inset-0 bg-black" style={{ zIndex: 2147483647 }} aria-label="Preparando panel" />;
+  }
+
+  if (clientIntroState === "show") {
+    return <ClientPanelLoadingVideo panelReady={!loading} onComplete={finishClientPanelIntro} />;
+  }
 
   if (loading) return <main className="flowly-app-shell flex items-center justify-center"><div className="flowly-app-content text-white">Cargando panel...</div></main>;
   if (!business || !settings) {
