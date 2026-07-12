@@ -7872,3 +7872,31 @@ iframe[src*="companion-webgl"] {
   .flow-engine-throne.is-occupied { width: 150px; height: 217px; transform: none; }
   .flow-engine-character.is-throned { width: 166px; height: 247px; }
 }
+
+/* Companion physical integration correction */
+.flow-engine-character { transition: width .28s ease, height .28s ease, filter .28s ease; }
+.flow-engine-character.is-throned {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  width: 174px !important;
+  height: 252px !important;
+  pointer-events: auto;
+  transform: translateY(7px);
+  filter: drop-shadow(0 12px 15px rgba(2,6,23,.45));
+}
+.flow-engine-character.is-throned .flow-engine-character-button { pointer-events: auto; }
+.flow-engine-throne.is-occupied .flow-engine-throne-art { opacity: 1; }
+.flow-engine-throne-seat-anchor {
+  left: 50% !important;
+  top: 58% !important;
+  width: 38% !important;
+  height: 12% !important;
+  transform: translate(-50%,-50%);
+}
+.flow-engine-character.is-walking { will-change: left, top; }
+.flow-engine-character.is-pointing,
+.flow-engine-character.is-waving { filter: drop-shadow(0 13px 18px rgba(2,6,23,.34)); }
+@media (max-width: 900px) {
+  .flow-engine-character.is-throned { width: 150px !important; height: 217px !important; transform: translateY(5px); }
+}

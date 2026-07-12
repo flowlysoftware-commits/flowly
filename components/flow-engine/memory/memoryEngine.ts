@@ -85,6 +85,18 @@ export class FlowMemoryEngine {
   }
 
 
+  confirmationFor(text: string): string | null {
+    const facts = extractExplicitFacts(text);
+    if (!facts.length) return null;
+    const labels = facts.map((fact) => {
+      if (fact.kind === "person" && fact.key === "user-name") return `que te llamas ${fact.value}`;
+      if (fact.kind === "company" && fact.key === "name") return `que tu empresa se llama ${fact.value}`;
+      if (fact.kind === "preference") return `tu preferencia: ${fact.value}`;
+      return fact.value;
+    });
+    return `Hecho. Recordaré ${labels.join(" y ")}.`;
+  }
+
   answerQuestion(text: string): string | null {
     const query = normalize(text).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const facts = this.snapshot.facts;

@@ -310,6 +310,19 @@ export default function FlowEngine() {
     memoryRef.current?.recordMessage(userMessage);
     services.events.emit("chat:message", { message: userMessage });
 
+    const memoryConfirmation = memoryRef.current?.confirmationFor(text);
+    if (memoryConfirmation) {
+      const flowMessage = { id: uid("flow"), role: "flow" as const, text: memoryConfirmation };
+      dispatch({ type: "message", message: flowMessage });
+      dispatch({ type: "bubble", text: memoryConfirmation });
+      dispatch({ type: "open", open: true });
+      dispatch({ type: "mode", mode: "talking" });
+      memoryRef.current?.recordMessage(flowMessage);
+      if (voiceActiveRef.current) voiceSpeakRef.current(memoryConfirmation);
+      window.setTimeout(() => dispatch({ type: "mode", mode: thronedRef.current ? "seated" : "idle" }), 1800);
+      return;
+    }
+
     const memoryAnswer = memoryRef.current?.answerQuestion(text);
     if (memoryAnswer) {
       const flowMessage = { id: uid("flow"), role: "flow" as const, text: memoryAnswer };
@@ -800,22 +813,20 @@ export default function FlowEngine() {
             aria-label="Mover a Flow"
           />
         )}
-        {!isThroned && (
-          <FlowCharacter
-            mode={state.mode}
-            facing={state.facing}
-            emotion={state.emotion}
-            behaviourPulse={state.behaviourPulse}
-            behaviourId={state.behaviourId}
-            gaitSpeed={state.gait.normalizedSpeed}
-            speechLevel={voice.speechLevel}
-            onClick={() => {
-              if (introRef.current === "ready" && !dragRef.current.active && !thronedRef.current) {
-                dispatch({ type: "open", open: !state.open });
-              }
-            }}
-          />
-        )}
+        <FlowCharacter
+          mode={state.mode}
+          facing={state.facing}
+          emotion={state.emotion}
+          behaviourPulse={state.behaviourPulse}
+          behaviourId={state.behaviourId}
+          gaitSpeed={state.gait.normalizedSpeed}
+          speechLevel={voice.speechLevel}
+          onClick={() => {
+            if (introRef.current === "ready" && !dragRef.current.active) {
+              dispatch({ type: "open", open: !state.open });
+            }
+          }}
+        />
 
         {introPhase === "welcome" && (
           <div className="flow-engine-welcome-card">

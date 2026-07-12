@@ -500,15 +500,15 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         // compatible with the master rig even when no dedicated sit clip exists.
         const settle = MathUtils.smoothstep(Math.min(modeTime / 0.75, 1), 0, 1);
         const relaxedBreath = Math.sin(elapsed * 1.15) * 0.006;
-        pelvisY = -0.115 * settle;
-        chestX = (0.055 + relaxedBreath) * settle;
+        pelvisY = -0.075 * settle;
+        chestX = (0.028 + relaxedBreath) * settle;
         chestZ = Math.sin(elapsed * 0.35) * 0.008 * settle;
-        leftThighX = -1.02 * settle;
-        rightThighX = -1.02 * settle;
-        leftCalfX = 1.14 * settle;
-        rightCalfX = 1.14 * settle;
-        leftFootX = -0.16 * settle;
-        rightFootX = -0.16 * settle;
+        leftThighX = -0.86 * settle;
+        rightThighX = -0.86 * settle;
+        leftCalfX = 1.02 * settle;
+        rightCalfX = 1.02 * settle;
+        leftFootX = -0.10 * settle;
+        rightFootX = -0.10 * settle;
         leftUpperX = 0.16 * settle;
         rightUpperX = 0.16 * settle;
         leftUpperZ = 0.075 * settle;
@@ -563,17 +563,17 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
           : 1;
         const amount = intro * outro;
         const wave = Math.sin(modeTime * 7.2) * 0.12;
-        rightUpperX = -0.08 * amount;
-        rightUpperZ = -0.24 * amount;
-        rightForeY = (-0.14 + wave * 0.45) * amount;
+        rightUpperX = -0.035 * amount;
+        rightUpperZ = -0.14 * amount;
+        rightForeY = (-0.07 + wave * 0.24) * amount;
         headZ = 0.025 * amount;
         chestY = -0.022 * amount;
       } else if (mode === "pointing") {
         const amount = MathUtils.smoothstep(Math.min(modeTime / 0.35, 1), 0, 1);
-        rightUpperX = -0.05 * amount;
-        rightUpperZ = -0.22 * amount;
-        rightForeY = -0.035 * amount;
-        headY = -0.055 * amount;
+        rightUpperX = -0.025 * amount;
+        rightUpperZ = -0.12 * amount;
+        rightForeY = -0.018 * amount;
+        headY = -0.035 * amount;
       } else if (mode === "talking") {
         const gesture = Math.sin(elapsed * (1.8 + energy));
         leftUpperZ = 0.06 + gesture * 0.035;
@@ -661,8 +661,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
 
     // The dedicated sitting clip bends the skeleton. This offset aligns the pelvis
     // with the throne cushion instead of leaving Flow floating above it.
-    const targetPresentationY = mode === "seated" ? -0.49 : 0;
-    const targetPresentationZ = mode === "seated" ? -0.08 : 0;
+    const targetPresentationY = mode === "seated" ? -0.30 : 0;
+    const targetPresentationZ = mode === "seated" ? -0.04 : 0;
     presentation.current.position.y += (targetPresentationY - presentation.current.position.y) * Math.min(1, dt * 7.5);
     presentation.current.position.z += (targetPresentationZ - presentation.current.position.z) * Math.min(1, dt * 7.5);
   });
