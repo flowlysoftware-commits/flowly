@@ -5,7 +5,7 @@ export type FlowCompanionEvents = {
   "runtime:unmounted": { runtimeId: string };
   "runtime:error": { error: Error };
   "state:mode": { mode: FlowMode };
-  "state:emotion": { emotion: Partial<FlowEmotion> };
+  "state:emotion": { emotion: FlowEmotion };
   "state:position": { position: FlowPosition };
   "chat:message": { message: FlowMessage };
   "navigation:requested": { target: string };

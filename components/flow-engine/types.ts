@@ -2,8 +2,10 @@ export type FlowMode = "idle" | "walking" | "thinking" | "listening" | "talking"
 export type FlowFacing = "front" | "left" | "right";
 export type FlowUserActivitySource = "pointer" | "keyboard" | "scroll" | "chat" | "drag" | "navigation";
 
+export type FlowMood = "neutral" | "calm" | "joyful" | "curious" | "empathetic" | "focused" | "tired" | "stressed";
+
 export type FlowEmotion = {
-  mood: string;
+  mood: FlowMood;
   calm: number;
   joy: number;
   curiosity: number;

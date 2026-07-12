@@ -7,6 +7,7 @@ import FlowCharacter from "./FlowCharacter";
 import { FlowBehaviourEngine } from "./behaviourEngine";
 import { detectNavigationTarget, getTargetApproach, highlightTarget, isElementActionable } from "./domNavigator";
 import { FlowGatewayClient } from "./gatewayClient";
+import { FlowEmotionEngine } from "./emotionEngine";
 import { walkFlowTo } from "./movementController";
 import { createInitialFlowState, flowReducer } from "./stateMachine";
 import { FlowMode, FlowPanelTarget } from "./types";
@@ -81,6 +82,7 @@ export default function FlowEngine() {
   const navigationLock = useRef(false);
   const movementAbortRef = useRef<AbortController | null>(null);
   const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
+  const emotionRef = useRef<FlowEmotionEngine | null>(null);
   const dragRef = useRef<DragState>({ active: false, offsetX: 0, offsetY: 0 });
   const throneRef = useRef<HTMLDivElement | null>(null);
   const thronedRef = useRef(false);
@@ -219,6 +221,7 @@ export default function FlowEngine() {
         const result = await api.navigate(target.key);
         dispatch({ type: "bubble", text: result.message });
         dispatch({ type: "open", open: true });
+        emotionRef.current?.stimulate({ type: "navigation-failure" });
         return;
       }
 
@@ -261,6 +264,7 @@ export default function FlowEngine() {
       dispatch({ type: "mode", mode: "idle" });
       dispatch({ type: "facing", facing: "front" });
       dispatch({ type: "open", open: true });
+      emotionRef.current?.stimulate({ type: "navigation-success" });
     } finally {
       movementAbortRef.current = null;
       navigationLock.current = false;
@@ -304,6 +308,23 @@ export default function FlowEngine() {
 
   useEffect(() => {
     if (!enabled) return;
+    const emotion = new FlowEmotionEngine({
+      initial: stateRef.current.emotion,
+      onChange: (snapshot) => {
+        dispatch({ type: "emotion", emotion: snapshot });
+        services.events.emit("state:emotion", { emotion: snapshot });
+      },
+    });
+    emotionRef.current = emotion;
+    emotion.start();
+    return () => {
+      emotion.stop();
+      emotionRef.current = null;
+    };
+  }, [enabled, services]);
+
+  useEffect(() => {
+    if (!enabled) return;
     const client = new FlowGatewayClient({
       wsUrl: FLOW_COMPANION_CONFIG.gatewayWsUrl,
       httpUrl: FLOW_COMPANION_CONFIG.gatewayHttpUrl,
@@ -311,8 +332,8 @@ export default function FlowEngine() {
       logger: services.logger,
       handlers: {
       onConnected: (connected) => dispatch({ type: "connected", connected }),
-      onMode: (mode) => dispatch({ type: "mode", mode }),
-      onEmotion: (emotion) => dispatch({ type: "emotion", emotion }),
+      onMode: (mode) => { dispatch({ type: "mode", mode }); emotionRef.current?.stimulate({ type: "mode", mode }); },
+      onEmotion: (emotion) => emotionRef.current?.stimulate({ type: "external", emotion }),
       onMessage: (text) => {
         dispatch({ type: "bubble", text });
         dispatch({
@@ -320,6 +341,7 @@ export default function FlowEngine() {
           message: { id: uid("flow"), role: "flow", text },
         });
         dispatch({ type: "open", open: true });
+        emotionRef.current?.stimulate({ type: "message-received" });
       },
       onAction: (name, payload) => {
         const target = actionTarget(name, payload);
@@ -359,8 +381,10 @@ export default function FlowEngine() {
           thronedRef.current = false;
           dispatch({ type: "position", ...getHomePosition() });
           dispatch({ type: "bubble", text: "Aquí estoy. ¿Qué necesitas?" });
+          emotionRef.current?.stimulate({ type: "wake" });
         }
         if (decision.command === "rest") {
+          emotionRef.current?.stimulate({ type: "rest-start" });
           void goToThrone();
           return;
         }
@@ -375,8 +399,8 @@ export default function FlowEngine() {
     behaviourRef.current = behaviour;
     behaviour.start();
 
-    const markPointerActivity = () => { behaviour.signalActivity("pointer"); services.events.emit("activity:user", { source: "pointer" }); };
-    const markKeyboardActivity = () => { behaviour.signalActivity("keyboard"); services.events.emit("activity:user", { source: "keyboard" }); };
+    const markPointerActivity = () => { behaviour.signalActivity("pointer"); emotionRef.current?.stimulate({ type: "user-activity", source: "pointer" }); services.events.emit("activity:user", { source: "pointer" }); };
+    const markKeyboardActivity = () => { behaviour.signalActivity("keyboard"); emotionRef.current?.stimulate({ type: "user-activity", source: "keyboard" }); services.events.emit("activity:user", { source: "keyboard" }); };
     const markScrollActivity = () => { behaviour.signalActivity("scroll"); services.events.emit("activity:user", { source: "scroll" }); };
     window.addEventListener("pointerdown", markPointerActivity, { passive: true });
     window.addEventListener("keydown", markKeyboardActivity);
@@ -404,6 +428,7 @@ export default function FlowEngine() {
       offsetY: event.clientY - position.top,
     };
     behaviourRef.current?.signalActivity("drag");
+    emotionRef.current?.stimulate({ type: "user-activity", source: "drag" });
     services.events.emit("activity:user", { source: "drag" });
     if (thronedRef.current) {
       setIsThroned(false);
@@ -498,6 +523,7 @@ export default function FlowEngine() {
 
     setInput("");
     behaviourRef.current?.signalActivity("chat");
+    emotionRef.current?.stimulate({ type: "message-sent" });
     services.events.emit("activity:user", { source: "chat" });
     const userMessage = { id: uid("user"), role: "user" as const, text };
     dispatch({ type: "message", message: userMessage });
@@ -512,6 +538,7 @@ export default function FlowEngine() {
     }
 
     dispatch({ type: "mode", mode: "thinking" });
+    emotionRef.current?.stimulate({ type: "mode", mode: "thinking" });
     dispatch({ type: "bubble", text: "Déjame pensarlo..." });
 
     const sentNow = await (clientRef.current?.sendText(text) ?? Promise.resolve(false));
