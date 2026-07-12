@@ -17,6 +17,7 @@ import { FLOW_COMPANION_CONFIG } from "./core/config";
 import { claimFlowRuntime, releaseFlowRuntime } from "./core/runtimeRegistry";
 import { createFlowCoreServices } from "./core/services";
 import { readFlowState, writeFlowState } from "./core/storage";
+import { useFlowlyVoiceRuntime } from "@/hooks/useFlowlyVoiceRuntime";
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -87,6 +88,8 @@ export default function FlowEngine() {
   const emotionRef = useRef<FlowEmotionEngine | null>(null);
   const memoryRef = useRef<FlowMemoryEngine | null>(null);
   const toolExecutorRef = useRef(new FlowToolExecutor(services.logger));
+  const voiceSpeakRef = useRef<(text: string) => void>(() => undefined);
+  const voiceActiveRef = useRef(false);
   const dragRef = useRef<DragState>({ active: false, offsetX: 0, offsetY: 0 });
   const throneRef = useRef<HTMLDivElement | null>(null);
   const thronedRef = useRef(false);
@@ -275,6 +278,63 @@ export default function FlowEngine() {
     }
   }, []);
 
+  const processUserText = useCallback(async (rawText: string) => {
+    const text = rawText.trim();
+    if (!text) return;
+
+    behaviourRef.current?.signalActivity("chat");
+    emotionRef.current?.stimulate({ type: "message-sent" });
+    services.events.emit("activity:user", { source: "chat" });
+    const userMessage = { id: uid("user"), role: "user" as const, text };
+    dispatch({ type: "message", message: userMessage });
+    memoryRef.current?.recordMessage(userMessage);
+    services.events.emit("chat:message", { message: userMessage });
+
+    const targets: FlowPanelTarget[] = window.FlowPanelIntegration?.targets || [];
+    const target = detectNavigationTarget(text, targets);
+    if (target) {
+      await navigate(target.key);
+      return;
+    }
+
+    dispatch({ type: "mode", mode: "thinking" });
+    emotionRef.current?.stimulate({ type: "mode", mode: "thinking" });
+    dispatch({ type: "bubble", text: "Déjame pensarlo..." });
+
+    const sentNow = await (clientRef.current?.sendText(text) ?? Promise.resolve(false));
+    if (!sentNow && stateRef.current.mode !== "error") {
+      dispatch({ type: "bubble", text: "No he podido conectar con mi cerebro. Revisa OPENAI_API_KEY y vuelve a intentarlo." });
+      dispatch({ type: "mode", mode: "error" });
+    }
+  }, [navigate, services]);
+
+  const voice = useFlowlyVoiceRuntime({
+    enabled: enabled && runtimeClaimed,
+    wakeWord: "flow",
+    onWake: () => {
+      behaviourRef.current?.signalActivity("chat");
+      emotionRef.current?.stimulate({ type: "user-activity", source: "chat" });
+      dispatch({ type: "open", open: true });
+      dispatch({ type: "bubble", text: "Te escucho." });
+    },
+    onCommand: processUserText,
+    onPhase: (phase) => {
+      if (phase === "listening" || phase === "permission" || phase === "waking") {
+        dispatch({ type: "mode", mode: "listening" });
+      } else if (phase === "thinking") {
+        dispatch({ type: "mode", mode: "thinking" });
+      } else if (phase === "speaking") {
+        dispatch({ type: "mode", mode: "talking" });
+      } else if (phase === "error") {
+        dispatch({ type: "mode", mode: "error" });
+      } else if (["passive", "disabled"].includes(phase) && ["listening", "talking"].includes(stateRef.current.mode)) {
+        dispatch({ type: "mode", mode: "idle" });
+      }
+    },
+  });
+  voiceSpeakRef.current = voice.speak;
+  voiceActiveRef.current = voice.active;
+
   const goToThrone = useCallback(async () => {
     if (navigationLock.current || thronedRef.current || dragRef.current.active) return;
     const throne = throneRef.current?.getBoundingClientRect();
@@ -370,6 +430,7 @@ export default function FlowEngine() {
         memoryRef.current?.recordMessage(flowMessage);
         dispatch({ type: "open", open: true });
         emotionRef.current?.stimulate({ type: "message-received" });
+        if (voiceActiveRef.current) voiceSpeakRef.current(text);
       },
       onAction: (name, payload) => {
         const target = actionTarget(name, payload);
@@ -567,32 +628,8 @@ export default function FlowEngine() {
     event.preventDefault();
     const text = input.trim();
     if (!text) return;
-
     setInput("");
-    behaviourRef.current?.signalActivity("chat");
-    emotionRef.current?.stimulate({ type: "message-sent" });
-    services.events.emit("activity:user", { source: "chat" });
-    const userMessage = { id: uid("user"), role: "user" as const, text };
-    dispatch({ type: "message", message: userMessage });
-    memoryRef.current?.recordMessage(userMessage);
-    services.events.emit("chat:message", { message: userMessage });
-
-    const targets: FlowPanelTarget[] = window.FlowPanelIntegration?.targets || [];
-    const target = detectNavigationTarget(text, targets);
-
-    if (target) {
-      await navigate(target.key);
-      return;
-    }
-
-    dispatch({ type: "mode", mode: "thinking" });
-    emotionRef.current?.stimulate({ type: "mode", mode: "thinking" });
-    dispatch({ type: "bubble", text: "Déjame pensarlo..." });
-
-    const sentNow = await (clientRef.current?.sendText(text) ?? Promise.resolve(false));
-    if (!sentNow && stateRef.current.mode !== "error") {
-      dispatch({ type: "bubble", text: "No he podido conectar con mi cerebro. Revisa OPENAI_API_KEY y vuelve a intentarlo." });
-    }
+    await processUserText(text);
   }
 
   const status = useMemo(
@@ -671,6 +708,7 @@ export default function FlowEngine() {
             behaviourPulse={state.behaviourPulse}
             behaviourId={state.behaviourId}
             gaitSpeed={state.gait.normalizedSpeed}
+            speechLevel={voice.speechLevel}
             onClick={() => {
               if (introRef.current === "ready" && !dragRef.current.active && !thronedRef.current) {
                 dispatch({ type: "open", open: !state.open });
@@ -721,7 +759,7 @@ export default function FlowEngine() {
           <header>
             <div>
               <strong>Flow</strong>
-              <span>{status} · OpenAI, memoria, emociones y Gateway activos</span>
+              <span>{status} · {voice.active ? `voz activa (${voice.state})` : "voz desactivada"} · Brain, memoria y herramientas activos</span>
             </div>
             <button type="button" onClick={() => dispatch({ type: "open", open: false })}>
               <X size={16} />
@@ -737,7 +775,14 @@ export default function FlowEngine() {
           </div>
 
           <form onSubmit={submit}>
-            <button type="button" aria-label="Micrófono próximamente">
+            <button
+              type="button"
+              className={voice.active ? "is-voice-active" : ""}
+              aria-label={voice.active ? "Desactivar micrófono" : "Activar micrófono"}
+              title={voice.supported ? (voice.active ? "Desactivar voz" : "Activar voz") : "Voz no compatible"}
+              disabled={!voice.supported}
+              onClick={() => void (voice.active ? voice.deactivate() : voice.activate())}
+            >
               <Mic size={15} />
             </button>
             <input

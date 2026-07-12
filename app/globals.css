@@ -7809,3 +7809,16 @@ iframe[src*="companion-webgl"] {
     transform: translate(-5px, -10px);
   }
 }
+
+/* Flow Companion — Phase 8 voice runtime */
+.flow-engine-panel form button.is-voice-active {
+  background: rgba(34, 197, 94, .22);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, .42), 0 0 18px rgba(34, 197, 94, .2);
+  color: #bbf7d0;
+  animation: flow-voice-pulse 1.6s ease-in-out infinite;
+}
+.flow-engine-panel form button:disabled { opacity: .42; cursor: not-allowed; }
+@keyframes flow-voice-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}

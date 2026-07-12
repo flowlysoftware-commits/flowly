@@ -32,6 +32,7 @@ type Props = {
   behaviourPulse?: number;
   behaviourId?: string | null;
   gaitSpeed?: number;
+  speechLevel?: number;
   onClick?: () => void;
 };
 
@@ -69,6 +70,7 @@ type FaceRig = {
   blinkRight: number[];
   smile: number[];
   browUp: number[];
+  mouthOpen: number[];
 };
 
 function normalizeBone(value: string) {
@@ -139,7 +141,7 @@ function Loading() {
 }
 
 function buildFaceRig(root: Object3D): FaceRig {
-  const result: FaceRig = { meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [] };
+  const result: FaceRig = { meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [], mouthOpen: [] };
 
   root.traverse((node) => {
     if (!isMesh(node)) return;
@@ -156,6 +158,7 @@ function buildFaceRig(root: Object3D): FaceRig {
       if (/blinkright|eyeblinkright|rightblink/.test(name)) result.blinkRight.push(packed);
       if (/smile|mouthsmile|happy/.test(name)) result.smile.push(packed);
       if (/browup|eyebrowup|surprise/.test(name)) result.browUp.push(packed);
+      if (/jawopen|mouthopen|visemeaa|visemeoh|visemeo/.test(name)) result.mouthOpen.push(packed);
     });
   });
 
@@ -279,12 +282,12 @@ function applyRestPosition(
   node.position.lerp(new Vector3(rest.position.x + x, rest.position.y + y, rest.position.z + z), alpha);
 }
 
-function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId = null, gaitSpeed = 0 }: Omit<Props, "onClick">) {
+function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId = null, gaitSpeed = 0, speechLevel = 0 }: Omit<Props, "onClick">) {
   const presentation = useRef<Group>(null);
   const pointer = useRef({ x: 0, y: 0 });
   const restPose = useRef(new Map<Object3D, RestTransform>());
   const rig = useRef<BoneRig>({});
-  const face = useRef<FaceRig>({ meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [] });
+  const face = useRef<FaceRig>({ meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [], mouthOpen: [] });
   const animationEngineRef = useRef<FlowAnimationEngine | null>(null);
   const nextIdleVariationAt = useRef(0);
   const blinkStartedAt = useRef(-1);
@@ -676,6 +679,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     setMorph(face.current, face.current.blinkRight, blink);
     setMorph(face.current, face.current.smile, MathUtils.clamp(joy * 0.58 + (mode === "waving" ? 0.2 : 0), 0, 0.8));
     setMorph(face.current, face.current.browUp, MathUtils.clamp(emotion.curiosity * 0.25 + (mode === "thinking" ? 0.12 : 0), 0, 0.5));
+    const talkAmount = mode === "talking" ? MathUtils.clamp(speechLevel, 0, 1) : 0;
+    setMorph(face.current, face.current.mouthOpen, talkAmount * 0.82);
 
     if (!presentation.current) return;
     const sideTurn = facing === "left" ? 0.58 : facing === "right" ? -0.58 : 0;
@@ -724,6 +729,7 @@ export default function FlowCharacter(props: Props) {
             behaviourPulse={props.behaviourPulse}
             behaviourId={props.behaviourId}
             gaitSpeed={props.gaitSpeed}
+            speechLevel={props.speechLevel}
           />
         </Suspense>
       </Canvas>

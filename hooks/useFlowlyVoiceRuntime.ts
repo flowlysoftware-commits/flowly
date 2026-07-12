@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createSpeechEnvelope, chooseSpanishVoice, sanitizeSpeechText } from "@/components/flow-engine/voiceEngine";
 import {
   cleanText,
   hasWakeWord,
@@ -21,6 +22,7 @@ type VoiceRuntimeOptions = {
   onCommand?: (text: string) => Promise<void> | void;
   onStatus?: (status: string) => void;
   onPhase?: (phase: VoiceRuntimeState) => void;
+  onSpeechLevel?: (level: number) => void;
 };
 
 type VoiceDebugSnapshot = {
@@ -43,6 +45,7 @@ export function useFlowlyVoiceRuntime({
   onCommand,
   onStatus,
   onPhase,
+  onSpeechLevel,
 }: VoiceRuntimeOptions = {}) {
   const enabledRef = useRef(enabled);
   const activeRef = useRef(false);
@@ -53,6 +56,7 @@ export function useFlowlyVoiceRuntime({
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<number | null>(null);
   const speechTimeoutRef = useRef<number | null>(null);
+  const speechEnvelopeRef = useRef<number | null>(null);
   const debugRef = useRef<VoiceDebugSnapshot>({
     ticks: 0,
     lastAudioKb: 0,
@@ -72,6 +76,7 @@ export function useFlowlyVoiceRuntime({
   const [isAwake, setIsAwake] = useState(false);
   const [state, setState] = useState<VoiceRuntimeState>("disabled");
   const [transcript, setTranscript] = useState("");
+  const [speechLevel, setSpeechLevel] = useState(0);
 
   useEffect(() => {
     enabledRef.current = enabled;
@@ -101,13 +106,17 @@ export function useFlowlyVoiceRuntime({
   }, [syncDebug]);
 
   const stopSpeaking = useCallback(() => {
+    if (speechEnvelopeRef.current) window.clearInterval(speechEnvelopeRef.current);
+    speechEnvelopeRef.current = null;
+    setSpeechLevel(0);
+    onSpeechLevel?.(0);
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
     if (speechTimeoutRef.current) window.clearTimeout(speechTimeoutRef.current);
     speechTimeoutRef.current = null;
     speakingRef.current = false;
-  }, []);
+  }, [onSpeechLevel]);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -307,7 +316,7 @@ export function useFlowlyVoiceRuntime({
   const speak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
 
-    const clean = text.replace(/[#*_`>\[\]]/g, " ").replace(/\s+/g, " ").slice(0, 520);
+    const clean = sanitizeSpeechText(text);
     if (!clean) return;
 
     stopSpeaking();
@@ -316,22 +325,35 @@ export function useFlowlyVoiceRuntime({
 
     const utterance = new SpeechSynthesisUtterance(clean);
     utterance.lang = "es-ES";
-    utterance.rate = 1.02;
-    utterance.pitch = 1.08;
-    utterance.volume = 0.94;
+    utterance.rate = 1.01;
+    utterance.pitch = 1.04;
+    utterance.volume = 0.96;
+    const voice = chooseSpanishVoice(window.speechSynthesis.getVoices());
+    if (voice) utterance.voice = voice;
+
+    const startedAt = performance.now();
+    speechEnvelopeRef.current = window.setInterval(() => {
+      const level = createSpeechEnvelope(clean, performance.now() - startedAt);
+      setSpeechLevel(level);
+      onSpeechLevel?.(level);
+    }, 55);
 
     const finish = () => {
       if (speechTimeoutRef.current) window.clearTimeout(speechTimeoutRef.current);
+      if (speechEnvelopeRef.current) window.clearInterval(speechEnvelopeRef.current);
       speechTimeoutRef.current = null;
+      speechEnvelopeRef.current = null;
       speakingRef.current = false;
+      setSpeechLevel(0);
+      onSpeechLevel?.(0);
       if (activeRef.current && !manualStopRef.current) setPhase("passive", "Voz activa. Puedes responderme cuando quieras");
     };
 
     utterance.onend = finish;
     utterance.onerror = finish;
-    speechTimeoutRef.current = window.setTimeout(finish, Math.min(12000, Math.max(1800, clean.length * 65)));
+    speechTimeoutRef.current = window.setTimeout(finish, Math.min(18000, Math.max(1800, clean.length * 68)));
     window.speechSynthesis.speak(utterance);
-  }, [setPhase, stopSpeaking]);
+  }, [onSpeechLevel, setPhase, stopSpeaking]);
 
   useEffect(() => {
     const ok = typeof window !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined";
@@ -350,5 +372,5 @@ export function useFlowlyVoiceRuntime({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearLoop, setPhase, stopSpeaking, stopStream]);
 
-  return { supported, active, isAwake, state, transcript, debug, refreshDebug, activate, deactivate, speak };
+  return { supported, active, isAwake, state, transcript, speechLevel, debug, refreshDebug, activate, deactivate, speak, stopSpeaking };
 }
