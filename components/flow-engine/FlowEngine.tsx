@@ -210,7 +210,7 @@ export default function FlowEngine() {
     }
 
     navigationLock.current = true;
-    behaviourRef.current?.noteActivity();
+    behaviourRef.current?.signalActivity("navigation");
 
     try {
       let element = api.findElement(target.key);
@@ -267,6 +267,41 @@ export default function FlowEngine() {
     }
   }, []);
 
+  const goToThrone = useCallback(async () => {
+    if (navigationLock.current || thronedRef.current || dragRef.current.active) return;
+    const throne = throneRef.current?.getBoundingClientRect();
+    if (!throne) return;
+
+    navigationLock.current = true;
+    dispatch({ type: "bubble", text: "Voy a descansar un momento. Sigo pendiente de ti." });
+    dispatch({ type: "open", open: false });
+    movementAbortRef.current?.abort();
+    const movement = new AbortController();
+    movementAbortRef.current = movement;
+
+    try {
+      const size = getCompactSize();
+      const destination = {
+        left: clamp(throne.left + throne.width / 2 - size.width / 2, 0, Math.max(0, window.innerWidth - size.width)),
+        top: clamp(throne.top - 12, 0, Math.max(0, window.innerHeight - size.height)),
+      };
+      await walkFlowTo(stateRef.current.position, destination, {
+        onPosition: (position) => dispatch({ type: "position", ...position }),
+        onFacing: (facing) => dispatch({ type: "facing", facing }),
+        onWalking: (walking) => dispatch({ type: "mode", mode: walking ? "walking" : "idle" }),
+        onGait: (gait) => dispatch({ type: "gait", gait }),
+      }, { signal: movement.signal });
+      if (movement.signal.aborted) return;
+      setIsThroned(true);
+      thronedRef.current = true;
+      dispatch({ type: "mode", mode: "seated" });
+      dispatch({ type: "facing", facing: "front" });
+    } finally {
+      movementAbortRef.current = null;
+      navigationLock.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     if (!enabled) return;
     const client = new FlowGatewayClient({
@@ -309,13 +344,30 @@ export default function FlowEngine() {
     const behaviour = new FlowBehaviourEngine({
       getMode: () => stateRef.current.mode,
       getEmotion: () => stateRef.current.emotion,
-      isBlocked: () => navigationLock.current || introRef.current !== "ready" || dragRef.current.active || thronedRef.current,
+      isBlocked: () => navigationLock.current || introRef.current !== "ready" || dragRef.current.active,
+      isThroned: () => thronedRef.current,
       onDecision: (decision) => {
+        services.events.emit("behaviour:goal", {
+          goal: decision.goal,
+          routine: decision.routine,
+          behaviour: decision.id,
+          priority: decision.priority,
+        });
         dispatch({ type: "behaviour", pulse: decision.pulse, id: decision.id });
+        if (decision.command === "wake") {
+          setIsThroned(false);
+          thronedRef.current = false;
+          dispatch({ type: "position", ...getHomePosition() });
+          dispatch({ type: "bubble", text: "Aquí estoy. ¿Qué necesitas?" });
+        }
+        if (decision.command === "rest") {
+          void goToThrone();
+          return;
+        }
         dispatch({ type: "mode", mode: decision.mode });
       },
       onReturnToIdle: (decision) => {
-        dispatch({ type: "mode", mode: "idle" });
+        dispatch({ type: "mode", mode: thronedRef.current ? "seated" : "idle" });
         dispatch({ type: "behaviour", pulse: decision.pulse + 1, id: null });
       },
     });
@@ -323,9 +375,9 @@ export default function FlowEngine() {
     behaviourRef.current = behaviour;
     behaviour.start();
 
-    const markPointerActivity = () => { behaviour.noteActivity(); services.events.emit("activity:user", { source: "pointer" }); };
-    const markKeyboardActivity = () => { behaviour.noteActivity(); services.events.emit("activity:user", { source: "keyboard" }); };
-    const markScrollActivity = () => { behaviour.noteActivity(); services.events.emit("activity:user", { source: "scroll" }); };
+    const markPointerActivity = () => { behaviour.signalActivity("pointer"); services.events.emit("activity:user", { source: "pointer" }); };
+    const markKeyboardActivity = () => { behaviour.signalActivity("keyboard"); services.events.emit("activity:user", { source: "keyboard" }); };
+    const markScrollActivity = () => { behaviour.signalActivity("scroll"); services.events.emit("activity:user", { source: "scroll" }); };
     window.addEventListener("pointerdown", markPointerActivity, { passive: true });
     window.addEventListener("keydown", markKeyboardActivity);
     window.addEventListener("scroll", markScrollActivity, { passive: true });
@@ -337,7 +389,7 @@ export default function FlowEngine() {
       window.removeEventListener("keydown", markKeyboardActivity);
       window.removeEventListener("scroll", markScrollActivity);
     };
-  }, [enabled, services]);
+  }, [enabled, goToThrone, services]);
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (introRef.current !== "ready") return;
@@ -351,7 +403,7 @@ export default function FlowEngine() {
       offsetX: event.clientX - position.left,
       offsetY: event.clientY - position.top,
     };
-    behaviourRef.current?.noteActivity();
+    behaviourRef.current?.signalActivity("drag");
     services.events.emit("activity:user", { source: "drag" });
     if (thronedRef.current) {
       setIsThroned(false);
@@ -445,7 +497,7 @@ export default function FlowEngine() {
     if (!text) return;
 
     setInput("");
-    behaviourRef.current?.noteActivity();
+    behaviourRef.current?.signalActivity("chat");
     services.events.emit("activity:user", { source: "chat" });
     const userMessage = { id: uid("user"), role: "user" as const, text };
     dispatch({ type: "message", message: userMessage });

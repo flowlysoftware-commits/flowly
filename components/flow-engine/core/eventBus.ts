@@ -1,4 +1,4 @@
-import { FlowEmotion, FlowMessage, FlowMode, FlowPosition } from "../types";
+import { FlowEmotion, FlowMessage, FlowMode, FlowPosition, FlowUserActivitySource } from "../types";
 
 export type FlowCompanionEvents = {
   "runtime:mounted": { runtimeId: string };
@@ -9,7 +9,9 @@ export type FlowCompanionEvents = {
   "state:position": { position: FlowPosition };
   "chat:message": { message: FlowMessage };
   "navigation:requested": { target: string };
-  "activity:user": { source: "pointer" | "keyboard" | "scroll" | "chat" | "drag" };
+  "activity:user": { source: FlowUserActivitySource };
+  "behaviour:goal": { goal: string; routine: string; behaviour: string; priority: number };
+  "behaviour:interrupted": { behaviour: string; reason: string };
 };
 
 type EventName = keyof FlowCompanionEvents;
