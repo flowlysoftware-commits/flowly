@@ -54,19 +54,21 @@ function getHomePosition() {
 
 function getThronedSize() {
   return window.innerWidth <= 900
-    ? { width: 166, height: 247 }
-    : { width: 190, height: 282 };
+    ? { width: 176, height: 262 }
+    : { width: 202, height: 300 };
 }
 
 function getThronePosition(rect: DOMRect) {
   const size = getThronedSize();
-  // Calibrated against the visible cushion (roughly 63% down the artwork).
-  // Align Flow's pelvis, not the top edge of his canvas, with that anchor.
-  const seatCenterY = rect.top + rect.height * 0.63;
-  const pelvisRatio = 0.52;
+  // The visible cushion sits near 64% of the throne artwork. In the seated canvas
+  // the pelvis is near 55% of the frame after the real Sit clip reaches its end.
+  const seatCenterX = rect.left + rect.width * 0.5;
+  const seatCenterY = rect.top + rect.height * 0.64;
+  const pelvisRatioX = 0.5;
+  const pelvisRatioY = 0.55;
   return {
-    left: clamp(rect.left + rect.width / 2 - size.width / 2, 0, Math.max(0, window.innerWidth - size.width)),
-    top: clamp(seatCenterY - size.height * pelvisRatio, 0, Math.max(0, window.innerHeight - size.height)),
+    left: clamp(seatCenterX - size.width * pelvisRatioX, 8, Math.max(8, window.innerWidth - size.width - 8)),
+    top: clamp(seatCenterY - size.height * pelvisRatioY, 8, Math.max(8, window.innerHeight - size.height - 8)),
   };
 }
 

@@ -352,13 +352,12 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     activeBehaviourId.current = behaviourId;
     idleVariant.current = behaviourPulse % 6;
 
-    // Sitting and greeting are calibrated directly on the master rig. Some FBX
-    // clips classified by name were visually weak or used incompatible root/body
-    // orientation, so these two critical poses deliberately bypass the mixer.
-    if (mode === "seated" || mode === "waving") {
+    // The throne uses the real seated clip from the master FBX. Greeting remains
+    // procedural because it needs to be clearly readable in every viewport.
+    if (mode === "waving") {
       animationEngineRef.current?.stop(0.18);
     } else {
-      animationEngineRef.current?.playMode(mode, emotion);
+      animationEngineRef.current?.playMode(mode, emotion, { force: mode === "seated" });
     }
     // useFrame owns the Three.js clock; it will timestamp this state change.
   }, [mode, emotion.energy, emotion.stress, emotion.joy, emotion.attention, behaviourPulse, behaviourId]);
@@ -677,10 +676,15 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
 
     // The dedicated sitting clip bends the skeleton. This offset aligns the pelvis
     // with the throne cushion instead of leaving Flow floating above it.
-    const targetPresentationY = mode === "seated" ? -0.20 : 0;
-    const targetPresentationZ = mode === "seated" ? -0.08 : 0;
+    const targetPresentationY = mode === "seated" ? -0.08 : 0;
+    const targetPresentationZ = mode === "seated" ? -0.04 : 0;
+    const targetPresentationScale = mode === "seated" ? 0.92 : 1;
     presentation.current.position.y += (targetPresentationY - presentation.current.position.y) * Math.min(1, dt * 7.5);
     presentation.current.position.z += (targetPresentationZ - presentation.current.position.z) * Math.min(1, dt * 7.5);
+    const scaleAlpha = Math.min(1, dt * 7.5);
+    presentation.current.scale.x += (targetPresentationScale - presentation.current.scale.x) * scaleAlpha;
+    presentation.current.scale.y += (targetPresentationScale - presentation.current.scale.y) * scaleAlpha;
+    presentation.current.scale.z += (targetPresentationScale - presentation.current.scale.z) * scaleAlpha;
   });
 
   return (

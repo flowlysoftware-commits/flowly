@@ -148,7 +148,9 @@ function familyDefaults(family: FlowAnimationFamily) {
     case "point":
       return { priority: 90, cooldownMs: 9000, loop: "once" as const, blendIn: 0.18, blendOut: 0.22, playbackRate: [0.94, 1.04] as [number, number] };
     case "seated":
-      return { priority: 85, cooldownMs: 0, loop: "repeat" as const, blendIn: 0.32, blendOut: 0.32, playbackRate: [0.72, 0.84] as [number, number] };
+      // "Sit" is a transition clip. Play it once and hold the final frame so Flow
+      // does not repeatedly stand up and sit down while resting on the throne.
+      return { priority: 85, cooldownMs: 0, loop: "once" as const, blendIn: 0.28, blendOut: 0.24, playbackRate: [0.9, 0.98] as [number, number] };
     case "talk":
       return { priority: 60, cooldownMs: 1400, loop: "repeat" as const, blendIn: 0.22, blendOut: 0.24, playbackRate: [0.92, 1.08] as [number, number] };
     case "think":
