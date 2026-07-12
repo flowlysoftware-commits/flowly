@@ -4,16 +4,12 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, useFBX, useTexture } from "@react-three/drei";
 import {
-  AnimationAction,
   AnimationClip,
-  AnimationMixer,
   Box3,
   Color,
   DoubleSide,
   Euler,
   Group,
-  LoopOnce,
-  LoopRepeat,
   MathUtils,
   Mesh,
   MeshStandardMaterial,
@@ -24,7 +20,8 @@ import {
   Vector3,
 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { buildAnimationCatalog, chooseClipForMode } from "./animationCatalog";
+import { buildAnimationCatalog } from "./animationCatalog";
+import { FlowAnimationEngine } from "./animationEngine";
 import { FLOW_FRONT_YAW, FLOW_MODEL_URL } from "./animationLibrary";
 import { FlowEmotion, FlowFacing, FlowMode } from "./types";
 
@@ -287,10 +284,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   const restPose = useRef(new Map<Object3D, RestTransform>());
   const rig = useRef<BoneRig>({});
   const face = useRef<FaceRig>({ meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [] });
-  const mixerRef = useRef<AnimationMixer | null>(null);
-  const activeActionRef = useRef<AnimationAction | null>(null);
-  const activeClipRef = useRef<AnimationClip | null>(null);
-  const recentClipsRef = useRef<string[]>([]);
+  const animationEngineRef = useRef<FlowAnimationEngine | null>(null);
   const nextIdleVariationAt = useRef(0);
   const blinkStartedAt = useRef(-1);
   const nextBlinkAt = useRef(1.8);
@@ -387,57 +381,22 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   }, [seatedSource, model]);
 
   useEffect(() => {
-    const mixer = new AnimationMixer(model);
-    mixerRef.current = mixer;
+    const engine = new FlowAnimationEngine(model, catalog);
+    animationEngineRef.current = engine;
     return () => {
-      mixer.stopAllAction();
-      mixer.uncacheRoot(model);
-      mixerRef.current = null;
+      engine.dispose();
+      if (animationEngineRef.current === engine) animationEngineRef.current = null;
     };
-  }, [model]);
-
-  const playClip = (clip: AnimationClip | null, requestedMode: FlowMode) => {
-    const mixer = mixerRef.current;
-    if (!mixer) return;
-    const previous = activeActionRef.current;
-
-    if (!clip) {
-      previous?.fadeOut(0.22);
-      activeActionRef.current = null;
-      activeClipRef.current = null;
-      return;
-    }
-
-    if (activeClipRef.current?.uuid === clip.uuid && previous) return;
-
-    const action = mixer.clipAction(clip, model);
-    action.reset();
-    action.enabled = true;
-    action.setEffectiveWeight(1);
-    action.setEffectiveTimeScale(
-      requestedMode === "walking" ? 1.08 : requestedMode === "seated" ? 0.72 : 1,
-    );
-
-    const oneShot = requestedMode === "waving" || requestedMode === "pointing";
-    action.setLoop(oneShot ? LoopOnce : LoopRepeat, oneShot ? 1 : Infinity);
-    action.clampWhenFinished = oneShot;
-    action.fadeIn(0.24).play();
-    previous?.fadeOut(0.24);
-
-    activeActionRef.current = action;
-    activeClipRef.current = clip;
-    recentClipsRef.current = [clip.name, ...recentClipsRef.current.filter((name) => name !== clip.name)].slice(0, 5);
-  };
+  }, [model, catalog]);
 
   useEffect(() => {
     activeBehaviourId.current = behaviourId;
     idleVariant.current = behaviourPulse % 6;
-    const clip = mode === "seated"
-      ? seatedClip
-      : chooseClipForMode(catalog, mode, emotion, recentClipsRef.current);
-    playClip(clip, mode);
+    animationEngineRef.current?.playMode(mode, emotion, {
+      fallbackClip: mode === "seated" ? seatedClip : null,
+    });
     // useFrame owns the Three.js clock; it will timestamp this state change.
-  }, [catalog, seatedClip, mode, emotion.energy, emotion.stress, behaviourPulse, behaviourId]);
+  }, [seatedClip, mode, emotion.energy, emotion.stress, emotion.joy, emotion.attention, behaviourPulse, behaviourId]);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -452,7 +411,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     const dt = Math.min(delta, 0.05);
     const elapsed = state.clock.elapsedTime;
     const alpha = 1 - Math.exp(-dt * 10);
-    mixerRef.current?.update(dt);
+    animationEngineRef.current?.update(dt);
 
     if (lastMode.current !== mode) {
       lastMode.current = mode;
@@ -471,11 +430,10 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     const empathy = MathUtils.clamp(emotion.empathy, 0, 1);
     const stress = MathUtils.clamp(emotion.stress, 0, 1);
     const modeTime = elapsed - modeEnteredAt.current;
-    const hasClip = Boolean(activeActionRef.current && activeClipRef.current);
+    const hasClip = Boolean(animationEngineRef.current?.hasActiveClip);
 
     if (mode === "idle" && elapsed >= nextIdleVariationAt.current && catalog.idle.length > 1) {
-      const clip = chooseClipForMode(catalog, "idle", emotion, recentClipsRef.current);
-      playClip(clip, "idle");
+      animationEngineRef.current?.playMode("idle", emotion, { force: true });
       nextIdleVariationAt.current = elapsed + 7 + Math.random() * 9;
     }
 
