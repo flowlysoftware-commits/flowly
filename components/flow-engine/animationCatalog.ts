@@ -9,6 +9,7 @@ export type FlowAnimationFamily =
   | "point"
   | "think"
   | "listen"
+  | "seated"
   | "other";
 
 export type FlowAnimationLoop = "repeat" | "once";
@@ -54,6 +55,7 @@ const KEYWORDS: Record<Exclude<FlowAnimationFamily, "other">, RegExp> = {
   point: /\b(point|pointing|show|indicate|direction|present)\b/i,
   think: /\b(think|thinking|ponder|wonder|consider|confused|reflect)\b/i,
   listen: /\b(listen|listening|attention|attentive|hear|nod|observe)\b/i,
+  seated: /\b(sit|sitting|seated|chair|throne)\b/i,
 };
 
 const MODE_TO_FAMILY: Record<FlowMode, FlowAnimationFamily | null> = {
@@ -65,7 +67,7 @@ const MODE_TO_FAMILY: Record<FlowMode, FlowAnimationFamily | null> = {
   waving: "wave",
   pointing: "point",
   dragging: null,
-  seated: null,
+  seated: "seated",
   error: "idle",
 };
 
@@ -145,6 +147,8 @@ function familyDefaults(family: FlowAnimationFamily) {
     case "wave":
     case "point":
       return { priority: 90, cooldownMs: 9000, loop: "once" as const, blendIn: 0.18, blendOut: 0.22, playbackRate: [0.94, 1.04] as [number, number] };
+    case "seated":
+      return { priority: 85, cooldownMs: 0, loop: "repeat" as const, blendIn: 0.32, blendOut: 0.32, playbackRate: [0.72, 0.84] as [number, number] };
     case "talk":
       return { priority: 60, cooldownMs: 1400, loop: "repeat" as const, blendIn: 0.22, blendOut: 0.24, playbackRate: [0.92, 1.08] as [number, number] };
     case "think":
@@ -180,6 +184,7 @@ export function buildAnimationCatalog(clips: AnimationClip[]): FlowAnimationCata
     point: [],
     think: [],
     listen: [],
+    seated: [],
     other: [],
   };
 
@@ -216,11 +221,14 @@ function emotionMultiplier(entry: CataloguedClip, emotion: FlowEmotion) {
   const joy = MathUtils.clamp(emotion.joy, 0, 1);
 
   switch (entry.family) {
+    case "seated":
+      return { priority: 85, cooldownMs: 0, loop: "repeat" as const, blendIn: 0.32, blendOut: 0.32, playbackRate: [0.72, 0.84] as [number, number] };
     case "talk": return 0.75 + energy * 0.65 + joy * 0.2;
     case "listen": return 0.7 + attention * 0.7;
     case "think": return 0.75 + emotion.curiosity * 0.55;
     case "idle": return 1.15 - stress * 0.25 + (1 - energy) * 0.18;
     case "walk": return 0.8 + energy * 0.4;
+    case "seated": return 1.1 + (1 - energy) * 0.2;
     default: return 1;
   }
 }

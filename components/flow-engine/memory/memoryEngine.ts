@@ -84,6 +84,32 @@ export class FlowMemoryEngine {
     };
   }
 
+
+  answerQuestion(text: string): string | null {
+    const query = normalize(text).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const facts = this.snapshot.facts;
+    const find = (kind: FlowMemoryKind, key?: string) => facts.find((fact) => fact.kind === kind && (!key || fact.key === key));
+
+    if (/como me llamo|cual es mi nombre|sabes mi nombre/.test(query)) {
+      const name = find("person", "user-name");
+      return name ? `Te llamas ${name.value}.` : "Todavía no me has dicho tu nombre. Dime «me llamo…» y lo recordaré.";
+    }
+    if (/como se llama (mi|nuestra) empresa|cual es (mi|nuestra) empresa|sabes que empresa/.test(query)) {
+      const company = find("company", "name");
+      return company ? `Tu empresa se llama ${company.value}.` : "Todavía no tengo guardado el nombre de tu empresa.";
+    }
+    if (/que recuerdas de mi|que sabes de mi|muestrame tu memoria|tu memoria/.test(query)) {
+      const remembered = facts.slice(0, 8).map((fact) => fact.value);
+      if (!remembered.length) return "Mi memoria está activa, pero todavía no me has pedido que recuerde ningún dato personal o preferencia.";
+      return `Recuerdo esto: ${remembered.join("; ")}.`;
+    }
+    if (/que prefiero|cuales son mis preferencias|mis preferencias/.test(query)) {
+      const preferences = facts.filter((fact) => fact.kind === "preference").slice(0, 6);
+      return preferences.length ? `Recuerdo estas preferencias: ${preferences.map((item) => item.value).join("; ")}.` : "Todavía no tengo preferencias tuyas guardadas.";
+    }
+    return null;
+  }
+
   recordMessage(message: FlowMessage) {
     this.snapshot.recentConversation = [...this.snapshot.recentConversation, message].slice(-this.options.maxConversation);
     if (message.role === "user") {

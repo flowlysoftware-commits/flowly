@@ -50,6 +50,21 @@ function getHomePosition() {
   };
 }
 
+
+function getThronedSize() {
+  return window.innerWidth <= 900
+    ? { width: 166, height: 247 }
+    : { width: 190, height: 282 };
+}
+
+function getThronePosition(rect: DOMRect) {
+  const size = getThronedSize();
+  return {
+    left: clamp(rect.left + rect.width / 2 - size.width / 2, 0, Math.max(0, window.innerWidth - size.width)),
+    top: clamp(rect.top - 4, 0, Math.max(0, window.innerHeight - size.height)),
+  };
+}
+
 function getWelcomePosition() {
   const width = Math.min(window.innerWidth * 0.72, 680);
   const height = Math.min(window.innerHeight * 0.84, 760);
@@ -295,6 +310,19 @@ export default function FlowEngine() {
     memoryRef.current?.recordMessage(userMessage);
     services.events.emit("chat:message", { message: userMessage });
 
+    const memoryAnswer = memoryRef.current?.answerQuestion(text);
+    if (memoryAnswer) {
+      const flowMessage = { id: uid("flow"), role: "flow" as const, text: memoryAnswer };
+      dispatch({ type: "message", message: flowMessage });
+      dispatch({ type: "bubble", text: memoryAnswer });
+      dispatch({ type: "open", open: true });
+      dispatch({ type: "mode", mode: "talking" });
+      memoryRef.current?.recordMessage(flowMessage);
+      if (voiceActiveRef.current) voiceSpeakRef.current(memoryAnswer);
+      window.setTimeout(() => dispatch({ type: "mode", mode: thronedRef.current ? "seated" : "idle" }), Math.min(4200, 900 + memoryAnswer.length * 22));
+      return;
+    }
+
     const targets: FlowPanelTarget[] = window.FlowPanelIntegration?.targets || [];
     const target = detectNavigationTarget(text, targets);
     if (target) {
@@ -353,11 +381,7 @@ export default function FlowEngine() {
     movementAbortRef.current = movement;
 
     try {
-      const size = getCompactSize();
-      const destination = {
-        left: clamp(throne.left + throne.width / 2 - size.width / 2, 0, Math.max(0, window.innerWidth - size.width)),
-        top: clamp(throne.top - 12, 0, Math.max(0, window.innerHeight - size.height)),
-      };
+      const destination = getThronePosition(throne);
       await walkFlowTo(stateRef.current.position, destination, {
         onPosition: (position) => dispatch({ type: "position", ...position }),
         onFacing: (facing) => dispatch({ type: "facing", facing }),
@@ -637,17 +661,7 @@ export default function FlowEngine() {
     setThroneHover(false);
 
     if (throne && droppedOnThrone) {
-      const size = getCompactSize();
-      const left = clamp(
-        throne.left + throne.width / 2 - size.width / 2,
-        0,
-        Math.max(0, window.innerWidth - size.width),
-      );
-      const top = clamp(
-        throne.top - 12,
-        0,
-        Math.max(0, window.innerHeight - size.height),
-      );
+      const { left, top } = getThronePosition(throne);
 
       setIsThroned(true);
       thronedRef.current = true;
@@ -750,8 +764,8 @@ export default function FlowEngine() {
         >
           <div className="flow-engine-throne-aura" aria-hidden="true" />
           <img
-            className={`flow-engine-throne-art ${isThroned ? "is-seated-art" : ""}`}
-            src={isThroned ? "/flow/flow-throne-seated.png" : "/flow/flow-throne.png"}
+            className="flow-engine-throne-art"
+            src="/flow/flow-throne.png"
             alt={isThroned ? "Flow descansando en su trono" : ""}
             draggable={false}
             aria-hidden={!isThroned}
