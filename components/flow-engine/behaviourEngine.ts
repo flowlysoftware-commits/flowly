@@ -45,7 +45,9 @@ type FlowBehaviourEngineOptions = {
 };
 
 const RULES: BehaviourRule[] = [
-  { id: "wake", goal: "engage", routine: "acknowledge-user", mode: "listening", priority: 100, interruptible: false, command: "wake", duration: [1000, 1700], cooldown: [4000, 6500], score: (c) => c.isThroned && Boolean(c.lastActivity && c.now - c.lastActivity.at < 2200) ? 100 : 0 },
+  // Flow remains seated until the user explicitly addresses him through chat.
+  // Generic pointer/scroll/keyboard activity elsewhere in the panel must not wake him.
+  { id: "wake", goal: "engage", routine: "acknowledge-user", mode: "listening", priority: 100, interruptible: false, command: "wake", duration: [1000, 1700], cooldown: [4000, 6500], score: (c) => c.isThroned && c.lastActivity?.source === "chat" && c.now - c.lastActivity.at < 2200 ? 100 : 0 },
   { id: "listen", goal: "engage", routine: "acknowledge-user", mode: "listening", priority: 85, interruptible: true, duration: [900, 1700], cooldown: [4500, 8000], score: (c) => c.lastActivity && c.now - c.lastActivity.at < 1800 ? 8 + c.emotion.attention * 4 : 0 },
   { id: "recover-calm", goal: "recover", routine: "calm-down", mode: "idle", priority: 80, interruptible: false, duration: [2400, 4200], cooldown: [8500, 14000], score: (c) => c.emotion.stress > 0.58 ? 8 + c.emotion.stress * 6 : 0 },
   { id: "observe", goal: "explore", routine: "inspect-panel", mode: "listening", priority: 45, interruptible: true, duration: [1500, 2800], cooldown: [7000, 12000], score: (c) => 2 + c.emotion.attention * 2.5 + c.emotion.curiosity * 1.4 },

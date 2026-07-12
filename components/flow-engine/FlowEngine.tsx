@@ -59,9 +59,13 @@ function getThronedSize() {
 
 function getThronePosition(rect: DOMRect) {
   const size = getThronedSize();
+  // Calibrated against the visible cushion (roughly 63% down the artwork).
+  // Align Flow's pelvis, not the top edge of his canvas, with that anchor.
+  const seatCenterY = rect.top + rect.height * 0.63;
+  const pelvisRatio = 0.52;
   return {
     left: clamp(rect.left + rect.width / 2 - size.width / 2, 0, Math.max(0, window.innerWidth - size.width)),
-    top: clamp(rect.top - 4, 0, Math.max(0, window.innerHeight - size.height)),
+    top: clamp(seatCenterY - size.height * pelvisRatio, 0, Math.max(0, window.innerHeight - size.height)),
   };
 }
 

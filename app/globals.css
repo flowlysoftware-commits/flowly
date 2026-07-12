@@ -7900,3 +7900,21 @@ iframe[src*="companion-webgl"] {
 @media (max-width: 900px) {
   .flow-engine-character.is-throned { width: 150px !important; height: 217px !important; transform: translateY(5px); }
 }
+
+/* Flow Companion — locomotion / greeting / throne calibration 2026-07-12 */
+.flow-engine-character.is-throned {
+  width: 190px !important;
+  height: 282px !important;
+  transform: none !important;
+  transform-origin: 50% 52%;
+}
+.flow-engine-throne-seat-anchor {
+  top: 63% !important;
+}
+@media (max-width: 900px) {
+  .flow-engine-character.is-throned {
+    width: 166px !important;
+    height: 247px !important;
+    transform: none !important;
+  }
+}

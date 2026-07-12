@@ -351,7 +351,15 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   useEffect(() => {
     activeBehaviourId.current = behaviourId;
     idleVariant.current = behaviourPulse % 6;
-    animationEngineRef.current?.playMode(mode, emotion);
+
+    // Sitting and greeting are calibrated directly on the master rig. Some FBX
+    // clips classified by name were visually weak or used incompatible root/body
+    // orientation, so these two critical poses deliberately bypass the mixer.
+    if (mode === "seated" || mode === "waving") {
+      animationEngineRef.current?.stop(0.18);
+    } else {
+      animationEngineRef.current?.playMode(mode, emotion);
+    }
     // useFrame owns the Three.js clock; it will timestamp this state change.
   }, [mode, emotion.energy, emotion.stress, emotion.joy, emotion.attention, behaviourPulse, behaviourId]);
 
@@ -500,22 +508,26 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         // compatible with the master rig even when no dedicated sit clip exists.
         const settle = MathUtils.smoothstep(Math.min(modeTime / 0.75, 1), 0, 1);
         const relaxedBreath = Math.sin(elapsed * 1.15) * 0.006;
-        pelvisY = -0.075 * settle;
-        chestX = (0.028 + relaxedBreath) * settle;
-        chestZ = Math.sin(elapsed * 0.35) * 0.008 * settle;
-        leftThighX = -0.86 * settle;
-        rightThighX = -0.86 * settle;
-        leftCalfX = 1.02 * settle;
-        rightCalfX = 1.02 * settle;
-        leftFootX = -0.10 * settle;
-        rightFootX = -0.10 * settle;
-        leftUpperX = 0.16 * settle;
-        rightUpperX = 0.16 * settle;
-        leftUpperZ = 0.075 * settle;
-        rightUpperZ = -0.075 * settle;
-        leftForeY = -0.12 * settle;
-        rightForeY = 0.12 * settle;
-        headZ = Math.sin(elapsed * 0.28) * 0.006;
+        // Mixamo-style rigs bend the thighs forward on positive local X and the
+        // knees backwards on negative local X. The previous signs produced an
+        // almost kneeling/backwards pose on the throne.
+        pelvisY = -0.115 * settle;
+        chestX = (-0.055 + relaxedBreath) * settle;
+        chestZ = Math.sin(elapsed * 0.35) * 0.006 * settle;
+        leftThighX = 1.08 * settle;
+        rightThighX = 1.08 * settle;
+        leftCalfX = -1.22 * settle;
+        rightCalfX = -1.22 * settle;
+        leftFootX = 0.16 * settle;
+        rightFootX = 0.16 * settle;
+        leftUpperX = 0.34 * settle;
+        rightUpperX = 0.34 * settle;
+        leftUpperZ = 0.12 * settle;
+        rightUpperZ = -0.12 * settle;
+        leftForeY = -0.24 * settle;
+        rightForeY = 0.24 * settle;
+        headX = 0.025 * settle;
+        headZ = Math.sin(elapsed * 0.28) * 0.005;
       } else if (mode === "dragging") {
         // Mii-style dangling reaction while the user grabs Flow by the head.
         const kick = Math.sin(elapsed * 11.5);
@@ -556,18 +568,20 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         chestY = -Math.sin(phase) * 0.018;
         chestX = 0.016;
       } else if (mode === "waving") {
-        // Deliberately restrained fallback: one-arm greeting without forcing the shoulder behind the body.
-        const intro = MathUtils.smoothstep(Math.min(modeTime / 0.45, 1), 0, 1);
-        const outro = modeTime > 1.45
-          ? 1 - MathUtils.smoothstep(Math.min((modeTime - 1.45) / 0.55, 1), 0, 1)
+        // Clear, readable greeting: raise the whole arm, bend the elbow and wave
+        // from the forearm. It remains below extreme anatomical limits.
+        const intro = MathUtils.smoothstep(Math.min(modeTime / 0.32, 1), 0, 1);
+        const outro = modeTime > 2.05
+          ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.05) / 0.42, 1), 0, 1)
           : 1;
         const amount = intro * outro;
-        const wave = Math.sin(modeTime * 7.2) * 0.12;
-        rightUpperX = -0.035 * amount;
-        rightUpperZ = -0.14 * amount;
-        rightForeY = (-0.07 + wave * 0.24) * amount;
-        headZ = 0.025 * amount;
-        chestY = -0.022 * amount;
+        const wave = Math.sin(modeTime * 8.8);
+        rightUpperX = -0.22 * amount;
+        rightUpperZ = -0.82 * amount;
+        rightForeY = (-0.58 + wave * 0.32) * amount;
+        headZ = 0.045 * amount;
+        headY = -0.035 * amount;
+        chestY = -0.035 * amount;
       } else if (mode === "pointing") {
         const amount = MathUtils.smoothstep(Math.min(modeTime / 0.35, 1), 0, 1);
         rightUpperX = -0.025 * amount;
@@ -655,14 +669,16 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     setMorph(face.current, face.current.mouthOpen, talkAmount * 0.82);
 
     if (!presentation.current) return;
-    const sideTurn = facing === "left" ? 0.58 : facing === "right" ? -0.58 : 0;
+    // The master model faces +X. FLOW_FRONT_YAW turns it toward the camera;
+    // screen-left/right therefore require a full quarter turn, not a small lean.
+    const sideTurn = facing === "left" ? -Math.PI / 2 : facing === "right" ? Math.PI / 2 : 0;
     const targetYaw = FLOW_FRONT_YAW + sideTurn;
     presentation.current.rotation.y += (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 7.2);
 
     // The dedicated sitting clip bends the skeleton. This offset aligns the pelvis
     // with the throne cushion instead of leaving Flow floating above it.
-    const targetPresentationY = mode === "seated" ? -0.30 : 0;
-    const targetPresentationZ = mode === "seated" ? -0.04 : 0;
+    const targetPresentationY = mode === "seated" ? -0.20 : 0;
+    const targetPresentationZ = mode === "seated" ? -0.08 : 0;
     presentation.current.position.y += (targetPresentationY - presentation.current.position.y) * Math.min(1, dt * 7.5);
     presentation.current.position.z += (targetPresentationZ - presentation.current.position.z) * Math.min(1, dt * 7.5);
   });
