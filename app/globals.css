@@ -7822,3 +7822,29 @@ iframe[src*="companion-webgl"] {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.06); }
 }
+
+/* Flow Companion · Phase 10 · Initiative layer */
+.flow-engine-initiative {
+  position: fixed;
+  right: 24px;
+  bottom: 500px;
+  z-index: 1000002;
+  width: min(340px, calc(100vw - 28px));
+  padding: 16px;
+  border: 1px solid rgba(103, 232, 249, .24);
+  border-radius: 20px;
+  background: rgba(2, 6, 23, .96);
+  color: #fff;
+  pointer-events: auto;
+  box-shadow: 0 24px 70px rgba(2, 6, 23, .5);
+  backdrop-filter: blur(22px);
+}
+.flow-engine-initiative.is-high { border-color: rgba(251, 191, 36, .48); }
+.flow-engine-initiative small { display:block; margin-bottom:4px; color:#67e8f9; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.flow-engine-initiative strong { display:block; padding-right:28px; font-size:15px; }
+.flow-engine-initiative p { margin:8px 0 13px; color:#cbd5e1; font-size:12px; line-height:1.5; }
+.flow-engine-initiative > div { display:flex; gap:8px; }
+.flow-engine-initiative > div button { border:0; border-radius:10px; padding:8px 11px; background:#22d3ee; color:#082f49; font-size:11px; font-weight:800; cursor:pointer; }
+.flow-engine-initiative > div button.is-secondary { background:rgba(148,163,184,.12); color:#e2e8f0; }
+.flow-engine-initiative-close { position:absolute; top:11px; right:11px; width:28px; height:28px; display:grid; place-items:center; border:0; border-radius:9px; background:rgba(148,163,184,.1); color:#e2e8f0; cursor:pointer; }
+@media(max-width:640px){.flow-engine-initiative{right:14px;bottom:390px}}

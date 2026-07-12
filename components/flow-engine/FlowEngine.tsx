@@ -8,6 +8,8 @@ import { FlowBehaviourEngine } from "./behaviourEngine";
 import { detectNavigationTarget, getTargetApproach, highlightTarget, isElementActionable } from "./domNavigator";
 import { FlowGatewayClient } from "./gatewayClient";
 import { FlowEmotionEngine } from "./emotionEngine";
+import { FlowAutonomyEngine } from "./autonomy/autonomyEngine";
+import type { FlowInitiative } from "./autonomy/types";
 import { FlowMemoryEngine } from "./memory/memoryEngine";
 import { FlowToolExecutor } from "./tools/executor";
 import { walkFlowTo } from "./movementController";
@@ -79,6 +81,7 @@ export default function FlowEngine() {
   const [introPhase, setIntroPhase] = useState<IntroPhase>("hidden");
   const [isThroned, setIsThroned] = useState(false);
   const [throneHover, setThroneHover] = useState(false);
+  const [initiative, setInitiative] = useState<FlowInitiative | null>(null);
   const stateRef = useRef(state);
   const introRef = useRef<IntroPhase>(introPhase);
   const clientRef = useRef<FlowGatewayClient | null>(null);
@@ -86,6 +89,7 @@ export default function FlowEngine() {
   const movementAbortRef = useRef<AbortController | null>(null);
   const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
   const emotionRef = useRef<FlowEmotionEngine | null>(null);
+  const autonomyRef = useRef<FlowAutonomyEngine | null>(null);
   const memoryRef = useRef<FlowMemoryEngine | null>(null);
   const toolExecutorRef = useRef(new FlowToolExecutor(services.logger));
   const voiceSpeakRef = useRef<(text: string) => void>(() => undefined);
@@ -283,6 +287,7 @@ export default function FlowEngine() {
     if (!text) return;
 
     behaviourRef.current?.signalActivity("chat");
+    autonomyRef.current?.signalUserActivity();
     emotionRef.current?.stimulate({ type: "message-sent" });
     services.events.emit("activity:user", { source: "chat" });
     const userMessage = { id: uid("user"), role: "user" as const, text };
@@ -470,6 +475,49 @@ export default function FlowEngine() {
 
 
   useEffect(() => {
+    if (!enabled || introPhase !== "ready") return;
+
+    const autonomy = new FlowAutonomyEngine({
+      storageKey: FLOW_COMPANION_CONFIG.autonomyStorageKey,
+      evaluateEveryMs: FLOW_COMPANION_CONFIG.autonomyEvaluateEveryMs,
+      getObservation: () => ({
+        pathname: window.location.pathname,
+        conversation: stateRef.current.messages,
+        memory: memoryRef.current?.buildContext(),
+        panel: window.FlowPanelIntegration?.context?.(),
+        emotion: stateRef.current.emotion,
+        connected: stateRef.current.connected,
+        isBusy:
+          navigationLock.current ||
+          dragRef.current.active ||
+          !["idle", "seated"].includes(stateRef.current.mode),
+        now: Date.now(),
+      }),
+      onInitiative: (nextInitiative) => {
+        setInitiative(nextInitiative);
+        dispatch({ type: "bubble", text: nextInitiative.message });
+        dispatch({ type: "open", open: false });
+        dispatch({ type: "mode", mode: nextInitiative.priority === "high" ? "thinking" : "listening" });
+        emotionRef.current?.stimulate({ type: "message-received" });
+        services.events.emit("initiative:created", { initiative: nextInitiative });
+      },
+      onDismiss: (dismissed, reason) => {
+        if (initiative?.id === dismissed.id) setInitiative(null);
+        services.events.emit("initiative:dismissed", { initiative: dismissed, reason });
+      },
+    });
+
+    autonomyRef.current = autonomy;
+    autonomy.start();
+    return () => {
+      autonomy.stop();
+      autonomyRef.current = null;
+      setInitiative(null);
+    };
+  }, [enabled, introPhase, services]);
+
+
+  useEffect(() => {
     if (!enabled) return;
     const behaviour = new FlowBehaviourEngine({
       getMode: () => stateRef.current.mode,
@@ -507,9 +555,9 @@ export default function FlowEngine() {
     behaviourRef.current = behaviour;
     behaviour.start();
 
-    const markPointerActivity = () => { behaviour.signalActivity("pointer"); emotionRef.current?.stimulate({ type: "user-activity", source: "pointer" }); services.events.emit("activity:user", { source: "pointer" }); };
-    const markKeyboardActivity = () => { behaviour.signalActivity("keyboard"); emotionRef.current?.stimulate({ type: "user-activity", source: "keyboard" }); services.events.emit("activity:user", { source: "keyboard" }); };
-    const markScrollActivity = () => { behaviour.signalActivity("scroll"); services.events.emit("activity:user", { source: "scroll" }); };
+    const markPointerActivity = () => { behaviour.signalActivity("pointer"); autonomyRef.current?.signalUserActivity(); emotionRef.current?.stimulate({ type: "user-activity", source: "pointer" }); services.events.emit("activity:user", { source: "pointer" }); };
+    const markKeyboardActivity = () => { behaviour.signalActivity("keyboard"); autonomyRef.current?.signalUserActivity(); emotionRef.current?.stimulate({ type: "user-activity", source: "keyboard" }); services.events.emit("activity:user", { source: "keyboard" }); };
+    const markScrollActivity = () => { behaviour.signalActivity("scroll"); autonomyRef.current?.signalUserActivity(); services.events.emit("activity:user", { source: "scroll" }); };
     window.addEventListener("pointerdown", markPointerActivity, { passive: true });
     window.addEventListener("keydown", markKeyboardActivity);
     window.addEventListener("scroll", markScrollActivity, { passive: true });
@@ -616,6 +664,44 @@ export default function FlowEngine() {
     dispatch({ type: "mode", mode: "idle" });
     dispatch({ type: "facing", facing: "front" });
     dispatch({ type: "bubble", text: "Puedes colocarme donde te resulte más cómodo." });
+  }
+
+  async function acceptInitiative(current: FlowInitiative) {
+    autonomyRef.current?.acknowledge(current.id);
+    setInitiative(null);
+    services.events.emit("initiative:accepted", { initiative: current });
+    dispatch({ type: "mode", mode: "thinking" });
+
+    if (current.action?.target) {
+      const target = current.action.target.replace(/^\/dashboard\/?/, "") || current.action.target;
+      await navigate(target);
+      return;
+    }
+
+    if (current.action?.toolId) {
+      const result = await toolExecutorRef.current.execute(
+        {
+          id: current.action.toolId,
+          arguments: current.action.arguments || {},
+          source: "system",
+        },
+        { pathname: window.location.pathname, panel: window.FlowPanelIntegration },
+      );
+      dispatch({ type: "bubble", text: result.message });
+      dispatch({ type: "open", open: true });
+      dispatch({ type: "mode", mode: result.ok ? "idle" : "error" });
+      return;
+    }
+
+    dispatch({ type: "bubble", text: "Perfecto. Lo tendré en cuenta y seguiré pendiente." });
+    dispatch({ type: "mode", mode: "idle" });
+  }
+
+  function dismissInitiative() {
+    autonomyRef.current?.dismiss("user-dismissed");
+    setInitiative(null);
+    dispatch({ type: "mode", mode: thronedRef.current ? "seated" : "idle" });
+    dispatch({ type: "bubble", text: "Entendido. No te molesto con esto." });
   }
 
   async function setTemporaryMode(mode: FlowMode, duration: number) {
@@ -753,6 +839,30 @@ export default function FlowEngine() {
           </button>
         </div>}
       </div>
+
+      {introPhase === "ready" && initiative && !state.open && !isThroned && (
+        <aside className={`flow-engine-initiative is-${initiative.priority}`} role="status">
+          <button
+            type="button"
+            className="flow-engine-initiative-close"
+            aria-label="Descartar propuesta"
+            onClick={dismissInitiative}
+          >
+            <X size={14} />
+          </button>
+          <small>{initiative.kind === "warning" ? "He detectado algo" : "Una idea de Flow"}</small>
+          <strong>{initiative.title}</strong>
+          <p>{initiative.message}</p>
+          <div>
+            {initiative.action && (
+              <button type="button" onClick={() => void acceptInitiative(initiative)}>
+                {initiative.action.label}
+              </button>
+            )}
+            <button type="button" className="is-secondary" onClick={dismissInitiative}>Ahora no</button>
+          </div>
+        </aside>
+      )}
 
       {introPhase === "ready" && state.open && (
         <section className="flow-engine-panel">

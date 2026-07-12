@@ -8,6 +8,8 @@ export type FlowCompanionConfig = Readonly<{
   gatewayHttpUrl: string;
   gatewayWsUrl: string | null;
   reconnectDelayMs: number;
+  autonomyStorageKey: string;
+  autonomyEvaluateEveryMs: number;
 }>;
 
 function buildGatewayWsUrl(httpUrl: string) {
@@ -27,4 +29,6 @@ export const FLOW_COMPANION_CONFIG: FlowCompanionConfig = Object.freeze({
   gatewayHttpUrl: "/api/companion/chat",
   gatewayWsUrl: buildGatewayWsUrl(externalGateway),
   reconnectDelayMs: 4000,
+  autonomyStorageKey: "flow_companion_autonomy_v1",
+  autonomyEvaluateEveryMs: 18000,
 });

@@ -1,5 +1,6 @@
 import { FlowEmotion, FlowMessage, FlowMode, FlowPosition, FlowUserActivitySource } from "../types";
 import type { FlowMemorySnapshot } from "../memory/types";
+import type { FlowInitiative } from "../autonomy/types";
 
 export type FlowCompanionEvents = {
   "runtime:mounted": { runtimeId: string };
@@ -14,6 +15,9 @@ export type FlowCompanionEvents = {
   "activity:user": { source: FlowUserActivitySource };
   "behaviour:goal": { goal: string; routine: string; behaviour: string; priority: number };
   "behaviour:interrupted": { behaviour: string; reason: string };
+  "initiative:created": { initiative: FlowInitiative };
+  "initiative:accepted": { initiative: FlowInitiative };
+  "initiative:dismissed": { initiative: FlowInitiative; reason: string };
 };
 
 type EventName = keyof FlowCompanionEvents;
