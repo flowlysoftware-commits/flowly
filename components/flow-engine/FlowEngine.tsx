@@ -8,6 +8,7 @@ import { FlowBehaviourEngine } from "./behaviourEngine";
 import { detectNavigationTarget, getTargetApproach, highlightTarget, isElementActionable } from "./domNavigator";
 import { FlowGatewayClient } from "./gatewayClient";
 import { FlowEmotionEngine } from "./emotionEngine";
+import { FlowMemoryEngine } from "./memory/memoryEngine";
 import { walkFlowTo } from "./movementController";
 import { createInitialFlowState, flowReducer } from "./stateMachine";
 import { FlowMode, FlowPanelTarget } from "./types";
@@ -83,6 +84,7 @@ export default function FlowEngine() {
   const movementAbortRef = useRef<AbortController | null>(null);
   const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
   const emotionRef = useRef<FlowEmotionEngine | null>(null);
+  const memoryRef = useRef<FlowMemoryEngine | null>(null);
   const dragRef = useRef<DragState>({ active: false, offsetX: 0, offsetY: 0 });
   const throneRef = useRef<HTMLDivElement | null>(null);
   const thronedRef = useRef(false);
@@ -308,6 +310,28 @@ export default function FlowEngine() {
 
   useEffect(() => {
     if (!enabled) return;
+    const memory = new FlowMemoryEngine({
+      storageKey: FLOW_COMPANION_CONFIG.memoryStorageKey,
+      maxFacts: FLOW_COMPANION_CONFIG.maxMemoryFacts,
+      logger: services.logger,
+      onChange: (snapshot) => services.events.emit("memory:changed", { snapshot }),
+    });
+    memoryRef.current = memory;
+    memory.start();
+    memory.observePath(window.location.pathname);
+    return () => {
+      memory.stop();
+      memoryRef.current = null;
+    };
+  }, [enabled, services]);
+
+  useEffect(() => {
+    if (!enabled || !memoryRef.current) return;
+    memoryRef.current.observePath(pathname);
+  }, [enabled, pathname]);
+
+  useEffect(() => {
+    if (!enabled) return;
     const emotion = new FlowEmotionEngine({
       initial: stateRef.current.emotion,
       onChange: (snapshot) => {
@@ -335,11 +359,13 @@ export default function FlowEngine() {
       onMode: (mode) => { dispatch({ type: "mode", mode }); emotionRef.current?.stimulate({ type: "mode", mode }); },
       onEmotion: (emotion) => emotionRef.current?.stimulate({ type: "external", emotion }),
       onMessage: (text) => {
+        const flowMessage = { id: uid("flow"), role: "flow" as const, text };
         dispatch({ type: "bubble", text });
         dispatch({
           type: "message",
-          message: { id: uid("flow"), role: "flow", text },
+          message: flowMessage,
         });
+        memoryRef.current?.recordMessage(flowMessage);
         dispatch({ type: "open", open: true });
         emotionRef.current?.stimulate({ type: "message-received" });
       },
@@ -351,6 +377,7 @@ export default function FlowEngine() {
         pathname: window.location.pathname,
         conversation: stateRef.current.messages,
         panel: window.FlowPanelIntegration?.context?.(),
+        memory: memoryRef.current?.buildContext(),
       }),
     },
     });
@@ -527,6 +554,7 @@ export default function FlowEngine() {
     services.events.emit("activity:user", { source: "chat" });
     const userMessage = { id: uid("user"), role: "user" as const, text };
     dispatch({ type: "message", message: userMessage });
+    memoryRef.current?.recordMessage(userMessage);
     services.events.emit("chat:message", { message: userMessage });
 
     const targets: FlowPanelTarget[] = window.FlowPanelIntegration?.targets || [];

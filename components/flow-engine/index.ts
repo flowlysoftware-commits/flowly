@@ -5,3 +5,6 @@ export type { FlowEmotion, FlowFacing, FlowMessage, FlowMode, FlowPanelApi, Flow
 
 export { FlowBehaviourEngine } from "./behaviourEngine";
 export type { FlowBehaviourDecision, FlowBehaviourId, FlowGoalId, FlowRoutineId } from "./behaviourEngine";
+
+export { FlowMemoryEngine } from "./memory/memoryEngine";
+export type { FlowMemoryContext, FlowMemoryFact, FlowMemorySnapshot } from "./memory/types";

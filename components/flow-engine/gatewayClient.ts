@@ -1,5 +1,6 @@
 import { FlowEmotion, FlowMessage, FlowMode } from "./types";
 import type { FlowLogger } from "./core/logger";
+import type { FlowMemoryContext } from "./memory/types";
 
 export type GatewayHandlers = {
   onConnected: (connected: boolean) => void;
@@ -7,7 +8,7 @@ export type GatewayHandlers = {
   onEmotion: (emotion: Partial<FlowEmotion>) => void;
   onMessage: (text: string) => void;
   onAction: (name: string, payload?: unknown) => void;
-  getContext?: () => { pathname?: string; conversation?: FlowMessage[]; panel?: unknown };
+  getContext?: () => { pathname?: string; conversation?: FlowMessage[]; panel?: unknown; memory?: FlowMemoryContext };
 };
 
 export class FlowGatewayClient {
@@ -87,7 +88,7 @@ export class FlowGatewayClient {
             role: role === "flow" ? "assistant" : role,
             content,
           })),
-          extraContext: { source: "flow_companion_web", panel: context.panel },
+          extraContext: { source: "flow_companion_web", panel: context.panel, memory: context.memory },
         }),
       });
       const data = await response.json().catch(() => ({}));

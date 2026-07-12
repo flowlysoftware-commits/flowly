@@ -1,4 +1,5 @@
 import { FlowEmotion, FlowMessage, FlowMode, FlowPosition, FlowUserActivitySource } from "../types";
+import type { FlowMemorySnapshot } from "../memory/types";
 
 export type FlowCompanionEvents = {
   "runtime:mounted": { runtimeId: string };
@@ -8,6 +9,7 @@ export type FlowCompanionEvents = {
   "state:emotion": { emotion: FlowEmotion };
   "state:position": { position: FlowPosition };
   "chat:message": { message: FlowMessage };
+  "memory:changed": { snapshot: FlowMemorySnapshot };
   "navigation:requested": { target: string };
   "activity:user": { source: FlowUserActivitySource };
   "behaviour:goal": { goal: string; routine: string; behaviour: string; priority: number };

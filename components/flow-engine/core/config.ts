@@ -3,6 +3,8 @@ export type FlowCompanionConfig = Readonly<{
   dashboardPrefix: string;
   storageKey: string;
   maxPersistedMessages: number;
+  memoryStorageKey: string;
+  maxMemoryFacts: number;
   gatewayHttpUrl: string;
   gatewayWsUrl: string | null;
   reconnectDelayMs: number;
@@ -20,6 +22,8 @@ export const FLOW_COMPANION_CONFIG: FlowCompanionConfig = Object.freeze({
   dashboardPrefix: "/dashboard",
   storageKey: "flow_companion_runtime_v2",
   maxPersistedMessages: 12,
+  memoryStorageKey: "flow_companion_memory_v1",
+  maxMemoryFacts: 80,
   gatewayHttpUrl: "/api/companion/chat",
   gatewayWsUrl: buildGatewayWsUrl(externalGateway),
   reconnectDelayMs: 4000,
