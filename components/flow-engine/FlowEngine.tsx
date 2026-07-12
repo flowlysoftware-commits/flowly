@@ -9,6 +9,7 @@ import { detectNavigationTarget, getTargetApproach, highlightTarget, isElementAc
 import { FlowGatewayClient } from "./gatewayClient";
 import { FlowEmotionEngine } from "./emotionEngine";
 import { FlowMemoryEngine } from "./memory/memoryEngine";
+import { FlowToolExecutor } from "./tools/executor";
 import { walkFlowTo } from "./movementController";
 import { createInitialFlowState, flowReducer } from "./stateMachine";
 import { FlowMode, FlowPanelTarget } from "./types";
@@ -85,6 +86,7 @@ export default function FlowEngine() {
   const behaviourRef = useRef<FlowBehaviourEngine | null>(null);
   const emotionRef = useRef<FlowEmotionEngine | null>(null);
   const memoryRef = useRef<FlowMemoryEngine | null>(null);
+  const toolExecutorRef = useRef(new FlowToolExecutor(services.logger));
   const dragRef = useRef<DragState>({ active: false, offsetX: 0, offsetY: 0 });
   const throneRef = useRef<HTMLDivElement | null>(null);
   const thronedRef = useRef(false);
@@ -371,7 +373,25 @@ export default function FlowEngine() {
       },
       onAction: (name, payload) => {
         const target = actionTarget(name, payload);
-        if (target) void navigate(target);
+        if (target && ["navigate", "open", "go", "visit"].some((prefix) => name.toLowerCase().includes(prefix))) {
+          void navigate(target);
+          return;
+        }
+
+        const argumentsPayload = payload && typeof payload === "object"
+          ? payload as Record<string, unknown>
+          : target
+            ? { target }
+            : {};
+
+        void toolExecutorRef.current.execute(
+          { id: name, arguments: argumentsPayload, source: "brain" },
+          { pathname: window.location.pathname, panel: window.FlowPanelIntegration },
+        ).then((result) => {
+          dispatch({ type: "bubble", text: result.message });
+          dispatch({ type: "open", open: true });
+          emotionRef.current?.stimulate({ type: result.ok ? "navigation-success" : "navigation-failure" });
+        });
       },
       getContext: () => ({
         pathname: window.location.pathname,

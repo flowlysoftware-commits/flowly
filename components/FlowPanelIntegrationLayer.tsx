@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { FLOW_TOOL_REGISTRY } from "@/components/flow-engine/tools/registry";
+import { FlowToolExecutor } from "@/components/flow-engine/tools/executor";
 import type {
   FlowPanelResult,
   FlowPanelTarget,
@@ -151,6 +153,8 @@ export default function FlowPanelIntegrationLayer() {
   const pathname = usePathname();
 
   useEffect(() => {
+    const executor = new FlowToolExecutor();
+
     window.FlowPanelIntegration = {
       targets: FLOW_PANEL_TARGETS,
       findTarget: findTargetByKeyOrText,
@@ -160,7 +164,9 @@ export default function FlowPanelIntegrationLayer() {
       },
       navigate: navigateToTarget,
       click: navigateToTarget,
-      context: getWorkspaceContext,
+      executeTool: (call) => executor.execute(call, { pathname: window.location.pathname, panel: window.FlowPanelIntegration }),
+      capabilities: () => FLOW_TOOL_REGISTRY,
+      context: () => ({ ...getWorkspaceContext(), capabilities: FLOW_TOOL_REGISTRY.map(({ id, label, risk }) => ({ id, label, risk })) }),
     };
 
     const handleNavigateEvent = (event: Event) => {

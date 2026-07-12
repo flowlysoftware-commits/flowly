@@ -54,6 +54,8 @@ export type FlowPanelApi = {
   findElement: (target: string) => HTMLElement | null;
   navigate: (target: string) => Promise<FlowPanelResult>;
   click?: (target: string) => Promise<FlowPanelResult>;
+  executeTool?: (call: import("./tools/types").FlowToolCall) => Promise<import("./tools/types").FlowToolResult>;
+  capabilities?: () => import("./tools/types").FlowToolDefinition[];
   context?: () => unknown;
 };
 

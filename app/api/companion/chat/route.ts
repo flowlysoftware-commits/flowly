@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFlowlyBrain, type FlowlyBrainMessage } from "@/lib/flowlyBrain";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { detectFlowlyCompanionActions } from "@/lib/flowlyCompanionActions";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await runFlowlyBrain({ message, pathname, conversation, extraContext });
+    const actions = detectFlowlyCompanionActions(message);
 
     // Memoria ligera del Companion: no bloquea la respuesta si Supabase no tiene aún la tabla.
     try {
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
       // La memoria nunca debe romper el chat.
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, actions });
   } catch (error) {
     console.error("Flowly Companion Brain error", error);
     return NextResponse.json({ error: "No se pudo generar la respuesta del Brain." }, { status: 500 });
