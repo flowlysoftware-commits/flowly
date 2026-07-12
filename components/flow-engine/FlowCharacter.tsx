@@ -24,6 +24,7 @@ import { buildAnimationCatalog } from "./animationCatalog";
 import { FlowAnimationEngine } from "./animationEngine";
 import { FLOW_FRONT_YAW, FLOW_MODEL_URL } from "./animationLibrary";
 import { FlowEmotion, FlowFacing, FlowMode } from "./types";
+import { FlowCinematicLifeEngine } from "./cinematicLifeEngine";
 
 type Props = {
   mode: FlowMode;
@@ -62,6 +63,12 @@ type BoneRig = {
   rightCalf?: Object3D;
   leftFoot?: Object3D;
   rightFoot?: Object3D;
+  leftEye?: Object3D;
+  rightEye?: Object3D;
+  leftIndex?: Object3D;
+  rightIndex?: Object3D;
+  leftMiddle?: Object3D;
+  rightMiddle?: Object3D;
 };
 
 type FaceRig = {
@@ -71,6 +78,9 @@ type FaceRig = {
   smile: number[];
   browUp: number[];
   mouthOpen: number[];
+  browDown: number[];
+  squintLeft: number[];
+  squintRight: number[];
 };
 
 function normalizeBone(value: string) {
@@ -141,7 +151,7 @@ function Loading() {
 }
 
 function buildFaceRig(root: Object3D): FaceRig {
-  const result: FaceRig = { meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [], mouthOpen: [] };
+  const result: FaceRig = { meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [], mouthOpen: [], browDown: [], squintLeft: [], squintRight: [] };
 
   root.traverse((node) => {
     if (!isMesh(node)) return;
@@ -159,6 +169,9 @@ function buildFaceRig(root: Object3D): FaceRig {
       if (/smile|mouthsmile|happy/.test(name)) result.smile.push(packed);
       if (/browup|eyebrowup|surprise/.test(name)) result.browUp.push(packed);
       if (/jawopen|mouthopen|visemeaa|visemeoh|visemeo/.test(name)) result.mouthOpen.push(packed);
+      if (/browdown|eyebrowdown|frown/.test(name)) result.browDown.push(packed);
+      if (/squintleft|eyesquintleft|leftsquint/.test(name)) result.squintLeft.push(packed);
+      if (/squintright|eyesquintright|rightsquint/.test(name)) result.squintRight.push(packed);
     });
   });
 
@@ -287,7 +300,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   const pointer = useRef({ x: 0, y: 0 });
   const restPose = useRef(new Map<Object3D, RestTransform>());
   const rig = useRef<BoneRig>({});
-  const face = useRef<FaceRig>({ meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [], mouthOpen: [] });
+  const face = useRef<FaceRig>({ meshes: [], blinkLeft: [], blinkRight: [], smile: [], browUp: [], mouthOpen: [], browDown: [], squintLeft: [], squintRight: [] });
+  const cinematicLife = useRef(new FlowCinematicLifeEngine());
   const animationEngineRef = useRef<FlowAnimationEngine | null>(null);
   const nextIdleVariationAt = useRef(0);
   const blinkStartedAt = useRef(-1);
@@ -321,8 +335,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       });
       if (!isMesh(node)) return;
       node.frustumCulled = false;
-      node.castShadow = false;
-      node.receiveShadow = false;
+      node.castShadow = true;
+      node.receiveShadow = true;
       const materials = Array.isArray(node.material) ? node.material : [node.material];
       const visible = materials.map((material) =>
         createVisibleMaterial(color, normal, roughness, metallic, material),
@@ -366,6 +380,12 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       rightCalf: findBone(boneMap, ["RightLeg", "RightCalf", "Calf_R", "RCalf"]),
       leftFoot: findBone(boneMap, ["LeftFoot", "Foot_L", "LFoot"]),
       rightFoot: findBone(boneMap, ["RightFoot", "Foot_R", "RFoot"]),
+      leftEye: findBone(boneMap, ["LeftEye", "Eye_L", "LEye"]),
+      rightEye: findBone(boneMap, ["RightEye", "Eye_R", "REye"]),
+      leftIndex: findBone(boneMap, ["LeftHandIndex1", "LeftIndex1", "Index1_L"]),
+      rightIndex: findBone(boneMap, ["RightHandIndex1", "RightIndex1", "Index1_R"]),
+      leftMiddle: findBone(boneMap, ["LeftHandMiddle1", "LeftMiddle1", "Middle1_L"]),
+      rightMiddle: findBone(boneMap, ["RightHandMiddle1", "RightMiddle1", "Middle1_R"]),
     };
     face.current = buildFaceRig(clone);
     return clone;
@@ -434,6 +454,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     const joy = MathUtils.clamp(emotion.joy, 0, 1);
     const empathy = MathUtils.clamp(emotion.empathy, 0, 1);
     const stress = MathUtils.clamp(emotion.stress, 0, 1);
+    const life = cinematicLife.current.update(elapsed, dt, pointer.current.x, pointer.current.y, emotion, mode);
     const modeTime = elapsed - modeEnteredAt.current;
     const hasClip = Boolean(animationEngineRef.current?.hasActiveClip);
 
@@ -442,8 +463,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       nextIdleVariationAt.current = elapsed + 7 + Math.random() * 9;
     }
 
-    const breath = Math.sin(elapsed * (0.92 + energy * 0.42 + stress * 0.2) * Math.PI * 2);
-    const sway = Math.sin(elapsed * 0.43) * (0.009 + (1 - calm) * 0.008);
+    const breath = life.breath;
+    const sway = life.bodySway;
 
     if (hasClip) {
       // Add only subtle life on top of the real full-body clip.
@@ -452,8 +473,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
 
       if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "dragging") {
         const seatedBoost = mode === "seated" ? 1.55 : 1;
-        const pointerYaw = pointer.current.x * 0.045 * attention * seatedBoost;
-        const pointerPitch = -pointer.current.y * 0.025 * attention * seatedBoost;
+        const pointerYaw = life.headYaw * seatedBoost;
+        const pointerPitch = life.headPitch * seatedBoost;
         multiplyLocalRotation(rig.current.neck, pointerPitch * 0.32, pointerYaw * 0.32, 0);
         multiplyLocalRotation(rig.current.head, pointerPitch * 0.55, pointerYaw * 0.55, 0);
       }
@@ -665,6 +686,21 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       applyRestRotation(rig.current.rightFoot, restPose.current, rightFootX, 0, 0, alpha);
     }
 
+    // Cinematic secondary motion layered over every animation clip.
+    if (mode !== "walking" && mode !== "dragging") {
+      multiplyLocalRotation(rig.current.pelvis, 0, 0, life.weightShift);
+      multiplyLocalRotation(rig.current.spine01, life.breathLift * 0.38, 0, -life.weightShift * 0.45);
+      multiplyLocalRotation(rig.current.spine02, life.breathLift, 0, life.bodySway * 0.35);
+      multiplyLocalRotation(rig.current.leftShoulder, 0, 0, life.shoulderLift);
+      multiplyLocalRotation(rig.current.rightShoulder, 0, 0, -life.shoulderLift);
+      multiplyLocalRotation(rig.current.leftIndex, life.fingerCurl, 0, 0);
+      multiplyLocalRotation(rig.current.rightIndex, life.fingerCurl, 0, 0);
+      multiplyLocalRotation(rig.current.leftMiddle, life.fingerCurl * 0.72, 0, 0);
+      multiplyLocalRotation(rig.current.rightMiddle, life.fingerCurl * 0.72, 0, 0);
+    }
+    multiplyLocalRotation(rig.current.leftEye, life.eyePitch, life.eyeYaw, 0);
+    multiplyLocalRotation(rig.current.rightEye, life.eyePitch, life.eyeYaw, 0);
+
     if (elapsed >= nextBlinkAt.current && blinkStartedAt.current < 0) blinkStartedAt.current = elapsed;
     let blink = 0;
     if (blinkStartedAt.current >= 0) {
@@ -677,8 +713,11 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     }
     setMorph(face.current, face.current.blinkLeft, blink);
     setMorph(face.current, face.current.blinkRight, blink);
-    setMorph(face.current, face.current.smile, MathUtils.clamp(joy * 0.58 + (mode === "waving" ? 0.2 : 0), 0, 0.8));
-    setMorph(face.current, face.current.browUp, MathUtils.clamp(emotion.curiosity * 0.25 + (mode === "thinking" ? 0.12 : 0), 0, 0.5));
+    setMorph(face.current, face.current.smile, life.smile);
+    setMorph(face.current, face.current.browUp, life.browUp);
+    setMorph(face.current, face.current.browDown, life.browDown);
+    setMorph(face.current, face.current.squintLeft, life.squint);
+    setMorph(face.current, face.current.squintRight, life.squint);
     const talkAmount = mode === "talking" ? MathUtils.clamp(speechLevel, 0, 1) : 0;
     setMorph(face.current, face.current.mouthOpen, talkAmount * 0.82);
 
@@ -713,14 +752,16 @@ export default function FlowCharacter(props: Props) {
       <Canvas
         orthographic
         camera={{ position: [0, 1.08, 8], zoom: 70, near: 0.1, far: 100 }}
-        dpr={[1, 1.5]}
-        gl={{ alpha: true, antialias: true, premultipliedAlpha: false }}
+        dpr={[1, 2]}
+        shadows="soft"
+        gl={{ alpha: true, antialias: true, premultipliedAlpha: false, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
       >
-        <ambientLight intensity={2.25} />
-        <hemisphereLight color="#ffffff" groundColor="#64748b" intensity={1.85} />
-        <directionalLight position={[3, 5, 6]} intensity={3.25} />
-        <directionalLight position={[-3, 2, 4]} intensity={1.55} />
+        <ambientLight intensity={1.15} />
+        <hemisphereLight color="#ffffff" groundColor="#334155" intensity={1.1} />
+        <directionalLight position={[3.8, 5.6, 6]} intensity={3.15} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+        <directionalLight position={[-3.2, 2.4, 4]} intensity={1.15} />
+        <pointLight position={[0, 2.7, 3.8]} intensity={0.72} distance={9} decay={2} />
         <Suspense fallback={<Loading />}>
           <CharacterScene
             mode={props.mode}
