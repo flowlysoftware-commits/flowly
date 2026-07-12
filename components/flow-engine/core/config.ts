@@ -27,7 +27,8 @@ export const FLOW_COMPANION_CONFIG: FlowCompanionConfig = Object.freeze({
   memoryStorageKey: "flow_companion_memory_v1",
   maxMemoryFacts: 80,
   gatewayHttpUrl: "/api/companion/chat",
-  gatewayWsUrl: buildGatewayWsUrl(externalGateway),
+  // Disabled until the websocket transport authenticates and scopes every session.
+  gatewayWsUrl: null,
   reconnectDelayMs: 4000,
   autonomyStorageKey: "flow_companion_autonomy_v1",
   autonomyEvaluateEveryMs: 18000,

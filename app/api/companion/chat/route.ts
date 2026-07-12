@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { runFlowlyBrain, type FlowlyBrainMessage } from "@/lib/flowlyBrain";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { detectFlowlyCompanionActions } from "@/lib/flowlyCompanionActions";
+import { requireCompanionAuth } from "../_auth";
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireCompanionAuth(request);
+    if (!auth) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+
     const body = await request.json().catch(() => ({}));
     const message = String(body.message || "").trim();
     const pathname = String(body.pathname || "/dashboard");
@@ -15,12 +19,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Falta el mensaje." }, { status: 400 });
     }
 
-    const result = await runFlowlyBrain({ message, pathname, conversation, extraContext });
+    const result = await runFlowlyBrain({
+      message,
+      pathname,
+      conversation: conversation.slice(-20),
+      extraContext: { ...extraContext, authenticatedUserId: auth.userId, authenticatedBusinessId: auth.businessId },
+    });
     const actions = detectFlowlyCompanionActions(message);
 
     // Memoria ligera del Companion: no bloquea la respuesta si Supabase no tiene aún la tabla.
     try {
       await supabaseAdmin.from("flowly_companion_conversation_memory").insert({
+        user_id: auth.userId,
+        business_id: auth.businessId,
         mode: result.mode,
         source: typeof extraContext.source === "string" ? extraContext.source : "text",
         message,

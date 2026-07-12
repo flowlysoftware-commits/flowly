@@ -20,6 +20,7 @@ import { claimFlowRuntime, releaseFlowRuntime } from "./core/runtimeRegistry";
 import { createFlowCoreServices } from "./core/services";
 import { readFlowState, writeFlowState } from "./core/storage";
 import { useFlowlyVoiceRuntime } from "@/hooks/useFlowlyVoiceRuntime";
+import { resolveFlowCompanionIdentity, scopedFlowStorageKey, type FlowCompanionIdentity } from "./core/identity";
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -95,6 +96,8 @@ export default function FlowEngine() {
   const enabled = pathname.startsWith(FLOW_COMPANION_CONFIG.dashboardPrefix);
   const services = useMemo(() => createFlowCoreServices(), []);
   const [runtimeClaimed, setRuntimeClaimed] = useState(false);
+  const [identity, setIdentity] = useState<FlowCompanionIdentity | null>(null);
+  const [identityReady, setIdentityReady] = useState(false);
   const [state, dispatch] = useReducer(flowReducer, undefined, createInitialFlowState);
   const [input, setInput] = useState("");
   const [introPhase, setIntroPhase] = useState<IntroPhase>("hidden");
@@ -120,6 +123,40 @@ export default function FlowEngine() {
   introRef.current = introPhase;
   thronedRef.current = isThroned;
 
+  const scopedKeys = useMemo(() => identity ? {
+    runtime: scopedFlowStorageKey(FLOW_COMPANION_CONFIG.storageKey, identity),
+    memory: scopedFlowStorageKey(FLOW_COMPANION_CONFIG.memoryStorageKey, identity),
+    autonomy: scopedFlowStorageKey(FLOW_COMPANION_CONFIG.autonomyStorageKey, identity),
+  } : null, [identity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!enabled) {
+      setIdentity(null);
+      setIdentityReady(false);
+      return;
+    }
+
+    setIdentityReady(false);
+    void resolveFlowCompanionIdentity().then((nextIdentity) => {
+      if (cancelled) return;
+      dispatch({ type: "reset" });
+      setIdentity(nextIdentity);
+      setIdentityReady(true);
+      if (nextIdentity) {
+        // Purge the legacy global stores that caused cross-account conversation leakage.
+        window.localStorage.removeItem(FLOW_COMPANION_CONFIG.storageKey);
+        window.localStorage.removeItem(FLOW_COMPANION_CONFIG.memoryStorageKey);
+        window.localStorage.removeItem(FLOW_COMPANION_CONFIG.autonomyStorageKey);
+      }
+      if (!nextIdentity) {
+        services.logger.warn("Companion disabled: authenticated user/business scope unavailable.");
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [enabled, services]);
+
   useEffect(() => {
     if (!enabled) {
       setRuntimeClaimed(false);
@@ -143,8 +180,8 @@ export default function FlowEngine() {
   }, [enabled, services]);
 
   useEffect(() => {
-    if (!enabled) return;
-    const persisted = readFlowState(FLOW_COMPANION_CONFIG.storageKey);
+    if (!enabled || !identityReady || !scopedKeys) return;
+    const persisted = readFlowState(scopedKeys.runtime);
     if (!persisted) return;
     if (persisted.position && Number.isFinite(persisted.position.left) && Number.isFinite(persisted.position.top)) {
       dispatch({ type: "position", left: persisted.position.left, top: persisted.position.top });
@@ -152,21 +189,21 @@ export default function FlowEngine() {
     (persisted.messages || [])
       .slice(-FLOW_COMPANION_CONFIG.maxPersistedMessages)
       .forEach((message) => dispatch({ type: "message", message }));
-  }, [enabled]);
+  }, [enabled, identityReady, scopedKeys]);
 
   useEffect(() => {
-    if (!enabled || introPhase !== "ready") return;
+    if (!enabled || !identityReady || !scopedKeys || introPhase !== "ready") return;
     const timer = window.setTimeout(() => {
-      writeFlowState(FLOW_COMPANION_CONFIG.storageKey, {
+      writeFlowState(scopedKeys.runtime, {
         position: state.position,
         messages: state.messages.slice(-FLOW_COMPANION_CONFIG.maxPersistedMessages),
       });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [enabled, introPhase, state.position, state.messages]);
+  }, [enabled, identityReady, scopedKeys, introPhase, state.position, state.messages]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !identityReady || !identity) {
       setIntroPhase("hidden");
       return;
     }
@@ -212,7 +249,7 @@ export default function FlowEngine() {
       window.clearTimeout(walkTimer);
       window.clearTimeout(finishTimer);
     };
-  }, [enabled]);
+  }, [enabled, identityReady, identity]);
 
   useEffect(() => {
     if (!enabled || introPhase !== "ready") return;
@@ -417,9 +454,9 @@ export default function FlowEngine() {
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !identityReady || !scopedKeys) return;
     const memory = new FlowMemoryEngine({
-      storageKey: FLOW_COMPANION_CONFIG.memoryStorageKey,
+      storageKey: scopedKeys.memory,
       maxFacts: FLOW_COMPANION_CONFIG.maxMemoryFacts,
       logger: services.logger,
       onChange: (snapshot) => services.events.emit("memory:changed", { snapshot }),
@@ -431,7 +468,7 @@ export default function FlowEngine() {
       memory.stop();
       memoryRef.current = null;
     };
-  }, [enabled, services]);
+  }, [enabled, identityReady, scopedKeys, services]);
 
   useEffect(() => {
     if (!enabled || !memoryRef.current) return;
@@ -456,12 +493,14 @@ export default function FlowEngine() {
   }, [enabled, services]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !identityReady || !identity) return;
     const client = new FlowGatewayClient({
       wsUrl: FLOW_COMPANION_CONFIG.gatewayWsUrl,
       httpUrl: FLOW_COMPANION_CONFIG.gatewayHttpUrl,
       reconnectDelayMs: FLOW_COMPANION_CONFIG.reconnectDelayMs,
       logger: services.logger,
+      identity: { userId: identity.userId, businessId: identity.businessId },
+      getAccessToken: async () => (await resolveFlowCompanionIdentity())?.accessToken || null,
       handlers: {
       onConnected: (connected) => dispatch({ type: "connected", connected }),
       onMode: (mode) => { dispatch({ type: "mode", mode }); emotionRef.current?.stimulate({ type: "mode", mode }); },
@@ -512,14 +551,14 @@ export default function FlowEngine() {
     clientRef.current = client;
     client.connect();
     return () => client.disconnect();
-  }, [enabled, navigate, services]);
+  }, [enabled, identityReady, identity, navigate, services]);
 
 
   useEffect(() => {
-    if (!enabled || introPhase !== "ready") return;
+    if (!enabled || !identityReady || !scopedKeys || introPhase !== "ready") return;
 
     const autonomy = new FlowAutonomyEngine({
-      storageKey: FLOW_COMPANION_CONFIG.autonomyStorageKey,
+      storageKey: scopedKeys.autonomy,
       evaluateEveryMs: FLOW_COMPANION_CONFIG.autonomyEvaluateEveryMs,
       getObservation: () => ({
         pathname: window.location.pathname,
@@ -555,7 +594,7 @@ export default function FlowEngine() {
       autonomyRef.current = null;
       setInitiative(null);
     };
-  }, [enabled, introPhase, services]);
+  }, [enabled, identityReady, scopedKeys, introPhase, services]);
 
 
   useEffect(() => {
@@ -769,7 +808,7 @@ export default function FlowEngine() {
     [state.connected, state.mode],
   );
 
-  if (!enabled || !runtimeClaimed) return null;
+  if (!enabled || !runtimeClaimed || !identityReady || !identity) return null;
 
   return (
     <div className={`flow-engine-root is-intro-${introPhase} ${isThroned ? "has-throned-flow" : ""}`} data-flow-runtime="engine-v2">

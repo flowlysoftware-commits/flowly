@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { companionJson, companionOptions } from "@/lib/flowlyCompanionCors";
 import { createGatewayMessageResponse } from "@/lib/flowlyCompanionGateway";
 import type { FlowlyBrainMessage } from "@/lib/flowlyBrain";
+import { requireCompanionAuth } from "../../_auth";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,9 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireCompanionAuth(request);
+    if (!auth) return companionJson({ ok: false, error: "No autorizado." }, { status: 401 });
+
     const body = await request.json().catch(() => ({}));
     const message = typeof body.message === "string" ? body.message.trim() : "";
 
@@ -27,9 +31,13 @@ export async function POST(request: NextRequest) {
       pathname: typeof body.pathname === "string" ? body.pathname : "/dashboard",
       conversation,
       companionId: typeof body.companionId === "string" ? body.companionId : undefined,
-      userId: typeof body.userId === "string" ? body.userId : undefined,
+      userId: auth.userId,
       sessionId: typeof body.sessionId === "string" ? body.sessionId : undefined,
-      extraContext: body.extraContext && typeof body.extraContext === "object" ? body.extraContext : undefined,
+      extraContext: {
+        ...(body.extraContext && typeof body.extraContext === "object" ? body.extraContext : {}),
+        authenticatedUserId: auth.userId,
+        authenticatedBusinessId: auth.businessId,
+      },
     });
 
     return companionJson(response);

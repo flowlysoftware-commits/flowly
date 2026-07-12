@@ -21,13 +21,17 @@ export class FlowGatewayClient {
   private requestSerial = 0;
   private readonly reconnectDelayMs: number;
   private readonly logger?: FlowLogger;
+  private readonly getAccessToken?: () => Promise<string | null>;
+  private readonly identity?: { userId: string; businessId: string };
 
-  constructor(options: { wsUrl?: string | null; httpUrl?: string; reconnectDelayMs?: number; logger?: FlowLogger; handlers: GatewayHandlers }) {
+  constructor(options: { wsUrl?: string | null; httpUrl?: string; reconnectDelayMs?: number; logger?: FlowLogger; getAccessToken?: () => Promise<string | null>; identity?: { userId: string; businessId: string }; handlers: GatewayHandlers }) {
     this.wsUrl = options.wsUrl || null;
     this.httpUrl = options.httpUrl || "/api/companion/chat";
     this.handlers = options.handlers;
     this.reconnectDelayMs = options.reconnectDelayMs ?? 4000;
     this.logger = options.logger;
+    this.getAccessToken = options.getAccessToken;
+    this.identity = options.identity;
   }
 
   connect() {
@@ -78,9 +82,11 @@ export class FlowGatewayClient {
     this.handlers.onMode("thinking");
     try {
       const context = this.handlers.getContext?.() || {};
+      const accessToken = await this.getAccessToken?.();
+      if (!accessToken) throw new Error("La sesión del Companion no es válida. Vuelve a iniciar sesión.");
       const response = await fetch(this.httpUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           message: clean,
           pathname: context.pathname || window.location.pathname,
@@ -89,6 +95,7 @@ export class FlowGatewayClient {
             content,
           })),
           extraContext: { source: "flow_companion_web", panel: context.panel, memory: context.memory },
+          identity: this.identity,
         }),
       });
       const data = await response.json().catch(() => ({}));

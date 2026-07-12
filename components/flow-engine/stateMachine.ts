@@ -1,6 +1,7 @@
 import { DEFAULT_EMOTION, FlowEmotion, FlowGait, FlowRuntimeState } from "./types";
 
 export type FlowAction =
+  | { type: "reset" }
   | { type: "mode"; mode: FlowRuntimeState["mode"] }
   | { type: "facing"; facing: FlowRuntimeState["facing"] }
   | { type: "connected"; connected: boolean }
@@ -30,6 +31,7 @@ export function createInitialFlowState(): FlowRuntimeState {
 
 export function flowReducer(state: FlowRuntimeState, action: FlowAction): FlowRuntimeState {
   switch (action.type) {
+    case "reset": return createInitialFlowState();
     case "mode": return { ...state, mode: action.mode };
     case "facing": return { ...state, facing: action.facing };
     case "connected": return { ...state, connected: action.connected };
