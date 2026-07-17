@@ -1,4 +1,8 @@
-export const FLOW_MODEL_URL = "/models/flow/flow-master.fbx";
+/** Official Flow avatar exported from Blender. */
+export const FLOW_MODEL_URL = "/avatars/flowly.glb";
 
-// The master FBX faces +X. The web camera observes from +Z.
-export const FLOW_FRONT_YAW = -Math.PI / 2;
+/**
+ * The Blender GLB is exported facing the web camera. Keep this centralized so
+ * orientation can be corrected without touching the runtime or procedural rig.
+ */
+export const FLOW_FRONT_YAW = 0;

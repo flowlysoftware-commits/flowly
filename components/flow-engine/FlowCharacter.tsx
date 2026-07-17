@@ -2,21 +2,16 @@
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Html, useFBX, useTexture } from "@react-three/drei";
+import { Html, useGLTF } from "@react-three/drei";
 import {
   AnimationClip,
   Box3,
-  Color,
-  DoubleSide,
   Euler,
   Group,
   MathUtils,
   Mesh,
-  MeshStandardMaterial,
   Object3D,
   Quaternion,
-  SRGBColorSpace,
-  Texture,
   Vector3,
 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -112,34 +107,6 @@ function findBone(map: Map<string, Object3D>, names: string[]) {
 
 function isMesh(node: Object3D): node is Mesh {
   return Boolean((node as Mesh).isMesh);
-}
-
-function createVisibleMaterial(
-  color: Texture,
-  normal: Texture,
-  roughness: Texture,
-  metallic: Texture,
-  source?: unknown,
-) {
-  const sourceMaterial = source as {
-    transparent?: boolean;
-    opacity?: number;
-    alphaTest?: number;
-  } | undefined;
-
-  return new MeshStandardMaterial({
-    color: new Color(0xffffff),
-    map: color,
-    normalMap: normal,
-    roughnessMap: roughness,
-    metalnessMap: metallic,
-    roughness: 0.78,
-    metalness: 0.02,
-    transparent: Boolean(sourceMaterial?.transparent),
-    opacity: sourceMaterial?.opacity ?? 1,
-    alphaTest: sourceMaterial?.alphaTest ?? 0,
-    side: DoubleSide,
-  });
 }
 
 function Loading() {
@@ -256,18 +223,10 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   const idleVariant = useRef(0);
   const lastBehaviourPulse = useRef(behaviourPulse);
 
-  const source = useFBX(FLOW_MODEL_URL);
-  const greetingSource = useFBX("/avatars/Waving.fbx");
-  const [color, normal, roughness, metallic] = useTexture([
-    "/models/flow/color.jpg",
-    "/models/flow/normal.jpg",
-    "/models/flow/roughness.jpeg",
-    "/models/flow/metallic.jpeg",
-  ]);
-  color.colorSpace = SRGBColorSpace;
+  const source = useGLTF(FLOW_MODEL_URL);
 
   const model = useMemo(() => {
-    const clone = cloneSkeleton(source) as Group;
+    const clone = cloneSkeleton(source.scene) as Group;
     const pose = new Map<Object3D, RestTransform>();
     const boneMap = buildBoneMap(clone);
 
@@ -278,14 +237,14 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         scale: node.scale.clone(),
       });
       if (!isMesh(node)) return;
+      const normalizedName = normalizeBone(node.name);
+      if (normalizedName.startsWith("ctrl") || normalizedName.startsWith("ik")) {
+        node.visible = false;
+        return;
+      }
       node.frustumCulled = false;
-      node.castShadow = true;
-      node.receiveShadow = true;
-      const materials = Array.isArray(node.material) ? node.material : [node.material];
-      const visible = materials.map((material) =>
-        createVisibleMaterial(color, normal, roughness, metallic, material),
-      );
-      node.material = Array.isArray(node.material) ? visible : visible[0];
+      node.castShadow = false;
+      node.receiveShadow = false;
     });
 
     const bounds = new Box3().setFromObject(clone);
@@ -305,25 +264,25 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
 
     restPose.current = pose;
     rig.current = {
-      pelvis: findBone(boneMap, ["Pelvis", "Hips", "Hip"]),
-      spine01: findBone(boneMap, ["Spine01", "Spine1", "Spine"]),
-      spine02: findBone(boneMap, ["Spine02", "Spine2", "Chest", "UpperChest"]),
-      neck: findBone(boneMap, ["NeckTwist01", "Neck"]),
-      head: findBone(boneMap, ["Head"]),
-      leftShoulder: findBone(boneMap, ["LeftShoulder", "Shoulder_L", "LShoulder"]),
-      rightShoulder: findBone(boneMap, ["RightShoulder", "Shoulder_R", "RShoulder"]),
-      leftUpperArm: findBone(boneMap, ["LeftArm", "LeftUpperArm", "UpperArm_L", "LUpperArm"]),
-      rightUpperArm: findBone(boneMap, ["RightArm", "RightUpperArm", "UpperArm_R", "RUpperArm"]),
-      leftForeArm: findBone(boneMap, ["LeftForeArm", "LeftLowerArm", "ForeArm_L", "LForeArm"]),
-      rightForeArm: findBone(boneMap, ["RightForeArm", "RightLowerArm", "ForeArm_R", "RForeArm"]),
-      leftHand: findBone(boneMap, ["LeftHand", "Hand_L", "LHand"]),
-      rightHand: findBone(boneMap, ["RightHand", "Hand_R", "RHand"]),
-      leftThigh: findBone(boneMap, ["LeftUpLeg", "LeftThigh", "Thigh_L", "LThigh"]),
-      rightThigh: findBone(boneMap, ["RightUpLeg", "RightThigh", "Thigh_R", "RThigh"]),
-      leftCalf: findBone(boneMap, ["LeftLeg", "LeftCalf", "Calf_L", "LCalf"]),
-      rightCalf: findBone(boneMap, ["RightLeg", "RightCalf", "Calf_R", "RCalf"]),
-      leftFoot: findBone(boneMap, ["LeftFoot", "Foot_L", "LFoot"]),
-      rightFoot: findBone(boneMap, ["RightFoot", "Foot_R", "RFoot"]),
+      pelvis: findBone(boneMap, ["J hip", "Pelvis", "Hips", "Hip"]),
+      spine01: findBone(boneMap, ["J spline", "Spine01", "Spine1", "Spine"]),
+      spine02: findBone(boneMap, ["J chest", "Spine02", "Spine2", "Chest", "UpperChest"]),
+      neck: findBone(boneMap, ["J neck", "NeckTwist01", "Neck"]),
+      head: findBone(boneMap, ["J head", "Head"]),
+      leftShoulder: findBone(boneMap, ["J shoulder l", "J shoulder upper l", "LeftShoulder", "Shoulder_L", "LShoulder"]),
+      rightShoulder: findBone(boneMap, ["J shoulder r", "J shoulder upper r", "RightShoulder", "Shoulder_R", "RShoulder"]),
+      leftUpperArm: findBone(boneMap, ["J arm l", "LeftArm", "LeftUpperArm", "UpperArm_L", "LUpperArm"]),
+      rightUpperArm: findBone(boneMap, ["J arm r", "RightArm", "RightUpperArm", "UpperArm_R", "RUpperArm"]),
+      leftForeArm: findBone(boneMap, ["J hand l", "LeftForeArm", "LeftLowerArm", "ForeArm_L", "LForeArm"]),
+      rightForeArm: findBone(boneMap, ["J hand r", "RightForeArm", "RightLowerArm", "ForeArm_R", "RForeArm"]),
+      leftHand: findBone(boneMap, ["J hand l", "LeftHand", "Hand_L", "LHand"]),
+      rightHand: findBone(boneMap, ["J hand r", "RightHand", "Hand_R", "RHand"]),
+      leftThigh: findBone(boneMap, ["J leg l", "LeftUpLeg", "LeftThigh", "Thigh_L", "LThigh"]),
+      rightThigh: findBone(boneMap, ["J leg r", "RightUpLeg", "RightThigh", "Thigh_R", "RThigh"]),
+      leftCalf: findBone(boneMap, ["J knee l", "LeftLeg", "LeftCalf", "Calf_L", "LCalf"]),
+      rightCalf: findBone(boneMap, ["J knee r", "RightLeg", "RightCalf", "Calf_R", "RCalf"]),
+      leftFoot: findBone(boneMap, ["J foot l", "LeftFoot", "Foot_L", "LFoot"]),
+      rightFoot: findBone(boneMap, ["J foot r", "RightFoot", "Foot_R", "RFoot"]),
       leftEye: findBone(boneMap, ["LeftEye", "Eye_L", "LEye"]),
       rightEye: findBone(boneMap, ["RightEye", "Eye_R", "REye"]),
       leftIndex: findBone(boneMap, ["LeftHandIndex1", "LeftIndex1", "Index1_L"]),
@@ -333,24 +292,12 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     };
     face.current = buildFaceRig(clone);
     return clone;
-  }, [source, color, normal, roughness, metallic]);
+  }, [source.scene]);
 
-  const catalog = useMemo(() => {
-    const baseCatalog = buildAnimationCatalog((source.animations || []).map(removeRootTranslation));
-    const greetingClip = greetingSource.animations?.[0];
-
-    if (greetingClip) {
-      const cleanGreeting = removeRootTranslation(greetingClip);
-      cleanGreeting.name = "Flow Greeting Wave";
-      const greetingCatalog = buildAnimationCatalog([cleanGreeting]);
-
-      // Always use the dedicated greeting clip for the waving state. This avoids
-      // the old procedural pose that looked like Flow was pointing sideways.
-      if (greetingCatalog.wave.length) baseCatalog.wave = greetingCatalog.wave;
-    }
-
-    return baseCatalog;
-  }, [source, greetingSource]);
+  const catalog = useMemo(
+    () => buildAnimationCatalog((source.animations || []).map(removeRootTranslation)),
+    [source.animations],
+  );
 
   useEffect(() => {
     const engine = new FlowAnimationEngine(model, catalog);
@@ -700,8 +647,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     setMorph(face.current, face.current.mouthOpen, talkAmount * 0.82);
 
     if (!presentation.current) return;
-    // The master model faces +X. FLOW_FRONT_YAW turns it toward the camera;
-    // screen-left/right therefore require a full quarter turn, not a small lean.
+    // The official GLB is normalized once through FLOW_FRONT_YAW.
+    // Screen-left/right remain quarter turns around the vertical axis.
     const sideTurn = facing === "left" ? -Math.PI / 2 : facing === "right" ? Math.PI / 2 : 0;
     const targetYaw = FLOW_FRONT_YAW + sideTurn;
     presentation.current.rotation.y += (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 7.2);
@@ -737,14 +684,13 @@ export default function FlowCharacter(props: Props) {
       <Canvas
         orthographic
         camera={{ position: [0, 1.08, 8], zoom: 70, near: 0.1, far: 100 }}
-        dpr={[1, 2]}
-        shadows="soft"
+        dpr={[1, 1.35]}
         gl={{ alpha: true, antialias: true, premultipliedAlpha: false, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
       >
         <ambientLight intensity={1.15} />
         <hemisphereLight color="#ffffff" groundColor="#334155" intensity={1.1} />
-        <directionalLight position={[3.8, 5.6, 6]} intensity={3.15} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+        <directionalLight position={[3.8, 5.6, 6]} intensity={3.15} />
         <directionalLight position={[-3.2, 2.4, 4]} intensity={1.15} />
         <pointLight position={[0, 2.7, 3.8]} intensity={0.72} distance={9} decay={2} />
         <Suspense fallback={<Loading />}>
@@ -763,4 +709,4 @@ export default function FlowCharacter(props: Props) {
   );
 }
 
-useFBX.preload(FLOW_MODEL_URL);
+useGLTF.preload(FLOW_MODEL_URL);

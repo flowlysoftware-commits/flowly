@@ -1902,7 +1902,7 @@ function FloatingAvatarAssistant({
   const entrancePositionIndex = 99;
 
   const currentPosition = positionIndex === entrancePositionIndex ? entrancePosition : characterPositions[positionIndex % characterPositions.length];
-  const modelUrl = "/avatars/flowly-grandma.glb";
+  const modelUrl = "/avatars/flowly.glb";
   const assistantFacing = isWalking ? travelFacing : currentPosition.facing;
   const characterMode = isWalking ? "walk" : isSpeaking ? "talk" : isGreeting ? "wave" : tourOpen ? "point" : thinking ? "thinking" : "idle";
 
