@@ -382,7 +382,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       multiplyLocalRotation(rig.current.spine01, breath * 0.0025, 0, sway * 0.18);
       multiplyLocalRotation(rig.current.spine02, breath * 0.0055, 0, -sway * 0.25);
 
-      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "pressing" && mode !== "dragging") {
+      if (mode !== "walking" && mode !== "turning" && mode !== "waving" && mode !== "pointing" && mode !== "pressing" && mode !== "dragging") {
         const seatedBoost = mode === "seated" ? 1.55 : 1;
         const pointerYaw = life.headYaw * seatedBoost;
         const pointerPitch = life.headPitch * seatedBoost;
@@ -428,8 +428,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       let rightClavicleZ = 0.035;
       let leftUpperX = 0;
       let rightUpperX = 0;
-      let leftUpperZ = -1.02;
-      let rightUpperZ = 1.02;
+      let leftUpperZ = -0.88;
+      let rightUpperZ = 0.88;
       let leftForeX = 0;
       let rightForeX = 0;
       let leftForeZ = -0.10;
@@ -518,6 +518,16 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         rightUpperX = -0.2 + kick * 0.1;
         leftUpperZ = -0.72 + Math.sin(elapsed * 7.2) * 0.08;
         rightUpperZ = 0.72 - Math.sin(elapsed * 7.2 + 0.8) * 0.08;
+      } else if (mode === "turning") {
+        const turnProgress = MathUtils.clamp(modeTime / 1.55, 0, 1);
+        const flourish = Math.sin(turnProgress * Math.PI);
+        pelvisZ = flourish * 0.025;
+        chestY = flourish * 0.08;
+        headY = -flourish * 0.12;
+        leftUpperZ = -0.82;
+        rightUpperZ = 0.82;
+        leftForeZ = -0.16;
+        rightForeZ = 0.16;
       } else if (mode === "walking") {
         const locomotion = MathUtils.clamp(gaitSpeed || 0.72, 0.42, 1.15);
         const cadence = 1.25 + locomotion * 0.75;
@@ -597,7 +607,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         headZ += Math.sin(elapsed * 0.17 + 2.1) * 0.007;
       }
 
-      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "pressing" && mode !== "dragging") {
+      if (mode !== "walking" && mode !== "turning" && mode !== "waving" && mode !== "pointing" && mode !== "pressing" && mode !== "dragging") {
         const seatedBoost = mode === "seated" ? 1.75 : 1;
         headY += pointer.current.x * 0.05 * attention * seatedBoost;
         headX += -pointer.current.y * 0.025 * attention * seatedBoost;
@@ -625,7 +635,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     }
 
     // Cinematic secondary motion layered over every animation clip.
-    if (mode !== "walking" && mode !== "dragging") {
+    if (mode !== "walking" && mode !== "turning" && mode !== "dragging") {
       multiplyLocalRotation(rig.current.pelvis, 0, 0, life.weightShift);
       multiplyLocalRotation(rig.current.spine01, life.breathLift * 0.38, 0, -life.weightShift * 0.45);
       multiplyLocalRotation(rig.current.spine02, life.breathLift, 0, life.bodySway * 0.35);
@@ -663,8 +673,20 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
     // The official GLB is normalized once through FLOW_FRONT_YAW.
     // Screen-left/right remain quarter turns around the vertical axis.
     const sideTurn = facing === "left" ? -Math.PI / 2 : facing === "right" ? Math.PI / 2 : 0;
-    const targetYaw = FLOW_FRONT_YAW + sideTurn;
-    presentation.current.rotation.y += (targetYaw - presentation.current.rotation.y) * Math.min(1, dt * 7.2);
+    const baseYaw = FLOW_FRONT_YAW + sideTurn;
+    if (mode === "turning") {
+      const progress = MathUtils.clamp(modeTime / 1.55, 0, 1);
+      const eased = progress < 0.5
+        ? 2 * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      presentation.current.rotation.y = baseYaw + eased * Math.PI * 2;
+    } else {
+      // Use the shortest angular path. After a commanded 360° turn this avoids
+      // unwinding the complete revolution in reverse when Flow returns to idle.
+      const currentYaw = presentation.current.rotation.y;
+      const deltaYaw = Math.atan2(Math.sin(baseYaw - currentYaw), Math.cos(baseYaw - currentYaw));
+      presentation.current.rotation.y += deltaYaw * Math.min(1, dt * 7.2);
+    }
 
     // The dedicated sitting clip bends the skeleton. This offset aligns the pelvis
     // with the throne cushion instead of leaving Flow floating above it.

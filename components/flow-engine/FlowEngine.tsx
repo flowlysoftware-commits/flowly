@@ -14,6 +14,7 @@ import { FlowMemoryEngine } from "./memory/memoryEngine";
 import { FlowToolExecutor } from "./tools/executor";
 import { walkFlowTo } from "./movementController";
 import { createInitialFlowState, flowReducer } from "./stateMachine";
+import { detectFlowChatCommand, type FlowChatCommand } from "./chatCommands";
 import { FlowMode, FlowPanelTarget } from "./types";
 import { FLOW_COMPANION_CONFIG } from "./core/config";
 import { claimFlowRuntime, releaseFlowRuntime } from "./core/runtimeRegistry";
@@ -345,6 +346,94 @@ export default function FlowEngine() {
     }
   }, []);
 
+  const addFlowReply = useCallback((text: string) => {
+    const flowMessage = { id: uid("flow"), role: "flow" as const, text };
+    dispatch({ type: "message", message: flowMessage });
+    dispatch({ type: "bubble", text });
+    memoryRef.current?.recordMessage(flowMessage);
+  }, []);
+
+  const executeChatCommand = useCallback(async (command: FlowChatCommand) => {
+    behaviourRef.current?.signalActivity("chat");
+    movementAbortRef.current?.abort();
+
+    if (command.type === "walk") {
+      if (navigationLock.current) {
+        addFlowReply("Espera un segundo, ahora mismo estoy terminando otro movimiento.");
+        return;
+      }
+
+      navigationLock.current = true;
+      dispatch({ type: "open", open: false });
+      addFlowReply("Claro. Voy a caminar un poco.");
+
+      const size = getCompactSize();
+      const current = stateRef.current.position;
+      const maxLeft = Math.max(0, window.innerWidth - size.width);
+      const step = Math.min(220, Math.max(110, window.innerWidth * 0.16));
+      const autoDirection = current.left + step <= maxLeft ? "right" : "left";
+      const direction = command.direction === "auto" ? autoDirection : command.direction;
+      const destination = {
+        left: clamp(current.left + (direction === "right" ? step : -step), 8, Math.max(8, maxLeft - 8)),
+        top: current.top,
+      };
+
+      const movement = new AbortController();
+      movementAbortRef.current = movement;
+      try {
+        await walkFlowTo(current, destination, {
+          onPosition: (position) => dispatch({ type: "position", ...position }),
+          onFacing: (facing) => dispatch({ type: "facing", facing }),
+          onWalking: (walking) => dispatch({ type: "mode", mode: walking ? "walking" : "idle" }),
+          onGait: (gait) => dispatch({ type: "gait", gait }),
+        }, { signal: movement.signal });
+      } finally {
+        movementAbortRef.current = null;
+        navigationLock.current = false;
+        dispatch({ type: "mode", mode: "idle" });
+        dispatch({ type: "facing", facing: "front" });
+        dispatch({ type: "open", open: true });
+      }
+      return;
+    }
+
+    if (command.type === "wave") {
+      addFlowReply("¡Hola! Encantado de saludarte.");
+      dispatch({ type: "mode", mode: "waving" });
+      await sleep(2900);
+      if (stateRef.current.mode === "waving") dispatch({ type: "mode", mode: "idle" });
+      return;
+    }
+
+    if (command.type === "turn") {
+      addFlowReply("Claro. Mira.");
+      dispatch({ type: "mode", mode: "turning" });
+      await sleep(1800);
+      if (stateRef.current.mode === "turning") dispatch({ type: "mode", mode: "idle" });
+      return;
+    }
+
+    if (command.type === "idle") {
+      addFlowReply("De acuerdo. Me quedo aquí.");
+      dispatch({ type: "mode", mode: "idle" });
+      dispatch({ type: "facing", facing: "front" });
+      return;
+    }
+
+    if (command.type === "think") {
+      addFlowReply("Déjame pensar...");
+      dispatch({ type: "mode", mode: "thinking" });
+      await sleep(2400);
+      if (stateRef.current.mode === "thinking") dispatch({ type: "mode", mode: "idle" });
+      return;
+    }
+
+    addFlowReply("Te escucho.");
+    dispatch({ type: "mode", mode: "listening" });
+    await sleep(2400);
+    if (stateRef.current.mode === "listening") dispatch({ type: "mode", mode: "idle" });
+  }, [addFlowReply]);
+
   const processUserText = useCallback(async (rawText: string) => {
     const text = rawText.trim();
     if (!text) return;
@@ -357,6 +446,12 @@ export default function FlowEngine() {
     dispatch({ type: "message", message: userMessage });
     memoryRef.current?.recordMessage(userMessage);
     services.events.emit("chat:message", { message: userMessage });
+
+    const directCommand = detectFlowChatCommand(text);
+    if (directCommand) {
+      await executeChatCommand(directCommand);
+      return;
+    }
 
     const memoryConfirmation = memoryRef.current?.confirmationFor(text);
     if (memoryConfirmation) {
@@ -400,7 +495,7 @@ export default function FlowEngine() {
       dispatch({ type: "bubble", text: "No he podido conectar con mi cerebro. Revisa OPENAI_API_KEY y vuelve a intentarlo." });
       dispatch({ type: "mode", mode: "error" });
     }
-  }, [navigate, services]);
+  }, [executeChatCommand, navigate, services]);
 
   const voice = useFlowlyVoiceRuntime({
     enabled: enabled && runtimeClaimed,
@@ -800,6 +895,8 @@ export default function FlowEngine() {
       state.connected
         ? state.mode === "walking"
           ? "caminando"
+          : state.mode === "turning"
+            ? "girando"
           : state.mode === "dragging"
             ? "en tus manos"
           : state.mode === "seated"
@@ -973,7 +1070,7 @@ export default function FlowEngine() {
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Pregúntame algo o dime: llévame al CRM"
+              placeholder="Dime: camina, saluda, gira o llévame al CRM"
             />
             <button type="submit" aria-label="Enviar mensaje">
               <Send size={15} />

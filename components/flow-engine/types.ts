@@ -1,4 +1,4 @@
-export type FlowMode = "idle" | "walking" | "thinking" | "listening" | "talking" | "waving" | "pointing" | "pressing" | "dragging" | "seated" | "error";
+export type FlowMode = "idle" | "walking" | "turning" | "thinking" | "listening" | "talking" | "waving" | "pointing" | "pressing" | "dragging" | "seated" | "error";
 export type FlowFacing = "front" | "left" | "right";
 export type FlowUserActivitySource = "pointer" | "keyboard" | "scroll" | "chat" | "drag" | "navigation";
 

@@ -61,6 +61,7 @@ const KEYWORDS: Record<Exclude<FlowAnimationFamily, "other">, RegExp> = {
 const MODE_TO_FAMILY: Record<FlowMode, FlowAnimationFamily | null> = {
   idle: "idle",
   walking: "walk",
+  turning: null,
   thinking: "think",
   listening: "listen",
   talking: "talk",
