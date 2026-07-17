@@ -424,16 +424,19 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       let headX = 0;
       let headY = 0;
       let headZ = 0;
-      let leftClavicleZ = -0.035;
-      let rightClavicleZ = 0.035;
-      let leftUpperX = 0;
-      let rightUpperX = 0;
-      let leftUpperZ = -0.88;
-      let rightUpperZ = 0.88;
-      let leftForeX = 0;
-      let rightForeX = 0;
-      let leftForeZ = -0.10;
-      let rightForeZ = 0.10;
+      // Relaxed A-pose. The previous values pulled both arms against the belt.
+      // These angles keep a visible gap between torso and bracers while avoiding
+      // the exported T-pose silhouette.
+      let leftClavicleZ = -0.012;
+      let rightClavicleZ = 0.012;
+      let leftUpperX = 0.035;
+      let rightUpperX = 0.035;
+      let leftUpperZ = -0.64;
+      let rightUpperZ = 0.64;
+      let leftForeX = -0.06;
+      let rightForeX = -0.06;
+      let leftForeZ = -0.18;
+      let rightForeZ = 0.18;
       let rightHandX = 0;
       let rightHandY = 0;
       let rightHandZ = 0;
@@ -454,8 +457,8 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         const amount = easeIn * easeOut;
         // Relaxed elbows prevent a rigid mannequin silhouette while retaining
         // enough clearance for the chest and bracers.
-        leftForeZ -= 0.035;
-        rightForeZ += 0.035;
+        leftForeZ -= 0.025;
+        rightForeZ += 0.025;
 
         if (variant === 0) {
           pelvisZ += Math.sin(local * 1.35) * 0.014 * amount;
@@ -529,28 +532,30 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         leftForeZ = -0.16;
         rightForeZ = 0.16;
       } else if (mode === "walking") {
-        const locomotion = MathUtils.clamp(gaitSpeed || 0.72, 0.42, 1.15);
-        const cadence = 1.25 + locomotion * 0.75;
+        // Compact natural gait for an on-screen companion. Keep the stride small
+        // so feet do not kick through the trousers or look like a marching pose.
+        const locomotion = MathUtils.clamp(gaitSpeed || 0.68, 0.38, 1.0);
+        const cadence = 1.05 + locomotion * 0.55;
         const phase = elapsed * Math.PI * 2 * cadence;
         const leftStep = Math.sin(phase);
         const rightStep = -leftStep;
-        const stride = 0.48 + locomotion * 0.18;
+        const stride = 0.26 + locomotion * 0.10;
         leftThighX = leftStep * stride;
         rightThighX = rightStep * stride;
-        // Bend the trailing knee and articulate the ankle. This is what makes
-        // the screen translation read as walking rather than floating.
-        leftCalfX = Math.max(0, -leftStep) * 0.72;
-        rightCalfX = Math.max(0, -rightStep) * 0.72;
-        leftFootX = -Math.max(0, leftStep) * 0.20 + Math.max(0, -leftStep) * 0.07;
-        rightFootX = -Math.max(0, rightStep) * 0.20 + Math.max(0, -rightStep) * 0.07;
-        leftUpperX = -leftStep * (0.24 + locomotion * 0.08);
-        rightUpperX = -rightStep * (0.24 + locomotion * 0.08);
-        leftForeZ = -0.18;
-        rightForeZ = 0.18;
-        pelvisY = Math.abs(Math.sin(phase)) * 0.025;
-        pelvisZ = Math.sin(phase) * 0.032;
-        chestY = -Math.sin(phase) * 0.025;
-        chestX = 0.012;
+        leftCalfX = Math.max(0, -leftStep) * 0.46;
+        rightCalfX = Math.max(0, -rightStep) * 0.46;
+        leftFootX = -Math.max(0, leftStep) * 0.10 + Math.max(0, -leftStep) * 0.035;
+        rightFootX = -Math.max(0, rightStep) * 0.10 + Math.max(0, -rightStep) * 0.035;
+        leftUpperX = 0.035 - leftStep * 0.12;
+        rightUpperX = 0.035 - rightStep * 0.12;
+        leftUpperZ = -0.60;
+        rightUpperZ = 0.60;
+        leftForeZ = -0.20;
+        rightForeZ = 0.20;
+        pelvisY = Math.abs(Math.sin(phase)) * 0.010;
+        pelvisZ = Math.sin(phase) * 0.014;
+        chestY = -Math.sin(phase) * 0.012;
+        chestX = 0.006;
       } else if (mode === "waving") {
         const raise = MathUtils.smoothstep(Math.min(modeTime / 0.58, 1), 0, 1);
         const lower = modeTime > 2.35
@@ -561,19 +566,20 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
           * (modeTime > 2.15 ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.15) / 0.2, 1), 0, 1) : 1);
         const wave = Math.sin((modeTime - 0.48) * 10.2) * waveWindow;
 
-        // Raise from clavicle + shoulder, bend at J arm, wave at J hand.
-        // Each segment now moves its anatomical joint instead of folding midway.
-        rightClavicleZ = MathUtils.lerp(0.035, -0.12, amount);
-        rightUpperX = -0.20 * amount;
-        rightUpperZ = MathUtils.lerp(1.02, -0.42, amount);
-        rightForeZ = MathUtils.lerp(0.10, 1.02, amount);
-        rightForeX = -0.10 * amount;
-        rightHandX = -0.08 * amount;
-        rightHandY = wave * 0.38 * amount;
-        rightHandZ = 0.10 * amount;
-        headZ = 0.05 * amount;
-        headY = -0.04 * amount;
-        chestY = -0.035 * amount;
+        // Friendly shoulder-led greeting: lift the complete arm beside the head,
+        // bend the elbow and wave only from the wrist. The old pose rotated the
+        // forearm downward and made Flow greet the floor.
+        rightClavicleZ = MathUtils.lerp(0.012, -0.055, amount);
+        rightUpperX = MathUtils.lerp(0.035, -0.92, amount);
+        rightUpperZ = MathUtils.lerp(0.64, 0.18, amount);
+        rightForeX = MathUtils.lerp(-0.06, -1.05, amount);
+        rightForeZ = MathUtils.lerp(0.18, 0.32, amount);
+        rightHandX = -0.16 * amount;
+        rightHandY = wave * 0.34 * amount;
+        rightHandZ = 0.06 * amount;
+        headZ = 0.045 * amount;
+        headY = -0.035 * amount;
+        chestY = -0.025 * amount;
       } else if (mode === "pointing" || mode === "pressing") {
         const intro = MathUtils.smoothstep(Math.min(modeTime / 0.32, 1), 0, 1);
         const press = mode === "pressing" ? Math.sin(Math.min(modeTime / 0.42, 1) * Math.PI) : 0;

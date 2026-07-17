@@ -705,7 +705,7 @@ export default function FlowEngine() {
       getMode: () => stateRef.current.mode,
       getEmotion: () => stateRef.current.emotion,
       isBlocked: () => navigationLock.current || introRef.current !== "ready" || dragRef.current.active,
-      isThroned: () => thronedRef.current,
+      isThroned: () => false,
       onDecision: (decision) => {
         services.events.emit("behaviour:goal", {
           goal: decision.goal,
@@ -723,7 +723,8 @@ export default function FlowEngine() {
         }
         if (decision.command === "rest") {
           emotionRef.current?.stimulate({ type: "rest-start" });
-          void goToThrone();
+          dispatch({ type: "mode", mode: "idle" });
+          dispatch({ type: "bubble", text: "Me quedo aquí, atento y disponible." });
           return;
         }
         dispatch({ type: "mode", mode: decision.mode });
@@ -807,29 +808,7 @@ export default function FlowEngine() {
     }
     dragRef.current.active = false;
 
-    const throne = throneRef.current?.getBoundingClientRect();
-    const droppedOnThrone = Boolean(
-      throne &&
-      event.clientX >= throne.left - 52 &&
-      event.clientX <= throne.right + 52 &&
-      event.clientY >= throne.top - 52 &&
-      event.clientY <= throne.bottom + 52
-    );
-
     setThroneHover(false);
-
-    if (throne && droppedOnThrone) {
-      const { left, top } = getThronePosition(throne);
-
-      setIsThroned(true);
-      thronedRef.current = true;
-      dispatch({ type: "position", left, top });
-      dispatch({ type: "mode", mode: "seated" });
-      dispatch({ type: "facing", facing: "front" });
-      dispatch({ type: "open", open: false });
-      dispatch({ type: "bubble", text: "Voy a descansar aquí un momento." });
-      return;
-    }
 
     setIsThroned(false);
     thronedRef.current = false;
@@ -915,38 +894,9 @@ export default function FlowEngine() {
   if (!enabled || !runtimeClaimed || !identityReady || !identity) return null;
 
   return (
-    <div className={`flow-engine-root is-intro-${introPhase} ${isThroned ? "has-throned-flow" : ""}`} data-flow-runtime="engine-v2">
-      {introPhase === "ready" && (
-        <div
-          ref={throneRef}
-          className={`flow-engine-throne ${throneHover ? "is-drop-hover" : ""} ${isThroned ? "is-occupied" : ""}`}
-          aria-label="Trono de Flow"
-        >
-          <div className="flow-engine-throne-aura" aria-hidden="true" />
-          <img
-            className="flow-engine-throne-art"
-            src="/flow/flow-throne.png"
-            alt={isThroned ? "Flow descansando en su trono" : ""}
-            draggable={false}
-            aria-hidden={!isThroned}
-          />
-          <div className="flow-engine-throne-seat-anchor" aria-hidden="true" />
-          {isThroned && (
-            <div
-              className="flow-engine-throne-grab-handle"
-              onPointerDown={beginDrag}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-              title="Coge a Flow por la cabeza"
-              aria-label="Levantar a Flow del trono"
-            />
-          )}
-          {!isThroned && <small>Arrastra a Flow al trono para descansar</small>}
-        </div>
-      )}
+    <div className={`flow-engine-root is-intro-${introPhase}`} data-flow-runtime="engine-v2">
       <div
-        className={`flow-engine-character is-${state.mode} is-intro-${introPhase} ${isThroned ? "is-throned" : ""}`}
+        className={`flow-engine-character is-${state.mode} is-intro-${introPhase}`}
         style={{ left: state.position.left, top: state.position.top }}
       >
         {introPhase === "ready" && (
