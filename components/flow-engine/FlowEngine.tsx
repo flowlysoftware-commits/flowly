@@ -325,10 +325,15 @@ export default function FlowEngine() {
       highlightTarget(element, true);
       dispatch({ type: "mode", mode: "pointing" });
       dispatch({ type: "bubble", text: `Aquí tienes ${target.label}.` });
-      await sleep(760);
+      await sleep(430);
+
+      // Make the interaction visible: Flow reaches the control, performs a short
+      // press and triggers the DOM click at the peak of the hand movement.
+      dispatch({ type: "mode", mode: "pressing" });
+      await sleep(210);
       element.focus({ preventScroll: true });
       element.click();
-      await sleep(180);
+      await sleep(260);
       highlightTarget(element, false);
       dispatch({ type: "mode", mode: "idle" });
       dispatch({ type: "facing", facing: "front" });

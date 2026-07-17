@@ -66,6 +66,7 @@ const MODE_TO_FAMILY: Record<FlowMode, FlowAnimationFamily | null> = {
   talking: "talk",
   waving: "wave",
   pointing: "point",
+  pressing: null,
   dragging: null,
   seated: "seated",
   error: "idle",

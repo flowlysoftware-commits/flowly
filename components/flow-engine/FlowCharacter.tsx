@@ -44,6 +44,8 @@ type BoneRig = {
   spine02?: Object3D;
   neck?: Object3D;
   head?: Object3D;
+  leftClavicle?: Object3D;
+  rightClavicle?: Object3D;
   leftShoulder?: Object3D;
   rightShoulder?: Object3D;
   leftUpperArm?: Object3D;
@@ -269,12 +271,17 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       spine02: findBone(boneMap, ["J chest", "Spine02", "Spine2", "Chest", "UpperChest"]),
       neck: findBone(boneMap, ["J neck", "NeckTwist01", "Neck"]),
       head: findBone(boneMap, ["J head", "Head"]),
-      leftShoulder: findBone(boneMap, ["J shoulder l", "J shoulder upper l", "LeftShoulder", "Shoulder_L", "LShoulder"]),
-      rightShoulder: findBone(boneMap, ["J shoulder r", "J shoulder upper r", "RightShoulder", "Shoulder_R", "RShoulder"]),
-      leftUpperArm: findBone(boneMap, ["J arm l", "LeftArm", "LeftUpperArm", "UpperArm_L", "LUpperArm"]),
-      rightUpperArm: findBone(boneMap, ["J arm r", "RightArm", "RightUpperArm", "UpperArm_R", "RUpperArm"]),
-      leftForeArm: findBone(boneMap, ["J hand l", "LeftForeArm", "LeftLowerArm", "ForeArm_L", "LForeArm"]),
-      rightForeArm: findBone(boneMap, ["J hand r", "RightForeArm", "RightLowerArm", "ForeArm_R", "RForeArm"]),
+      // Flow's custom chain is: shoulder upper (clavicle) → shoulder (upper arm)
+      // → arm (forearm) → hand. Keep these roles exact; treating J arm as the
+      // upper arm was the reason greetings appeared to snap at the elbow.
+      leftClavicle: findBone(boneMap, ["J shoulder upper l", "LeftClavicle", "Clavicle_L"]),
+      rightClavicle: findBone(boneMap, ["J shoulder upper r", "RightClavicle", "Clavicle_R"]),
+      leftShoulder: findBone(boneMap, ["J shoulder l", "LeftShoulder", "Shoulder_L", "LShoulder"]),
+      rightShoulder: findBone(boneMap, ["J shoulder r", "RightShoulder", "Shoulder_R", "RShoulder"]),
+      leftUpperArm: findBone(boneMap, ["J shoulder l", "LeftArm", "LeftUpperArm", "UpperArm_L", "LUpperArm"]),
+      rightUpperArm: findBone(boneMap, ["J shoulder r", "RightArm", "RightUpperArm", "UpperArm_R", "RUpperArm"]),
+      leftForeArm: findBone(boneMap, ["J arm l", "LeftForeArm", "LeftLowerArm", "ForeArm_L", "LForeArm"]),
+      rightForeArm: findBone(boneMap, ["J arm r", "RightForeArm", "RightLowerArm", "ForeArm_R", "RForeArm"]),
       leftHand: findBone(boneMap, ["J hand l", "LeftHand", "Hand_L", "LHand"]),
       rightHand: findBone(boneMap, ["J hand r", "RightHand", "Hand_R", "RHand"]),
       leftThigh: findBone(boneMap, ["J leg l", "LeftUpLeg", "LeftThigh", "Thigh_L", "LThigh"]),
@@ -295,7 +302,14 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
   }, [source.scene]);
 
   const catalog = useMemo(
-    () => buildAnimationCatalog((source.animations || []).map(removeRootTranslation)),
+    () => buildAnimationCatalog(
+      (source.animations || [])
+        // This Blender-generated placeholder was authored from the T-pose and
+        // keeps both arms horizontal. The web runtime supplies the production
+        // idle procedurally, with relaxed arms and natural micro-motion.
+        .filter((clip) => !/^FLOW_Idle_Procedural$/i.test(clip.name || ""))
+        .map(removeRootTranslation),
+    ),
     [source.animations],
   );
 
@@ -368,7 +382,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       multiplyLocalRotation(rig.current.spine01, breath * 0.0025, 0, sway * 0.18);
       multiplyLocalRotation(rig.current.spine02, breath * 0.0055, 0, -sway * 0.25);
 
-      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "dragging") {
+      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "pressing" && mode !== "dragging") {
         const seatedBoost = mode === "seated" ? 1.55 : 1;
         const pointerYaw = life.headYaw * seatedBoost;
         const pointerPitch = life.headPitch * seatedBoost;
@@ -399,21 +413,27 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         }
       }
     } else {
-      // Conservative fallback for files without an appropriate named clip.
+      // Production procedural rig for Flow's custom Blender skeleton. The
+      // exported rest pose is a T-pose, so every normal state begins by lowering
+      // the arms from the shoulder joint before layering gestures on top.
       let pelvisY = 0;
-      let pelvisZ = sway * 0.25;
+      let pelvisZ = sway * 0.22;
       let chestX = breath * (0.006 + energy * 0.002);
       let chestY = 0;
-      let chestZ = -sway * 0.4;
+      let chestZ = -sway * 0.35;
       let headX = 0;
       let headY = 0;
       let headZ = 0;
+      let leftClavicleZ = -0.035;
+      let rightClavicleZ = 0.035;
       let leftUpperX = 0;
       let rightUpperX = 0;
-      let leftUpperZ = 0;
-      let rightUpperZ = 0;
-      let leftForeY = 0;
-      let rightForeY = 0;
+      let leftUpperZ = -1.02;
+      let rightUpperZ = 1.02;
+      let leftForeX = 0;
+      let rightForeX = 0;
+      let leftForeZ = -0.10;
+      let rightForeZ = 0.10;
       let rightHandX = 0;
       let rightHandY = 0;
       let rightHandZ = 0;
@@ -432,63 +452,55 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
           ? 1 - MathUtils.smoothstep(Math.min((local - 1.7) / 0.7, 1), 0, 1)
           : 1;
         const amount = easeIn * easeOut;
+        // Relaxed elbows prevent a rigid mannequin silhouette while retaining
+        // enough clearance for the chest and bracers.
+        leftForeZ -= 0.035;
+        rightForeZ += 0.035;
 
         if (variant === 0) {
-          pelvisZ += Math.sin(local * 1.35) * 0.018 * amount;
-          chestZ += -Math.sin(local * 1.35) * 0.018 * amount;
-          headZ += Math.sin(local * 0.9) * 0.012 * amount;
+          pelvisZ += Math.sin(local * 1.35) * 0.014 * amount;
+          chestZ += -Math.sin(local * 1.35) * 0.014 * amount;
+          headZ += Math.sin(local * 0.9) * 0.01 * amount;
         } else if (variant === 1) {
-          headY += 0.06 * amount;
-          headX -= 0.012 * amount;
-          chestY -= 0.02 * amount;
+          headY += 0.05 * amount;
+          headX -= 0.01 * amount;
+          chestY -= 0.016 * amount;
         } else if (variant === 2) {
-          leftUpperZ += 0.035 * amount;
-          rightUpperZ -= 0.035 * amount;
-          chestX -= 0.018 * amount;
-          headX += 0.01 * amount;
+          leftForeZ -= 0.04 * amount;
+          rightForeZ += 0.04 * amount;
+          chestX -= 0.014 * amount;
         } else if (variant === 3) {
-          pelvisY += 0.008 * amount;
-          chestX += 0.028 * amount;
-          headX -= 0.018 * amount;
+          pelvisY += 0.006 * amount;
+          chestX += 0.022 * amount;
+          headX -= 0.014 * amount;
         } else if (variant === 4) {
-          headY -= 0.055 * amount;
-          headZ += 0.018 * amount;
-          chestY += 0.018 * amount;
+          headY -= 0.045 * amount;
+          headZ += 0.014 * amount;
+          chestY += 0.014 * amount;
         } else {
-          pelvisZ += 0.014 * amount;
-          leftThighX += 0.02 * amount;
-          rightThighX -= 0.014 * amount;
-          headY += Math.sin(local * 0.8) * 0.015 * amount;
+          pelvisZ += 0.012 * amount;
+          leftThighX += 0.014 * amount;
+          rightThighX -= 0.01 * amount;
         }
       }
 
       if (mode === "seated") {
-        // Resting pose for Flow's throne. Keep this procedural so it remains
-        // compatible with the master rig even when no dedicated sit clip exists.
-        const settle = MathUtils.smoothstep(Math.min(modeTime / 0.75, 1), 0, 1);
+        const settle = MathUtils.smoothstep(Math.min(modeTime / 0.72, 1), 0, 1);
         const relaxedBreath = Math.sin(elapsed * 1.15) * 0.006;
-        // Mixamo-style rigs bend the thighs forward on positive local X and the
-        // knees backwards on negative local X. The previous signs produced an
-        // almost kneeling/backwards pose on the throne.
-        pelvisY = -0.115 * settle;
-        chestX = (-0.055 + relaxedBreath) * settle;
-        chestZ = Math.sin(elapsed * 0.35) * 0.006 * settle;
-        leftThighX = 1.08 * settle;
-        rightThighX = 1.08 * settle;
-        leftCalfX = -1.22 * settle;
-        rightCalfX = -1.22 * settle;
-        leftFootX = 0.16 * settle;
-        rightFootX = 0.16 * settle;
-        leftUpperX = 0.34 * settle;
-        rightUpperX = 0.34 * settle;
-        leftUpperZ = 0.12 * settle;
-        rightUpperZ = -0.12 * settle;
-        leftForeY = -0.24 * settle;
-        rightForeY = 0.24 * settle;
-        headX = 0.025 * settle;
-        headZ = Math.sin(elapsed * 0.28) * 0.005;
+        pelvisY = -0.16 * settle;
+        chestX = (-0.05 + relaxedBreath) * settle;
+        leftThighX = 1.02 * settle;
+        rightThighX = 1.02 * settle;
+        leftCalfX = -1.28 * settle;
+        rightCalfX = -1.28 * settle;
+        leftFootX = 0.18 * settle;
+        rightFootX = 0.18 * settle;
+        leftUpperZ = -0.88;
+        rightUpperZ = 0.88;
+        leftForeZ = -0.42 * settle;
+        rightForeZ = 0.42 * settle;
+        headX = 0.02 * settle;
       } else if (mode === "dragging") {
-        // Mii-style dangling reaction while the user grabs Flow by the head.
         const kick = Math.sin(elapsed * 11.5);
         const counterKick = Math.sin(elapsed * 11.5 + Math.PI);
         pelvisY = -0.018 + Math.abs(Math.sin(elapsed * 5.75)) * 0.008;
@@ -504,73 +516,72 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         rightFootX = -0.12 - Math.max(0, counterKick) * 0.12;
         leftUpperX = -0.2 + counterKick * 0.1;
         rightUpperX = -0.2 + kick * 0.1;
-        leftUpperZ = 0.22 + Math.sin(elapsed * 7.2) * 0.08;
-        rightUpperZ = -0.22 - Math.sin(elapsed * 7.2 + 0.8) * 0.08;
-        leftForeY = -0.12 + Math.sin(elapsed * 8.4) * 0.12;
-        rightForeY = 0.12 - Math.sin(elapsed * 8.4 + 0.6) * 0.12;
+        leftUpperZ = -0.72 + Math.sin(elapsed * 7.2) * 0.08;
+        rightUpperZ = 0.72 - Math.sin(elapsed * 7.2 + 0.8) * 0.08;
       } else if (mode === "walking") {
-        const cadence = 1.48 + energy * 0.34;
+        const locomotion = MathUtils.clamp(gaitSpeed || 0.72, 0.42, 1.15);
+        const cadence = 1.25 + locomotion * 0.75;
         const phase = elapsed * Math.PI * 2 * cadence;
-        const stride = 0.38 + energy * 0.08;
         const leftStep = Math.sin(phase);
         const rightStep = -leftStep;
+        const stride = 0.48 + locomotion * 0.18;
         leftThighX = leftStep * stride;
         rightThighX = rightStep * stride;
-        leftCalfX = Math.max(0, -leftStep) * 0.48;
-        rightCalfX = Math.max(0, -rightStep) * 0.48;
-        leftFootX = -Math.max(0, leftStep) * 0.16;
-        rightFootX = -Math.max(0, rightStep) * 0.16;
-        leftUpperX = -leftStep * 0.25;
-        rightUpperX = -rightStep * 0.25;
-        pelvisY = Math.abs(Math.sin(phase)) * 0.012;
-        pelvisZ = Math.sin(phase) * 0.025;
-        chestY = -Math.sin(phase) * 0.018;
-        chestX = 0.016;
+        // Bend the trailing knee and articulate the ankle. This is what makes
+        // the screen translation read as walking rather than floating.
+        leftCalfX = Math.max(0, -leftStep) * 0.72;
+        rightCalfX = Math.max(0, -rightStep) * 0.72;
+        leftFootX = -Math.max(0, leftStep) * 0.20 + Math.max(0, -leftStep) * 0.07;
+        rightFootX = -Math.max(0, rightStep) * 0.20 + Math.max(0, -rightStep) * 0.07;
+        leftUpperX = -leftStep * (0.24 + locomotion * 0.08);
+        rightUpperX = -rightStep * (0.24 + locomotion * 0.08);
+        leftForeZ = -0.18;
+        rightForeZ = 0.18;
+        pelvisY = Math.abs(Math.sin(phase)) * 0.025;
+        pelvisZ = Math.sin(phase) * 0.032;
+        chestY = -Math.sin(phase) * 0.025;
+        chestX = 0.012;
       } else if (mode === "waving") {
-        // Friendly, unmistakable greeting. Flow first raises the hand beside his
-        // face, opens the palm toward the visitor and then performs two wrist
-        // waves before returning naturally to idle.
-        const raise = MathUtils.smoothstep(Math.min(modeTime / 0.55, 1), 0, 1);
+        const raise = MathUtils.smoothstep(Math.min(modeTime / 0.58, 1), 0, 1);
         const lower = modeTime > 2.35
           ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.35) / 0.55, 1), 0, 1)
           : 1;
         const amount = raise * lower;
-        const waveWindow = MathUtils.smoothstep(Math.min(Math.max((modeTime - 0.48) / 0.22, 0), 1), 0, 1)
-          * (modeTime > 2.15
-            ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.15) / 0.2, 1), 0, 1)
-            : 1);
-        const wave = Math.sin((modeTime - 0.45) * 10.4) * waveWindow;
+        const waveWindow = MathUtils.smoothstep(Math.min(Math.max((modeTime - 0.52) / 0.22, 0), 1), 0, 1)
+          * (modeTime > 2.15 ? 1 - MathUtils.smoothstep(Math.min((modeTime - 2.15) / 0.2, 1), 0, 1) : 1);
+        const wave = Math.sin((modeTime - 0.48) * 10.2) * waveWindow;
 
-        // Shoulder and upper arm place the hand clearly beside the head instead
-        // of leaving the arm diagonally extended at waist height.
-        rightUpperX = -0.34 * amount;
-        rightUpperZ = -1.28 * amount;
-        rightForeY = (-1.08 + wave * 0.12) * amount;
-
-        // Most of the greeting comes from the wrist, as in a real human wave.
-        rightHandX = -0.12 * amount;
-        rightHandY = (0.08 + wave * 0.42) * amount;
-        rightHandZ = 0.12 * amount;
-
-        // The whole body participates subtly: eye contact, a small head tilt and
-        // a gentle lean make the gesture feel welcoming rather than mechanical.
-        headZ = 0.055 * amount;
-        headY = -0.045 * amount;
-        headX = -0.018 * amount;
-        chestY = -0.045 * amount;
-        chestZ = 0.018 * amount;
-      } else if (mode === "pointing") {
-        const amount = MathUtils.smoothstep(Math.min(modeTime / 0.35, 1), 0, 1);
-        rightUpperX = -0.025 * amount;
-        rightUpperZ = -0.12 * amount;
-        rightForeY = -0.018 * amount;
-        headY = -0.035 * amount;
+        // Raise from clavicle + shoulder, bend at J arm, wave at J hand.
+        // Each segment now moves its anatomical joint instead of folding midway.
+        rightClavicleZ = MathUtils.lerp(0.035, -0.12, amount);
+        rightUpperX = -0.20 * amount;
+        rightUpperZ = MathUtils.lerp(1.02, -0.42, amount);
+        rightForeZ = MathUtils.lerp(0.10, 1.02, amount);
+        rightForeX = -0.10 * amount;
+        rightHandX = -0.08 * amount;
+        rightHandY = wave * 0.38 * amount;
+        rightHandZ = 0.10 * amount;
+        headZ = 0.05 * amount;
+        headY = -0.04 * amount;
+        chestY = -0.035 * amount;
+      } else if (mode === "pointing" || mode === "pressing") {
+        const intro = MathUtils.smoothstep(Math.min(modeTime / 0.32, 1), 0, 1);
+        const press = mode === "pressing" ? Math.sin(Math.min(modeTime / 0.42, 1) * Math.PI) : 0;
+        rightClavicleZ = MathUtils.lerp(0.035, -0.02, intro);
+        rightUpperZ = MathUtils.lerp(1.02, 0.08, intro);
+        rightUpperX = (-0.10 - press * 0.08) * intro;
+        rightForeZ = MathUtils.lerp(0.10, 0.03, intro);
+        rightHandX = -0.10 * intro - press * 0.22;
+        rightHandZ = press * 0.08;
+        chestX += press * 0.025;
+        chestY = -0.035 * intro;
+        headY = -0.03 * intro;
       } else if (mode === "talking") {
         const gesture = Math.sin(elapsed * (1.8 + energy));
-        leftUpperZ = 0.06 + gesture * 0.035;
-        rightUpperZ = -0.06 - gesture * 0.035;
-        leftForeY = -0.045 + Math.sin(elapsed * 1.2 + 1.4) * 0.05;
-        rightForeY = 0.045 - gesture * 0.05;
+        leftForeZ = -0.18 - Math.max(0, gesture) * 0.10;
+        rightForeZ = 0.18 + Math.max(0, -gesture) * 0.10;
+        leftUpperX = gesture * 0.035;
+        rightUpperX = -gesture * 0.035;
         chestY = gesture * 0.01;
       } else if (mode === "thinking") {
         headX = -0.025;
@@ -586,7 +597,7 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
         headZ += Math.sin(elapsed * 0.17 + 2.1) * 0.007;
       }
 
-      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "dragging") {
+      if (mode !== "walking" && mode !== "waving" && mode !== "pointing" && mode !== "pressing" && mode !== "dragging") {
         const seatedBoost = mode === "seated" ? 1.75 : 1;
         headY += pointer.current.x * 0.05 * attention * seatedBoost;
         headX += -pointer.current.y * 0.025 * attention * seatedBoost;
@@ -598,10 +609,12 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
       applyRestRotation(rig.current.spine02, restPose.current, chestX, chestY, chestZ, alpha);
       applyRestRotation(rig.current.neck, restPose.current, headX * 0.35, headY * 0.35, headZ * 0.35, alpha);
       applyRestRotation(rig.current.head, restPose.current, headX * 0.65, headY * 0.65, headZ * 0.65, alpha);
+      applyRestRotation(rig.current.leftClavicle, restPose.current, 0, 0, leftClavicleZ, alpha);
+      applyRestRotation(rig.current.rightClavicle, restPose.current, 0, 0, rightClavicleZ, alpha);
       applyRestRotation(rig.current.leftUpperArm, restPose.current, leftUpperX, 0, leftUpperZ, alpha);
       applyRestRotation(rig.current.rightUpperArm, restPose.current, rightUpperX, 0, rightUpperZ, alpha);
-      applyRestRotation(rig.current.leftForeArm, restPose.current, 0, leftForeY, 0, alpha);
-      applyRestRotation(rig.current.rightForeArm, restPose.current, 0, rightForeY, 0, alpha);
+      applyRestRotation(rig.current.leftForeArm, restPose.current, leftForeX, 0, leftForeZ, alpha);
+      applyRestRotation(rig.current.rightForeArm, restPose.current, rightForeX, 0, rightForeZ, alpha);
       applyRestRotation(rig.current.rightHand, restPose.current, rightHandX, rightHandY, rightHandZ, alpha);
       applyRestRotation(rig.current.leftThigh, restPose.current, leftThighX, 0, 0, alpha);
       applyRestRotation(rig.current.rightThigh, restPose.current, rightThighX, 0, 0, alpha);
@@ -655,9 +668,9 @@ function CharacterScene({ mode, facing, emotion, behaviourPulse = 0, behaviourId
 
     // The dedicated sitting clip bends the skeleton. This offset aligns the pelvis
     // with the throne cushion instead of leaving Flow floating above it.
-    const targetPresentationY = mode === "seated" ? -0.08 : 0;
-    const targetPresentationZ = mode === "seated" ? -0.04 : 0;
-    const targetPresentationScale = mode === "seated" ? 0.92 : 1;
+    const targetPresentationY = mode === "seated" ? -0.44 : 0;
+    const targetPresentationZ = mode === "seated" ? -0.02 : 0;
+    const targetPresentationScale = mode === "seated" ? 0.90 : 1;
     presentation.current.position.y += (targetPresentationY - presentation.current.position.y) * Math.min(1, dt * 7.5);
     presentation.current.position.z += (targetPresentationZ - presentation.current.position.z) * Math.min(1, dt * 7.5);
     const scaleAlpha = Math.min(1, dt * 7.5);
