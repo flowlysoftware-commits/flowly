@@ -17,28 +17,31 @@ import {
   X,
 } from "lucide-react";
 
-type AccountingEffect = "ingreso" | "gasto";
+type MovementType = "ingreso" | "gasto";
 type BalanceMap = Record<string, number>;
-type OptionCategory = "movement" | "business" | "origin" | "destination" | "channel" | "category" | "functionality";
+type OptionCategory = "business" | "origin" | "destination" | "channel" | "category";
 
 type ConfigOption = {
   id: string;
   category: OptionCategory;
   label: string;
-  accounting_effect?: AccountingEffect | null;
   active: boolean;
-  sort_order: number;
+};
+
+type ApiConfigOption = {
+  id: string;
+  category: string;
+  value: string;
+  active: boolean;
 };
 
 type AccountingEntry = {
   id: string;
-  type: string;
-  effect: AccountingEffect;
+  type: MovementType;
   date: string;
   business: string;
   channel: string;
   category: string;
-  functionality: string;
   amount: number;
   note: string;
   originAccount: string;
@@ -49,12 +52,10 @@ type AccountingEntry = {
 type ApiEntry = {
   id: string;
   movement_type: string;
-  movement_effect?: AccountingEffect | null;
   movement_date: string;
   business: string;
   channel: string;
   category: string;
-  functionality?: string | null;
   amount: number | string;
   note: string | null;
   origin_account?: string | null;
@@ -74,23 +75,19 @@ type Filters = {
 type CashRow = { entry: AccountingEntry; cashIn: number; cashOut: number; balance: number };
 
 const ACCESS_PASSWORD = "Nosotrostarot1.";
-const defaultOptions: Record<OptionCategory, Array<{ label: string; accounting_effect?: AccountingEffect }>> = {
-  movement: [{ label: "Ingreso", accounting_effect: "ingreso" }, { label: "Gasto", accounting_effect: "gasto" }],
+const defaultOptions: Record<OptionCategory, Array<{ label: string }>> = {
   business: [{ label: "Flowly" }, { label: "Celestial" }, { label: "Leonaris" }],
   origin: [{ label: "Banco" }, { label: "Caja extra" }],
   destination: [{ label: "Banco" }, { label: "Caja extra" }],
   channel: [{ label: "Square" }, { label: "Transferencia" }, { label: "Bizum" }, { label: "Tarjeta" }, { label: "Stripe" }, { label: "PayPal" }, { label: "Otro" }],
   category: [{ label: "recarga" }, { label: "facebook" }, { label: "pago tarotista" }, { label: "Deuda" }, { label: "Pago Centrales" }, { label: "Pago premium numbers" }, { label: "pago hubspot" }, { label: "otros" }, { label: "call400" }, { label: "Flowly" }],
-  functionality: [{ label: "General" }],
 };
 const categoryLabels: Record<OptionCategory, string> = {
-  movement: "Movimiento",
   business: "Negocio",
   origin: "Origen del dinero",
   destination: "Destino del dinero",
   channel: "Por dónde se paga",
   category: "Tipo",
-  functionality: "Funcionamiento",
 };
 const emptyFilters: Filters = { date: "", origin: "", destination: "", channel: "", category: "", movement: "" };
 
@@ -99,8 +96,18 @@ function euro(value: number) {
 }
 function today() { return new Date().toISOString().slice(0, 10); }
 function currentMonth() { return new Date().toISOString().slice(0, 7); }
+function apiCategory(category: OptionCategory) {
+  return ({ business: "business", origin: "money_origin", destination: "money_destination", channel: "payment_method", category: "movement_type" } as const)[category];
+}
+function uiCategory(category: string): OptionCategory | null {
+  return ({ business: "business", money_origin: "origin", money_destination: "destination", payment_method: "channel", movement_type: "category" } as Record<string, OptionCategory>)[category] || null;
+}
+function mapConfigOption(option: ApiConfigOption): ConfigOption | null {
+  const category = uiCategory(option.category);
+  return category ? { id: option.id, category, label: option.value, active: option.active } : null;
+}
 function optionValues(options: ConfigOption[], category: OptionCategory) {
-  return options.filter((item) => item.category === category && item.active).sort((a, b) => a.sort_order - b.sort_order).map((item) => item.label);
+  return options.filter((item) => item.category === category && item.active).map((item) => item.label);
 }
 function mergeHistoric(active: string[], historic: string[]) {
   return Array.from(new Set([...active, ...historic.filter(Boolean)]));
@@ -108,13 +115,11 @@ function mergeHistoric(active: string[], historic: string[]) {
 function mapEntry(entry: ApiEntry): AccountingEntry {
   return {
     id: entry.id,
-    type: entry.movement_type,
-    effect: entry.movement_effect === "gasto" || entry.movement_effect === "ingreso" ? entry.movement_effect : entry.movement_type.toLowerCase() === "gasto" ? "gasto" : "ingreso",
+    type: entry.movement_type.toLowerCase() === "gasto" ? "gasto" : "ingreso",
     date: entry.movement_date,
     business: entry.business,
     channel: entry.channel,
     category: entry.category,
-    functionality: entry.functionality || "General",
     amount: Number(entry.amount) || 0,
     note: entry.note || "",
     originAccount: entry.origin_account || "Banco",
@@ -123,8 +128,8 @@ function mapEntry(entry: ApiEntry): AccountingEntry {
   };
 }
 function calculateTotals(entries: AccountingEntry[]) {
-  const income = entries.filter((entry) => entry.effect === "ingreso").reduce((sum, entry) => sum + entry.amount, 0);
-  const expenses = entries.filter((entry) => entry.effect === "gasto").reduce((sum, entry) => sum + entry.amount, 0);
+  const income = entries.filter((entry) => entry.type === "ingreso").reduce((sum, entry) => sum + entry.amount, 0);
+  const expenses = entries.filter((entry) => entry.type === "gasto").reduce((sum, entry) => sum + entry.amount, 0);
   return { income, expenses, balance: income - expenses };
 }
 function calculateCashRows(entries: AccountingEntry[], openingBalance = 0) {
@@ -142,9 +147,7 @@ function fallbackConfigOptions(): ConfigOption[] {
     id: `fallback-${category}-${index}`,
     category,
     label: item.label,
-    accounting_effect: item.accounting_effect || null,
     active: true,
-    sort_order: (index + 1) * 10,
   })));
 }
 
@@ -153,7 +156,7 @@ export default function ContabilidadClient() {
   const [unlocked, setUnlocked] = useState(false);
   const [accessError, setAccessError] = useState("");
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>(fallbackConfigOptions());
-  const [type, setType] = useState("Ingreso");
+  const [type, setType] = useState<MovementType>("ingreso");
   const [date, setDate] = useState(today());
   const [month, setMonth] = useState(currentMonth());
   const [business, setBusiness] = useState("Flowly");
@@ -161,7 +164,6 @@ export default function ContabilidadClient() {
   const [destinationAccount, setDestinationAccount] = useState("Banco");
   const [channel, setChannel] = useState("Square");
   const [category, setCategory] = useState("recarga");
-  const [functionality, setFunctionality] = useState("General");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
@@ -174,20 +176,16 @@ export default function ContabilidadClient() {
   const [managerCategory, setManagerCategory] = useState<OptionCategory | null>(null);
   const [addCategory, setAddCategory] = useState<OptionCategory | null>(null);
 
-  const movementOptions = optionValues(configOptions, "movement");
   const businessOptions = optionValues(configOptions, "business");
   const originOptions = optionValues(configOptions, "origin");
   const destinationOptions = optionValues(configOptions, "destination");
   const channelOptions = optionValues(configOptions, "channel");
   const categoryOptions = optionValues(configOptions, "category");
-  const functionalityOptions = optionValues(configOptions, "functionality");
-  const selectedMovement = configOptions.find((item) => item.category === "movement" && item.active && item.label === type);
-  const selectedEffect: AccountingEffect = selectedMovement?.accounting_effect === "gasto" ? "gasto" : "ingreso";
 
   const filterAccounts = useMemo(() => mergeHistoric(mergeHistoric(originOptions, destinationOptions), entries.flatMap((entry) => [entry.originAccount, entry.destinationAccount])), [originOptions, destinationOptions, entries]);
   const filterChannels = useMemo(() => mergeHistoric(channelOptions, entries.map((entry) => entry.channel)), [channelOptions, entries]);
   const filterCategories = useMemo(() => mergeHistoric(categoryOptions, entries.map((entry) => entry.category)), [categoryOptions, entries]);
-  const filterMovements = useMemo(() => mergeHistoric(movementOptions, entries.map((entry) => entry.type)), [movementOptions, entries]);
+  const filterMovements = useMemo(() => mergeHistoric(["ingreso", "gasto"], entries.map((entry) => entry.type)), [entries]);
 
   const monthlyTotals = useMemo(() => calculateTotals(entries), [entries]);
   const allBusinessNames = useMemo(() => mergeHistoric(businessOptions, [...Object.keys(openingBalances), ...Object.keys(openingCashBalances), ...entries.map((entry) => entry.business)]), [businessOptions, entries, openingBalances, openingCashBalances]);
@@ -212,7 +210,13 @@ export default function ContabilidadClient() {
     const response = await fetch("/api/contabilidad/opciones", { headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload?.error || "No se pudieron cargar las opciones configurables.");
-    setConfigOptions(payload.options || []);
+    const stored = ((payload.options || []) as ApiConfigOption[]).map(mapConfigOption).filter((item): item is ConfigOption => Boolean(item));
+    const defaults = fallbackConfigOptions();
+    const merged = defaults.map((item) => stored.find((saved) => saved.category === item.category && saved.label.toLocaleLowerCase("es") === item.label.toLocaleLowerCase("es")) || item);
+    for (const item of stored) {
+      if (!merged.some((current) => current.category === item.category && current.label.toLocaleLowerCase("es") === item.label.toLocaleLowerCase("es"))) merged.push(item);
+    }
+    setConfigOptions(merged);
   }
 
   useEffect(() => {
@@ -246,13 +250,11 @@ export default function ContabilidadClient() {
   }, [month, unlocked]);
 
   useEffect(() => {
-    if (!movementOptions.includes(type) && movementOptions[0]) setType(movementOptions[0]);
     if (!businessOptions.includes(business) && businessOptions[0]) setBusiness(businessOptions[0]);
     if (!originOptions.includes(originAccount) && originOptions[0]) setOriginAccount(originOptions[0]);
     if (!destinationOptions.includes(destinationAccount) && destinationOptions[0]) setDestinationAccount(destinationOptions[0]);
     if (!channelOptions.includes(channel) && channelOptions[0]) setChannel(channelOptions[0]);
     if (!categoryOptions.includes(category) && categoryOptions[0]) setCategory(categoryOptions[0]);
-    if (!functionalityOptions.includes(functionality) && functionalityOptions[0]) setFunctionality(functionalityOptions[0]);
   }, [configOptions]);
 
   const handleAccess = (event: FormEvent<HTMLFormElement>) => {
@@ -277,7 +279,7 @@ export default function ContabilidadClient() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const numericAmount = Number(amount.replace(",", "."));
-    if (!date || !business || !type || !channel || !category || !functionality || !originAccount || !destinationAccount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (!date || !business || !type || !channel || !category || !originAccount || !destinationAccount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
       setFormError("Completa los campos obligatorios y pon un importe válido.");
       return;
     }
@@ -287,7 +289,7 @@ export default function ContabilidadClient() {
       const response = await fetch("/api/contabilidad/movimientos", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-contabilidad-password": ACCESS_PASSWORD },
-        body: JSON.stringify({ type, effect: selectedEffect, date, business, originAccount, destinationAccount, channel, category, functionality, amount: numericAmount, note: note.trim() }),
+        body: JSON.stringify({ type, date, business, originAccount, destinationAccount, channel, category, amount: numericAmount, note: note.trim() }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo guardar el movimiento.");
@@ -314,14 +316,13 @@ export default function ContabilidadClient() {
         <form onSubmit={handleSubmit} className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-purple-950/10 backdrop-blur sm:p-5">
           <div className="mb-4 flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-100"><Plus size={20} /></div><div><h2 className="font-black">Nuevo movimiento</h2><p className="text-xs text-slate-400">Añade o administra las opciones desde cada desplegable.</p></div></div><Field label="Mes visible"><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="min-h-[46px] rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-cyan-300/70" /></Field></div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-[1fr_145px_1fr_1fr_1fr_1fr_1fr_1fr_135px_1.2fr_auto]">
-            <Field label="Movimiento"><ConfigurableSelect {...selectProps("movement", type, setType, movementOptions)} /></Field>
+            <Field label="Movimiento"><select value={type} onChange={(event) => setType(event.target.value as MovementType)} className="field-control"><option value="ingreso">Ingreso</option><option value="gasto">Gasto</option></select></Field>
             <Field label="Fecha"><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} /><input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="field-control pl-10" /></div></Field>
             <Field label="Negocio"><ConfigurableSelect {...selectProps("business", business, setBusiness, businessOptions)} /></Field>
             <Field label="Origen del dinero"><ConfigurableSelect {...selectProps("origin", originAccount, setOriginAccount, originOptions)} /></Field>
             <Field label="Destino del dinero"><ConfigurableSelect {...selectProps("destination", destinationAccount, setDestinationAccount, destinationOptions)} /></Field>
-            <Field label={selectedEffect === "ingreso" ? "Por dónde ingresa" : "Por dónde se paga"}><ConfigurableSelect {...selectProps("channel", channel, setChannel, channelOptions)} /></Field>
+            <Field label={type === "ingreso" ? "Por dónde se ingresa" : "Por dónde se paga"}><ConfigurableSelect {...selectProps("channel", channel, setChannel, channelOptions)} /></Field>
             <Field label="Tipo"><ConfigurableSelect {...selectProps("category", category, setCategory, categoryOptions)} /></Field>
-            <Field label="Funcionamiento"><ConfigurableSelect {...selectProps("functionality", functionality, setFunctionality, functionalityOptions)} /></Field>
             <Field label="Importe"><input type="number" inputMode="decimal" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className="field-control" placeholder="0,00 €" /></Field>
             <Field label="Observación"><input value={note} onChange={(event) => setNote(event.target.value)} className="field-control" placeholder="Opcional" /></Field>
             <div className="flex items-end"><button type="submit" disabled={saving} className="h-[50px] rounded-2xl bg-cyan-300 px-6 font-black text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Guardando" : "Añadir"}</button></div>
@@ -336,7 +337,7 @@ export default function ContabilidadClient() {
         </section>
       </section>
 
-      {addCategory ? <OptionEditorModal category={addCategory} title={`Añadir opción · ${categoryLabels[addCategory]}`} onClose={() => setAddCategory(null)} onSaved={async (saved) => { await loadOptions(); setAddCategory(null); if (saved.category === "movement") setType(saved.label); if (saved.category === "business") setBusiness(saved.label); if (saved.category === "origin") setOriginAccount(saved.label); if (saved.category === "destination") setDestinationAccount(saved.label); if (saved.category === "channel") setChannel(saved.label); if (saved.category === "category") setCategory(saved.label); if (saved.category === "functionality") setFunctionality(saved.label); }} setError={setFormError} /> : null}
+      {addCategory ? <OptionEditorModal category={addCategory} title={`Añadir opción · ${categoryLabels[addCategory]}`} onClose={() => setAddCategory(null)} onSaved={async (saved) => { await loadOptions(); setAddCategory(null); if (saved.category === "business") setBusiness(saved.label); if (saved.category === "origin") setOriginAccount(saved.label); if (saved.category === "destination") setDestinationAccount(saved.label); if (saved.category === "channel") setChannel(saved.label); if (saved.category === "category") setCategory(saved.label); }} setError={setFormError} /> : null}
       {managerCategory ? <OptionsManagerModal category={managerCategory} options={configOptions.filter((item) => item.category === managerCategory && item.active)} onClose={() => setManagerCategory(null)} onChanged={loadOptions} setError={setFormError} /> : null}
     </main>
   );
@@ -348,19 +349,20 @@ function ConfigurableSelect({ category, value, options, onChange, onAdd, onManag
 }
 function OptionEditorModal({ category, title, initial, onClose, onSaved, setError }: { category: OptionCategory; title: string; initial?: ConfigOption; onClose: () => void; onSaved: (option: ConfigOption) => void | Promise<void>; setError: (error: string) => void }) {
   const [label, setLabel] = useState(initial?.label || "");
-  const [effect, setEffect] = useState<AccountingEffect>(initial?.accounting_effect === "gasto" ? "gasto" : "ingreso");
   const [saving, setSaving] = useState(false);
   async function save(event: FormEvent) {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      const response = await fetch("/api/contabilidad/opciones", { method: initial ? "PATCH" : "POST", headers: { "Content-Type": "application/json", "x-contabilidad-password": ACCESS_PASSWORD }, body: JSON.stringify({ id: initial?.id, category, label: label.trim(), accountingEffect: category === "movement" ? effect : null }) });
+      const response = await fetch("/api/contabilidad/opciones", { method: initial ? "PATCH" : "POST", headers: { "Content-Type": "application/json", "x-contabilidad-password": ACCESS_PASSWORD }, body: JSON.stringify({ id: initial?.id, category: apiCategory(category), value: label.trim() }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo guardar la opción.");
-      await onSaved(payload.option);
+      const saved = mapConfigOption(payload.option as ApiConfigOption);
+      if (!saved) throw new Error("La categoría recibida no es válida.");
+      await onSaved(saved);
     } catch (error) { setError(error instanceof Error ? error.message : "No se pudo guardar la opción."); }
     finally { setSaving(false); }
   }
-  return <Modal title={title} onClose={onClose}><form onSubmit={save} className="space-y-4"><Field label="Nombre de la opción"><input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} className="field-control" placeholder="Escribe el nuevo valor" /></Field>{category === "movement" ? <Field label="Comportamiento contable"><select value={effect} onChange={(event) => setEffect(event.target.value as AccountingEffect)} className="field-control"><option value="ingreso">Cuenta como ingreso</option><option value="gasto">Cuenta como gasto</option></select></Field> : null}<div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300">Cancelar</button><button type="submit" disabled={saving || !label.trim()} className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 disabled:opacity-50">{saving ? "Guardando" : "Guardar"}</button></div></form></Modal>;
+  return <Modal title={title} onClose={onClose}><form onSubmit={save} className="space-y-4"><Field label="Nombre de la opción"><input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} className="field-control" placeholder="Escribe el nuevo valor" /></Field><div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300">Cancelar</button><button type="submit" disabled={saving || !label.trim()} className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 disabled:opacity-50">{saving ? "Guardando" : "Guardar"}</button></div></form></Modal>;
 }
 function OptionsManagerModal({ category, options, onClose, onChanged, setError }: { category: OptionCategory; options: ConfigOption[]; onClose: () => void; onChanged: () => Promise<void>; setError: (error: string) => void }) {
   const [editing, setEditing] = useState<ConfigOption | null>(null);
@@ -375,7 +377,7 @@ function OptionsManagerModal({ category, options, onClose, onChanged, setError }
   }
   if (editing) return <OptionEditorModal category={category} title={`Editar · ${categoryLabels[category]}`} initial={editing} onClose={() => setEditing(null)} onSaved={async () => { await onChanged(); setEditing(null); }} setError={setError} />;
   if (adding) return <OptionEditorModal category={category} title={`Añadir opción · ${categoryLabels[category]}`} onClose={() => setAdding(false)} onSaved={async () => { await onChanged(); setAdding(false); }} setError={setError} />;
-  return <Modal title={`Administrar · ${categoryLabels[category]}`} onClose={onClose}><div className="space-y-3"><button type="button" onClick={() => setAdding(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100"><Plus size={16} /> Añadir nueva opción</button><div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">{options.length ? options.map((option) => <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-3"><div><p className="font-bold text-white">{option.label}</p>{category === "movement" ? <p className="mt-0.5 text-[11px] text-slate-400">Cuenta como {option.accounting_effect || "ingreso"}</p> : null}</div><div className="flex gap-2"><button type="button" onClick={() => setEditing(option)} className="rounded-xl border border-white/10 p-2 text-slate-300 hover:text-cyan-100"><Pencil size={15} /></button><button type="button" onClick={() => remove(option)} disabled={busyId === option.id} className="rounded-xl border border-rose-300/20 p-2 text-rose-200 disabled:opacity-50"><Trash2 size={15} /></button></div></div>) : <p className="rounded-2xl border border-dashed border-white/15 p-6 text-center text-sm text-slate-400">No hay opciones activas.</p>}</div></div></Modal>;
+  return <Modal title={`Administrar · ${categoryLabels[category]}`} onClose={onClose}><div className="space-y-3"><button type="button" onClick={() => setAdding(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100"><Plus size={16} /> Añadir nueva opción</button><div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">{options.length ? options.map((option) => <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-3"><div><p className="font-bold text-white">{option.label}</p></div><div className="flex gap-2"><button type="button" onClick={() => setEditing(option)} className="rounded-xl border border-white/10 p-2 text-slate-300 hover:text-cyan-100"><Pencil size={15} /></button><button type="button" onClick={() => remove(option)} disabled={busyId === option.id} className="rounded-xl border border-rose-300/20 p-2 text-rose-200 disabled:opacity-50"><Trash2 size={15} /></button></div></div>) : <p className="rounded-2xl border border-dashed border-white/15 p-6 text-center text-sm text-slate-400">No hay opciones activas.</p>}</div></div></Modal>;
 }
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-slate-950 p-5 shadow-2xl shadow-black/60"><div className="mb-5 flex items-center justify-between"><h3 className="text-lg font-black text-white">{title}</h3><button type="button" onClick={onClose} className="rounded-xl border border-white/10 p-2 text-slate-400 hover:text-white"><X size={18} /></button></div>{children}</div></div>; }
 function StatCard({ label, value, tone }: { label: string; value: string; tone: "purple" | "emerald" | "rose" | "cyan" | "amber" }) { const tones = { purple: "text-purple-200", emerald: "text-emerald-200", rose: "text-rose-200", cyan: "text-cyan-200", amber: "text-amber-200" }; return <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</p><p className={`mt-1 text-base font-black ${tones[tone]}`}>{value}</p></div>; }
@@ -394,6 +396,6 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
 function CashHeader({ business, opening, cashIn, cashOut, balance, count }: { business: string; opening: number; cashIn: number; cashOut: number; balance: number; count: number }) { return <div className="mb-4"><div className="mb-3 flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-300/15 text-amber-100"><Vault size={18} /></div><div><h4 className="font-black">Caja extra · {business}</h4><p className="text-[11px] text-slate-400">Saldo independiente y acumulado para futuros meses.</p></div></div><div className="grid grid-cols-2 gap-2 2xl:grid-cols-5"><MiniStat label="Anterior" value={euro(opening)} tone="purple" /><MiniStat label="Entradas" value={euro(cashIn)} tone="emerald" /><MiniStat label="Salidas" value={euro(cashOut)} tone="rose" /><MiniStat label="Saldo actual" value={euro(balance)} tone="amber" /><div className="rounded-2xl bg-black/20 p-3 text-slate-200"><p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">Líneas</p><p className="mt-1 text-sm font-black">{count}</p></div></div></div>; }
 function MovementsTable({ entries, emptyText, compact = false, onDelete, deletingId }: { entries: AccountingEntry[]; emptyText: string; compact?: boolean; onDelete: (entry: AccountingEntry) => void; deletingId: string | null }) {
   if (!entries.length) return <div className="rounded-3xl border border-dashed border-white/15 bg-black/20 p-8 text-center text-sm text-slate-400">{emptyText}</div>;
-  return <div className="overflow-x-auto"><table className={`w-full text-left text-sm ${compact ? "min-w-[1080px]" : "min-w-[1220px]"}`}><thead className="text-xs uppercase tracking-[0.18em] text-slate-500"><tr className="border-b border-white/10"><th className="px-4 py-3">Movimiento</th><th className="px-4 py-3">Fecha</th>{!compact ? <th className="px-4 py-3">Negocio</th> : null}<th className="px-4 py-3">Origen</th><th className="px-4 py-3">Destino</th><th className="px-4 py-3">Medio</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">Funcionamiento</th><th className="px-4 py-3 text-right">Importe</th><th className="px-4 py-3">Observación</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id} className="border-b border-white/5 text-slate-200 last:border-0"><td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${entry.effect === "ingreso" ? "bg-emerald-300/15 text-emerald-200" : "bg-rose-300/15 text-rose-200"}`}>{entry.type}</span></td><td className="px-4 py-4">{entry.date}</td>{!compact ? <td className="px-4 py-4 font-semibold">{entry.business}</td> : null}<td className="px-4 py-4">{entry.originAccount}</td><td className="px-4 py-4">{entry.destinationAccount}</td><td className="px-4 py-4">{entry.channel}</td><td className="px-4 py-4">{entry.category}</td><td className="px-4 py-4">{entry.functionality}</td><td className={`px-4 py-4 text-right font-black ${entry.effect === "ingreso" ? "text-emerald-200" : "text-rose-200"}`}>{entry.effect === "gasto" ? "-" : "+"}{euro(entry.amount)}</td><td className="px-4 py-4 text-slate-400">{entry.note || "—"}</td><td className="px-4 py-4 text-right"><button type="button" onClick={() => onDelete(entry)} disabled={deletingId === entry.id} className="inline-flex items-center gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs font-black text-rose-200 transition hover:bg-rose-300/20 disabled:opacity-50"><Trash2 size={15} />{deletingId === entry.id ? "Eliminando" : "Eliminar"}</button></td></tr>)}</tbody></table></div>;
+  return <div className="overflow-x-auto"><table className={`w-full text-left text-sm ${compact ? "min-w-[1080px]" : "min-w-[1220px]"}`}><thead className="text-xs uppercase tracking-[0.18em] text-slate-500"><tr className="border-b border-white/10"><th className="px-4 py-3">Movimiento</th><th className="px-4 py-3">Fecha</th>{!compact ? <th className="px-4 py-3">Negocio</th> : null}<th className="px-4 py-3">Origen</th><th className="px-4 py-3">Destino</th><th className="px-4 py-3">Medio</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3 text-right">Importe</th><th className="px-4 py-3">Observación</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id} className="border-b border-white/5 text-slate-200 last:border-0"><td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${entry.type === "ingreso" ? "bg-emerald-300/15 text-emerald-200" : "bg-rose-300/15 text-rose-200"}`}>{entry.type}</span></td><td className="px-4 py-4">{entry.date}</td>{!compact ? <td className="px-4 py-4 font-semibold">{entry.business}</td> : null}<td className="px-4 py-4">{entry.originAccount}</td><td className="px-4 py-4">{entry.destinationAccount}</td><td className="px-4 py-4">{entry.channel}</td><td className="px-4 py-4">{entry.category}</td><td className={`px-4 py-4 text-right font-black ${entry.type === "ingreso" ? "text-emerald-200" : "text-rose-200"}`}>{entry.type === "gasto" ? "-" : "+"}{euro(entry.amount)}</td><td className="px-4 py-4 text-slate-400">{entry.note || "—"}</td><td className="px-4 py-4 text-right"><button type="button" onClick={() => onDelete(entry)} disabled={deletingId === entry.id} className="inline-flex items-center gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs font-black text-rose-200 transition hover:bg-rose-300/20 disabled:opacity-50"><Trash2 size={15} />{deletingId === entry.id ? "Eliminando" : "Eliminar"}</button></td></tr>)}</tbody></table></div>;
 }
 function CashTable({ rows, onDelete, deletingId }: { rows: CashRow[]; onDelete: (entry: AccountingEntry) => void; deletingId: string | null }) { if (!rows.length) return <div className="rounded-2xl border border-dashed border-amber-300/20 bg-black/20 p-5 text-center text-xs text-slate-400">Sin movimientos de caja extra este mes.</div>; const recent = rows.slice().reverse().slice(0, 10); return <div className="overflow-x-auto"><table className="min-w-[760px] w-full text-left text-xs"><thead className="uppercase tracking-[0.14em] text-slate-500"><tr className="border-b border-white/10"><th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Medio</th><th className="px-3 py-2 text-right">Entrada</th><th className="px-3 py-2 text-right">Salida</th><th className="px-3 py-2 text-right">Saldo</th><th className="px-3 py-2 text-right">Acción</th></tr></thead><tbody>{recent.map((row) => <tr key={row.entry.id} className="border-b border-white/5"><td className="px-3 py-3">{row.entry.date}</td><td className="px-3 py-3">{row.entry.channel}</td><td className="px-3 py-3 text-right font-bold text-emerald-200">{row.cashIn ? euro(row.cashIn) : "—"}</td><td className="px-3 py-3 text-right font-bold text-rose-200">{row.cashOut ? euro(row.cashOut) : "—"}</td><td className="px-3 py-3 text-right font-black text-amber-100">{euro(row.balance)}</td><td className="px-3 py-3 text-right"><button type="button" onClick={() => onDelete(row.entry)} disabled={deletingId === row.entry.id} className="rounded-lg p-2 text-rose-200 hover:bg-rose-300/10"><Trash2 size={14} /></button></td></tr>)}</tbody></table></div>; }

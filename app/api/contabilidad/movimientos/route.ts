@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const ACCESS_PASSWORD = "Nosotrostarot1.";
+const movementTypes = new Set(["ingreso", "gasto"]);
 
 function isAuthorized(request: NextRequest) {
   return request.headers.get("x-contabilidad-password") === ACCESS_PASSWORD;
@@ -30,17 +31,11 @@ function validOption(value: unknown, max = 80) {
 type BalanceMap = Record<string, number>;
 type PriorEntry = {
   movement_type: string;
-  movement_effect?: "ingreso" | "gasto" | null;
   business: string;
   amount: number | string;
   origin_account: string | null;
   destination_account: string | null;
 };
-
-function accountingEffect(entry: Pick<PriorEntry, "movement_type" | "movement_effect">) {
-  if (entry.movement_effect === "gasto" || entry.movement_effect === "ingreso") return entry.movement_effect;
-  return entry.movement_type.toLowerCase() === "gasto" ? "gasto" : "ingreso";
-}
 
 function calculateOpeningBalances(entries: PriorEntry[]) {
   const business: BalanceMap = {};
@@ -48,7 +43,7 @@ function calculateOpeningBalances(entries: PriorEntry[]) {
 
   for (const entry of entries) {
     const amount = Number(entry.amount) || 0;
-    const sign = accountingEffect(entry) === "ingreso" ? 1 : -1;
+    const sign = entry.movement_type.toLowerCase() === "gasto" ? -1 : 1;
     business[entry.business] = (business[entry.business] || 0) + sign * amount;
 
     if (entry.destination_account === "Caja extra") cash[entry.business] = (cash[entry.business] || 0) + amount;
@@ -58,7 +53,7 @@ function calculateOpeningBalances(entries: PriorEntry[]) {
   return { business, cash };
 }
 
-const selectFields = "id, movement_type, movement_effect, movement_date, business, channel, category, functionality, amount, note, origin_account, destination_account, created_at";
+const selectFields = "id, movement_type, movement_date, business, channel, category, amount, note, origin_account, destination_account, created_at";
 
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) return jsonError("No autorizado", 401);
@@ -79,7 +74,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false }),
     supabaseAdmin
       .from("manual_accounting_movements")
-      .select("movement_type, movement_effect, business, amount, origin_account, destination_account")
+      .select("movement_type, business, amount, origin_account, destination_account")
       .lt("movement_date", start),
   ]);
 
@@ -101,27 +96,23 @@ export async function POST(request: NextRequest) {
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
   const body = await request.json();
-  const type = String(body.type || "").trim();
-  const effect = body.effect === "gasto" ? "gasto" : body.effect === "ingreso" ? "ingreso" : "";
+  const type = String(body.type || "").trim().toLowerCase();
   const date = String(body.date || "");
   const business = String(body.business || "").trim();
   const originAccount = String(body.originAccount || body.origin_account || "Banco").trim();
   const destinationAccount = String(body.destinationAccount || body.destination_account || "Banco").trim();
   const channel = String(body.channel || "").trim();
   const category = String(body.category || "").trim();
-  const functionality = String(body.functionality || "").trim();
   const amount = Number(String(body.amount ?? "").replace(",", "."));
   const note = typeof body.note === "string" ? body.note.trim() : "";
 
-  if (!validOption(type)) return jsonError("Movimiento no válido");
-  if (!effect) return jsonError("El movimiento debe indicar si cuenta como ingreso o gasto");
+  if (!movementTypes.has(type)) return jsonError("Tipo de movimiento no válido");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return jsonError("Fecha no válida");
   if (!validOption(business)) return jsonError("Negocio no válido");
   if (!validOption(originAccount)) return jsonError("Origen de dinero no válido");
   if (!validOption(destinationAccount)) return jsonError("Destino de dinero no válido");
   if (!validOption(channel)) return jsonError("Medio no válido");
   if (!validOption(category)) return jsonError("Tipo no válido");
-  if (!validOption(functionality)) return jsonError("Funcionamiento no válido");
   if (!Number.isFinite(amount) || amount <= 0) return jsonError("Importe no válido");
   if (note.length > 500) return jsonError("La observación es demasiado larga");
 
@@ -129,14 +120,12 @@ export async function POST(request: NextRequest) {
     .from("manual_accounting_movements")
     .insert({
       movement_type: type,
-      movement_effect: effect,
       movement_date: date,
       business,
       origin_account: originAccount,
       destination_account: destinationAccount,
       channel,
       category,
-      functionality,
       amount,
       note: note || null,
     })
