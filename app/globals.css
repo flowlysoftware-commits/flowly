@@ -8102,3 +8102,14 @@ iframe[src*="companion-webgl"] {
 @media (prefers-reduced-motion: reduce) {
   .flowly-ai-halo,.flowly-ai-ring,.flowly-orbit-card { animation: none !important; }
 }
+
+/* Contabilidad mensual: evita desbordamiento y cortes dentro de palabras. */
+.flowly-app-shell .field-control {
+  width: 100%;
+  min-width: 0;
+}
+.flowly-app-shell table th,
+.flowly-app-shell table td {
+  word-break: normal;
+  overflow-wrap: normal;
+}

@@ -16,6 +16,12 @@ function jsonError(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
 }
 
+
+function isMissingOptionsTable(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.code === "42P01" || error?.code === "PGRST205" || message.includes("manual_accounting_options") && (message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find"));
+}
+
 function cleanText(value: unknown, max = 80) {
   if (typeof value !== "string") return "";
   const clean = value.trim();
@@ -34,8 +40,9 @@ export async function GET(request: NextRequest) {
     .order("category", { ascending: true })
     .order("created_at", { ascending: true });
 
-  if (error) return jsonError(error.message, 500);
-  return NextResponse.json({ options: data || [] });
+  if (isMissingOptionsTable(error)) return NextResponse.json({ options: [], available: false });
+  if (error) return jsonError("No se pudieron cargar las opciones configurables", 503);
+  return NextResponse.json({ options: data || [], available: true });
 }
 
 export async function POST(request: NextRequest) {
@@ -56,7 +63,8 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error?.code === "23505") return jsonError("Ya existe una opción con ese nombre en esta categoría", 409);
-  if (error) return jsonError(error.message, 500);
+  if (isMissingOptionsTable(error)) return jsonError("La tabla de opciones configurables todavía no está disponible. Ejecuta el SQL incluido.", 503);
+  if (error) return jsonError("No se pudo guardar la opción", 500);
   return NextResponse.json({ option: data });
 }
 
@@ -78,7 +86,8 @@ export async function PATCH(request: NextRequest) {
     .single();
 
   if (error?.code === "23505") return jsonError("Ya existe una opción con ese nombre en esta categoría", 409);
-  if (error) return jsonError(error.message, 500);
+  if (isMissingOptionsTable(error)) return jsonError("La tabla de opciones configurables todavía no está disponible. Ejecuta el SQL incluido.", 503);
+  if (error) return jsonError("No se pudo actualizar la opción", 500);
   return NextResponse.json({ option: data });
 }
 
@@ -96,7 +105,8 @@ export async function DELETE(request: NextRequest) {
     .select("id")
     .maybeSingle();
 
-  if (error) return jsonError(error.message, 500);
+  if (isMissingOptionsTable(error)) return jsonError("La tabla de opciones configurables todavía no está disponible. Ejecuta el SQL incluido.", 503);
+  if (error) return jsonError("No se pudo desactivar la opción", 500);
   if (!data) return jsonError("La opción no existe o ya fue eliminada", 404);
   return NextResponse.json({ deletedId: data.id });
 }
