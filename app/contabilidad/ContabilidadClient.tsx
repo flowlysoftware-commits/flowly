@@ -204,7 +204,7 @@ export default function ContabilidadClient() {
   }), [allBusinessNames, entries, openingBalances, openingCashBalances]);
 
   async function loadOptions() {
-    const response = await fetch("/api/contabilidad/opciones", { headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
+    const response = await fetch("/api/contabilidad/opciones", { cache: "no-store", headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
     const payload = await response.json();
     if (!response.ok) return;
     const stored = ((payload.options || []) as ApiConfigOption[]).map(mapConfigOption).filter((item): item is ConfigOption => Boolean(item));
