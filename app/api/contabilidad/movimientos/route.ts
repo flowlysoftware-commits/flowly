@@ -37,17 +37,38 @@ type PriorEntry = {
   destination_account: string | null;
 };
 
+function isExtraCashAccount(value: string | null | undefined) {
+  return String(value || "").trim().toLocaleLowerCase("es") === "caja extra";
+}
+
+function calculateMainBalanceDelta(entry: PriorEntry, amount: number) {
+  const type = entry.movement_type.toLowerCase() === "gasto" ? "gasto" : "ingreso";
+  const fromExtraCash = isExtraCashAccount(entry.origin_account);
+  const toExtraCash = isExtraCashAccount(entry.destination_account);
+
+  // Un movimiento dentro de la propia Caja extra no altera el saldo principal.
+  if (fromExtraCash && toExtraCash) return 0;
+
+  // Ingreso con origen Caja extra: traspaso Caja extra -> saldo principal.
+  if (fromExtraCash) return type === "ingreso" ? amount : 0;
+
+  // Gasto con destino Caja extra: traspaso saldo principal -> Caja extra.
+  // Un ingreso con destino Caja extra es una entrada externa directa a esa caja.
+  if (toExtraCash) return type === "gasto" ? -amount : 0;
+
+  return type === "gasto" ? -amount : amount;
+}
+
 function calculateOpeningBalances(entries: PriorEntry[]) {
   const business: BalanceMap = {};
   const cash: BalanceMap = {};
 
   for (const entry of entries) {
     const amount = Number(entry.amount) || 0;
-    const sign = entry.movement_type.toLowerCase() === "gasto" ? -1 : 1;
-    business[entry.business] = (business[entry.business] || 0) + sign * amount;
+    business[entry.business] = (business[entry.business] || 0) + calculateMainBalanceDelta(entry, amount);
 
-    if (entry.destination_account === "Caja extra") cash[entry.business] = (cash[entry.business] || 0) + amount;
-    if (entry.origin_account === "Caja extra") cash[entry.business] = (cash[entry.business] || 0) - amount;
+    if (isExtraCashAccount(entry.destination_account)) cash[entry.business] = (cash[entry.business] || 0) + amount;
+    if (isExtraCashAccount(entry.origin_account)) cash[entry.business] = (cash[entry.business] || 0) - amount;
   }
 
   return { business, cash };

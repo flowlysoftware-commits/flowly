@@ -125,17 +125,57 @@ function mapEntry(entry: ApiEntry): AccountingEntry {
     createdAt: entry.created_at,
   };
 }
+function isExtraCashAccount(value: string | null | undefined) {
+  return String(value || "").trim().toLocaleLowerCase("es") === "caja extra";
+}
+
+function classifyAccountingEntry(entry: AccountingEntry) {
+  const fromExtraCash = isExtraCashAccount(entry.originAccount);
+  const toExtraCash = isExtraCashAccount(entry.destinationAccount);
+
+  if (fromExtraCash && toExtraCash) {
+    return { income: 0, expenses: 0, mainBalanceDelta: 0 };
+  }
+
+  if (fromExtraCash) {
+    return {
+      income: 0,
+      expenses: 0,
+      mainBalanceDelta: entry.type === "ingreso" ? entry.amount : 0,
+    };
+  }
+
+  if (toExtraCash) {
+    return {
+      income: 0,
+      expenses: 0,
+      mainBalanceDelta: entry.type === "gasto" ? -entry.amount : 0,
+    };
+  }
+
+  return entry.type === "ingreso"
+    ? { income: entry.amount, expenses: 0, mainBalanceDelta: entry.amount }
+    : { income: 0, expenses: entry.amount, mainBalanceDelta: -entry.amount };
+}
+
 function calculateTotals(entries: AccountingEntry[]) {
-  const income = entries.filter((entry) => entry.type === "ingreso").reduce((sum, entry) => sum + entry.amount, 0);
-  const expenses = entries.filter((entry) => entry.type === "gasto").reduce((sum, entry) => sum + entry.amount, 0);
-  return { income, expenses, balance: income - expenses };
+  return entries.reduce(
+    (totals, entry) => {
+      const effect = classifyAccountingEntry(entry);
+      totals.income += effect.income;
+      totals.expenses += effect.expenses;
+      totals.balance += effect.mainBalanceDelta;
+      return totals;
+    },
+    { income: 0, expenses: 0, balance: 0 },
+  );
 }
 function calculateCashRows(entries: AccountingEntry[], openingBalance = 0) {
-  const rows = entries.filter((entry) => entry.originAccount === "Caja extra" || entry.destinationAccount === "Caja extra").slice().sort((a, b) => `${a.date}-${a.createdAt || ""}`.localeCompare(`${b.date}-${b.createdAt || ""}`));
+  const rows = entries.filter((entry) => isExtraCashAccount(entry.originAccount) || isExtraCashAccount(entry.destinationAccount)).slice().sort((a, b) => `${a.date}-${a.createdAt || ""}`.localeCompare(`${b.date}-${b.createdAt || ""}`));
   let balance = openingBalance;
   return rows.map((entry) => {
-    const cashIn = entry.destinationAccount === "Caja extra" ? entry.amount : 0;
-    const cashOut = entry.originAccount === "Caja extra" ? entry.amount : 0;
+    const cashIn = isExtraCashAccount(entry.destinationAccount) ? entry.amount : 0;
+    const cashOut = isExtraCashAccount(entry.originAccount) ? entry.amount : 0;
     balance += cashIn - cashOut;
     return { entry, cashIn, cashOut, balance };
   });
