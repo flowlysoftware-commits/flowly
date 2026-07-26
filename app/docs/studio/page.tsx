@@ -166,20 +166,8 @@ export default function FlowlyDocsStudioPage() {
             <div className="flex flex-wrap gap-2">
               <a href={exportUrl} className="rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-slate-950">Exportar Markdown</a>
               <a href={`/api/docs/export?book=${encodeURIComponent(bookSlug || "constitution")}&format=html`} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white">Exportar HTML</a>
-              <a href={`/api/docs/export?book=${encodeURIComponent(bookSlug || "constitution")}&format=word`} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white">Exportar Word básico</a>
-            </div>
-            <form onSubmit={findLinks} className="mt-5 flex gap-2">
-              <input value={target} onChange={(event) => setTarget(event.target.value)} placeholder="customer, docs, invoice..." className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm outline-none" />
-              <button className="inline-flex items-center gap-2 rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-slate-950"><Code2 size={16} /> Enlazar</button>
-            </form>
-            <div className="mt-4 max-h-72 space-y-2 overflow-auto pr-2">
-              {links.map((link) => <div key={link.path} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-xs text-white/65">{link.path}</div>)}
             </div>
           </Panel>
-        </div>
-
-        <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 text-sm leading-7 text-white/55">
-          Ejecuta primero el SQL incluido en <strong className="text-white">supabase/flowly_docs.sql</strong>. Después usa “Sincronizar Docs actuales” para copiar la documentación estática a Supabase y empezar a editarla desde esta pantalla.
         </div>
       </section>
     </main>
