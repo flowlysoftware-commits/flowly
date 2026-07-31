@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
+  Download,
   Filter,
   LockKeyhole,
   Plus,
@@ -63,6 +64,7 @@ type ApiEntry = {
 
 type Filters = {
   date: string;
+  business: string;
   origin: string;
   destination: string;
   channel: string;
@@ -87,7 +89,7 @@ const categoryLabels: Record<OptionCategory, string> = {
   channel: "Por dónde se paga",
   category: "Tipo",
 };
-const emptyFilters: Filters = { date: "", origin: "", destination: "", channel: "", category: "", movement: "" };
+const emptyFilters: Filters = { date: "", business: "", origin: "", destination: "", channel: "", category: "", movement: "" };
 
 function euro(value: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(value || 0);
@@ -371,10 +373,10 @@ export default function ContabilidadClient() {
           {formError ? <p className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm font-semibold text-rose-200">{formError}</p> : null}
         </form>
 
-        <section className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur"><div className="mb-5 flex items-center justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-300/15 text-purple-100"><ReceiptText size={20} /></div><div><h2 className="font-black">Movimientos del mes</h2><p className="text-xs text-slate-400">{loading ? "Cargando..." : `${entries.length} movimientos registrados`}</p></div></div></div><MovementTableWithFilters entries={entries} options={{ accounts: filterAccounts, channels: filterChannels, categories: filterCategories, movements: filterMovements }} emptyText="No hay movimientos en este mes." onDelete={handleDelete} deletingId={deletingId} /></section>
+        <section className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur"><MovementTableWithFilters entries={entries} month={month} showSummaryReport options={{ businesses: allBusinessNames, accounts: filterAccounts, channels: filterChannels, categories: filterCategories, movements: filterMovements }} emptyText="No hay movimientos en este mes." onDelete={handleDelete} deletingId={deletingId} loading={loading} /></section>
 
         <section className="grid gap-5 xl:grid-cols-3">
-          {entriesByBusiness.map((group) => <div key={group.business} className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/70">Negocio</p><h3 className="mt-1 text-2xl font-black">{group.business}</h3></div><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-300">{group.entries.length} líneas</span></div><div className="mb-4 grid grid-cols-1 gap-3"><MiniStat label="Saldo anterior" value={euro(group.opening)} tone="purple" /><MiniStat label="Ingresos" value={euro(group.totals.income)} tone="emerald" /><MiniStat label="Gastos" value={euro(group.totals.expenses)} tone="rose" /><MiniStat label="Saldo actual" value={euro(group.final)} tone="cyan" /><MiniStat label="Caja extra" value={euro(group.cashFinal)} tone="amber" /></div><MovementTableWithFilters entries={group.entries} compact options={{ accounts: filterAccounts, channels: filterChannels, categories: filterCategories, movements: filterMovements }} emptyText={`Sin movimientos para ${group.business}.`} onDelete={handleDelete} deletingId={deletingId} /><div className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/[0.06] p-4"><CashHeader business={group.business} cashIn={group.cashIn} cashOut={group.cashOut} balance={group.cashFinal} /><CashTable rows={group.cashRows} onDelete={handleDelete} deletingId={deletingId} /></div></div>)}
+          {entriesByBusiness.map((group) => <div key={group.business} className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-purple-950/10 backdrop-blur"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/70">Negocio</p><h3 className="mt-1 text-2xl font-black">{group.business}</h3></div><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-300">{group.entries.length} líneas</span></div><div className="mb-4 grid grid-cols-1 gap-3"><MiniStat label="Saldo anterior" value={euro(group.opening)} tone="purple" /><MiniStat label="Ingresos" value={euro(group.totals.income)} tone="emerald" /><MiniStat label="Gastos" value={euro(group.totals.expenses)} tone="rose" /><MiniStat label="Saldo actual" value={euro(group.final)} tone="cyan" /><MiniStat label="Caja extra" value={euro(group.cashFinal)} tone="amber" /></div><MovementTableWithFilters entries={group.entries} compact options={{ businesses: allBusinessNames, accounts: filterAccounts, channels: filterChannels, categories: filterCategories, movements: filterMovements }} emptyText={`Sin movimientos para ${group.business}.`} onDelete={handleDelete} deletingId={deletingId} /><div className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/[0.06] p-4"><CashHeader business={group.business} cashIn={group.cashIn} cashOut={group.cashOut} balance={group.cashFinal} /><CashTable rows={group.cashRows} onDelete={handleDelete} deletingId={deletingId} /></div></div>)}
         </section>
       </section>
 
@@ -407,14 +409,83 @@ function OptionEditorModal({ category, title, initial, onClose, onSaved, setErro
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-slate-950 p-5 shadow-2xl shadow-black/60"><div className="mb-5 flex items-center justify-between"><h3 className="text-lg font-black text-white">{title}</h3><button type="button" onClick={onClose} className="rounded-xl border border-white/10 p-2 text-slate-400 hover:text-white"><X size={18} /></button></div>{children}</div></div>; }
 function StatCard({ label, value, tone }: { label: string; value: string; tone: "purple" | "emerald" | "rose" | "cyan" | "amber" }) { const tones = { purple: "text-purple-200/70", emerald: "text-emerald-200", rose: "text-rose-200", cyan: "text-cyan-200", amber: "text-amber-200" }; const subdued = tone === "purple"; return <div className={`min-w-0 rounded-2xl border p-4 ${subdued ? "border-white/[0.06] bg-black/15 opacity-75" : "border-white/10 bg-black/25"}`}><p className={`font-black uppercase text-slate-500 [overflow-wrap:normal] [word-break:normal] ${subdued ? "text-[8px] tracking-[0.12em]" : "text-[9px] tracking-[0.14em]"}`}>{label}</p><p className={`mt-1 whitespace-nowrap font-black ${subdued ? "text-sm" : "text-base"} ${tones[tone]}`}>{value}</p></div>; }
 function MiniStat({ label, value, tone }: { label: string; value: string; tone: "purple" | "emerald" | "rose" | "cyan" | "amber" }) { return <StatCard label={label} value={value} tone={tone} />; }
-type FilterOptions = { accounts: string[]; channels: string[]; categories: string[]; movements: string[] };
-function MovementTableWithFilters({ entries, options, emptyText, compact = false, onDelete, deletingId }: { entries: AccountingEntry[]; options: FilterOptions; emptyText: string; compact?: boolean; onDelete: (entry: AccountingEntry) => void; deletingId: string | null }) {
+type FilterOptions = { businesses: string[]; accounts: string[]; channels: string[]; categories: string[]; movements: string[] };
+
+type FilterSummary = {
+  count: number;
+  income: number;
+  expenses: number;
+  balance: number;
+};
+
+function formatMonthLabel(month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month)) return month;
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" }).format(new Date(year, monthNumber - 1, 1));
+}
+
+function reportFilterRows(filters: Filters, month: string) {
+  return [
+    ["Periodo", filters.date || formatMonthLabel(month)],
+    ["Negocio", filters.business || "Todos"],
+    ["Origen", filters.origin || "Todos"],
+    ["Destino", filters.destination || "Todos"],
+    ["Medio", filters.channel || "Todos"],
+    ["Tipo", filters.category || "Todos"],
+    ["Movimiento", filters.movement ? filters.movement.charAt(0).toUpperCase() + filters.movement.slice(1) : "Todos"],
+  ];
+}
+
+function escapeHtml(value: string | number) {
+  return String(value).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character] || character);
+}
+
+function buildAccountingReportHtml(entries: AccountingEntry[], filters: Filters, month: string, summary: FilterSummary, generatedAt: string) {
+  const filterHtml = reportFilterRows(filters, month).map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`).join("");
+  const rows = entries.map((entry) => `<tr><td>${escapeHtml(entry.type)}</td><td>${escapeHtml(entry.date)}</td><td>${escapeHtml(entry.business)}</td><td>${escapeHtml(entry.originAccount)}</td><td>${escapeHtml(entry.destinationAccount)}</td><td>${escapeHtml(entry.channel)}</td><td>${escapeHtml(entry.category)}</td><td class="amount">${entry.type === "gasto" ? "-" : "+"}${escapeHtml(euro(entry.amount))}</td><td>${escapeHtml(entry.note || "—")}</td></tr>`).join("");
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de contabilidad ${escapeHtml(month)}</title><style>body{font-family:Arial,sans-serif;color:#172033;margin:32px}h1{margin-bottom:4px}.subtitle{color:#64748b;margin-bottom:20px}.filters{background:#f1f5f9;border-radius:10px;padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:16px}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}.card{border:1px solid #cbd5e1;border-radius:10px;padding:12px}.label{font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700}.value{font-size:18px;font-weight:800;margin-top:4px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#e2e8f0;text-align:left;padding:9px}td{padding:9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.amount{text-align:right;white-space:nowrap}.footer{margin-top:16px;color:#64748b;font-size:11px}@media print{body{margin:16px}}</style></head><body><h1>Informe de movimientos filtrados</h1><div class="subtitle">Contabilidad mensual · ${escapeHtml(formatMonthLabel(month))}</div><section class="filters">${filterHtml}</section><section class="summary"><div class="card"><div class="label">Movimientos</div><div class="value">${summary.count}</div></div><div class="card"><div class="label">Ingresos</div><div class="value">${escapeHtml(euro(summary.income))}</div></div><div class="card"><div class="label">Gastos</div><div class="value">${escapeHtml(euro(summary.expenses))}</div></div><div class="card"><div class="label">Balance neto</div><div class="value">${escapeHtml(euro(summary.balance))}</div></div></section><table><thead><tr><th>Movimiento</th><th>Fecha</th><th>Negocio</th><th>Origen</th><th>Destino</th><th>Medio</th><th>Tipo</th><th>Importe</th><th>Observación</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No hay movimientos que coincidan con los filtros seleccionados.</td></tr>'}</tbody></table><div class="footer">Generado el ${escapeHtml(generatedAt)}</div></body></html>`;
+}
+
+function MovementTableWithFilters({ entries, options, emptyText, compact = false, onDelete, deletingId, month = currentMonth(), showSummaryReport = false, loading = false }: { entries: AccountingEntry[]; options: FilterOptions; emptyText: string; compact?: boolean; onDelete: (entry: AccountingEntry) => void; deletingId: string | null; month?: string; showSummaryReport?: boolean; loading?: boolean }) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [visibleCount, setVisibleCount] = useState(10);
-  const filtered = useMemo(() => entries.filter((entry) => (!filters.date || entry.date === filters.date) && (!filters.origin || entry.originAccount === filters.origin) && (!filters.destination || entry.destinationAccount === filters.destination) && (!filters.channel || entry.channel === filters.channel) && (!filters.category || entry.category === filters.category) && (!filters.movement || entry.type === filters.movement)), [entries, filters]);
+  const [exporting, setExporting] = useState(false);
+  const filtered = useMemo(() => entries.filter((entry) => (!filters.date || entry.date === filters.date) && (!filters.business || entry.business === filters.business) && (!filters.origin || entry.originAccount === filters.origin) && (!filters.destination || entry.destinationAccount === filters.destination) && (!filters.channel || entry.channel === filters.channel) && (!filters.category || entry.category === filters.category) && (!filters.movement || entry.type === filters.movement)), [entries, filters]);
+  const summary = useMemo<FilterSummary>(() => filtered.reduce((result, entry) => {
+    if (entry.type === "ingreso") result.income += entry.amount;
+    else result.expenses += entry.amount;
+    result.count += 1;
+    result.balance = result.income - result.expenses;
+    return result;
+  }, { count: 0, income: 0, expenses: 0, balance: 0 }), [filtered]);
   useEffect(() => { setVisibleCount(10); }, [filters, entries.length]);
   const activeFilters = Object.values(filters).filter(Boolean).length;
-  return <div><div className="mb-4 rounded-3xl border border-white/10 bg-black/20 p-3"><div className="mb-3 flex items-center justify-between"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-slate-300"><Filter size={14} /> Filtros {activeFilters ? `(${activeFilters})` : ""}</p>{activeFilters ? <button type="button" onClick={() => setFilters(emptyFilters)} className="flex items-center gap-1 text-xs font-bold text-cyan-200"><X size={13} /> Limpiar</button> : null}</div><div className={`grid gap-2 ${compact ? "sm:grid-cols-2 2xl:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-6"}`}><FilterInput label="Fecha" type="date" value={filters.date} onChange={(value) => setFilters((current) => ({ ...current, date: value }))} /><FilterSelect label="Origen" value={filters.origin} options={options.accounts} onChange={(value) => setFilters((current) => ({ ...current, origin: value }))} /><FilterSelect label="Destino" value={filters.destination} options={options.accounts} onChange={(value) => setFilters((current) => ({ ...current, destination: value }))} /><FilterSelect label="Medio" value={filters.channel} options={options.channels} onChange={(value) => setFilters((current) => ({ ...current, channel: value }))} /><FilterSelect label="Tipo" value={filters.category} options={options.categories} onChange={(value) => setFilters((current) => ({ ...current, category: value }))} /><FilterSelect label="Movimiento" value={filters.movement} options={options.movements} onChange={(value) => setFilters((current) => ({ ...current, movement: value }))} /></div></div><MovementsTable entries={filtered.slice(0, visibleCount)} emptyText={emptyText} compact={compact} onDelete={onDelete} deletingId={deletingId} />{filtered.length > 10 ? <div className="mt-4 flex justify-center"><button type="button" onClick={() => setVisibleCount((current) => current >= filtered.length ? 10 : current + 10)} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-5 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/20">{visibleCount >= filtered.length ? <><ChevronUp size={16} /> Mostrar menos</> : <><ChevronDown size={16} /> Mostrar más ({Math.min(10, filtered.length - visibleCount)})</>}</button></div> : null}{entries.length > 0 && filtered.length === 0 ? <p className="mt-3 text-center text-xs text-slate-400">No hay movimientos que coincidan con los filtros seleccionados.</p> : null}</div>;
+  async function downloadReport() {
+    setExporting(true);
+    try {
+      const generatedAt = new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "medium" }).format(new Date());
+      const html = buildAccountingReportHtml(filtered, filters, month, summary, generatedAt);
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `informe-contabilidad-${month}${filters.date ? `-${filters.date}` : ""}.html`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  }
+  return <div>
+    {showSummaryReport ? <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-300/15 text-purple-100"><ReceiptText size={20} /></div><div><h2 className="font-black">Movimientos del mes</h2><p className="text-xs text-slate-400">{loading ? "Cargando..." : `${entries.length} movimientos registrados`}</p></div></div><button type="button" onClick={downloadReport} disabled={exporting || loading} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/20 disabled:opacity-50"><Download size={16} />{exporting ? "Generando informe" : "Descargar informe"}</button></div> : null}
+    <div className="mb-4 rounded-3xl border border-white/10 bg-black/20 p-3"><div className="mb-3 flex items-center justify-between"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-slate-300"><Filter size={14} /> Filtros {activeFilters ? `(${activeFilters})` : ""}</p>{activeFilters ? <button type="button" onClick={() => setFilters(emptyFilters)} className="flex items-center gap-1 text-xs font-bold text-cyan-200"><X size={13} /> Limpiar</button> : null}</div><div className={`grid gap-2 ${compact ? "sm:grid-cols-2 2xl:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"}`}><FilterInput label="Fecha" type="date" value={filters.date} onChange={(value) => setFilters((current) => ({ ...current, date: value }))} />{!compact ? <FilterSelect label="Negocio" value={filters.business} options={options.businesses} onChange={(value) => setFilters((current) => ({ ...current, business: value }))} /> : null}<FilterSelect label="Origen" value={filters.origin} options={options.accounts} onChange={(value) => setFilters((current) => ({ ...current, origin: value }))} /><FilterSelect label="Destino" value={filters.destination} options={options.accounts} onChange={(value) => setFilters((current) => ({ ...current, destination: value }))} /><FilterSelect label="Medio" value={filters.channel} options={options.channels} onChange={(value) => setFilters((current) => ({ ...current, channel: value }))} /><FilterSelect label="Tipo" value={filters.category} options={options.categories} onChange={(value) => setFilters((current) => ({ ...current, category: value }))} /><FilterSelect label="Movimiento" value={filters.movement} options={options.movements} onChange={(value) => setFilters((current) => ({ ...current, movement: value }))} /></div></div>
+    {showSummaryReport ? <div className="mb-4 rounded-3xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.08] via-purple-300/[0.05] to-transparent p-4"><div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Resumen de resultados filtrados</p><div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-300">{reportFilterRows(filters, month).map(([label, value]) => <span key={label}><strong className="text-slate-400">{label}:</strong> {value}</span>)}</div></div><div className="grid min-w-full grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[620px]"><SummaryStat label="Movimientos" value={String(summary.count)} tone="purple" /><SummaryStat label="Ingresos filtrados" value={euro(summary.income)} tone="emerald" /><SummaryStat label="Gastos filtrados" value={euro(summary.expenses)} tone="rose" /><SummaryStat label="Balance neto" value={euro(summary.balance)} tone="cyan" /></div></div></div> : null}
+    <MovementsTable entries={filtered.slice(0, visibleCount)} emptyText={emptyText} compact={compact} onDelete={onDelete} deletingId={deletingId} />{filtered.length > 10 ? <div className="mt-4 flex justify-center"><button type="button" onClick={() => setVisibleCount((current) => current >= filtered.length ? 10 : current + 10)} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-5 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/20">{visibleCount >= filtered.length ? <><ChevronUp size={16} /> Mostrar menos</> : <><ChevronDown size={16} /> Mostrar más ({Math.min(10, filtered.length - visibleCount)})</>}</button></div> : null}{entries.length > 0 && filtered.length === 0 ? <p className="mt-3 text-center text-xs text-slate-400">No hay movimientos que coincidan con los filtros seleccionados.</p> : null}</div>;
+}
+
+function SummaryStat({ label, value, tone }: { label: string; value: string; tone: "purple" | "emerald" | "rose" | "cyan" }) {
+  const tones = { purple: "text-purple-200", emerald: "text-emerald-200", rose: "text-rose-200", cyan: "text-cyan-200" };
+  return <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><p className="text-[8px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p><p className={`mt-1 whitespace-nowrap text-sm font-black ${tones[tone]}`}>{value}</p></div>;
 }
 function FilterInput({ label, type, value, onChange }: { label: string; type: string; value: string; onChange: (value: string) => void }) { return <label className="space-y-1"><span className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-cyan-300/60" /></label>; }
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) { return <label className="space-y-1"><span className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-xl border border-white/10 bg-slate-950 px-3 text-xs text-white outline-none focus:border-cyan-300/60"><option value="">Todos</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>; }
