@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const ACCESS_PASSWORD = "Nosotrostarot1.";
-const movementTypes = new Set(["ingreso", "gasto"]);
+const movementTypes = new Set(["ingreso", "gasto", "traspaso"]);
 
 function isAuthorized(request: NextRequest) {
   return request.headers.get("x-contabilidad-password") === ACCESS_PASSWORD;
@@ -42,9 +42,16 @@ function isExtraCashAccount(value: string | null | undefined) {
 }
 
 function calculateMainBalanceDelta(entry: PriorEntry, amount: number) {
-  const type = entry.movement_type.toLowerCase() === "gasto" ? "gasto" : "ingreso";
+  const normalizedType = entry.movement_type.toLowerCase();
+  const type = normalizedType === "traspaso" ? "traspaso" : normalizedType === "gasto" ? "gasto" : "ingreso";
   const fromExtraCash = isExtraCashAccount(entry.origin_account);
   const toExtraCash = isExtraCashAccount(entry.destination_account);
+
+  if (type === "traspaso") {
+    if (fromExtraCash && !toExtraCash) return amount;
+    if (!fromExtraCash && toExtraCash) return -amount;
+    return 0;
+  }
 
   // Un movimiento dentro de la propia Caja extra no altera el saldo principal.
   if (fromExtraCash && toExtraCash) return 0;
@@ -136,6 +143,9 @@ export async function POST(request: NextRequest) {
   if (!validOption(category)) return jsonError("Tipo no válido");
   if (!Number.isFinite(amount) || amount <= 0) return jsonError("Importe no válido");
   if (note.length > 500) return jsonError("La observación es demasiado larga");
+  if (type === "traspaso" && originAccount.localeCompare(destinationAccount, "es", { sensitivity: "base" }) === 0) {
+    return jsonError("El origen y el destino del traspaso deben ser diferentes");
+  }
 
   const { data, error } = await supabaseAdmin
     .from("manual_accounting_movements")
@@ -153,7 +163,11 @@ export async function POST(request: NextRequest) {
     .select(selectFields)
     .single();
 
-  if (error) return jsonError(error.message, 500);
+  if (error) {
+    console.error("No se pudo guardar el movimiento contable", { code: error.code, message: error.message });
+    if (error.code === "23514") return jsonError("La configuración contable de Supabase no admite este movimiento. Ejecuta el SQL incluido con esta actualización.", 409);
+    return jsonError("No se pudo guardar el movimiento. Revisa los datos e inténtalo de nuevo.", 500);
+  }
   return NextResponse.json({ entry: data });
 }
 
