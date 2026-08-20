@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import FinancialIntelligence from "@/components/accounting/FinancialIntelligence";
 import {
   CalendarDays,
   ArrowRightLeft,
@@ -214,6 +215,7 @@ export default function ContabilidadClient() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
+  const [analyticsEntries, setAnalyticsEntries] = useState<AccountingEntry[]>([]);
   const [openingBalances, setOpeningBalances] = useState<BalanceMap>({});
   const [openingCashBalances, setOpeningCashBalances] = useState<BalanceMap>({});
   const [loading, setLoading] = useState(false);
@@ -270,30 +272,34 @@ export default function ContabilidadClient() {
     loadOptions().catch(() => undefined);
   }, [unlocked]);
 
-  useEffect(() => {
-    if (!unlocked) return;
-    let cancelled = false;
-    async function loadEntries() {
-      setLoading(true);
+  const loadEntries = useCallback(async (silent = false) => {
+      if (!unlocked) return;
+      if (!silent) setLoading(true);
       setFormError("");
       try {
         const response = await fetch(`/api/contabilidad/movimientos?month=${encodeURIComponent(month)}`, { headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload?.error || "No se pudieron cargar los movimientos.");
-        if (!cancelled) {
-          setEntries((payload.entries || []).map(mapEntry));
-          setOpeningBalances(payload.openingBalances || {});
-          setOpeningCashBalances(payload.openingCashBalances || {});
-        }
+        setEntries((payload.entries || []).map(mapEntry));
+        setAnalyticsEntries((payload.analyticsEntries || payload.entries || []).map(mapEntry));
+        setOpeningBalances(payload.openingBalances || {});
+        setOpeningCashBalances(payload.openingCashBalances || {});
       } catch (error) {
-        if (!cancelled) setFormError(error instanceof Error ? error.message : "No se pudieron cargar los movimientos.");
+        if (!silent) setFormError(error instanceof Error ? error.message : "No se pudieron cargar los movimientos.");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!silent) setLoading(false);
       }
-    }
-    loadEntries();
-    return () => { cancelled = true; };
   }, [month, unlocked]);
+
+  useEffect(() => { void loadEntries(); }, [loadEntries]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    const timer = window.setInterval(() => void loadEntries(true), 30000);
+    const onVisible = () => { if (document.visibilityState === "visible") void loadEntries(true); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
+  }, [loadEntries, unlocked]);
 
   useEffect(() => {
     if (!businessOptions.includes(business) && businessOptions[0]) setBusiness(businessOptions[0]);
@@ -318,6 +324,7 @@ export default function ContabilidadClient() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo eliminar el movimiento.");
       setEntries((current) => current.filter((item) => item.id !== entry.id));
+      setAnalyticsEntries((current) => current.filter((item) => item.id !== entry.id));
     } catch (error) { setFormError(error instanceof Error ? error.message : "No se pudo eliminar el movimiento."); }
     finally { setDeletingId(null); }
   };
@@ -346,6 +353,7 @@ export default function ContabilidadClient() {
       const savedEntry = mapEntry(payload.entry);
       if (savedEntry.date.slice(0, 7) === month) setEntries((current) => [savedEntry, ...current]);
       else setMonth(savedEntry.date.slice(0, 7));
+      setAnalyticsEntries((current) => current.some((item) => item.id === savedEntry.id) ? current : [...current, savedEntry]);
       setAmount("");
       setNote("");
     } catch (error) { setFormError(error instanceof Error ? error.message : "No se pudo guardar el movimiento."); }
@@ -362,6 +370,8 @@ export default function ContabilidadClient() {
     <main className="flowly-app-shell min-h-screen overflow-x-hidden px-5 py-8 text-white sm:px-8">
       <section className="mx-auto max-w-[1600px] space-y-6">
         <header className="flowly-client-hero overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/12 via-purple-500/10 to-black p-6 shadow-2xl shadow-cyan-950/20 sm:p-8"><div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between"><div className="shrink-0"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.32em] text-cyan-200/75"><ShieldCheck size={16} /> Privado</p><h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Contabilidad mensual</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Los saldos anteriores se arrastran automáticamente y cada negocio conserva su propia caja extra.</p></div><div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:max-w-[900px] 2xl:grid-cols-5"><StatCard label="Saldo anterior" value={euro(totalOpening)} tone="purple" /><StatCard label="Ingresos del mes" value={euro(monthlyTotals.income)} tone="emerald" /><StatCard label="Gastos del mes" value={euro(monthlyTotals.expenses)} tone="rose" /><StatCard label="Saldo actual" value={euro(totalOpening + monthlyTotals.balance)} tone="cyan" /><StatCard label="Cajas extra" value={euro(totalCashMovement.final)} tone="amber" /></div></div></header>
+
+        <FinancialIntelligence entries={analyticsEntries} month={month} businesses={allBusinessNames} channels={filterChannels} categories={filterCategories} loading={loading} />
 
         <form onSubmit={handleSubmit} className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-purple-950/10 backdrop-blur sm:p-5">
           <div className="mb-4 flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-100"><Plus size={20} /></div><div><h2 className="font-black">Nuevo movimiento</h2><p className="text-xs text-slate-400">Añade o administra las opciones desde cada desplegable.</p></div></div><Field label="Mes visible"><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="min-h-[46px] rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-cyan-300/70" /></Field></div>

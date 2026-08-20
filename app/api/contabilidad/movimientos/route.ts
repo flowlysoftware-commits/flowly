@@ -83,6 +83,21 @@ function calculateOpeningBalances(entries: PriorEntry[]) {
 
 const selectFields = "id, movement_type, movement_date, business, channel, category, amount, note, origin_account, destination_account, created_at";
 
+async function loadAccountingHistory(untilDate: string) {
+  const pageSize = 1000;
+  const rows: ApiHistoryEntry[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const result = await supabaseAdmin.from("manual_accounting_movements").select(selectFields).lt("movement_date", untilDate).order("movement_date", { ascending: true }).order("created_at", { ascending: true }).range(from, from + pageSize - 1);
+    if (result.error) throw result.error;
+    const page = (result.data || []) as ApiHistoryEntry[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+type ApiHistoryEntry = PriorEntry & { id: string; movement_date: string; channel: string; category: string; note: string | null; created_at: string };
+
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) return jsonError("No autorizado", 401);
   if (!dbReady()) {
@@ -92,26 +107,15 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const { month, start, next } = parseMonth(searchParams.get("month"));
 
-  const [monthResult, priorResult] = await Promise.all([
-    supabaseAdmin
-      .from("manual_accounting_movements")
-      .select(selectFields)
-      .gte("movement_date", start)
-      .lt("movement_date", next)
-      .order("movement_date", { ascending: false })
-      .order("created_at", { ascending: false }),
-    supabaseAdmin
-      .from("manual_accounting_movements")
-      .select("movement_type, business, amount, origin_account, destination_account")
-      .lt("movement_date", start),
-  ]);
-
-  if (monthResult.error) return jsonError(monthResult.error.message, 500);
-  if (priorResult.error) return jsonError(priorResult.error.message, 500);
-
-  const opening = calculateOpeningBalances((priorResult.data || []) as PriorEntry[]);
+  let history: ApiHistoryEntry[];
+  try { history = await loadAccountingHistory(next); }
+  catch (error) { return jsonError(error instanceof Error ? error.message : "No se pudo cargar el histórico contable", 500); }
+  const prior = history.filter((entry) => entry.movement_date < start);
+  const monthEntries = history.filter((entry) => entry.movement_date >= start).sort((a,b)=>`${b.movement_date}-${b.created_at}`.localeCompare(`${a.movement_date}-${a.created_at}`));
+  const opening = calculateOpeningBalances(prior);
   return NextResponse.json({
-    entries: monthResult.data || [],
+    entries: monthEntries,
+    analyticsEntries: history,
     month,
     openingBalances: opening.business,
     openingCashBalances: opening.cash,
