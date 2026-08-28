@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import FinancialIntelligence from "@/components/accounting/FinancialIntelligence";
+import { accountingBalanceEffects, applyAccountingEffects, isExtraCashAccount } from "@/lib/accountingBalances";
 import {
   CalendarDays,
   ArrowRightLeft,
@@ -129,43 +130,9 @@ function mapEntry(entry: ApiEntry): AccountingEntry {
     createdAt: entry.created_at,
   };
 }
-function isExtraCashAccount(value: string | null | undefined) {
-  return String(value || "").trim().toLocaleLowerCase("es") === "caja extra";
-}
-
 function classifyAccountingEntry(entry: AccountingEntry) {
-  const fromExtraCash = isExtraCashAccount(entry.originAccount);
-  const toExtraCash = isExtraCashAccount(entry.destinationAccount);
-
-  if (entry.type === "traspaso") {
-    if (fromExtraCash && !toExtraCash) return { income: 0, expenses: 0, mainBalanceDelta: entry.amount };
-    if (!fromExtraCash && toExtraCash) return { income: 0, expenses: 0, mainBalanceDelta: -entry.amount };
-    return { income: 0, expenses: 0, mainBalanceDelta: 0 };
-  }
-
-  if (fromExtraCash && toExtraCash) {
-    return { income: 0, expenses: 0, mainBalanceDelta: 0 };
-  }
-
-  if (fromExtraCash) {
-    return {
-      income: 0,
-      expenses: 0,
-      mainBalanceDelta: entry.type === "ingreso" ? entry.amount : 0,
-    };
-  }
-
-  if (toExtraCash) {
-    return {
-      income: 0,
-      expenses: 0,
-      mainBalanceDelta: entry.type === "gasto" ? -entry.amount : 0,
-    };
-  }
-
-  return entry.type === "ingreso"
-    ? { income: entry.amount, expenses: 0, mainBalanceDelta: entry.amount }
-    : { income: 0, expenses: entry.amount, mainBalanceDelta: -entry.amount };
+  const effect = accountingBalanceEffects(entry, [entry.business]);
+  return { income: effect.income, expenses: effect.expenses, mainBalanceDelta: Object.values(effect.main).reduce((sum, value) => sum + value, 0) };
 }
 
 function calculateTotals(entries: AccountingEntry[]) {
@@ -223,6 +190,7 @@ export default function ContabilidadClient() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
   const [addCategory, setAddCategory] = useState<OptionCategory | null>(null);
+  const [confirmingTransfer, setConfirmingTransfer] = useState<number | null>(null);
 
   const businessOptions = optionValues(configOptions, "business");
   const originOptions = optionValues(configOptions, "origin");
@@ -245,14 +213,22 @@ export default function ContabilidadClient() {
     const outgoing = allCashRows.reduce((sum, row) => sum + row.cashOut, 0);
     return { final: totalOpeningCash + incoming - outgoing };
   }, [allCashRows, totalOpeningCash]);
+  const currentBalances = useMemo(() => applyAccountingEffects(entries, allBusinessNames, openingBalances, openingCashBalances), [allBusinessNames, entries, openingBalances, openingCashBalances]);
   const entriesByBusiness = useMemo(() => allBusinessNames.map((name) => {
-    const businessEntries = entries.filter((entry) => entry.business === name);
-    const totals = calculateTotals(businessEntries);
-    const cashRows = calculateCashRows(businessEntries, openingCashBalances[name] || 0);
+    const businessEntries = entries.filter((entry) => entry.business === name || (entry.type === "traspaso" && (entry.originAccount === name || entry.destinationAccount === name)));
+    const totals = businessEntries.reduce((result, entry) => {
+      const effect = accountingBalanceEffects(entry, allBusinessNames);
+      result.income += entry.business === name ? effect.income : 0;
+      result.expenses += entry.business === name ? effect.expenses : 0;
+      result.balance += effect.main[name] || 0;
+      return result;
+    }, { income: 0, expenses: 0, balance: 0 });
+    const cashEntries = entries.filter((entry) => Boolean(accountingBalanceEffects(entry, allBusinessNames).cash[name]));
+    const cashRows = calculateCashRows(cashEntries, openingCashBalances[name] || 0);
     const cashIn = cashRows.reduce((sum, row) => sum + row.cashIn, 0);
     const cashOut = cashRows.reduce((sum, row) => sum + row.cashOut, 0);
-    return { business: name, entries: businessEntries, totals, opening: openingBalances[name] || 0, final: (openingBalances[name] || 0) + totals.balance, cashRows, cashIn, cashOut, cashFinal: (openingCashBalances[name] || 0) + cashIn - cashOut };
-  }), [allBusinessNames, entries, openingBalances, openingCashBalances]);
+    return { business: name, entries: businessEntries, totals, opening: openingBalances[name] || 0, final: currentBalances.main[name] || 0, cashRows, cashIn, cashOut, cashFinal: currentBalances.cash[name] || 0 };
+  }), [allBusinessNames, currentBalances, entries, openingBalances, openingCashBalances]);
 
   async function loadOptions() {
     const response = await fetch("/api/contabilidad/opciones", { cache: "no-store", headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
@@ -323,15 +299,12 @@ export default function ContabilidadClient() {
       const response = await fetch(`/api/contabilidad/movimientos?id=${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo eliminar el movimiento.");
-      setEntries((current) => current.filter((item) => item.id !== entry.id));
-      setAnalyticsEntries((current) => current.filter((item) => item.id !== entry.id));
+      await loadEntries(true);
     } catch (error) { setFormError(error instanceof Error ? error.message : "No se pudo eliminar el movimiento."); }
     finally { setDeletingId(null); }
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const numericAmount = Number(amount.replace(",", "."));
+  const saveMovement = async (numericAmount: number) => {
     if (!date || !business || !type || !channel || !category || !originAccount || !destinationAccount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
       setFormError("Completa los campos obligatorios y pon un importe válido.");
       return;
@@ -351,13 +324,26 @@ export default function ContabilidadClient() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo guardar el movimiento.");
       const savedEntry = mapEntry(payload.entry);
-      if (savedEntry.date.slice(0, 7) === month) setEntries((current) => [savedEntry, ...current]);
-      else setMonth(savedEntry.date.slice(0, 7));
-      setAnalyticsEntries((current) => current.some((item) => item.id === savedEntry.id) ? current : [...current, savedEntry]);
+      if (savedEntry.date.slice(0, 7) !== month) setMonth(savedEntry.date.slice(0, 7));
+      else await loadEntries(true);
       setAmount("");
       setNote("");
+      setConfirmingTransfer(null);
     } catch (error) { setFormError(error instanceof Error ? error.message : "No se pudo guardar el movimiento."); }
     finally { setSaving(false); }
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const numericAmount = Number(amount.replace(",", "."));
+    if (type === "traspaso") {
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) return setFormError("Introduce un importe válido para el traspaso.");
+      if (originAccount.localeCompare(destinationAccount, "es", { sensitivity: "base" }) === 0) return setFormError("El origen y el destino del traspaso deben ser diferentes.");
+      setFormError("");
+      setConfirmingTransfer(numericAmount);
+      return;
+    }
+    void saveMovement(numericAmount);
   };
 
   if (!unlocked) return (
@@ -380,10 +366,10 @@ export default function ContabilidadClient() {
               <Field label="Movimiento"><select value={type} onChange={(event) => setType(event.target.value as MovementType)} className="field-control"><option value="ingreso">Ingreso</option><option value="gasto">Gasto</option><option value="traspaso">Traspaso</option></select></Field>
               <Field label="Fecha"><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} /><input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="field-control pl-10" /></div></Field>
               <Field label="Negocio"><ConfigurableSelect {...selectProps("business", business, setBusiness, businessOptions)} /></Field>
-              <Field label="Origen del dinero"><ConfigurableSelect {...selectProps("origin", originAccount, setOriginAccount, originOptions)} /></Field>
-              <Field label="Destino del dinero"><ConfigurableSelect {...selectProps("destination", destinationAccount, setDestinationAccount, destinationOptions)} /></Field>
+              <Field label="Origen del dinero"><ConfigurableSelect {...selectProps("origin", originAccount, setOriginAccount, type === "traspaso" ? mergeHistoric(originOptions, businessOptions) : originOptions)} /></Field>
+              <Field label="Destino del dinero"><ConfigurableSelect {...selectProps("destination", destinationAccount, setDestinationAccount, type === "traspaso" ? mergeHistoric(destinationOptions, businessOptions) : destinationOptions)} /></Field>
             </div>
-            {type === "traspaso" ? <div className="flex flex-col gap-3 rounded-2xl border border-violet-300/20 bg-violet-300/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" role="status"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-300/15 text-violet-200"><ArrowRightLeft size={18} aria-hidden="true" /></span><div><p className="text-xs font-black uppercase tracking-[0.14em] text-violet-200">Traspaso interno</p><p className="text-sm text-slate-300"><strong>{business} · {originAccount || "Selecciona origen"}</strong> <span aria-hidden="true">→</span> <strong>{destinationAccount || "Selecciona destino"}</strong></p></div></div><p className="max-w-xl text-xs leading-5 text-slate-400">Mueve saldo entre cuentas del mismo negocio. No modifica ingresos ni gastos. Medio y tipo se conservan únicamente como referencia.</p></div> : null}
+            {type === "traspaso" ? <div className="flex flex-col gap-3 rounded-2xl border border-violet-300/20 bg-violet-300/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" role="status"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-300/15 text-violet-200"><ArrowRightLeft size={18} aria-hidden="true" /></span><div><p className="text-xs font-black uppercase tracking-[0.14em] text-violet-200">Traspaso interno</p><p className="text-sm text-slate-300"><strong>{originAccount || "Selecciona origen"}</strong> <span aria-hidden="true">→</span> <strong>{destinationAccount || "Selecciona destino"}</strong></p></div></div><p className="max-w-xl text-xs leading-5 text-slate-400">Resta saldo al origen y lo suma al destino. No modifica ingresos ni gastos. Medio y tipo se conservan únicamente como referencia.</p></div> : null}
             <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[1.15fr_1fr_0.8fr_1.5fr_auto]">
               <Field label={type === "ingreso" ? "Por dónde se ingresa" : "Por dónde se paga"}><ConfigurableSelect {...selectProps("channel", channel, setChannel, channelOptions)} /></Field>
               <Field label="Tipo"><ConfigurableSelect {...selectProps("category", category, setCategory, categoryOptions)} /></Field>
@@ -403,6 +389,7 @@ export default function ContabilidadClient() {
       </section>
 
       {addCategory ? <OptionEditorModal category={addCategory} title={`Añadir opción · ${categoryLabels[addCategory]}`} onClose={() => setAddCategory(null)} onSaved={async (saved) => { await loadOptions(); setAddCategory(null); if (saved.category === "business") setBusiness(saved.label); if (saved.category === "origin") setOriginAccount(saved.label); if (saved.category === "destination") setDestinationAccount(saved.label); if (saved.category === "channel") setChannel(saved.label); if (saved.category === "category") setCategory(saved.label); }} setError={setFormError} /> : null}
+      {confirmingTransfer != null ? <TransferConfirmation amount={confirmingTransfer} origin={originAccount} destination={destinationAccount} business={business} businessNames={allBusinessNames} balances={currentBalances} onClose={() => setConfirmingTransfer(null)} onConfirm={() => void saveMovement(confirmingTransfer)} saving={saving} /> : null}
     </main>
   );
 }
@@ -429,6 +416,16 @@ function OptionEditorModal({ category, title, initial, onClose, onSaved, setErro
   return <Modal title={title} onClose={onClose}><form onSubmit={save} className="space-y-4"><Field label="Nombre de la opción"><input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} className="field-control" placeholder="Escribe el nuevo valor" /></Field><div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300">Cancelar</button><button type="submit" disabled={saving || !label.trim()} className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 disabled:opacity-50">{saving ? "Guardando" : "Guardar"}</button></div></form></Modal>;
 }
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-slate-950 p-5 shadow-2xl shadow-black/60"><div className="mb-5 flex items-center justify-between"><h3 className="text-lg font-black text-white">{title}</h3><button type="button" onClick={onClose} className="rounded-xl border border-white/10 p-2 text-slate-400 hover:text-white"><X size={18} /></button></div>{children}</div></div>; }
+function TransferConfirmation({ amount, origin, destination, business, businessNames, balances, saving, onClose, onConfirm }: { amount: number; origin: string; destination: string; business: string; businessNames: string[]; balances: { main: BalanceMap; cash: BalanceMap }; saving: boolean; onClose: () => void; onConfirm: () => void }) {
+  const previewEntry: AccountingEntry = { id: "preview", type: "traspaso", date: "", business, channel: "", category: "", amount, note: "", originAccount: origin, destinationAccount: destination };
+  const effect = accountingBalanceEffects(previewEntry, businessNames);
+  const owner = businessNames.find((name) => name === origin || name === destination) || business;
+  const originBefore = isExtraCashAccount(origin) ? balances.cash[owner] || 0 : balances.main[origin] ?? balances.main[business] ?? 0;
+  const destinationBefore = isExtraCashAccount(destination) ? balances.cash[owner] || 0 : balances.main[destination] ?? balances.main[business] ?? 0;
+  const originDelta = isExtraCashAccount(origin) ? effect.cash[owner] || 0 : effect.main[origin] ?? effect.main[business] ?? 0;
+  const destinationDelta = isExtraCashAccount(destination) ? effect.cash[owner] || 0 : effect.main[destination] ?? effect.main[business] ?? 0;
+  return <Modal title="Confirmar traspaso" onClose={onClose}><div className="space-y-4"><p className="text-sm text-slate-300">Se moverán <strong className="text-white">{euro(amount)}</strong> sin alterar ingresos ni gastos.</p><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-rose-300/20 bg-rose-300/[0.07] p-4"><p className="text-xs font-black uppercase text-rose-200">Origen · {origin}</p><p className="mt-2 text-sm text-slate-400">{euro(originBefore)} → <strong className="text-white">{euro(originBefore + originDelta)}</strong></p></div><div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.07] p-4"><p className="text-xs font-black uppercase text-emerald-200">Destino · {destination}</p><p className="mt-2 text-sm text-slate-400">{euro(destinationBefore)} → <strong className="text-white">{euro(destinationBefore + destinationDelta)}</strong></p></div></div><div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300">Cancelar</button><button type="button" onClick={onConfirm} disabled={saving} className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 disabled:opacity-50">{saving ? "Guardando" : "Confirmar traspaso"}</button></div></div></Modal>;
+}
 function StatCard({ label, value, tone }: { label: string; value: string; tone: "purple" | "emerald" | "rose" | "cyan" | "amber" }) { const tones = { purple: "text-purple-200/70", emerald: "text-emerald-200", rose: "text-rose-200", cyan: "text-cyan-200", amber: "text-amber-200" }; const subdued = tone === "purple"; return <div className={`min-w-0 rounded-2xl border p-4 ${subdued ? "border-white/[0.06] bg-black/15 opacity-75" : "border-white/10 bg-black/25"}`}><p className={`font-black uppercase text-slate-500 [overflow-wrap:normal] [word-break:normal] ${subdued ? "text-[8px] tracking-[0.12em]" : "text-[9px] tracking-[0.14em]"}`}>{label}</p><p className={`mt-1 whitespace-nowrap font-black ${subdued ? "text-sm" : "text-base"} ${tones[tone]}`}>{value}</p></div>; }
 function MiniStat({ label, value, tone }: { label: string; value: string; tone: "purple" | "emerald" | "rose" | "cyan" | "amber" }) { return <StatCard label={label} value={value} tone={tone} />; }
 type FilterOptions = { businesses: string[]; accounts: string[]; channels: string[]; categories: string[]; movements: string[] };
@@ -473,7 +470,7 @@ function MovementTableWithFilters({ entries, options, emptyText, compact = false
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [visibleCount, setVisibleCount] = useState(10);
   const [exporting, setExporting] = useState(false);
-  const filtered = useMemo(() => entries.filter((entry) => (!filters.date || entry.date === filters.date) && (!filters.business || entry.business === filters.business) && (!filters.origin || entry.originAccount === filters.origin) && (!filters.destination || entry.destinationAccount === filters.destination) && (!filters.channel || entry.channel === filters.channel) && (!filters.category || entry.category === filters.category) && (!filters.movement || entry.type === filters.movement)), [entries, filters]);
+  const filtered = useMemo(() => entries.filter((entry) => (!filters.date || entry.date === filters.date) && (!filters.business || entry.business === filters.business || (entry.type === "traspaso" && (entry.originAccount === filters.business || entry.destinationAccount === filters.business))) && (!filters.origin || entry.originAccount === filters.origin) && (!filters.destination || entry.destinationAccount === filters.destination) && (!filters.channel || entry.channel === filters.channel) && (!filters.category || entry.category === filters.category) && (!filters.movement || entry.type === filters.movement)), [entries, filters]);
   const summary = useMemo<FilterSummary>(() => filtered.reduce((result, entry) => {
     const effect = classifyAccountingEntry(entry);
     result.income += effect.income;

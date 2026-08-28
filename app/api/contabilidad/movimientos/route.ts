@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { applyAccountingEffects, type AccountingBalanceEntry } from "@/lib/accountingBalances";
 
 const ACCESS_PASSWORD = "Nosotrostarot1.";
 const movementTypes = new Set(["ingreso", "gasto", "traspaso"]);
@@ -37,48 +38,17 @@ type PriorEntry = {
   destination_account: string | null;
 };
 
-function isExtraCashAccount(value: string | null | undefined) {
-  return String(value || "").trim().toLocaleLowerCase("es") === "caja extra";
-}
-
-function calculateMainBalanceDelta(entry: PriorEntry, amount: number) {
-  const normalizedType = entry.movement_type.toLowerCase();
-  const type = normalizedType === "traspaso" ? "traspaso" : normalizedType === "gasto" ? "gasto" : "ingreso";
-  const fromExtraCash = isExtraCashAccount(entry.origin_account);
-  const toExtraCash = isExtraCashAccount(entry.destination_account);
-
-  if (type === "traspaso") {
-    if (fromExtraCash && !toExtraCash) return amount;
-    if (!fromExtraCash && toExtraCash) return -amount;
-    return 0;
-  }
-
-  // Un movimiento dentro de la propia Caja extra no altera el saldo principal.
-  if (fromExtraCash && toExtraCash) return 0;
-
-  // Ingreso con origen Caja extra: traspaso Caja extra -> saldo principal.
-  if (fromExtraCash) return type === "ingreso" ? amount : 0;
-
-  // Gasto con destino Caja extra: traspaso saldo principal -> Caja extra.
-  // Un ingreso con destino Caja extra es una entrada externa directa a esa caja.
-  if (toExtraCash) return type === "gasto" ? -amount : 0;
-
-  return type === "gasto" ? -amount : amount;
-}
-
 function calculateOpeningBalances(entries: PriorEntry[]) {
-  const business: BalanceMap = {};
-  const cash: BalanceMap = {};
-
-  for (const entry of entries) {
-    const amount = Number(entry.amount) || 0;
-    business[entry.business] = (business[entry.business] || 0) + calculateMainBalanceDelta(entry, amount);
-
-    if (isExtraCashAccount(entry.destination_account)) cash[entry.business] = (cash[entry.business] || 0) + amount;
-    if (isExtraCashAccount(entry.origin_account)) cash[entry.business] = (cash[entry.business] || 0) - amount;
-  }
-
-  return { business, cash };
+  const businesses = new Set(entries.map((entry) => entry.business));
+  const mapped: AccountingBalanceEntry[] = entries.map((entry) => ({
+    type: entry.movement_type.toLowerCase() === "traspaso" ? "traspaso" : entry.movement_type.toLowerCase() === "gasto" ? "gasto" : "ingreso",
+    business: entry.business,
+    amount: Number(entry.amount) || 0,
+    originAccount: entry.origin_account || "Banco",
+    destinationAccount: entry.destination_account || "Banco",
+  }));
+  const balances = applyAccountingEffects(mapped, businesses);
+  return { business: balances.main as BalanceMap, cash: balances.cash as BalanceMap };
 }
 
 const selectFields = "id, movement_type, movement_date, business, channel, category, amount, note, origin_account, destination_account, created_at";
