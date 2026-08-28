@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import FinancialIntelligence from "@/components/accounting/FinancialIntelligence";
-import { accountingBalanceEffects, applyAccountingEffects, isExtraCashAccount } from "@/lib/accountingBalances";
+import { accountingBalanceEffects, applyAccountingEffects, isExtraCashAccount } from "@/lib/accountingMetrics";
 import {
   CalendarDays,
   ArrowRightLeft,

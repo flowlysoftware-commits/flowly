@@ -13,10 +13,73 @@ export type AccountingMetricEntry = {
 export type AccountingMetricFilters = { business: string; method: string; type: string };
 export type MetricSnapshot = { income: number; expenses: number; balance: number; cash: number; count: number };
 
+export type AccountingBalanceEntry = {
+  type: "ingreso" | "gasto" | "traspaso";
+  business: string;
+  amount: number;
+  originAccount: string;
+  destinationAccount: string;
+};
+export type BalanceEffects = { income: number; expenses: number; main: Record<string, number>; cash: Record<string, number> };
+
 const cents = (value: number) => Math.round((Number(value) || 0) * 100);
 const money = (value: number) => value / 100;
 const normalized = (value: string) => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
 const extraCash = (value: string) => normalized(value) === "caja extra";
+export const isExtraCashAccount = (value: string | null | undefined) => extraCash(String(value || ""));
+
+function addBalance(target: Record<string, number>, key: string, amount: number) {
+  if (key) target[key] = (target[key] || 0) + amount;
+}
+
+export function accountingBalanceEffects(entry: AccountingBalanceEntry, businessNames: Iterable<string>): BalanceEffects {
+  const result: BalanceEffects = { income: 0, expenses: 0, main: {}, cash: {} };
+  const amount = Number(entry.amount) || 0;
+  const names = new Map(Array.from(businessNames, (name) => [normalized(name), name]));
+  if (!names.has(normalized(entry.business))) names.set(normalized(entry.business), entry.business);
+  const originBusiness = names.get(normalized(entry.originAccount));
+  const destinationBusiness = names.get(normalized(entry.destinationAccount));
+  const fromCash = isExtraCashAccount(entry.originAccount);
+  const toCash = isExtraCashAccount(entry.destinationAccount);
+
+  if (entry.type === "traspaso") {
+    const cashOwner = originBusiness || destinationBusiness || entry.business;
+    if (originBusiness) addBalance(result.main, originBusiness, -amount);
+    else if (fromCash) addBalance(result.cash, cashOwner, -amount);
+    else if (toCash || destinationBusiness) addBalance(result.main, entry.business, -amount);
+    if (destinationBusiness) addBalance(result.main, destinationBusiness, amount);
+    else if (toCash) addBalance(result.cash, cashOwner, amount);
+    else if (fromCash || originBusiness) addBalance(result.main, entry.business, amount);
+    return result;
+  }
+
+  if (fromCash && toCash) return result;
+  if (fromCash) {
+    addBalance(result.cash, entry.business, -amount);
+    if (entry.type === "ingreso") addBalance(result.main, entry.business, amount);
+    return result;
+  }
+  if (toCash) {
+    addBalance(result.cash, entry.business, amount);
+    if (entry.type === "gasto") addBalance(result.main, entry.business, -amount);
+    return result;
+  }
+  if (entry.type === "ingreso") { result.income = amount; addBalance(result.main, entry.business, amount); }
+  else { result.expenses = amount; addBalance(result.main, entry.business, -amount); }
+  return result;
+}
+
+export function applyAccountingEffects(entries: AccountingBalanceEntry[], businessNames: Iterable<string>, openingMain: Record<string, number> = {}, openingCash: Record<string, number> = {}) {
+  const main = { ...openingMain }, cash = { ...openingCash };
+  let income = 0, expenses = 0;
+  for (const entry of entries) {
+    const effect = accountingBalanceEffects(entry, businessNames);
+    income += effect.income; expenses += effect.expenses;
+    for (const [name, value] of Object.entries(effect.main)) addBalance(main, name, value);
+    for (const [name, value] of Object.entries(effect.cash)) addBalance(cash, name, value);
+  }
+  return { main, cash, income, expenses };
+}
 export const monthKey = (date: string) => String(date || "").slice(0, 7);
 export function previousMonth(month: string) { const [year, number] = month.split("-").map(Number); return new Date(Date.UTC(year, number - 2, 1)).toISOString().slice(0, 7); }
 

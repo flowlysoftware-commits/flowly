@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { applyAccountingEffects, type AccountingBalanceEntry } from "@/lib/accountingBalances";
+import { applyAccountingEffects, type AccountingBalanceEntry } from "@/lib/accountingMetrics";
 
 const ACCESS_PASSWORD = "Nosotrostarot1.";
 const movementTypes = new Set(["ingreso", "gasto", "traspaso"]);
