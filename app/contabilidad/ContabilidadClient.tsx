@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import FinancialIntelligence from "@/components/accounting/FinancialIntelligence";
 import { accountingBalanceEffects, applyAccountingEffects, isExtraCashAccount } from "@/lib/accountingMetrics";
 import {
   CalendarDays,
   ArrowRightLeft,
+  Bell,
   ChevronDown,
   ChevronUp,
   Download,
@@ -76,6 +77,7 @@ type Filters = {
 };
 
 type CashRow = { entry: AccountingEntry; cashIn: number; cashOut: number; balance: number };
+type AuditEvent = { id: number; movement_id: string; action: "INSERT" | "UPDATE" | "DELETE"; occurred_at: string; actor_user_id: string | null; database_role: string; source: string; old_data: Record<string, unknown> | null; new_data: Record<string, unknown> | null };
 
 const ACCESS_PASSWORD = "Nosotrostarot1.";
 const defaultOptions: Record<OptionCategory, Array<{ label: string }>> = {
@@ -191,6 +193,44 @@ export default function ContabilidadClient() {
   const [formError, setFormError] = useState("");
   const [addCategory, setAddCategory] = useState<OptionCategory | null>(null);
   const [confirmingTransfer, setConfirmingTransfer] = useState<number | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditReady, setAuditReady] = useState(true);
+  const [toast, setToast] = useState<{ message: string; tone: "emerald" | "rose" | "violet" } | null>(null);
+  const lastAuditId = useRef<number | null>(null);
+
+  const showToast = useCallback((message: string, tone: "emerald" | "rose" | "violet") => {
+    setToast({ message, tone });
+    window.setTimeout(() => setToast(null), 4500);
+  }, []);
+
+  const loadAudit = useCallback(async (notify = false) => {
+    setAuditLoading(true);
+    try {
+      const response = await fetch("/api/contabilidad/auditoria?limit=300", { cache: "no-store", headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || "No se pudo cargar la comparación.");
+      const nextEvents = (payload.events || []) as AuditEvent[];
+      if (notify && lastAuditId.current != null && nextEvents[0]?.id > lastAuditId.current) {
+        const latest = nextEvents[0];
+        const data = (latest.action === "DELETE" ? latest.old_data : latest.new_data) || {};
+        showToast(`${latest.action === "DELETE" ? "Movimiento eliminado" : latest.action === "UPDATE" ? "Movimiento modificado" : String(data.movement_type || "Movimiento") + " registrado"} · ${euro(Number(data.amount) || 0)}`, latest.action === "DELETE" ? "rose" : String(data.movement_type).toLowerCase() === "traspaso" ? "violet" : "emerald");
+      }
+      if (nextEvents[0]?.id) lastAuditId.current = nextEvents[0].id;
+      setAuditEvents(nextEvents); setAuditReady(payload.auditReady !== false);
+    } catch (error) { setFormError(error instanceof Error ? error.message : "No se pudo cargar la comparación."); }
+    finally { setAuditLoading(false); }
+  }, [showToast]);
+
+  const openAudit = useCallback(async () => { setAuditOpen(true); await loadAudit(false); }, [loadAudit]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    void loadAudit(false);
+    const timer = window.setInterval(() => void loadAudit(true), 15000);
+    return () => window.clearInterval(timer);
+  }, [loadAudit, unlocked]);
 
   const businessOptions = optionValues(configOptions, "business");
   const originOptions = optionValues(configOptions, "origin");
@@ -300,6 +340,7 @@ export default function ContabilidadClient() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo eliminar el movimiento.");
       await loadEntries(true);
+      showToast(`${entry.type === "traspaso" ? "Traspaso" : "Movimiento"} eliminado · ${euro(entry.amount)}`, "rose");
     } catch (error) { setFormError(error instanceof Error ? error.message : "No se pudo eliminar el movimiento."); }
     finally { setDeletingId(null); }
   };
@@ -329,6 +370,7 @@ export default function ContabilidadClient() {
       setAmount("");
       setNote("");
       setConfirmingTransfer(null);
+      showToast(`${savedEntry.type === "traspaso" ? "Traspaso realizado" : savedEntry.type === "ingreso" ? "Ingreso registrado" : "Gasto registrado"} · ${euro(savedEntry.amount)}`, savedEntry.type === "traspaso" ? "violet" : "emerald");
     } catch (error) { setFormError(error instanceof Error ? error.message : "No se pudo guardar el movimiento."); }
     finally { setSaving(false); }
   };
@@ -357,7 +399,7 @@ export default function ContabilidadClient() {
       <section className="mx-auto max-w-[1600px] space-y-6">
         <header className="flowly-client-hero overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/12 via-purple-500/10 to-black p-6 shadow-2xl shadow-cyan-950/20 sm:p-8"><div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between"><div className="shrink-0"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.32em] text-cyan-200/75"><ShieldCheck size={16} /> Privado</p><h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Contabilidad mensual</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Los saldos anteriores se arrastran automáticamente y cada negocio conserva su propia caja extra.</p></div><div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:max-w-[900px] 2xl:grid-cols-5"><StatCard label="Saldo anterior" value={euro(totalOpening)} tone="purple" /><StatCard label="Ingresos del mes" value={euro(monthlyTotals.income)} tone="emerald" /><StatCard label="Gastos del mes" value={euro(monthlyTotals.expenses)} tone="rose" /><StatCard label="Saldo actual" value={euro(totalOpening + monthlyTotals.balance)} tone="cyan" /><StatCard label="Cajas extra" value={euro(totalCashMovement.final)} tone="amber" /></div></div></header>
 
-        <FinancialIntelligence entries={analyticsEntries} month={month} businesses={allBusinessNames} channels={filterChannels} categories={filterCategories} loading={loading} />
+        <FinancialIntelligence entries={analyticsEntries} month={month} businesses={allBusinessNames} channels={filterChannels} categories={filterCategories} loading={loading} onOpenComparison={() => void openAudit()} />
 
         <form onSubmit={handleSubmit} className="flowly-client-card rounded-[2rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-purple-950/10 backdrop-blur sm:p-5">
           <div className="mb-4 flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-100"><Plus size={20} /></div><div><h2 className="font-black">Nuevo movimiento</h2><p className="text-xs text-slate-400">Añade o administra las opciones desde cada desplegable.</p></div></div><Field label="Mes visible"><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="min-h-[46px] rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-cyan-300/70" /></Field></div>
@@ -390,6 +432,8 @@ export default function ContabilidadClient() {
 
       {addCategory ? <OptionEditorModal category={addCategory} title={`Añadir opción · ${categoryLabels[addCategory]}`} onClose={() => setAddCategory(null)} onSaved={async (saved) => { await loadOptions(); setAddCategory(null); if (saved.category === "business") setBusiness(saved.label); if (saved.category === "origin") setOriginAccount(saved.label); if (saved.category === "destination") setDestinationAccount(saved.label); if (saved.category === "channel") setChannel(saved.label); if (saved.category === "category") setCategory(saved.label); }} setError={setFormError} /> : null}
       {confirmingTransfer != null ? <TransferConfirmation amount={confirmingTransfer} origin={originAccount} destination={destinationAccount} business={business} businessNames={allBusinessNames} balances={currentBalances} onClose={() => setConfirmingTransfer(null)} onConfirm={() => void saveMovement(confirmingTransfer)} saving={saving} /> : null}
+      {auditOpen ? <AuditModal events={auditEvents} loading={auditLoading} ready={auditReady} onClose={() => setAuditOpen(false)} onRefresh={() => void loadAudit(false)} /> : null}
+      {toast ? <div role="status" aria-live="polite" className={`fixed bottom-5 right-5 z-[120] flex max-w-sm items-center gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur ${toast.tone === "rose" ? "border-rose-300/30 bg-rose-950/90 text-rose-100" : toast.tone === "violet" ? "border-violet-300/30 bg-violet-950/90 text-violet-100" : "border-emerald-300/30 bg-emerald-950/90 text-emerald-100"}`}><Bell size={18} aria-hidden="true" /><span className="text-sm font-bold">{toast.message}</span></div> : null}
     </main>
   );
 }
@@ -416,6 +460,12 @@ function OptionEditorModal({ category, title, initial, onClose, onSaved, setErro
   return <Modal title={title} onClose={onClose}><form onSubmit={save} className="space-y-4"><Field label="Nombre de la opción"><input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} className="field-control" placeholder="Escribe el nuevo valor" /></Field><div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300">Cancelar</button><button type="submit" disabled={saving || !label.trim()} className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 disabled:opacity-50">{saving ? "Guardando" : "Guardar"}</button></div></form></Modal>;
 }
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-slate-950 p-5 shadow-2xl shadow-black/60"><div className="mb-5 flex items-center justify-between"><h3 className="text-lg font-black text-white">{title}</h3><button type="button" onClick={onClose} className="rounded-xl border border-white/10 p-2 text-slate-400 hover:text-white"><X size={18} /></button></div>{children}</div></div>; }
+function AuditModal({ events, loading, ready, onClose, onRefresh }: { events: AuditEvent[]; loading: boolean; ready: boolean; onClose: () => void; onRefresh: () => void }) {
+  const [filter, setFilter] = useState<"ALL" | AuditEvent["action"]>("ALL");
+  const visible = filter === "ALL" ? events : events.filter((event) => event.action === filter);
+  const labels = { INSERT: "Añadido", UPDATE: "Modificado", DELETE: "Eliminado" } as const;
+  return <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="audit-title" className="flex max-h-[92vh] w-full max-w-5xl flex-col rounded-[2rem] border border-violet-300/20 bg-slate-950 p-4 shadow-2xl sm:p-6"><header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-violet-200">Auditoría protegida</p><h2 id="audit-title" className="mt-1 text-2xl font-black">Comparación e historial</h2><p className="mt-1 text-xs text-slate-400">Altas, cambios y eliminaciones conservadas por la base de datos.</p></div><div className="flex gap-2"><button type="button" onClick={onRefresh} className="rounded-xl border border-cyan-300/20 px-3 py-2 text-xs font-bold text-cyan-100">Actualizar</button><button type="button" onClick={onClose} aria-label="Cerrar historial" className="rounded-xl border border-white/10 p-2 text-slate-300"><X size={18}/></button></div></header><div className="mb-3 flex flex-wrap gap-2">{(["ALL","INSERT","UPDATE","DELETE"] as const).map((item)=><button type="button" key={item} onClick={()=>setFilter(item)} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${filter===item?"border-violet-300/40 bg-violet-300/15 text-violet-100":"border-white/10 text-slate-400"}`}>{item==="ALL"?"Todo":labels[item]}</button>)}</div>{!ready ? <div role="alert" className="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">La auditoría todavía no está activa. Ejecuta el archivo SQL incluido en Supabase.</div> : <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-white/10"><table className="min-w-[900px] w-full text-left text-xs"><thead className="sticky top-0 bg-slate-900 text-slate-400"><tr><th className="p-3">Fecha y hora</th><th className="p-3">Acción</th><th className="p-3">Movimiento</th><th className="p-3">Negocio</th><th className="p-3">Importe</th><th className="p-3">Origen → destino</th><th className="p-3">Procedencia</th></tr></thead><tbody>{visible.map((event)=>{const data=(event.action==="DELETE"?event.old_data:event.new_data)||event.old_data||{}; return <tr key={event.id} className="border-t border-white/5"><td className="whitespace-nowrap p-3">{new Intl.DateTimeFormat("es-ES",{dateStyle:"short",timeStyle:"medium"}).format(new Date(event.occurred_at))}</td><td className={`p-3 font-black ${event.action==="DELETE"?"text-rose-200":event.action==="UPDATE"?"text-amber-200":"text-emerald-200"}`}>{labels[event.action]}</td><td className="p-3">{String(data.movement_type||"—")}</td><td className="p-3">{String(data.business||"—")}</td><td className="whitespace-nowrap p-3 font-bold">{euro(Number(data.amount)||0)}</td><td className="p-3">{String(data.origin_account||"—")} → {String(data.destination_account||"—")}</td><td className="p-3"><span className="block">{event.source}</span><span className="text-slate-500">Rol: {event.database_role}{event.actor_user_id?` · Usuario ${event.actor_user_id}`:""}</span></td></tr>})}{!loading&&!visible.length?<tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay eventos registrados todavía.</td></tr>:null}</tbody></table>{loading?<p className="p-5 text-center text-slate-400">Cargando historial…</p>:null}</div>}</section></div>;
+}
 function TransferConfirmation({ amount, origin, destination, business, businessNames, balances, saving, onClose, onConfirm }: { amount: number; origin: string; destination: string; business: string; businessNames: string[]; balances: { main: BalanceMap; cash: BalanceMap }; saving: boolean; onClose: () => void; onConfirm: () => void }) {
   const previewEntry: AccountingEntry = { id: "preview", type: "traspaso", date: "", business, channel: "", category: "", amount, note: "", originAccount: origin, destinationAccount: destination };
   const effect = accountingBalanceEffects(previewEntry, businessNames);
