@@ -145,6 +145,37 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ entry: data });
 }
 
+export async function PATCH(request: NextRequest) {
+  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  if (!dbReady()) return jsonError("Supabase no está configurado", 503);
+
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonError("Datos no válidos"); }
+  if (!body || typeof body !== "object") return jsonError("Datos no válidos");
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  const parseAmount = (value: unknown) => {
+    if (typeof value !== "string" && typeof value !== "number") return NaN;
+    const input = String(value).trim().replace(",", ".");
+    if (!/^\d+(?:\.\d{1,2})?$/.test(input)) return NaN;
+    const amount = Number(input);
+    return amount > 0 && Number.isSafeInteger(Math.round(amount * 100)) ? amount : NaN;
+  };
+  const amount = parseAmount(body.amount);
+  const previousAmount = parseAmount(body.previousAmount);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return jsonError("Identificador no válido");
+  if (!Number.isFinite(amount) || !Number.isFinite(previousAmount)) return jsonError("El importe debe ser mayor que cero y tener como máximo dos decimales.");
+
+  // Only replace the amount of this row. The existing UPDATE trigger keeps its old/new values.
+  // Compare the original amount atomically to avoid overwriting another person's correction.
+  const { data, error } = await supabaseAdmin.from("manual_accounting_movements")
+    .update({ amount }).eq("id", id).eq("amount", previousAmount)
+    .select(selectFields).maybeSingle();
+  if (error) return jsonError("No se pudo actualizar el importe. No se ha confirmado ningún cambio.", 500);
+  if (!data) return jsonError("El movimiento cambió o fue eliminado. Cierra esta ventana y actualiza los movimientos antes de editarlo.", 409);
+  return NextResponse.json({ entry: data });
+}
+
 export async function DELETE(request: NextRequest) {
   if (!isAuthorized(request)) return jsonError("No autorizado", 401);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
