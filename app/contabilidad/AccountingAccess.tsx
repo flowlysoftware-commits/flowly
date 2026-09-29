@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { LockKeyhole } from "lucide-react";
 import { accountingFetch } from "@/lib/accountingFetch";
 
-type SessionUser = { id: string; name: string };
+type SessionUser = { id: null; name: string };
 export default function AccountingAccess({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -70,7 +70,7 @@ export default function AccountingAccess({ children }: { children: ReactNode }) 
   if (checking) return <main className="flowly-app-shell grid min-h-screen place-items-center text-cyan-100"><p role="status">Comprobando sesión privada…</p></main>;
   if (user) return <>
     <div className="flex flex-wrap items-center justify-end gap-3 bg-slate-950 px-5 py-3 text-sm text-cyan-100">
-      <span role="status">Sesión: {user.name}</span>
+      <span role="status" title="Nombre seleccionado al entrar con la contraseña común">Sesión: {user.name} · nombre seleccionado</span>
       <button type="button" disabled={busy} onClick={() => void logout()} className="min-h-11 rounded-xl border border-cyan-200/30 px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 disabled:opacity-50">{busy ? "Cerrando…" : "Cerrar sesión"}</button>
       {error ? <p role="alert" className="w-full text-right text-rose-300">{error}</p> : null}
     </div>
@@ -82,10 +82,15 @@ export default function AccountingAccess({ children }: { children: ReactNode }) 
         <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-200"><LockKeyhole size={26} aria-hidden="true" /></div>
         <p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-200/70">Área privada</p>
         <h1 className="mt-3 text-3xl font-black tracking-tight">Contabilidad mensual</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-300">Accede con tu usuario y contraseña personales.</p>
+        <p className="mt-3 text-sm leading-6 text-slate-300">Elige tu nombre e introduce la contraseña común de siempre.</p>
         <fieldset disabled={busy} className="mt-8 space-y-3 disabled:opacity-60">
-          <label htmlFor="accounting-username" className="block text-xs font-bold uppercase tracking-[0.18em] text-slate-300">Usuario</label>
-          <input id="accounting-username" name="username" required maxLength={80} autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={e => setUsername(e.target.value)} placeholder="Nombre de acceso" className="w-full rounded-2xl border border-white/20 bg-black/30 px-4 py-4 text-base outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30" />
+          <label htmlFor="accounting-username" className="block text-xs font-bold uppercase tracking-[0.18em] text-slate-300">¿Quién entra?</label>
+          <select id="accounting-username" name="username" required value={username} onChange={e => setUsername(e.target.value)} aria-describedby="accounting-name-help" className="w-full rounded-2xl border border-white/20 bg-slate-900 px-4 py-4 text-base outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30">
+            <option value="" disabled>Selecciona tu nombre</option>
+            <option value="Alex">Alex</option>
+            <option value="Ricky">Ricky</option>
+          </select>
+          <p id="accounting-name-help" className="text-xs leading-5 text-slate-400">El historial mostrará el nombre elegido. No es una cuenta personal verificada.</p>
           <label htmlFor="accounting-password" className="block pt-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-300">Contraseña</label>
           <input id="accounting-password" name="password" type="password" required maxLength={1024} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••••" className="w-full rounded-2xl border border-white/20 bg-black/30 px-4 py-4 text-base outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30" />
         </fieldset>
