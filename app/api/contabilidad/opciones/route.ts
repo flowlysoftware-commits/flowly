@@ -1,23 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { NextRequest } from "next/server";
+import { requireAccounting, accountingDatabase, privateJson } from "@/lib/accountingAuth";
 
-const ACCESS_PASSWORD = "Nosotrostarot1.";
+export const dynamic = "force-dynamic";
+
 const allowedCategories = new Set(["business", "money_origin", "money_destination", "payment_method", "movement_type"]);
 const selectFields = "id, category, value, active, created_at";
 
-function isAuthorized(request: NextRequest) {
-  return request.headers.get("x-contabilidad-password") === ACCESS_PASSWORD;
-}
 
 function dbReady() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 function json(data: object, status = 200) {
-  return NextResponse.json(data, {
-    status,
-    headers: { "Cache-Control": "no-store, max-age=0" },
-  });
+  return privateJson(data, status);
 }
 
 function jsonError(error: string, status = 400) {
@@ -45,10 +40,12 @@ function sameOptionValue(left: string, right: string) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
+  const db = accountingDatabase(actor);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from("manual_accounting_options")
     .select(selectFields)
     .order("category", { ascending: true })
@@ -61,7 +58,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
+  const db = accountingDatabase(actor);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
   const body = await request.json();
@@ -72,7 +71,7 @@ export async function POST(request: NextRequest) {
   if (!value) return jsonError("Escribe un nombre válido de hasta 80 caracteres");
 
   // Si la opción ya existía pero fue desactivada, se recupera en lugar de crear un duplicado.
-  const existingResult = await supabaseAdmin
+  const existingResult = await db
     .from("manual_accounting_options")
     .select(selectFields)
     .eq("category", category);
@@ -86,7 +85,7 @@ export async function POST(request: NextRequest) {
   if (existing?.active) return jsonError("Ya existe una opción con ese nombre en esta categoría", 409);
 
   if (existing) {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from("manual_accounting_options")
       .update({ value, active: true })
       .eq("id", existing.id)
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
     return json({ option: data });
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from("manual_accounting_options")
     .insert({ category, value, active: true })
     .select(selectFields)
@@ -110,7 +109,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
+  const db = accountingDatabase(actor);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
   const body = await request.json();
@@ -119,7 +120,7 @@ export async function PATCH(request: NextRequest) {
   if (!id) return jsonError("Falta el identificador de la opción");
   if (!value) return jsonError("Escribe un nombre válido de hasta 80 caracteres");
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from("manual_accounting_options")
     .update({ value })
     .eq("id", id)
@@ -133,13 +134,15 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
+  const db = accountingDatabase(actor);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
   const id = cleanText(new URL(request.url).searchParams.get("id"), 100);
   if (!id) return jsonError("Falta el identificador de la opción");
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from("manual_accounting_options")
     .update({ active: false })
     .eq("id", id)

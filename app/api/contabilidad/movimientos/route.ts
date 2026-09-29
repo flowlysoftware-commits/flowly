@@ -1,16 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireAccounting, accountingDatabase, privateJson } from "@/lib/accountingAuth";
+
+export const dynamic = "force-dynamic";
 import { applyAccountingEffects, type AccountingBalanceEntry } from "@/lib/accountingMetrics";
 
-const ACCESS_PASSWORD = "Nosotrostarot1.";
 const movementTypes = new Set(["ingreso", "gasto", "traspaso"]);
 
-function isAuthorized(request: NextRequest) {
-  return request.headers.get("x-contabilidad-password") === ACCESS_PASSWORD;
-}
 
 function jsonError(error: string, status = 400) {
-  return NextResponse.json({ error }, { status });
+  return privateJson({ error }, status);
 }
 
 function dbReady() {
@@ -69,9 +68,10 @@ async function loadAccountingHistory(untilDate: string) {
 type ApiHistoryEntry = PriorEntry & { id: string; movement_date: string; channel: string; category: string; note: string | null; created_at: string };
 
 export async function GET(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
   if (!dbReady()) {
-    return NextResponse.json({ entries: [], openingBalances: {}, openingCashBalances: {}, dbReady: false });
+    return privateJson({ entries: [], openingBalances: {}, openingCashBalances: {}, dbReady: false });
   }
 
   const { searchParams } = new URL(request.url);
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
   const prior = history.filter((entry) => entry.movement_date < start);
   const monthEntries = history.filter((entry) => entry.movement_date >= start).sort((a,b)=>`${b.movement_date}-${b.created_at}`.localeCompare(`${a.movement_date}-${a.created_at}`));
   const opening = calculateOpeningBalances(prior);
-  return NextResponse.json({
+  return privateJson({
     entries: monthEntries,
     analyticsEntries: history,
     month,
@@ -94,7 +94,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
+  const db = accountingDatabase(actor);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
   const body = await request.json();
@@ -121,7 +123,7 @@ export async function POST(request: NextRequest) {
     return jsonError("El origen y el destino del traspaso deben ser diferentes");
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from("manual_accounting_movements")
     .insert({
       movement_type: type,
@@ -142,11 +144,13 @@ export async function POST(request: NextRequest) {
     if (error.code === "23514") return jsonError("La configuración contable de Supabase no admite este movimiento. Ejecuta el SQL incluido con esta actualización.", 409);
     return jsonError("No se pudo guardar el movimiento. Revisa los datos e inténtalo de nuevo.", 500);
   }
-  return NextResponse.json({ entry: data });
+  return privateJson({ entry: data });
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
+  const db = accountingDatabase(actor);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
   let body;
@@ -168,22 +172,24 @@ export async function PATCH(request: NextRequest) {
 
   // Only replace the amount of this row. The existing UPDATE trigger keeps its old/new values.
   // Compare the original amount atomically to avoid overwriting another person's correction.
-  const { data, error } = await supabaseAdmin.from("manual_accounting_movements")
+  const { data, error } = await db.from("manual_accounting_movements")
     .update({ amount }).eq("id", id).eq("amount", previousAmount)
     .select(selectFields).maybeSingle();
   if (error) return jsonError("No se pudo actualizar el importe. No se ha confirmado ningún cambio.", 500);
   if (!data) return jsonError("El movimiento cambió o fue eliminado. Cierra esta ventana y actualiza los movimientos antes de editarlo.", 409);
-  return NextResponse.json({ entry: data });
+  return privateJson({ entry: data });
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!isAuthorized(request)) return jsonError("No autorizado", 401);
+  const actor = await requireAccounting(request);
+  if (!actor) return privateJson({ error: "No autorizado" }, 401);
+  const db = accountingDatabase(actor);
   if (!dbReady()) return jsonError("Supabase no está configurado", 503);
 
   const id = String(new URL(request.url).searchParams.get("id") || "").trim();
   if (!id) return jsonError("Falta el identificador del movimiento");
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from("manual_accounting_movements")
     .delete()
     .eq("id", id)
@@ -192,5 +198,5 @@ export async function DELETE(request: NextRequest) {
 
   if (error) return jsonError(error.message, 500);
   if (!data) return jsonError("El movimiento no existe o ya fue eliminado", 404);
-  return NextResponse.json({ deletedId: data.id });
+  return privateJson({ deletedId: data.id });
 }

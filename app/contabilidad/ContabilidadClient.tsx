@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import AccountingAccess from "./AccountingAccess";
+import { accountingFetch } from "@/lib/accountingFetch";
 import FinancialIntelligence from "@/components/accounting/FinancialIntelligence";
 import { accountingBalanceEffects, applyAccountingEffects, isExtraCashAccount } from "@/lib/accountingMetrics";
 import {
@@ -80,7 +82,6 @@ type Filters = {
 type CashRow = { entry: AccountingEntry; cashIn: number; cashOut: number; balance: number };
 type AuditEvent = { id: number; movement_id: string; action: "INSERT" | "UPDATE" | "DELETE"; occurred_at: string; actor_user_id: string | null; database_role: string; source: string; old_data: Record<string, unknown> | null; new_data: Record<string, unknown> | null };
 
-const ACCESS_PASSWORD = "Nosotrostarot1.";
 const defaultOptions: Record<OptionCategory, Array<{ label: string }>> = {
   business: [{ label: "Flowly" }, { label: "Celestial" }, { label: "Leonaris" }],
   origin: [{ label: "Banco" }, { label: "Caja extra" }],
@@ -170,9 +171,11 @@ function fallbackConfigOptions(): ConfigOption[] {
 }
 
 export default function ContabilidadClient() {
-  const [password, setPassword] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
-  const [accessError, setAccessError] = useState("");
+  return <AccountingAccess><AccountingPanel /></AccountingAccess>;
+}
+
+function AccountingPanel() {
+  const unlocked = true; // Mounted only after the server validates the private session.
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>(fallbackConfigOptions());
   const [type, setType] = useState<MovementType>("ingreso");
   const [date, setDate] = useState(today());
@@ -210,7 +213,7 @@ export default function ContabilidadClient() {
   const loadAudit = useCallback(async (notify = false) => {
     setAuditLoading(true);
     try {
-      const response = await fetch("/api/contabilidad/auditoria?limit=300", { cache: "no-store", headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
+      const response = await accountingFetch("/api/contabilidad/auditoria?limit=300", { cache: "no-store", headers: { } });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo cargar la comparación.");
       const nextEvents = (payload.events || []) as AuditEvent[];
@@ -273,7 +276,7 @@ export default function ContabilidadClient() {
   }), [allBusinessNames, currentBalances, entries, openingBalances, openingCashBalances]);
 
   async function loadOptions() {
-    const response = await fetch("/api/contabilidad/opciones", { cache: "no-store", headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
+    const response = await accountingFetch("/api/contabilidad/opciones", { cache: "no-store", headers: { } });
     const payload = await response.json();
     if (!response.ok) return;
     const stored = ((payload.options || []) as ApiConfigOption[]).map(mapConfigOption).filter((item): item is ConfigOption => Boolean(item));
@@ -295,7 +298,7 @@ export default function ContabilidadClient() {
       if (!silent) setLoading(true);
       setFormError("");
       try {
-        const response = await fetch(`/api/contabilidad/movimientos?month=${encodeURIComponent(month)}`, { headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
+        const response = await accountingFetch(`/api/contabilidad/movimientos?month=${encodeURIComponent(month)}`, { headers: { } });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload?.error || "No se pudieron cargar los movimientos.");
         setEntries((payload.entries || []).map(mapEntry));
@@ -327,18 +330,13 @@ export default function ContabilidadClient() {
     if (!categoryOptions.includes(category) && categoryOptions[0]) setCategory(categoryOptions[0]);
   }, [configOptions]);
 
-  const handleAccess = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (password.trim() === ACCESS_PASSWORD) { setUnlocked(true); setAccessError(""); }
-    else setAccessError("Contraseña incorrecta.");
-  };
 
   const handleDelete = async (entry: AccountingEntry) => {
     if (!window.confirm(`¿Seguro que deseas eliminar este movimiento de ${euro(entry.amount)}? Esta acción no se puede deshacer.`)) return;
     setDeletingId(entry.id);
     setFormError("");
     try {
-      const response = await fetch(`/api/contabilidad/movimientos?id=${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "x-contabilidad-password": ACCESS_PASSWORD } });
+      const response = await accountingFetch(`/api/contabilidad/movimientos?id=${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { } });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo eliminar el movimiento.");
       await loadEntries(true);
@@ -359,9 +357,9 @@ export default function ContabilidadClient() {
     setSaving(true);
     setFormError("");
     try {
-      const response = await fetch("/api/contabilidad/movimientos", {
+      const response = await accountingFetch("/api/contabilidad/movimientos", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-contabilidad-password": ACCESS_PASSWORD },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, date, business, originAccount, destinationAccount, channel, category, amount: numericAmount, note: note.trim() }),
       });
       const payload = await response.json();
@@ -390,9 +388,6 @@ export default function ContabilidadClient() {
     void saveMovement(numericAmount);
   };
 
-  if (!unlocked) return (
-    <main className="flowly-app-shell min-h-screen px-6 py-10 text-white"><section className="mx-auto flex min-h-[78vh] max-w-xl items-center justify-center"><form onSubmit={handleAccess} className="flowly-client-card w-full rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 shadow-2xl shadow-purple-950/30 backdrop-blur"><div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-200"><LockKeyhole size={26} /></div><p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-200/70">Área privada</p><h1 className="mt-3 text-3xl font-black tracking-tight">Contabilidad mensual</h1><p className="mt-3 text-sm leading-6 text-slate-300">Introduce la contraseña para acceder al panel de ingresos, gastos y cajas independientes.</p><div className="mt-8 space-y-3"><label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Contraseña</label><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-4 text-white outline-none transition focus:border-cyan-300/70" placeholder="••••••••••••" />{accessError ? <p className="text-sm font-semibold text-rose-300">{accessError}</p> : null}</div><button type="submit" className="mt-6 w-full rounded-2xl bg-cyan-300 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-200">Entrar</button></form></section></main>
-  );
 
   const selectProps = (categoryName: OptionCategory, value: string, setValue: (value: string) => void, options: string[]) => ({ category: categoryName, value, options, onChange: setValue, onAdd: () => setAddCategory(categoryName) });
 
@@ -476,9 +471,9 @@ function EditAmountDialog({ entry, onClose, onSaved }: { entry: AccountingEntry;
     if (amount === entry.amount) { onClose(); return; }
     pending.current = true; setBusy(true); setError("");
     try {
-      const response = await fetch("/api/contabilidad/movimientos", {
+      const response = await accountingFetch("/api/contabilidad/movimientos", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-contabilidad-password": ACCESS_PASSWORD },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: entry.id, amount: text, previousAmount: entry.amount }),
       });
       const payload = await response.json();
@@ -509,7 +504,7 @@ function OptionEditorModal({ category, title, initial, onClose, onSaved, setErro
   async function save(event: FormEvent) {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      const response = await fetch("/api/contabilidad/opciones", { method: initial ? "PATCH" : "POST", headers: { "Content-Type": "application/json", "x-contabilidad-password": ACCESS_PASSWORD }, body: JSON.stringify({ id: initial?.id, category: apiCategory(category), value: label.trim() }) });
+      const response = await accountingFetch("/api/contabilidad/opciones", { method: initial ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: initial?.id, category: apiCategory(category), value: label.trim() }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No se pudo guardar la opción.");
       const saved = mapConfigOption(payload.option as ApiConfigOption);
