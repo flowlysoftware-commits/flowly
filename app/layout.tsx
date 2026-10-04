@@ -1,3 +1,6 @@
+"use client";
+
+import { type ReactNode } from "react";
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
@@ -9,6 +12,20 @@ import FlowlyAnalyticsTracker from "@/components/FlowlyAnalyticsTracker";
 export const metadata: Metadata = {
   title: "Flowly IA | La IA que organiza tu empresa",
   description: "Flowly organiza clientes, WhatsApp, agenda, presupuestos, facturas y seguimiento para que tu negocio venda más con menos caos.",
+  openGraph: {
+    title: "Flowly IA | La IA que organiza tu empresa",
+    description: "Optimiza tu negocio con Flowly, la IA que centraliza clientes y procesos.",
+    url: "https://www.flowly.com",
+    images: ["/images/og-image.png"],
+    site_name: "Flowly",
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@Flowly",
+    title: "Flowly IA | La IA que organiza tu empresa",
+    description: "Optimiza tu negocio con Flowly, la IA que centraliza clientes y procesos.",
+    image: "/images/twitter-image.png",
+  },
 };
 
 const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID || "1479231557294191";
