@@ -1,27 +1,33 @@
-# Acceso simplificado: Alex / Ricky y contraseña común
+# Contabilidad: acceso con la cuenta administrativa de Flowly
 
-Esta actualización sustituye el acceso individual por el selector solicitado. No necesitas crear cuentas de Alex/Ricky en Supabase ni configurar sus UID.
+Se retira la contraseña común y el selector Alex/Ricky. La contabilidad NO es pública: requiere una identidad validada por Supabase Auth y un perfil `user_profiles.account_type = 'admin'`, consultado en el servidor en cada petición. No se utiliza `user_metadata` para autorizar.
 
-## Instalación
+## Entrada
 
-1. Ejecuta UNA VEZ el archivo separado `FLOWLY-20-ACCESO-COMUN.sql` en el SQL Editor del proyecto Supabase de Flowly. Es reejecutable; no borra ni modifica movimientos, importes ni históricos. Crea el almacenamiento de sesiones compartidas y adapta el origen de las nuevas anotaciones de auditoría.
-2. Extrae el ZIP y copia sus archivos sobre el repositorio conservando las rutas. Despliega el cambio.
-3. En Contabilidad selecciona Alex o Ricky y escribe la contraseña común que se usaba antes del acceso individual. La contraseña no ha cambiado.
+1. Abre `/contabilidad`. Si ya hay una sesión administrativa válida, entra directamente.
+2. En caso contrario, pulsa **Entrar con mi cuenta de Flowly**. El acceso normal `/login?next=/contabilidad` valida tu cuenta y vuelve a Contabilidad.
+3. La contraseña antigua de la contabilidad no es la contraseña de la cuenta de Flowly y ya no se comprueba.
 
-No hacen falta nuevas variables. Se reutilizan `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, que ya utiliza Contabilidad. Las variables `ACCOUNTING_ALEX_USER_ID` y `ACCOUNTING_RICKY_USER_ID` dejan de usarse. `ACCOUNTING_ORIGIN` sigue siendo opcional; si ya está configurada debe coincidir con el dominio de la aplicación, sin barra final.
+No se crean cuentas ni se cambian permisos de personas. Si la cuenta no está registrada como administradora, el acceso queda denegado; el propietario debe revisar ese perfil en su Supabase. No se asigna automáticamente un administrador a partir de un correo o del nombre Alex/Ricky.
 
-## Qué significa el nombre
+## Sesión
 
-Alex/Ricky es un nombre elegido por quien conoce la contraseña compartida, NO una identidad verificada. Cualquiera que la conozca puede elegir cualquiera de los dos nombres. La interfaz y las nuevas entradas de Comparación lo indican. No se asignan UUID de personas ni se inventan autores para el historial anterior.
+Se reutilizan `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`. No hay nuevas contraseñas, claves ni migraciones para este cambio de acceso. `ACCOUNTING_ORIGIN`, si existe, debe coincidir con el dominio de la web, sin barra final.
 
-## Sesión y seguridad
+El token de acceso de una cuenta administrativa verificada se conserva en una cookie HttpOnly, SameSite=Strict y Secure en producción, con caducidad no superior a una hora ni a la del propio token. Se vuelve a validar con `auth.getUser(token)` y se consulta de nuevo el perfil de administrador en cada operación. La cookie permite recargar sin depender de que el cliente general (que almacena la sesión en memoria) siga vivo. Al caducar hay que volver a iniciar sesión.
 
-La contraseña se verifica en el servidor contra un hash scrypt con salt. No se incluye en texto plano en estos archivos ni en el navegador. A petición del propietario se mantiene la contraseña antigua, aunque estuvo expuesta en versiones anteriores: este cambio no elimina esa exposición histórica.
+Cerrar sesión elimina la cookie contable e intenta cerrar la sesión local de Supabase del navegador. No se promete la revocación inmediata de una copia externa de un JWT ya emitido; su caducidad y la comprobación actual del permiso administrativo siguen siendo necesarias. Las sesiones compartidas antiguas y las contraseñas embebidas en versiones anteriores ya no autorizan este módulo.
 
-La sesión usa un token aleatorio en cookie HttpOnly/Secure en producción, dura una hora y se comprueba en el servidor en cada operación. Al cerrar sesión se revoca en la base de datos. La contraseña y el token no se guardan en LocalStorage. Las sesiones individuales antiguas no sirven para este acceso.
+Las solicitudes de modificación conservan la comprobación de origen y la cabecera personalizada. Las respuestas contables no se almacenan en caché. El transporte del navegador solo permite rutas del mismo origen bajo `/api/contabilidad` y rechaza redirecciones.
 
-Hay un límite compartido de 10 intentos de acceso por 15 minutos (incluye accesos correctos). Alternar Alex/Ricky no permite eludirlo. No se modifican cuentas personales de Supabase ni otras sesiones de Flowly.
+## Alcance y datos
 
-Las reglas contables, Caja Extra, filtros, informes, importes y arrastres permanecen sin cambios. La auditoría identifica expresamente el nombre seleccionado, no garantiza quién estaba físicamente detrás de la sesión. Un administrador de base de datos conserva sus privilegios sobre los registros.
+No se modifican los endpoints de movimientos/opciones/auditoría, la pantalla `ContabilidadClient`, las reglas, los filtros, los arrastres ni los cálculos de Caja Extra. No se ejecuta SQL, no se importan datos y no se altera ningún saldo. Los nuevos encabezados identifican a la cuenta verificada; este cambio no reescribe ni atribuye identidades al historial antiguo. Si la base de datos aún no tiene las tablas contables, eso debe diagnosticarse aparte del acceso.
 
-No vuelvas a ejecutar el SQL antiguo de acceso individual después del SQL de esta entrega, pues reemplazaría la función de auditoría adaptada.
+Pruebas aisladas (dobles de Auth/PostgREST; nunca consultan producción):
+
+```sh
+node --test tests/accounting-admin-access.test.cjs
+```
+
+Además de estas pruebas, verificar la compilación de la versión de prueba y la entrada con una cuenta administrativa real antes de dar por comprobado el acceso al saldo. La existencia y el importe de la caja no se deducen del código.

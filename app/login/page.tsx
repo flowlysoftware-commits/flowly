@@ -34,6 +34,32 @@ export default function LoginPage() {
       .eq("user_id", userId)
       .maybeSingle();
 
+    // Only this fixed, internal destination is accepted. Never redirect to arbitrary input.
+    const openAccounting = new URLSearchParams(window.location.search).get("next") === "/contabilidad";
+    if (openAccounting) {
+      if (profile?.account_type !== "admin" || !data.session?.access_token) {
+        setLoading(false);
+        return alert("Esta cuenta no tiene acceso de administrador a Contabilidad.");
+      }
+      try {
+        const response = await fetch("/api/contabilidad/sesion", {
+          method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
+          headers: { "Content-Type": "application/json", "x-accounting-request": "1", Authorization: `Bearer ${data.session.access_token}` },
+          body: "{}",
+        });
+        if (!response.ok) {
+          const result = await response.json();
+          setLoading(false);
+          return alert(result.error || "No se pudo abrir Contabilidad.");
+        }
+        setPassword("");
+        return router.push("/contabilidad");
+      } catch {
+        setLoading(false);
+        return alert("No se pudo conectar con Contabilidad. Inténtalo de nuevo.");
+      }
+    }
+
     if (profile?.account_type === "admin") return router.push("/admin");
     if (profile?.account_type === "sales") return router.push("/comercial");
 
