@@ -1,27 +1,11 @@
-import { createHash, scrypt, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-export const accountingCookie = process.env.NODE_ENV === "production" ? "__Host-flowly-accounting-shared" : "flowly-accounting-shared";
+export const accountingCookie = process.env.NODE_ENV === "production" ? "__Host-flowly-accounting-admin" : "flowly-accounting-admin";
+export const legacyAccountingCookie = process.env.NODE_ENV === "production" ? "__Host-flowly-accounting-shared" : "flowly-accounting-shared";
 export const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" as const, path: "/" };
-export type AccountingActor = { id: null; name: "Ricky" | "Alex" };
-export const sessionHash = (token: string) => createHash("sha256").update(token).digest("hex");
-
-export function accountingUsers(): AccountingActor[] {
-  return [{ id: null, name: "Ricky" }, { id: null, name: "Alex" }];
-}
-
-// Hash of the previously used shared password. Server-only; never return this to the browser.
-const passwordSalt = "a92d5612a5e1fc9132ebd0a44a7878aa";
-const passwordHash = "cf20ea845e785c6bc83c588054f35314ed28846aa9e9f6dbb4d6c0448ad9b598681b5f567d7a7223f623bae723decf2871f3fdcceb1346c722b2417b6f76ac23";
-export async function validSharedPassword(password: string): Promise<boolean> {
-  if (!password || password.length > 1024) return false;
-  const derived = await new Promise<Buffer>((resolve, reject) => {
-    scrypt(password, passwordSalt, 64, (error, key) => error ? reject(error) : resolve(key));
-  });
-  return timingSafeEqual(derived, Buffer.from(passwordHash, "hex"));
-}
+export type AccountingActor = { id: string; name: string };
 
 export function accountingConfigured() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -35,25 +19,52 @@ export function safeAccountingRequest(request: NextRequest) {
 }
 
 export function privateJson(data: unknown, status = 200) {
-  return NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0", Vary: "Cookie" } });
+  return NextResponse.json(data, { status, headers: {
+    "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache", Vary: "Authorization, Cookie",
+  } });
 }
 
-// The label is selected by the person holding the common password, not an Auth identity.
+export function accountingBearerToken(request: NextRequest): string | null {
+  const header = request.headers.get("authorization");
+  if (!header) return null;
+  const token = header.match(/^Bearer\s+(\S+)$/i)?.[1];
+  return token && token.length <= 3800 ? token : null;
+}
+
+/** Read exp only AFTER Supabase Auth has validated this exact token. */
+export function verifiedAccountingTokenMaxAge(token: string): number {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+    if (!Number.isSafeInteger(payload.exp)) return 0;
+    return Math.max(0, Math.min(3600, payload.exp - Math.floor(Date.now() / 1000)));
+  } catch { return 0; }
+}
+
+/** Auth identity is verified remotely and administrative permission is read afresh. */
+export async function requireAccounting(request: NextRequest): Promise<AccountingActor | null> {
+  if (!accountingConfigured() || !safeAccountingRequest(request)) return null;
+  // An invalid explicitly supplied bearer must not fall back to another user's cookie.
+  const token = request.headers.has("authorization")
+    ? accountingBearerToken(request) : request.cookies.get(accountingCookie)?.value;
+  if (!token || token.length > 3800) return null;
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data.user || data.user.is_anonymous || verifiedAccountingTokenMaxAge(token) <= 0) return null;
+    const { data: profile, error: profileError } = await supabaseAdmin.from("user_profiles")
+      .select("account_type").eq("user_id", data.user.id).maybeSingle();
+    if (profileError || profile?.account_type !== "admin") return null;
+    // Never infer authorization or a person's identity from a selectable name or user_metadata.
+    return { id: data.user.id, name: data.user.email || data.user.id };
+  } catch { return null; }
+}
+
 export function accountingDatabase(actor?: AccountingActor) {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    global: actor ? { headers: { "x-accounting-actor-name": actor.name, "x-accounting-identity-mode": "shared-password" } } : undefined,
+    global: actor ? { headers: {
+      "x-accounting-actor-name": actor.name,
+      "x-accounting-actor-id": actor.id,
+      "x-accounting-identity-mode": "verified-admin",
+    } } : undefined,
   });
-}
-
-export async function requireAccounting(request: NextRequest): Promise<AccountingActor | null> {
-  if (!accountingConfigured() || !safeAccountingRequest(request)) return null;
-  const token = request.cookies.get(accountingCookie)?.value;
-  if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  try {
-    const { data: session, error } = await supabaseAdmin.from("accounting_shared_sessions")
-      .select("selected_name").eq("token_hash", sessionHash(token)).gt("expires_at", new Date().toISOString()).maybeSingle();
-    if (error || !session) return null;
-    return accountingUsers().find((user) => user.name === session.selected_name) || null;
-  } catch { return null; }
 }
